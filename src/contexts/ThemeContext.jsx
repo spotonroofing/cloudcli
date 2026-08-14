@@ -18,13 +18,9 @@ export const ThemeProvider = ({ children }) => {
     if (savedTheme) {
       return savedTheme === 'dark';
     }
-    
-    // Check system preference
-    if (window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    
-    return false;
+
+    // Default to dark: this fork docks inside Orca's dark UI.
+    return true;
   });
 
   // Update document class and localStorage when theme changes
@@ -41,7 +37,7 @@ export const ThemeProvider = ({ children }) => {
       
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
       if (themeColorMeta) {
-        themeColorMeta.setAttribute('content', '#141414'); // Dark background color (hsl(0 0% 8%))
+        themeColorMeta.setAttribute('content', '#0a0a0a'); // Dark background color (matches Orca canvas)
       }
     } else {
       document.documentElement.classList.remove('dark');
