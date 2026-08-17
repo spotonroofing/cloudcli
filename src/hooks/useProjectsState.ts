@@ -390,7 +390,9 @@ export function useProjectsState({
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSession, setSelectedSession] = useState<ProjectSession | null>(null);
   const [attentionSessionIds, setAttentionSessionIds] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<AppTab>(readPersistedTab);
+  // Desktop is chat-only (phase 2 chrome strip): ignore a persisted non-chat
+  // tab so removed views never mount, even for one frame, on load.
+  const [activeTab, setActiveTab] = useState<AppTab>(() => (isMobile ? readPersistedTab() : 'chat'));
 
   useEffect(() => {
     try {

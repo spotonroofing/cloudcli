@@ -148,6 +148,16 @@ function Sidebar({
     document.body.classList.toggle('pwa-mode', isPWA);
   }, [isPWA]);
 
+  // Docked tab label: the scoped project's name alone, no wordmark (phase 2
+  // chrome strip). Lives here so it runs regardless of sidebar search mode.
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    document.title = selectedProject?.displayName?.trim() || 'CloudCLI UI';
+  }, [selectedProject]);
+
   const handleProjectCreated = () => {
     void paletteOps.refreshProjects();
   };

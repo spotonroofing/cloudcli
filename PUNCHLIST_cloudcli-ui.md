@@ -33,13 +33,13 @@ Done check: agent-browser snapshot of a scoped session page shows the new bubble
 Goal and scope: remove desktop chrome. Removal-only phase; shell and sidebar components.
 Dependencies: phase 1 tokens (any surviving chrome inherits them). Parallelism: solo.
 
-- [ ] 1. CloudCLI branding/wordmark removed everywhere on desktop (sidebar header text/logo and anywhere else upstream branding surfaces).
-- [ ] 2. Projects tab removed from the desktop sidebar; Conversations and Archive remain.
-- [ ] 3. Running-sessions tab removed on desktop.
-- [ ] 4. Ctrl+K shortcut hint removed from the search box.
-- [ ] 5. Report Issue and Join Community removed in both sidebar-open and sidebar-collapsed states.
-- [ ] 6. Chat/Shell/Files/Source Control view-mode bar removed on desktop; chat is the only view. Routes or state for the removed views must not be reachable from desktop UI.
-- [ ] 7. Chat-title top bar removed entirely on desktop.
+- [x] 1. CloudCLI branding/wordmark removed everywhere on desktop (sidebar header text/logo and anywhere else upstream branding surfaces).
+- [x] 2. Projects tab removed from the desktop sidebar; Conversations and Archive remain.
+- [x] 3. Running-sessions tab removed on desktop.
+- [x] 4. Ctrl+K shortcut hint removed from the search box.
+- [x] 5. Report Issue and Join Community removed in both sidebar-open and sidebar-collapsed states.
+- [x] 6. Chat/Shell/Files/Source Control view-mode bar removed on desktop; chat is the only view. Routes or state for the removed views must not be reachable from desktop UI.
+- [x] 7. Chat-title top bar removed entirely on desktop.
 
 Done check: agent-browser snapshot contains none of the removed labels (Projects, Shell, Files, Source Control, Report Issue, Join Community, Ctrl+K, the wordmark, the session title bar) on desktop viewport, and all of them still present at a phone viewport; bundle rebuilt and served. Fresh-context verifier on the diff. Commit, push.
 

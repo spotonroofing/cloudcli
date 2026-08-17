@@ -288,7 +288,8 @@ function AppContentInner() {
         selectedProject={selectedProject}
         onStartNewChat={handleNewSession}
         onOpenSettings={() => openSettings()}
-        onShowTab={setActiveTab}
+        // Desktop is chat-only (phase 2 chrome strip): no tab navigation from the palette.
+        onShowTab={isMobile ? setActiveTab : undefined}
       />
 
       <QuickSettingsPanel />

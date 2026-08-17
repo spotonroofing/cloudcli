@@ -219,7 +219,7 @@ export default function CommandPalette({
               </CommandGroup>
             )}
 
-            {showActions && (
+            {showActions && onShowTab && (
               <CommandGroup heading="Navigate">
                 {NAV_TABS.map((tab) => (
                   <CommandItem

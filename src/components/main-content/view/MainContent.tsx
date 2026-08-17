@@ -101,6 +101,14 @@ function MainContent({
     }
   }, [shouldShowTasksTab, activeTab, setActiveTab]);
 
+  // Desktop is chat-only (phase 2 chrome strip): the view-mode bar is gone, and
+  // any other route into a non-chat tab (palette, notifications) snaps back.
+  useEffect(() => {
+    if (!isMobile && activeTab !== 'chat') {
+      setActiveTab('chat');
+    }
+  }, [isMobile, activeTab, setActiveTab]);
+
   const loadBrowserUseSettings = useCallback(async () => {
     try {
       const response = await authenticatedFetch('/api/browser-use/settings');
@@ -144,16 +152,18 @@ function MainContent({
 
   return (
     <div className="flex h-full flex-col">
-      <MainContentHeader
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        selectedProject={selectedProject}
-        selectedSession={selectedSession}
-        shouldShowTasksTab={shouldShowTasksTab}
-        shouldShowBrowserTab={shouldShowBrowserTab}
-        isMobile={isMobile}
-        onMenuClick={onMenuClick}
-      />
+      {isMobile && (
+        <MainContentHeader
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          selectedProject={selectedProject}
+          selectedSession={selectedSession}
+          shouldShowTasksTab={shouldShowTasksTab}
+          shouldShowBrowserTab={shouldShowBrowserTab}
+          isMobile={isMobile}
+          onMenuClick={onMenuClick}
+        />
+      )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}>
