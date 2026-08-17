@@ -1,5 +1,3 @@
-@import '@fontsource-variable/geist';
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -44,7 +42,7 @@
     --border: 44 14% 87%;
     --input: 44 14% 87%;
     --ring: 221.2 83.2% 53.3%;
-    --radius: 0.625rem;
+    --radius: 0.5rem;
 
     /* Nav design tokens */
     --nav-glass-bg: 44 22% 96% / 0.7;
@@ -86,41 +84,38 @@
     }
   }
 
-  /* Dark palette matched to the Orca desktop app so the docked pane reads as
-     part of the app: near-black canvas, neutral monochrome accents, hairline
-     white borders at low alpha. */
   .dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 90%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 63%;
-    --accent: 0 0% 25%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 359 100% 70%;
-    --destructive-foreground: 0 0% 9%;
-    --border: 0 0% 100% / 0.07;
-    --input: 0 0% 100% / 0.15;
-    --ring: 0 0% 45%;
+    --background: 0 0% 8%;
+    --foreground: 40 8% 93%;
+    --card: 0 0% 12%;
+    --card-foreground: 40 8% 93%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 40 8% 93%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 0 0% 8%;
+    --secondary: 0 0% 17%;
+    --secondary-foreground: 40 8% 93%;
+    --muted: 0 0% 17%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 17%;
+    --accent-foreground: 40 8% 93%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 40 8% 93%;
+    --border: 0 0% 17%;
+    --input: 0 0% 23%;
+    --ring: 217.2 91.2% 59.8%;
 
     /* Nav design tokens — dark overrides */
-    --nav-glass-bg: 0 0% 9% / 0.55;
+    --nav-glass-bg: 0 0% 12% / 0.55;
     --nav-glass-blur: 24px;
     --nav-glass-saturate: 1.6;
-    --nav-tab-glow: 0 0% 100% / 0.10;
-    --nav-tab-ring: 0 0% 100% / 0.08;
+    --nav-tab-glow: 217.2 91.2% 59.8% / 0.25;
+    --nav-tab-ring: 217.2 91.2% 59.8% / 0.15;
     --nav-float-shadow: 0 0% 0% / 0.35;
-    --nav-float-ring: 0 0% 100% / 0.07;
-    --nav-divider-color: 0 0% 100% / 0.07;
-    --nav-input-bg: 0 0% 100% / 0.04;
-    --nav-input-focus-ring: 0 0% 100% / 0.15;
+    --nav-float-ring: 0 0% 17% / 0.3;
+    --nav-divider-color: 0 0% 17% / 0.5;
+    --nav-input-bg: 0 0% 17% / 0.5;
+    --nav-input-focus-ring: 217.2 91.2% 59.8% / 0.25;
   }
 }
 
@@ -134,7 +129,7 @@
   body {
     @apply bg-background text-foreground;
 
-    font-family: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Encode Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     margin: 0;
