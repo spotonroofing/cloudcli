@@ -15,8 +15,11 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['"Encode Sans"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
-        serif: ['Merriweather', 'Georgia', 'Cambria', '"Times New Roman"', 'serif'],
+        // Both map to CSS variables defined in src/index.css (see DESIGN.md).
+        // `serif` is the legacy utility name for message content; it now
+        // resolves to the message cut of the app sans.
+        sans: 'var(--font-ui)',
+        serif: 'var(--font-message)',
       },
       colors: {
         border: "hsl(var(--border))",
