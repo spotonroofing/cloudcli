@@ -48,7 +48,7 @@ Done check: agent-browser snapshot contains none of the removed labels (Projects
 Goal and scope: the project-scoped view becomes the only desktop view; router and conversation-list data.
 Dependencies: phase 2 (sidebar shape settled). Parallelism: solo.
 
-- [ ] 8. Desktop conversations list shows only the current project's sessions; the global all-projects view is removed on desktop (no switcher, no escape). The scoped /project/:projectId route contract is unchanged so Orca tab URLs keep working; hitting the bare root on desktop lands somewhere sane (most recent project or a pick-a-project state), not the old global list.
+- [x] 8. Desktop conversations list shows only the current project's sessions; the global all-projects view is removed on desktop (no switcher, no escape). The scoped /project/:projectId route contract is unchanged so Orca tab URLs keep working; hitting the bare root on desktop lands somewhere sane (most recent project or a pick-a-project state), not the old global list.
 
 Done check: agent-browser on a scoped URL shows only that project's sessions; the bare root on desktop does not render the global all-projects list; mobile behavior unchanged; bundle rebuilt and served. Commit, push.
 

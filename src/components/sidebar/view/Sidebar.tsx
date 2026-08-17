@@ -24,6 +24,7 @@ type TaskMasterSidebarContext = {
 function Sidebar({
   projects,
   selectedProject,
+  scopedProjectId,
   selectedSession,
   activeSessions,
   attentionSessionIds,
@@ -123,6 +124,7 @@ function Sidebar({
   } = useSidebarController({
     projects,
     selectedProject,
+    scopedProjectId,
     selectedSession,
     activeSessions,
     isLoading,

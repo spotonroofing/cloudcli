@@ -370,12 +370,16 @@ export const sessionsDb = {
    * and correctly ordered across projects instead of flattening only the
    * per-project slices already loaded by the client.
    */
-  getRecentSessionsPage(limit: number, offset: number): RecentSessionsPage {
+  getRecentSessionsPage(limit: number, offset: number, projectId: string | null = null): RecentSessionsPage {
     const db = getConnection();
+    // Optional projectId narrows the feed to one project (scoped desktop tabs);
+    // pagination and totals then reflect only that project's sessions.
     const visibilityClause = `
       sessions.isArchived = 0
       AND (projects.isArchived IS NULL OR projects.isArchived = 0)
+      ${projectId ? 'AND projects.project_id = ?' : ''}
     `;
+    const filterParams = projectId ? [projectId] : [];
     const rows = db
       .prepare(
         `SELECT sessions.*
@@ -386,7 +390,7 @@ export const sessionsDb = {
                   sessions.session_id DESC
          LIMIT ? OFFSET ?`
       )
-      .all(limit, offset) as SessionRow[];
+      .all(...filterParams, limit, offset) as SessionRow[];
     const countRow = db
       .prepare(
         `SELECT COUNT(*) AS count
@@ -394,7 +398,7 @@ export const sessionsDb = {
          LEFT JOIN projects ON projects.project_path = sessions.project_path
          WHERE ${visibilityClause}`
       )
-      .get() as { count: number } | undefined;
+      .get(...filterParams) as { count: number } | undefined;
 
     return {
       sessions: normalizeSessionRows(rows),

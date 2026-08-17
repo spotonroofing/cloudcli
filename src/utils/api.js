@@ -199,11 +199,13 @@ export const api = {
     authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}`),
   runningSessions: () =>
     authenticatedFetch('/api/providers/sessions/running'),
-  recentConversations: ({ limit = 40, offset = 0 } = {}) => {
+  /** @param {{ limit?: number, offset?: number, projectId?: string | null }} [options] */
+  recentConversations: ({ limit = 40, offset = 0, projectId = null } = {}) => {
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
     });
+    if (projectId) params.set('projectId', projectId);
     return authenticatedFetch(`/api/providers/sessions/recent?${params.toString()}`);
   },
   providerSessionId: (sessionId) =>

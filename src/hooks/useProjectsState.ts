@@ -687,6 +687,29 @@ export function useProjectsState({
     }
   }, [isLoadingProjects, projects, scopedProjectId, selectedProject?.projectId, sessionId]);
 
+  // Desktop has no global all-projects view (phase 3): loading the bare root
+  // lands on the selected project, else the most recently active one, through
+  // the unchanged /project/:projectId route. Mobile keeps the global list.
+  useEffect(() => {
+    if (isMobile || scopedProjectId || sessionId || isLoadingProjects || projects.length === 0) {
+      return;
+    }
+
+    const latestActivity = (project: Project): number =>
+      (project.sessions ?? []).reduce((latest, session) => {
+        const stamp = Date.parse(
+          String(session.lastActivity ?? session.updated_at ?? session.created_at ?? ''),
+        );
+        return Number.isFinite(stamp) && stamp > latest ? stamp : latest;
+      }, 0);
+
+    const targetProjectId =
+      selectedProject?.projectId
+      ?? [...projects].sort((a, b) => latestActivity(b) - latestActivity(a))[0].projectId;
+
+    navigate(`/project/${targetProjectId}`, { replace: true });
+  }, [isLoadingProjects, isMobile, navigate, projects, scopedProjectId, selectedProject?.projectId, sessionId]);
+
   // Realtime sidebar updates. The backend pushes per-session deltas
   // (`session_upserted`) instead of full project snapshots, so each event is
   // a keyed upsert that can never clobber unrelated client state — no
@@ -1174,6 +1197,7 @@ export function useProjectsState({
   const sidebarSharedProps = useMemo(
     () => ({
       projects: visibleProjects,
+      scopedProjectId: scopedProjectId ?? null,
       selectedProject,
       selectedSession,
       activeSessions,
@@ -1206,6 +1230,7 @@ export function useProjectsState({
       isMobile,
       loadingProgress,
       activeSessions,
+      scopedProjectId,
       visibleProjects,
       settingsInitialTab,
       selectedProject,

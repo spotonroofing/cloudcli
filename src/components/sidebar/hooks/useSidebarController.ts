@@ -91,6 +91,8 @@ type RecentConversationsApiPayload = {
 type UseSidebarControllerArgs = {
   projects: Project[];
   selectedProject: Project | null;
+  /** Route-pinned project id when the tab is scoped (`/project/:projectId`). */
+  scopedProjectId?: string | null;
   selectedSession: ProjectSession | null;
   activeSessions: SessionActivityMap;
   isLoading: boolean;
@@ -111,6 +113,7 @@ type UseSidebarControllerArgs = {
 export function useSidebarController({
   projects,
   selectedProject,
+  scopedProjectId = null,
   selectedSession: _selectedSession,
   activeSessions,
   isLoading,
@@ -167,6 +170,13 @@ export function useSidebarController({
   const onRefreshRef = useRef(onRefresh);
 
   const isSidebarCollapsed = !isMobile && !sidebarVisible;
+
+  // Desktop conversations are scoped to the current project (phase 3): the
+  // route-pinned project when scoped, else the selected project. Mobile keeps
+  // the global all-projects feed.
+  const conversationsProjectId = !isMobile
+    ? scopedProjectId ?? selectedProject?.projectId ?? null
+    : null;
 
   // If a resize lands desktop in a mode whose tab was removed, snap back to Conversations.
   useEffect(() => {
@@ -295,7 +305,7 @@ export function useSidebarController({
     setRecentConversationsError(false);
 
     try {
-      const response = await api.recentConversations({ limit: 40, offset });
+      const response = await api.recentConversations({ limit: 40, offset, projectId: conversationsProjectId });
       if (!response.ok) {
         throw new Error(`Failed to load recent conversations: ${response.status}`);
       }
@@ -334,7 +344,7 @@ export function useSidebarController({
         setIsLoadingMoreRecentConversations(false);
       }
     }
-  }, []);
+  }, [conversationsProjectId]);
 
   const reloadRecentConversations = useCallback(() => {
     void fetchRecentConversationsPage(0, false);
@@ -387,8 +397,14 @@ export function useSidebarController({
       return;
     }
 
+    // Desktop never loads the global all-projects feed; wait until the
+    // current project is known (route scope or resolved selection).
+    if (!isMobile && !conversationsProjectId) {
+      return;
+    }
+
     reloadRecentConversations();
-  }, [debouncedSearchQuery, reloadRecentConversations, searchMode]);
+  }, [conversationsProjectId, debouncedSearchQuery, isMobile, reloadRecentConversations, searchMode]);
 
   useEffect(() => {
     if (searchMode !== 'archived') {
@@ -478,10 +494,21 @@ export function useSidebarController({
           scannedProjects: number;
           totalProjects: number;
         };
-        accumulated.push(data.projectResult);
-        totalMatches = data.totalMatches;
-        setConversationResults({ results: [...accumulated], totalMatches, query });
         setSearchProgress({ scannedProjects: data.scannedProjects, totalProjects: data.totalProjects });
+        // Scoped desktop view only surfaces matches from the current project;
+        // other projects' results would be an escape hatch out of the scope.
+        if (conversationsProjectId && data.projectResult.projectId !== conversationsProjectId) {
+          return;
+        }
+        accumulated.push(data.projectResult);
+        totalMatches = conversationsProjectId
+          ? accumulated.reduce(
+              (projectSum, projectResult) =>
+                projectSum + projectResult.sessions.reduce((sessionSum, session) => sessionSum + session.matches.length, 0),
+              0,
+            )
+          : data.totalMatches;
+        setConversationResults({ results: [...accumulated], totalMatches, query });
       } catch {
         // Ignore malformed SSE data
       }
@@ -526,7 +553,7 @@ export function useSidebarController({
         eventSourceRef.current = null;
       }
     };
-  }, [debouncedSearchQuery, searchMode]);
+  }, [conversationsProjectId, debouncedSearchQuery, searchMode]);
 
   // All sidebar state keys (expanded, starred, loading, etc.) use the DB
   // `projectId` as their identifier after the migration.

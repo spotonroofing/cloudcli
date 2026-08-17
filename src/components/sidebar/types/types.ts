@@ -45,6 +45,8 @@ export type SessionDeleteConfirmation = {
 export type SidebarProps = {
   projects: Project[];
   selectedProject: Project | null;
+  /** Route-pinned project id when the tab is scoped (`/project/:projectId`). */
+  scopedProjectId?: string | null;
   selectedSession: ProjectSession | null;
   activeSessions: SessionActivityMap;
   attentionSessionIds: ReadonlySet<string>;
