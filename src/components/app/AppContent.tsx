@@ -50,7 +50,10 @@ export default function AppContent() {
 
 function AppContentInner() {
   const navigate = useNavigate();
-  const { sessionId } = useParams<{ sessionId?: string }>();
+  const { sessionId, projectId } = useParams<{ sessionId?: string; projectId?: string }>();
+  // Scoped tab (`/project/:projectId`): session navigation keeps the prefix so
+  // the tab stays docked to its project.
+  const projectBasePath = projectId ? `/project/${projectId}` : '';
   const { t } = useTranslation('common');
   const { isMobile } = useDeviceSettings({ trackPWA: false });
   const { ws, sendMessage, subscribe } = useWebSocket();
@@ -63,6 +66,7 @@ function AppContentInner() {
   } = useSessionProtection();
 
   const {
+    scopedProjectNotFound,
     selectedProject,
     selectedSession,
     activeTab,
@@ -81,6 +85,7 @@ function AppContentInner() {
     handleProjectSelect,
   } = useProjectsState({
     sessionId,
+    scopedProjectId: projectId,
     navigate,
     subscribe,
     isMobile,
@@ -204,6 +209,17 @@ function AppContentInner() {
     return () => vv.removeEventListener('resize', update);
   }, []);
 
+  // Scoped route with an unknown project id: show a plain not-found state
+  // instead of falling back to the global project list.
+  if (scopedProjectNotFound) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center gap-1 bg-background">
+        <p className="text-lg font-medium text-foreground">Project not found</p>
+        <p className="text-sm text-muted-foreground">This link points to a project that does not exist on this server.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 flex bg-background" style={{ bottom: 'var(--keyboard-height, 0px)' }}>
       {!isMobile ? (
@@ -255,7 +271,7 @@ function AppContentInner() {
           onSessionIdle={markSessionIdle}
           processingSessions={processingSessions}
           onNavigateToSession={(targetSessionId: string, options) =>
-            navigate(`/session/${targetSessionId}`, { replace: Boolean(options?.replace) })
+            navigate(`${projectBasePath}/session/${targetSessionId}`, { replace: Boolean(options?.replace) })
           }
           onSessionEstablished={(targetSessionId, context) =>
             registerOptimisticSession({ sessionId: targetSessionId, ...context })

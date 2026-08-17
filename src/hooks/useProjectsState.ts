@@ -15,6 +15,8 @@ import type { SessionActivityMap } from './useSessionProtection';
 
 type UseProjectsStateArgs = {
   sessionId?: string;
+  /** Route-pinned project id (`/project/:projectId`) that scopes this tab to one project. */
+  scopedProjectId?: string;
   navigate: NavigateFunction;
   /** Subscription to the unified websocket event stream. */
   subscribe: (listener: (event: ServerEvent) => void) => () => void;
@@ -373,11 +375,17 @@ const readPersistedTab = (): AppTab => {
 
 export function useProjectsState({
   sessionId,
+  scopedProjectId,
   navigate,
   subscribe,
   isMobile,
   activeSessions,
 }: UseProjectsStateArgs) {
+  // In a scoped tab every in-app navigation stays under the project prefix so
+  // the tab never escapes its project.
+  const basePath = scopedProjectId ? `/project/${scopedProjectId}` : '';
+  const rootPath = basePath || '/';
+  const [scopedProjectNotFound, setScopedProjectNotFound] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSession, setSelectedSession] = useState<ProjectSession | null>(null);
@@ -653,6 +661,30 @@ export function useProjectsState({
     }
   }, [isLoadingProjects, projects, selectedProject, sessionId]);
 
+  // Scoped-tab resolver, mirroring the sessionId resolver below: when the URL
+  // pins a project, lock the selection to it so new sessions are created with
+  // that project's path. An id that is still missing after the project list
+  // has loaded flips `scopedProjectNotFound` instead of falling back to the
+  // global view. With a sessionId in the URL, selection is left to the
+  // sessionId resolver.
+  useEffect(() => {
+    if (!scopedProjectId) {
+      setScopedProjectNotFound(false);
+      return;
+    }
+
+    const scopedProject = projects.find((project) => project.projectId === scopedProjectId);
+    if (!scopedProject) {
+      setScopedProjectNotFound(!isLoadingProjects);
+      return;
+    }
+
+    setScopedProjectNotFound(false);
+    if (!sessionId && selectedProject?.projectId !== scopedProject.projectId) {
+      setSelectedProject(scopedProject);
+    }
+  }, [isLoadingProjects, projects, scopedProjectId, selectedProject?.projectId, sessionId]);
+
   // Realtime sidebar updates. The backend pushes per-session deltas
   // (`session_upserted`) instead of full project snapshots, so each event is
   // a keyed upsert that can never clobber unrelated client state — no
@@ -797,12 +829,12 @@ export function useProjectsState({
       });
 
       if (sessionId === aliasedSelectedSessionId) {
-        navigate(`/session/${upsert.sessionId}`);
+        navigate(`${basePath}/session/${upsert.sessionId}`);
       }
     };
 
     return subscribe(handleEvent);
-  }, [markSessionAttention, navigate, sessionId, subscribe]);
+  }, [basePath, markSessionAttention, navigate, sessionId, subscribe]);
 
   useEffect(() => {
     return () => {
@@ -895,7 +927,7 @@ export function useProjectsState({
       // The URL carried a provider-native alias id: swap it for the canonical
       // app-facing id and let this effect re-run against the new URL.
       if (typeof details.sessionId === 'string' && details.sessionId && details.sessionId !== sessionId) {
-        navigate(`/session/${details.sessionId}`, { replace: true });
+        navigate(`${basePath}/session/${details.sessionId}`, { replace: true });
         return;
       }
 
@@ -945,19 +977,19 @@ export function useProjectsState({
           : resolvedSession,
       );
     })();
-  }, [navigate, sessionId, projects, selectedProject, selectedSession?.id, selectedSession?.__provider]);
+  }, [basePath, navigate, sessionId, projects, selectedProject, selectedSession?.id, selectedSession?.__provider]);
 
   const handleProjectSelect = useCallback(
     (project: Project) => {
       setSelectedProject(project);
       setSelectedSession(null);
-      navigate('/');
+      navigate(rootPath);
 
       if (isMobile) {
         setSidebarOpen(false);
       }
     },
-    [isMobile, navigate],
+    [isMobile, navigate, rootPath],
   );
 
   const handleSessionSelect = useCallback(
@@ -982,9 +1014,9 @@ export function useProjectsState({
         }
       }
 
-      navigate(`/session/${session.id}`);
+      navigate(`${basePath}/session/${session.id}`);
     },
-    [activeTab, clearSessionAttention, isMobile, navigate, selectedProject?.projectId],
+    [activeTab, basePath, clearSessionAttention, isMobile, navigate, selectedProject?.projectId],
   );
 
   const handleNewSession = useCallback(
@@ -993,13 +1025,13 @@ export function useProjectsState({
       setSelectedSession(null);
       setActiveTab('chat');
       setNewSessionTrigger((previous) => previous + 1);
-      navigate('/');
+      navigate(rootPath);
 
       if (isMobile) {
         setSidebarOpen(false);
       }
     },
-    [isMobile, navigate],
+    [isMobile, navigate, rootPath],
   );
 
   const handleSessionDelete = useCallback(
@@ -1008,14 +1040,14 @@ export function useProjectsState({
 
       if (selectedSession?.id === sessionIdToDelete) {
         setSelectedSession(null);
-        navigate('/');
+        navigate(rootPath);
       }
 
       setProjects((prevProjects) =>
         prevProjects.map((project) => removeSessionFromProject(project, sessionIdToDelete)),
       );
     },
-    [clearSessionAttention, navigate, selectedSession?.id],
+    [clearSessionAttention, navigate, rootPath, selectedSession?.id],
   );
 
   const handleSidebarRefresh = useCallback(async () => {
@@ -1122,17 +1154,24 @@ export function useProjectsState({
       if (selectedProject?.projectId === projectId) {
         setSelectedProject(null);
         setSelectedSession(null);
-        navigate('/');
+        navigate(rootPath);
       }
 
       setProjects((prevProjects) => prevProjects.filter((project) => project.projectId !== projectId));
     },
-    [navigate, selectedProject?.projectId],
+    [navigate, rootPath, selectedProject?.projectId],
+  );
+
+  // Scoped tabs pin the sidebar to the one route-selected project, so there
+  // is no project switcher to escape through.
+  const visibleProjects = useMemo(
+    () => (scopedProjectId ? projects.filter((project) => project.projectId === scopedProjectId) : projects),
+    [projects, scopedProjectId],
   );
 
   const sidebarSharedProps = useMemo(
     () => ({
-      projects,
+      projects: visibleProjects,
       selectedProject,
       selectedSession,
       activeSessions,
@@ -1165,7 +1204,7 @@ export function useProjectsState({
       isMobile,
       loadingProgress,
       activeSessions,
-      projects,
+      visibleProjects,
       settingsInitialTab,
       selectedProject,
       selectedSession,
@@ -1175,6 +1214,7 @@ export function useProjectsState({
 
   return {
     projects,
+    scopedProjectNotFound,
     selectedProject,
     selectedSession,
     activeTab,
