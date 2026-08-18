@@ -110,7 +110,8 @@ const generateToken = (user) => {
       username: user.username
     },
     JWT_SECRET,
-    { expiresIn: '7d' }
+    // Tailscale is the perimeter; long-lived sessions so devices don't re-prompt (auto-refresh past half-life keeps active devices signed in indefinitely).
+    { expiresIn: '90d' }
   );
 };
 
