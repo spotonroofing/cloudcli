@@ -22,7 +22,7 @@ interface UseChatRealtimeHandlersArgs {
   provider: LLMProvider;
   selectedSession: ProjectSession | null;
   currentSessionId: string | null;
-  setTokenBudget: (budget: Record<string, unknown> | null) => void;
+  setTokenBudget: Dispatch<SetStateAction<Record<string, unknown> | null>>;
   pendingPermissionRequests: PendingPermissionRequest[];
   setPendingPermissionRequests: Dispatch<SetStateAction<PendingPermissionRequest[]>>;
   streamTimerRef: MutableRefObject<number | null>;
@@ -310,7 +310,17 @@ export function useChatRealtimeHandlers({
 
         case 'status': {
           if (msg.text === 'token_budget' && msg.tokenBudget) {
-            setTokenBudget(msg.tokenBudget as Record<string, unknown>);
+            const incoming = msg.tokenBudget as Record<string, unknown>;
+            setTokenBudget((previous) => {
+              // Mid-stream budgets carry fresh counters but only the env-guess
+              // denominator; keep the SDK-derived window and category breakdown
+              // from the last result until the next one lands.
+              if (incoming.contextUsageSource !== 'sdk' && previous?.contextUsageSource === 'sdk') {
+                const { total, rawTotal, totalIsUsableWindow, categories, contextUsageSource } = previous;
+                return { ...incoming, total, rawTotal, totalIsUsableWindow, categories, contextUsageSource };
+              }
+              return incoming;
+            });
           } else if (msg.text && sid) {
             onSessionProcessing?.(sid, {
               statusText: msg.text as string,

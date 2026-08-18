@@ -10,7 +10,7 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { PlusIcon, MessageSquareIcon, XIcon, Loader2, ArrowUpIcon } from 'lucide-react';
+import { PlusIcon, SlashIcon, XIcon, Loader2, ArrowUpIcon } from 'lucide-react';
 
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
@@ -71,7 +71,6 @@ interface ChatComposerProps {
   onSelectModel: (model: string) => void;
   modelsLoading: boolean;
   tokenBudget: Record<string, unknown> | null;
-  onShowTokenUsage: () => void;
   onToggleCommandMenu: () => void;
   hasInput: boolean;
   onClearInput: () => void;
@@ -129,7 +128,6 @@ export default function ChatComposer({
   onSelectModel,
   modelsLoading,
   tokenBudget,
-  onShowTokenUsage,
   onToggleCommandMenu,
   hasInput,
   onClearInput,
@@ -368,15 +366,15 @@ export default function ChatComposer({
               <VoiceInputButton state={voiceState} onToggle={voiceToggle} errorMsg={voiceError} />
             )}
 
-            <TokenUsageSummary usage={tokenBudget} onClick={onShowTokenUsage} />
-
             <PromptInputButton
               tooltip={{ content: t('input.showAllCommands') }}
               onClick={onToggleCommandMenu}
               className="relative"
             >
-              <MessageSquareIcon />
+              <SlashIcon />
             </PromptInputButton>
+
+            <TokenUsageSummary usage={tokenBudget} />
 
             {hasInput && (
               <PromptInputButton

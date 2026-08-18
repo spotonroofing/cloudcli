@@ -367,6 +367,39 @@ function extractTokenBudget(sdkMessage) {
 }
 
 /**
+ * Folds the SDK's getContextUsage() snapshot into a token budget so the client
+ * ring and usage popover divide by the model's real usable window instead of
+ * the CONTEXT_WINDOW env guess, and can render the per-category breakdown.
+ * @param {Object} budget - Budget from extractTokenBudget
+ * @param {Object} snapshot - SDKControlGetContextUsageResponse
+ * @returns {Object} Enriched budget
+ */
+function applyContextUsageSnapshot(budget, snapshot) {
+  const maxTokens = readNumber(snapshot?.maxTokens);
+  if (!maxTokens) {
+    return budget;
+  }
+
+  const rawMaxTokens = readNumber(snapshot.rawMaxTokens) || maxTokens;
+  return {
+    ...budget,
+    used: readNumber(snapshot.totalTokens) || budget.used,
+    total: maxTokens,
+    rawTotal: rawMaxTokens,
+    totalIsUsableWindow: maxTokens < rawMaxTokens,
+    contextUsageSource: 'sdk',
+    categories: Array.isArray(snapshot.categories)
+      ? snapshot.categories.map((category) => ({
+          name: category.name,
+          tokens: readNumber(category.tokens),
+          color: category.color,
+          isDeferred: Boolean(category.isDeferred),
+        }))
+      : undefined,
+  };
+}
+
+/**
  * Builds the SDK `prompt` payload for one turn.
  *
  * Plain text turns pass the string through unchanged. Turns with image
@@ -637,6 +670,11 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
 
     // Process streaming messages
     console.log('Starting async generator loop for session:', capturedSessionId || 'NEW');
+    // The get_context_usage control request only answers while the CLI process
+    // is alive, so it is fired on assistant messages (mid-turn) and awaited at
+    // the result message; a request first issued at the result itself loses the
+    // race against process exit.
+    let contextUsagePromise = null;
     for await (const message of queryInstance) {
       // Capture session ID from first message
       if (message.session_id && !capturedSessionId) {
@@ -673,7 +711,30 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
       }
 
       // Extract and send token budget updates from assistant/result usage payloads
-      const tokenBudgetData = extractTokenBudget(message);
+      if (message.type === 'assistant') {
+        contextUsagePromise = queryInstance.getContextUsage().catch(() => null);
+      }
+      let tokenBudgetData = extractTokenBudget(message);
+      if (message.type === 'result' && tokenBudgetData) {
+        const snapshot = contextUsagePromise ? await contextUsagePromise : null;
+        if (snapshot) {
+          tokenBudgetData = applyContextUsageSnapshot(tokenBudgetData, snapshot);
+        } else {
+          // No snapshot landed: the model's raw window from the result payload
+          // still beats the env guess as a denominator.
+          const modelData = message.modelUsage ? Object.values(message.modelUsage)[0] : null;
+          const modelWindow = readNumber(modelData?.contextWindow);
+          if (modelWindow > 0) {
+            tokenBudgetData = {
+              ...tokenBudgetData,
+              total: modelWindow,
+              rawTotal: modelWindow,
+              totalIsUsableWindow: false,
+              contextUsageSource: 'model',
+            };
+          }
+        }
+      }
       if (tokenBudgetData) {
         ws.send(createNormalizedMessage({ kind: 'status', text: 'token_budget', tokenBudget: tokenBudgetData, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
       }

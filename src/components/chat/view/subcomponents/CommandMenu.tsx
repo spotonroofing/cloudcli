@@ -215,8 +215,8 @@ export default function CommandMenu({
   }
 
   const preferredOrder = hasFrequentCommands
-    ? ['frequent', 'builtin', 'skill', 'project', 'user', 'other']
-    : ['builtin', 'skill', 'project', 'user', 'other'];
+    ? ['user', 'frequent', 'builtin', 'skill', 'project', 'other']
+    : ['user', 'builtin', 'skill', 'project', 'other'];
   const extraNamespaces = Object.keys(groupedCommands).filter((namespace) => !preferredOrder.includes(namespace));
   const orderedNamespaces = [...preferredOrder, ...extraNamespaces].filter((namespace) => groupedCommands[namespace]);
   const renderInPortal = (node: ReactElement) =>
