@@ -141,8 +141,8 @@ export function VersionUpgradeModal({
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                            <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15">
+                            <svg className="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
                             </svg>
                         </div>
@@ -169,9 +169,9 @@ export function VersionUpgradeModal({
                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('versionUpdate.currentVersion')}</span>
                         <span className="font-mono text-sm text-gray-900 dark:text-white">{currentVersion}</span>
                     </div>
-                    <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-700 dark:bg-blue-900/20">
-                        <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{t('versionUpdate.latestVersion')}</span>
-                        <span className="font-mono text-sm text-blue-900 dark:text-blue-100">{latestVersion}</span>
+                    <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/10 p-3">
+                        <span className="text-sm font-medium text-primary">{t('versionUpdate.latestVersion')}</span>
+                        <span className="font-mono text-sm text-primary">{latestVersion}</span>
                     </div>
                 </div>
 
@@ -185,7 +185,7 @@ export function VersionUpgradeModal({
                                     href={releaseInfo.htmlUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 hover:underline"
                                 >
                                     {t('versionUpdate.viewFullRelease')}
                                     <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,7 +212,7 @@ export function VersionUpgradeModal({
                             <pre className="whitespace-pre-wrap font-mono text-xs text-green-400">{updateOutput}</pre>
                         </div>
                         {IS_PLATFORM && reloadCountdown !== null && (
-                            <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-200">
+                            <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
                                 {reloadCountdown === 0
                                     ? 'Refreshing the window now...'
                                     : `This will refresh the window in ${reloadCountdown} ${reloadCountdown === 1 ? 'second' : 'seconds'}. If the update doesn't apply, RESTART the environment.`}
@@ -260,7 +260,7 @@ export function VersionUpgradeModal({
                             <button
                                 onClick={handleUpdateNow}
                                 disabled={isUpdating}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
+                                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/50"
                             >
                                 {isUpdating ? (
                                     <>
@@ -281,7 +281,7 @@ export function VersionUpgradeModal({
 
 const changelogComponents = {
     a: ({ href, children }: { href?: string; children?: ReactNode }) => (
-        <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">
+        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
             {children}
         </a>
     ),

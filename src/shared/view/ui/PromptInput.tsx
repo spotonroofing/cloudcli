@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from 'react';
-import { SendHorizonalIcon, SquareIcon } from 'lucide-react';
+import { ArrowUpIcon, SquareIcon } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';
 import { Button } from './Button';
@@ -208,7 +208,7 @@ export const PromptInputSubmit = React.forwardRef<HTMLButtonElement, PromptInput
         {children ?? (isActive ? (
           <SquareIcon className="h-3.5 w-3.5 fill-current" />
         ) : (
-          <SendHorizonalIcon className="h-4 w-4" />
+          <ArrowUpIcon className="h-4 w-4" strokeWidth={2} />
         ))}
       </Button>
     );

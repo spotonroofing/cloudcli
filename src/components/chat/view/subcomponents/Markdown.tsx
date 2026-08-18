@@ -218,7 +218,7 @@ export function Markdown({ children, className, breaks = false }: MarkdownProps)
           return (
             <a
               href={href || fileRef}
-              className="cursor-pointer text-blue-600 hover:underline dark:text-blue-400"
+              className="cursor-pointer text-primary hover:underline"
               onClick={(event) => {
                 event.preventDefault();
                 openFileInEditor(stripLineSuffix(fileRef));
@@ -232,7 +232,7 @@ export function Markdown({ children, className, breaks = false }: MarkdownProps)
         return (
           <a
             href={href}
-            className="text-blue-600 hover:underline dark:text-blue-400"
+            className="text-primary hover:underline"
             target="_blank"
             rel="noopener noreferrer"
           >

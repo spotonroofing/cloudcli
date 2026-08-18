@@ -32,8 +32,8 @@
     --card-foreground: 36 25% 4%;
     --popover: 0 0% 100%;
     --popover-foreground: 36 25% 4%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 15 56% 52%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 44 15% 91%;
     --secondary-foreground: 36 15% 18%;
     --muted: 44 15% 91%;
@@ -44,7 +44,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 44 14% 87%;
     --input: 44 14% 87%;
-    --ring: 221.2 83.2% 53.3%;
+    --ring: 15 56% 52%;
     --radius: 0.75rem;
 
     /* Typography tokens — see DESIGN.md. Same self-hosted family, two cuts:
@@ -57,13 +57,13 @@
     --nav-glass-bg: 44 22% 96% / 0.7;
     --nav-glass-blur: 20px;
     --nav-glass-saturate: 1.8;
-    --nav-tab-glow: 221.2 83.2% 53.3% / 0.18;
-    --nav-tab-ring: 221.2 83.2% 53.3% / 0.10;
+    --nav-tab-glow: 15 56% 52% / 0.18;
+    --nav-tab-ring: 15 56% 52% / 0.10;
     --nav-float-shadow: 0 0% 0% / 0.06;
     --nav-float-ring: 44 14% 87% / 0.5;
     --nav-divider-color: 44 14% 87% / 0.5;
     --nav-input-bg: 44 15% 91% / 0.5;
-    --nav-input-focus-ring: 221.2 83.2% 53.3% / 0.22;
+    --nav-input-focus-ring: 15 56% 52% / 0.22;
 
     /* Safe area CSS variables */
     --safe-area-inset-top: env(safe-area-inset-top);
@@ -100,8 +100,8 @@
     --card-foreground: 40 8% 93%;
     --popover: 0 0% 12%;
     --popover-foreground: 40 8% 93%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 0 0% 8%;
+    --primary: 15 56% 52%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 17%;
     --secondary-foreground: 40 8% 93%;
     --muted: 0 0% 17%;
@@ -112,19 +112,19 @@
     --destructive-foreground: 40 8% 93%;
     --border: 0 0% 17%;
     --input: 0 0% 23%;
-    --ring: 217.2 91.2% 59.8%;
+    --ring: 15 56% 52%;
 
     /* Nav design tokens — dark overrides */
     --nav-glass-bg: 0 0% 12% / 0.55;
     --nav-glass-blur: 24px;
     --nav-glass-saturate: 1.6;
-    --nav-tab-glow: 217.2 91.2% 59.8% / 0.25;
-    --nav-tab-ring: 217.2 91.2% 59.8% / 0.15;
+    --nav-tab-glow: 15 56% 52% / 0.25;
+    --nav-tab-ring: 15 56% 52% / 0.15;
     --nav-float-shadow: 0 0% 0% / 0.35;
     --nav-float-ring: 0 0% 17% / 0.3;
     --nav-divider-color: 0 0% 17% / 0.5;
     --nav-input-bg: 0 0% 17% / 0.5;
-    --nav-input-focus-ring: 217.2 91.2% 59.8% / 0.25;
+    --nav-input-focus-ring: 15 56% 52% / 0.25;
   }
 }
 
@@ -399,7 +399,7 @@
   
   /* Ensure checkbox styling is preserved */
   input[type="checkbox"] {
-    @apply accent-blue-600;
+    accent-color: hsl(var(--primary));
     opacity: 1;
   }
   
@@ -413,17 +413,17 @@
   .dark input[type="checkbox"] {
     background-color: rgb(31 41 55); /* gray-800 */
     border-color: rgb(75 85 99); /* gray-600 */
-    color: rgb(37 99 235); /* blue-600 */
+    color: hsl(var(--primary));
     color-scheme: dark;
   }
-  
+
   .dark input[type="checkbox"]:checked {
-    background-color: rgb(37 99 235); /* blue-600 */
-    border-color: rgb(37 99 235); /* blue-600 */
+    background-color: hsl(var(--primary));
+    border-color: hsl(var(--primary));
   }
-  
+
   .dark input[type="checkbox"]:focus {
-    --tw-ring-color: rgb(59 130 246); /* blue-500 */
+    --tw-ring-color: hsl(var(--ring));
     --tw-ring-offset-color: rgb(31 41 55); /* gray-800 */
   }
   
@@ -431,17 +431,17 @@
   .dark input[type="radio"] {
     background-color: rgb(31 41 55); /* gray-800 */
     border-color: rgb(75 85 99); /* gray-600 */
-    color: rgb(37 99 235); /* blue-600 */
+    color: hsl(var(--primary));
     color-scheme: dark;
   }
-  
+
   .dark input[type="radio"]:checked {
-    background-color: rgb(37 99 235); /* blue-600 */
-    border-color: rgb(37 99 235); /* blue-600 */
+    background-color: hsl(var(--primary));
+    border-color: hsl(var(--primary));
   }
-  
+
   .dark input[type="radio"]:focus {
-    --tw-ring-color: rgb(59 130 246); /* blue-500 */
+    --tw-ring-color: hsl(var(--ring));
     --tw-ring-offset-color: rgb(31 41 55); /* gray-800 */
   }
   

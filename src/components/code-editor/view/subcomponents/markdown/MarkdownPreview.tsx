@@ -21,7 +21,7 @@ const markdownPreviewComponents: Components = {
     </blockquote>
   ),
   a: ({ href, children }) => (
-    <a href={href} className="text-blue-600 hover:underline dark:text-blue-400" target="_blank" rel="noopener noreferrer">
+    <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
       {children}
     </a>
   ),

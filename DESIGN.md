@@ -24,6 +24,7 @@ Both currently point at the same family; keep them separate so the cuts can dive
 
 `--background` / `--foreground`, `--card`, `--popover`, `--primary`, `--secondary`, `--muted`, `--accent`, `--destructive`, `--border`, `--input`, `--ring` — each with a `-foreground` pair where applicable. Nav-specific glass tokens (`--nav-glass-*`, `--nav-tab-*`, `--nav-input-*`) also live in `src/index.css`.
 
+- Accent: `--primary: 15 56% 52%` (Claude-style terracotta, #C96442; same value light and dark, `--primary-foreground` white). `--ring` and the nav glow/focus tokens carry the same hue. Every accent use (send button, links, active states, selection ticks, progress ring fill, focus rings) goes through `primary`/`ring` utilities — never hardcode blue or orange Tailwind palette classes.
 - User message bubble: `bg-secondary text-secondary-foreground` (lighter gray bubble on the darker background in dark mode, white text). No blue bubble, no avatar circle.
 - Secondary/metadata text: `text-muted-foreground`.
 
