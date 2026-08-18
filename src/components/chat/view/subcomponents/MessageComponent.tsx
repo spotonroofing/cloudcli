@@ -1,14 +1,14 @@
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SessionProviderLogo from '../../../llm-logo-provider/SessionProviderLogo';
+import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
 import type {
   ChatMessage,
   ClaudePermissionSuggestion,
   PermissionGrantResult,
   Provider,
 } from '../../types/types';
-import { formatUsageLimitText } from '../../utils/chatFormatting';
+import { formatUsageLimitText, stripProposedPlanEnvelope } from '../../utils/chatFormatting';
 import type { Project } from '../../../../types/app';
 import { ToolRenderer, ToolErrorDisplay, shouldHideToolResult } from '../../tools';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '../../../../shared/view/ui';
@@ -56,8 +56,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
   const messageRef = useRef<HTMLDivElement | null>(null);
   const userCopyContent = String(message.content || '');
   const formattedMessageContent = useMemo(
-    () => formatUsageLimitText(String(message.content || '')),
-    [message.content]
+    () => {
+      const content = formatUsageLimitText(String(message.content || ''));
+      return provider === 'codex' && message.type === 'assistant' && !message.isThinking
+        ? stripProposedPlanEnvelope(content)
+        : content;
+    },
+    [message.content, message.isThinking, message.type, provider]
   );
   const assistantCopyContent = message.isToolUse
     ? String(message.displayText || message.content || '')
@@ -146,7 +151,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                 </div>
               ) : (
                 <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full p-1 text-sm text-foreground">
-                  <SessionProviderLogo provider={provider} className="h-full w-full" />
+                  <LLMProviderLogo provider={provider} className="h-full w-full" />
                 </div>
               )}
               <div className="text-sm font-medium text-gray-900 dark:text-white">
