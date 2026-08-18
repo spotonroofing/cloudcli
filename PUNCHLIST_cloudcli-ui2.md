@@ -40,10 +40,10 @@ Done check: agent-browser opens the switcher; snapshot shows the card, Effort ro
 
 Goal and scope: chat tool-row styling plus sidebar chrome. Dependencies: phase 1 accent. Parallelism: solo.
 
-- [ ] 8. Tool indicator rows (Read, Bash, etc.): remove the layered offset-gray wraparound treatment; every tool row uses one consistent treatment matching the Glob row style: a solid left rule, or a single clean full border, identical across all tool row types. No shifted or stacked-layer look anywhere in the transcript.
-- [ ] 9. Sidebar top bar: the Conversations|Archive selector becomes a 50/50 equal-width segmented control living inside the top button bar alongside the reload, new-session, and collapse buttons; below the top bar comes search, then the conversations list, and nothing else. The old separate pill row is gone.
-- [ ] 10. The teal quick-settings flyout arrow on the right edge of the chat area is removed; any setting that exists only in that flyout moves into the Settings page (skip duplicates). List in the final message which settings moved.
-- [ ] 11. Collapsed sidebar rail: Settings stays pinned at the bottom-left; nothing about collapsing moves it up.
+- [x] 8. Tool indicator rows (Read, Bash, etc.): remove the layered offset-gray wraparound treatment; every tool row uses one consistent treatment matching the Glob row style: a solid left rule, or a single clean full border, identical across all tool row types. No shifted or stacked-layer look anywhere in the transcript.
+- [x] 9. Sidebar top bar: the Conversations|Archive selector becomes a 50/50 equal-width segmented control living inside the top button bar alongside the reload, new-session, and collapse buttons; below the top bar comes search, then the conversations list, and nothing else. The old separate pill row is gone.
+- [x] 10. The teal quick-settings flyout arrow on the right edge of the chat area is removed; any setting that exists only in that flyout moves into the Settings page (skip duplicates). List in the final message which settings moved.
+- [x] 11. Collapsed sidebar rail: Settings stays pinned at the bottom-left; nothing about collapsing moves it up.
 
 Done check: agent-browser snapshot shows no flyout tab on the right edge, the segmented control in the top bar with equal widths (bounding boxes within a few px), search directly below, Settings at the rail bottom when collapsed; transcript tool rows all carry the single consistent treatment. Fresh-context verifier on the diff. Commit, push.
 

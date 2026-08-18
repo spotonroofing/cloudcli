@@ -69,7 +69,7 @@ Renders as a single line with `border-l-2` accent. Supports multiple rendering m
 
 Used by: Edit, Write, ApplyPatch, Grep/Glob results, TodoWrite, TaskList/TaskGet results, ExitPlanMode, Default
 
-Wraps `CollapsibleSection` (`<details>`/`<summary>`) with a `border-l-2` accent colored by tool category. Accepts **children** directly (not contentProps).
+Wraps `CollapsibleSection` (`<details>`/`<summary>`) with the shared `border-l-2` gray rule every tool row carries. Accepts **children** directly (not contentProps).
 
 ```tsx
 <CollapsibleDisplay
@@ -80,22 +80,12 @@ Wraps `CollapsibleSection` (`<details>`/`<summary>`) with a `border-l-2` accent 
   onTitleClick={() => ...}      // Makes title a clickable link (for edit tools)
   showRawParameters={true}      // Show raw JSON toggle
   rawContent="..."              // Raw JSON string
-  toolCategory="edit"           // Drives border color
 >
   <ToolDiffViewer {...} />          // Content as children
 </CollapsibleDisplay>
 ```
 
-**Tool category colors** (via `border-l-2`):
-| Category | Tools | Color |
-|----------|-------|-------|
-| `edit` | Edit, Write, ApplyPatch | amber |
-| `bash` | Bash | green |
-| `search` | Grep, Glob | gray |
-| `todo` | TodoWrite, TodoRead | violet |
-| `task` | TaskCreate/Update/List/Get | violet |
-| `plan` | ExitPlanMode | indigo |
-| `default` | everything else | neutral gray |
+All tool rows share one treatment: a solid `border-l-2` gray left rule (`border-gray-400 dark:border-gray-500`), matching the Grep/Glob rows.
 
 ---
 
@@ -136,8 +126,6 @@ MyTool: {
   }
 }
 ```
-
-**Step 2:** If the tool needs a category color, add it to `getToolCategory()` in `ToolRenderer.tsx`.
 
 **That's it.** The ToolRenderer auto-routes based on config.
 

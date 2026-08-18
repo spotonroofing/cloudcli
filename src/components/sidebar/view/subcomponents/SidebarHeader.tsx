@@ -82,8 +82,37 @@ export default function SidebarHeader({
         className="hidden px-3 pb-2 pt-3 md:block"
         style={{}}
       >
-        <div className="flex items-center justify-end gap-2">
-          <div className="flex flex-shrink-0 items-center gap-0.5">
+        <div className="flex items-center gap-2">
+          {/* Conversations | Archive segmented control, 50/50, inside the top button bar */}
+          {showSearchTools && (
+            <div className="flex min-w-0 flex-1 rounded-lg bg-muted/50 p-0.5">
+              <button
+                onClick={() => onSearchModeChange('conversations')}
+                aria-pressed={searchMode === 'conversations'}
+                className={cn(
+                  "flex min-w-0 flex-1 basis-0 items-center justify-center rounded-md px-1 py-1.5 text-[11px] font-normal transition-all",
+                  searchMode === 'conversations'
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className="truncate">{t('search.modeConversations')}</span>
+              </button>
+              <button
+                onClick={() => onSearchModeChange('archived')}
+                aria-pressed={searchMode === 'archived'}
+                className={cn(
+                  "flex min-w-0 flex-1 basis-0 items-center justify-center rounded-md px-1 py-1.5 text-[11px] font-normal transition-all",
+                  searchMode === 'archived'
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className="truncate">{t('archived.title', 'Archive')}</span>
+              </button>
+            </div>
+          )}
+          <div className="ml-auto flex flex-shrink-0 items-center gap-0.5">
             <Button
               variant="ghost"
               size="sm"
@@ -123,39 +152,7 @@ export default function SidebarHeader({
 
         {/* Search bar */}
         {showSearchTools && (
-          <div className="mt-2.5 space-y-2">
-            {/* Search mode toggle (desktop keeps Conversations + Archive only) */}
-            <div className="flex rounded-lg bg-muted/50 p-0.5">
-              <button
-                onClick={() => onSearchModeChange('conversations')}
-                aria-pressed={searchMode === 'conversations'}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-normal transition-all",
-                  searchMode === 'conversations'
-                    ? "bg-background shadow-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <MessageSquare className="h-3 w-3" />
-                {t('search.modeConversations')}
-              </button>
-              <Tooltip content={t('search.archiveOnlyTooltip', 'Archive only')} position="top">
-                <button
-                  onClick={() => onSearchModeChange('archived')}
-                  aria-pressed={searchMode === 'archived'}
-                  aria-label={t('search.archiveOnlyTooltip', 'Archive only')}
-                  title={t('search.archiveOnlyTooltip', 'Archive only')}
-                  className={cn(
-                    "flex items-center justify-center rounded-md px-2.5 py-1.5 text-xs font-normal transition-all",
-                    searchMode === 'archived'
-                      ? "bg-background shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Archive className="h-3 w-3" />
-                </button>
-              </Tooltip>
-            </div>
+          <div className="mt-2.5">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
               <Input

@@ -32,16 +32,6 @@ export default function SidebarCollapsed({
 
       <div className="nav-divider my-1 w-6" />
 
-      {/* Settings */}
-      <button
-        onClick={onShowSettings}
-        className="group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"
-        aria-label={t('actions.settings')}
-        title={t('actions.settings')}
-      >
-        <Settings className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-      </button>
-
       {/* Restart-required indicator */}
       {restartRequired && (
         <div
@@ -66,6 +56,16 @@ export default function SidebarCollapsed({
           <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
         </button>
       )}
+
+      {/* Settings — pinned to the rail bottom, matching the expanded footer */}
+      <button
+        onClick={onShowSettings}
+        className="group mt-auto flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"
+        aria-label={t('actions.settings')}
+        title={t('actions.settings')}
+      >
+        <Settings className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+      </button>
     </div>
   );
 }

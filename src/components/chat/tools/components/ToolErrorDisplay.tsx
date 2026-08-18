@@ -29,12 +29,7 @@ export const ToolErrorDisplay: React.FC<ToolErrorDisplayProps> = ({ content, lab
   };
 
   return (
-    <div
-      className={cn(
-        'mt-2 overflow-hidden rounded-lg border border-red-500/30 bg-red-50/50 transition-all duration-200 dark:bg-red-950/10',
-        open && 'shadow-sm',
-      )}
-    >
+    <div className="my-0.5 border-l-2 border-red-500/60 py-0.5 pl-3 dark:border-red-400/60">
       <div
         role={hasContent ? 'button' : undefined}
         tabIndex={hasContent ? 0 : undefined}
@@ -47,7 +42,7 @@ export const ToolErrorDisplay: React.FC<ToolErrorDisplayProps> = ({ content, lab
           }
         }}
         className={cn(
-          'flex items-center gap-2 px-2.5 py-1.5 outline-none',
+          'flex items-center gap-2 outline-none',
           hasContent && 'cursor-pointer focus-visible:ring-1 focus-visible:ring-ring',
         )}
       >
@@ -77,7 +72,7 @@ export const ToolErrorDisplay: React.FC<ToolErrorDisplayProps> = ({ content, lab
       </div>
 
       {open && hasContent && (
-        <div className="settings-content-enter border-t border-red-500/20 px-3 py-2 text-sm text-red-900 dark:text-red-100">
+        <div className="settings-content-enter py-1 pl-[1.375rem] text-sm text-red-900 dark:text-red-100">
           <Markdown className="prose prose-sm prose-red max-w-none font-serif dark:prose-invert">
             {trimmedContent}
           </Markdown>

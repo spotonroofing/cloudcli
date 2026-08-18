@@ -55,6 +55,12 @@ export default function QuickSettingsPanelView() {
     [consumeSuppressedClick],
   );
 
+  // Desktop has no flyout — these settings live in the Settings page. Mobile
+  // keeps the edge handle.
+  if (!isMobile) {
+    return null;
+  }
+
   return (
     <>
       <QuickSettingsHandle

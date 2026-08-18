@@ -17,11 +17,10 @@ interface BashCommandDisplayProps {
 }
 
 /**
- * Codex-in-VSCode style command row: a compact, single-line command with a
- * chevron on the left. When the command produced output, the row becomes a
- * dropdown that expands to reveal the output inline. Theme-integrated surfaces
- * keep it clean in both light and dark mode; consecutive commands stack tightly
- * into a clean list.
+ * Command row: a compact, single-line command with a chevron on the left.
+ * When the command produced output, the row becomes a dropdown that expands
+ * to reveal the output inline. Carries the same solid left rule as every
+ * other tool row (the Glob-row treatment).
  */
 export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
   command,
@@ -66,14 +65,7 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
   };
 
   return (
-    <div
-      className={cn(
-        'group/cmd overflow-hidden rounded-lg border bg-muted/40 backdrop-blur-sm transition-all duration-200',
-        isError ? 'border-red-500/30' : 'border-border/60',
-        hasOutput && !open && 'hover:border-border hover:bg-muted/60',
-        open && 'bg-muted/50 shadow-sm',
-      )}
-    >
+    <div className="group/cmd my-0.5 border-l-2 border-gray-400 py-0.5 pl-3 dark:border-gray-500">
       {/* Command header — clickable when there is output to expand */}
       <div
         role={hasOutput ? 'button' : undefined}
@@ -87,7 +79,7 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
           }
         }}
         className={cn(
-          'flex items-center gap-2 px-2.5 py-1.5 outline-none',
+          'flex items-center gap-2 outline-none',
           hasOutput && 'cursor-pointer focus-visible:ring-1 focus-visible:ring-ring',
         )}
       >
@@ -135,20 +127,20 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
       </div>
 
       {description && !open && (
-        <div className="truncate px-2.5 pb-1.5 pl-[2.4rem] text-[11px] italic text-muted-foreground/70">
+        <div className="truncate pl-[1.375rem] text-[11px] italic text-muted-foreground/70">
           {description}
         </div>
       )}
 
       {/* Expanded output */}
       {open && hasOutput && (
-        <div className="settings-content-enter border-t border-border/50 bg-background/50">
+        <div className="settings-content-enter pl-[1.375rem]">
           {description && (
-            <div className="px-3 pt-2 text-[11px] italic text-muted-foreground/70">{description}</div>
+            <div className="pt-1 text-[11px] italic text-muted-foreground/70">{description}</div>
           )}
           <pre
             className={cn(
-              'max-h-80 overflow-auto whitespace-pre-wrap break-all px-3 py-2 font-mono text-xs leading-relaxed',
+              'max-h-80 overflow-auto whitespace-pre-wrap break-all py-1 font-mono text-xs leading-relaxed',
               isError ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground',
             )}
           >

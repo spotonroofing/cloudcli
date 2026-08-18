@@ -58,7 +58,7 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
   const title = `Subagent / ${subagentType}: ${description}`;
 
   return (
-    <div className="my-1 border-l-2 border-l-purple-500 py-0.5 pl-3 dark:border-l-purple-400">
+    <div className="my-1 border-l-2 border-l-gray-400 py-0.5 pl-3 dark:border-l-gray-500">
       <CollapsibleSection
         title={title}
         toolName="Task"

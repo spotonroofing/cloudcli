@@ -73,7 +73,7 @@ export default function ToolGroupContainer({
   const [isExpanded, setIsExpanded] = useState(false);
   const config = getToolConfig(group.toolName).input;
   const label = config.label || group.toolName;
-  const borderClass = config.colorScheme?.border || 'border-border';
+  const borderClass = config.colorScheme?.border || 'border-gray-400 dark:border-gray-500';
   const iconClass = config.colorScheme?.icon || 'text-muted-foreground';
   const icon = getToolGroupIcon(config.icon, group.toolName);
 
@@ -97,7 +97,7 @@ export default function ToolGroupContainer({
     <div className="chat-message tool px-3 sm:px-0" data-message-timestamp={group.timestamp || undefined}>
       <button
         type="button"
-        className={`group flex w-full items-center gap-2 border-l-2 ${borderClass} rounded-md bg-muted/25 px-3 py-2 text-left transition-colors hover:bg-muted/40 dark:bg-muted/10 dark:hover:bg-muted/20`}
+        className={`group my-0.5 flex w-full items-center gap-2 border-l-2 ${borderClass} py-0.5 pl-3 text-left transition-colors hover:bg-muted/20`}
         onClick={() => setIsExpanded((current) => !current)}
         aria-expanded={isExpanded}
       >

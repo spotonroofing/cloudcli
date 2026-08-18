@@ -47,10 +47,10 @@ Chat view: `src/components/chat/view/`
 - `subcomponents/Markdown.tsx` — markdown renderer (`prose prose-sm font-serif dark:prose-invert` pattern).
 - `subcomponents/ChatComposer.tsx` — input composer (unified single box: textarea on top, one control row below; plus/attach left, model selector + send right; no hint text, no permission selector — sessions are hardwired to skip-permissions). `ComposerModelMenu.tsx` — Claude.ai-style model switcher (pill: friendly name + effort + chevron; card + Effort and More models submenus; friendly labels only, wire values unchanged), `CommandMenu.tsx` — composer menus (portal + `bg-popover` pattern).
 - `subcomponents/ChatMessagesPane.tsx` — scroll container; `TokenUsageSummary.tsx` — circular context-usage progress ring, click opens the usage menu.
-- `tools/ToolRenderer.tsx` (+ `tools/components/`) — tool input/result rendering.
+- `tools/ToolRenderer.tsx` (+ `tools/components/`) — tool input/result rendering. Every tool row (one-line, collapsible, Bash command row, grouped rows, subagent) carries one treatment: a solid `border-l-2` left rule in `border-gray-400 dark:border-gray-500` (error rows use the same rule in red). No rounded cards, backgrounds, or per-category border colors on tool rows.
 
 App chrome
 - Sidebar: `src/components/sidebar/`; main layout: `src/components/main-content/`, `src/components/app/`.
-- Settings: `src/components/settings/`; quick settings: `src/components/quick-settings-panel/`.
+- Settings: `src/components/settings/`; quick settings: `src/components/quick-settings-panel/` (mobile-only edge flyout; desktop gets these settings in the Settings page's Appearance tab).
 
 Global CSS (scrollbars, transitions, chat containment classes, placeholder colors): `src/index.css`.

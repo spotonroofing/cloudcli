@@ -46,7 +46,7 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
     primary: 'text-foreground',
     secondary: 'text-muted-foreground',
     background: '',
-    border: 'border-border',
+    border: 'border-gray-400 dark:border-gray-500',
     icon: 'text-muted-foreground',
   },
   toolResult,

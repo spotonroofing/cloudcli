@@ -34,18 +34,6 @@ interface ToolRendererProps {
   };
 }
 
-function getToolCategory(toolName: string): string {
-  if (['Edit', 'Write', 'ApplyPatch'].includes(toolName)) return 'edit';
-  if (['Grep', 'Glob'].includes(toolName)) return 'search';
-  if (toolName === 'Bash') return 'bash';
-  if (['TodoWrite', 'TodoRead'].includes(toolName)) return 'todo';
-  if (['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet'].includes(toolName)) return 'task';
-  if (toolName === 'Task') return 'agent';
-  if (toolName === 'exit_plan_mode' || toolName === 'ExitPlanMode') return 'plan';
-  if (toolName === 'AskUserQuestion') return 'question';
-  return 'default';
-}
-
 // Exact denial messages from the Claude runtime adapter — other providers can't reliably signal denial
 const CLAUDE_DENIAL_MESSAGES = [
   'user denied tool use',
@@ -317,7 +305,6 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
         badge={badgeElement}
         showRawParameters={mode === 'input' && showRawParameters}
         rawContent={rawToolInput}
-        toolCategory={getToolCategory(toolName)}
       >
         {contentComponent}
       </CollapsibleDisplay>

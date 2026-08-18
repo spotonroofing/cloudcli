@@ -14,20 +14,7 @@ interface CollapsibleDisplayProps {
   showRawParameters?: boolean;
   rawContent?: string;
   className?: string;
-  toolCategory?: string;
 }
-
-const borderColorMap: Record<string, string> = {
-  edit: 'border-l-amber-500 dark:border-l-amber-400',
-  search: 'border-l-muted-foreground/40',
-  bash: 'border-l-green-500 dark:border-l-green-400',
-  todo: 'border-l-violet-500 dark:border-l-violet-400',
-  task: 'border-l-violet-500 dark:border-l-violet-400',
-  agent: 'border-l-purple-500 dark:border-l-purple-400',
-  plan: 'border-l-indigo-500 dark:border-l-indigo-400',
-  question: 'border-l-primary',
-  default: 'border-l-border',
-};
 
 export const CollapsibleDisplay: React.FC<CollapsibleDisplayProps> = ({
   toolName,
@@ -40,12 +27,9 @@ export const CollapsibleDisplay: React.FC<CollapsibleDisplayProps> = ({
   showRawParameters = false,
   rawContent,
   className = '',
-  toolCategory,
 }) => {
-  const borderColor = borderColorMap[toolCategory || 'default'] || borderColorMap.default;
-
   return (
-    <div className={`border-l-2 ${borderColor} my-1 py-0.5 pl-3 ${className}`}>
+    <div className={`my-1 border-l-2 border-l-gray-400 py-0.5 pl-3 dark:border-l-gray-500 ${className}`}>
       <CollapsibleSection
         title={title}
         toolName={toolName}
