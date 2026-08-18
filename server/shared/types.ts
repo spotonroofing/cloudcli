@@ -75,6 +75,8 @@ export type ProviderModelOption = {
   value: string;
   label: string;
   description?: string;
+  /** Switcher grouping: 'legacy' renders below the More models divider. */
+  group?: 'current' | 'legacy';
   /** Stable SQLite row id used only by model-management actions. */
   recordId?: number;
   /** True for user-created rows; false for immutable CloudCLI defaults. */

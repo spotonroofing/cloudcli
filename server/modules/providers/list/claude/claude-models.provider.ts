@@ -9,14 +9,18 @@ import type {
 } from '@/shared/types.js';
 import { buildDefaultProviderCurrentActiveModel } from '@/shared/utils.js';
 
-// Friendly-name catalog: labels/descriptions are display-only; values are the
-// real model ids sent to the SDK unchanged (the wire format is untouched).
+// The one plain config array driving the model switcher: id (value), friendly
+// name (label), tagline (description), and group ('current' | 'legacy') per
+// model, in display order — adding a future model is one entry here.
+// Labels/descriptions are display-only; values are the real model ids sent to
+// the SDK unchanged (the wire format is untouched).
 export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
   OPTIONS: [
     {
       value: 'claude-fable-5',
       label: 'Fable 5',
       description: 'For your toughest challenges',
+      group: 'current',
       effort: {
         default: 'high',
         values: [
@@ -32,6 +36,7 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       value: 'claude-sonnet-5',
       label: 'Sonnet 5',
       description: 'Fast and capable',
+      group: 'current',
       effort: {
         default: 'high',
         values: [
@@ -47,11 +52,13 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       value: 'claude-haiku-4-5',
       label: 'Haiku 4.5',
       description: 'Fastest for everyday tasks',
+      group: 'current',
     },
     {
       value: 'claude-opus-4-8',
       label: 'Opus 4.8',
       description: 'Deep reasoning',
+      group: 'legacy',
       effort: {
         default: 'high',
         values: [
@@ -67,6 +74,7 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       value: 'claude-opus-4-7',
       label: 'Opus 4.7',
       description: 'Strong sustained reasoning',
+      group: 'legacy',
       effort: {
         default: 'high',
         values: [
@@ -83,20 +91,7 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       value: 'claude-opus-4-6',
       label: 'Opus 4.6',
       description: 'Thorough and dependable',
-      effort: {
-        default: 'high',
-        values: [
-          { value: 'low' },
-          { value: 'medium' },
-          { value: 'high' },
-          { value: 'max' },
-        ],
-      },
-    },
-    {
-      value: 'claude-sonnet-4-6',
-      label: 'Sonnet 4.6',
-      description: 'Balanced and efficient',
+      group: 'legacy',
       effort: {
         default: 'high',
         values: [
@@ -111,6 +106,22 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       value: 'claude-3-opus-20240229',
       label: 'Opus 3',
       description: 'The original Opus',
+      group: 'legacy',
+    },
+    {
+      value: 'claude-sonnet-4-6',
+      label: 'Sonnet 4.6',
+      description: 'Balanced and efficient',
+      group: 'legacy',
+      effort: {
+        default: 'high',
+        values: [
+          { value: 'low' },
+          { value: 'medium' },
+          { value: 'high' },
+          { value: 'max' },
+        ],
+      },
     },
   ],
   DEFAULT: 'claude-fable-5',

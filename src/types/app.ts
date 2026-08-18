@@ -4,6 +4,8 @@ export type ProviderModelOption = {
   value: string;
   label: string;
   description?: string;
+  /** Switcher grouping: 'legacy' renders below the More models divider. */
+  group?: 'current' | 'legacy';
   recordId?: number;
   isCustom?: boolean;
   effort?: {

@@ -29,9 +29,9 @@ Dependencies: none. Parallelism: items are small and adjacent; run in-thread, no
 
 Files: model switcher component and its model-list config.
 
-- [ ] 7. More models submenu splits into current and legacy groups with a divider, matching claude.ai: current group Fable 5, Sonnet 5, Haiku 4.5; legacy group below the divider Opus 4.8, Opus 4.7, Opus 4.6, Opus 3, Sonnet 4.6, in that order.
-- [ ] 8. The currently selected model is hidden from the More models list (it already renders as the checked card above), matching claude.ai. Selecting any model updates the hidden entry accordingly.
-- [ ] 9. The model list, grouping, and order live in one plain config array (id, friendly name, tagline, group) so future models are a one-line addition. A short comment names the file's purpose.
+- [x] 7. More models submenu splits into current and legacy groups with a divider, matching claude.ai: current group Fable 5, Sonnet 5, Haiku 4.5; legacy group below the divider Opus 4.8, Opus 4.7, Opus 4.6, Opus 3, Sonnet 4.6, in that order.
+- [x] 8. The currently selected model is hidden from the More models list (it already renders as the checked card above), matching claude.ai. Selecting any model updates the hidden entry accordingly.
+- [x] 9. The model list, grouping, and order live in one plain config array (id, friendly name, tagline, group) so future models are a one-line addition. A short comment names the file's purpose.
 
 Dependencies: phase 1 committed (shared composer area). Done check: with Fable 5 selected, More models shows exactly Sonnet 5 and Haiku 4.5 above the divider and the five legacy models below it; selecting Sonnet 5 re-lists Fable 5 in the current group; websocket payload still carries correct real model ids. Fresh-context reviewer audits before commit. Commit, push.
 

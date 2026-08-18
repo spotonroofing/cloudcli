@@ -83,6 +83,16 @@ export default function ComposerModelMenu({
   }, [model, modelOptions]);
   const modelLabel = selectedModelOption?.label || model;
 
+  // Claude.ai parity: the selected model renders as the checked card above, so
+  // More models hides it and splits the rest into current / legacy groups
+  // (ungrouped options count as current) in catalog order.
+  const listedModelOptions = useMemo(() => {
+    const selectedValue = selectedModelOption?.value ?? model;
+    return modelOptions.filter((option) => option.value !== selectedValue);
+  }, [model, modelOptions, selectedModelOption]);
+  const currentModelOptions = listedModelOptions.filter((option) => option.group !== 'legacy');
+  const legacyModelOptions = listedModelOptions.filter((option) => option.group === 'legacy');
+
   const hasEffortSection = effortOptions.length > 0;
   const hasModelSection = modelOptions.length > 0 || modelsLoading;
   if (!hasEffortSection && !hasModelSection) {
@@ -208,11 +218,25 @@ export default function ComposerModelMenu({
                   {t('composer.loadingModels', { defaultValue: 'Loading models…' })}
                 </p>
               )}
-              {modelOptions.map((option) => (
+              {currentModelOptions.map((option) => (
                 <ComposerMenuItem
                   key={option.value}
                   label={option.label || option.value}
-                  isSelected={option.value === model}
+                  isSelected={false}
+                  onSelect={() => {
+                    onSelectModel(option.value);
+                    setIsOpen(false);
+                  }}
+                />
+              ))}
+              {currentModelOptions.length > 0 && legacyModelOptions.length > 0 && (
+                <ComposerMenuSeparator />
+              )}
+              {legacyModelOptions.map((option) => (
+                <ComposerMenuItem
+                  key={option.value}
+                  label={option.label || option.value}
+                  isSelected={false}
                   onSelect={() => {
                     onSelectModel(option.value);
                     setIsOpen(false);
