@@ -9,41 +9,14 @@ import type {
 } from '@/shared/types.js';
 import { buildDefaultProviderCurrentActiveModel } from '@/shared/utils.js';
 
+// Friendly-name catalog: labels/descriptions are display-only; values are the
+// real model ids sent to the SDK unchanged (the wire format is untouched).
 export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
   OPTIONS: [
     {
-      value: 'default',
-      label: 'Default (recommended)',
-      description: 'Use the recommended model for your Claude account and deployment.',
-      effort: {
-        default: 'high',
-        values: [
-          { value: 'low' },
-          { value: 'medium' },
-          { value: 'high' },
-          { value: 'max' },
-        ],
-      },
-    },
-    {
-      value: 'best',
-      label: 'Best available',
-      description: 'Use Fable 5 when available, otherwise the latest Opus model.',
-      effort: {
-        default: 'high',
-        values: [
-          { value: 'low' },
-          { value: 'medium' },
-          { value: 'high' },
-          { value: 'xhigh' },
-          { value: 'max' },
-        ],
-      },
-    },
-    {
-      value: 'fable',
+      value: 'claude-fable-5',
       label: 'Fable 5',
-      description: 'Most capable Claude model for the hardest, longest-running tasks.',
+      description: 'For your toughest challenges',
       effort: {
         default: 'high',
         values: [
@@ -56,9 +29,9 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       },
     },
     {
-      value: 'sonnet',
-      label: 'Sonnet',
-      description: 'Latest Sonnet model for everyday coding tasks.',
+      value: 'claude-sonnet-5',
+      label: 'Sonnet 5',
+      description: 'Fast and capable',
       effort: {
         default: 'high',
         values: [
@@ -71,9 +44,14 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       },
     },
     {
-      value: 'sonnet[1m]',
-      label: 'Sonnet (1M context)',
-      description: 'Latest Sonnet model with a 1M context window.',
+      value: 'claude-haiku-4-5',
+      label: 'Haiku 4.5',
+      description: 'Fastest for everyday tasks',
+    },
+    {
+      value: 'claude-opus-4-8',
+      label: 'Opus 4.8',
+      description: 'Deep reasoning',
       effort: {
         default: 'high',
         values: [
@@ -86,9 +64,9 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       },
     },
     {
-      value: 'opus',
-      label: 'Opus',
-      description: 'Latest Opus model for complex reasoning and coding tasks.',
+      value: 'claude-opus-4-7',
+      label: 'Opus 4.7',
+      description: 'Strong sustained reasoning',
       effort: {
         default: 'high',
         values: [
@@ -101,42 +79,41 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       },
     },
     {
-      value: 'opus[1m]',
-      label: 'Opus (1M context)',
-      description: 'Latest Opus model with a 1M context window.',
+      // xhigh arrived with Opus 4.7; the 4.6 models reject it.
+      value: 'claude-opus-4-6',
+      label: 'Opus 4.6',
+      description: 'Thorough and dependable',
       effort: {
         default: 'high',
         values: [
           { value: 'low' },
           { value: 'medium' },
           { value: 'high' },
-          { value: 'xhigh' },
           { value: 'max' },
         ],
       },
     },
     {
-      value: 'haiku',
-      label: 'Haiku',
-      description: 'Fast and efficient Claude model for simple tasks.',
-    },
-    {
-      value: 'opusplan',
-      label: 'Opus Plan',
-      description: 'Use Opus while planning, then switch to Sonnet for execution.',
+      value: 'claude-sonnet-4-6',
+      label: 'Sonnet 4.6',
+      description: 'Balanced and efficient',
       effort: {
         default: 'high',
         values: [
           { value: 'low' },
           { value: 'medium' },
           { value: 'high' },
-          { value: 'xhigh' },
           { value: 'max' },
         ],
       },
+    },
+    {
+      value: 'claude-3-opus-20240229',
+      label: 'Opus 3',
+      description: 'The original Opus',
     },
   ],
-  DEFAULT: 'default',
+  DEFAULT: 'claude-fable-5',
 };
 
 export const findClaudeModelOption = (model: string | undefined | null): ProviderModelOption | null => {

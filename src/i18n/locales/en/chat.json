@@ -139,9 +139,10 @@
     }
   },
   "composer": {
-    "reasoning": "Reasoning",
-    "model": "Model",
-    "effortDefault": "Default",
+    "effort": "Effort",
+    "moreModels": "More models",
+    "effortHint": "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
+    "effortDefaultBadge": "Default",
     "loadingModels": "Loading models…",
     "modelMenu": "Select model and reasoning effort",
     "permissionHeading": "How should {{provider}} actions be approved?"

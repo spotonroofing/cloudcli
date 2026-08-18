@@ -86,7 +86,7 @@ export function ComposerMenuItem({
           <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">{description}</span>
         )}
       </span>
-      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+      <span className="mt-0.5 flex h-4 min-w-4 shrink-0 items-center justify-end">
         {trailing ?? (isSelected ? <Check className="h-3.5 w-3.5 text-foreground" /> : null)}
       </span>
     </button>

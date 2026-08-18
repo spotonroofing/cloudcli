@@ -45,7 +45,7 @@ Chat view: `src/components/chat/view/`
 - `subcomponents/MessageCopyControl.tsx` — single copy button, always copies plain text.
 - `subcomponents/MessageSpeakControl.tsx` — TTS button.
 - `subcomponents/Markdown.tsx` — markdown renderer (`prose prose-sm font-serif dark:prose-invert` pattern).
-- `subcomponents/ChatComposer.tsx` — input composer (unified single box: textarea on top, one control row below; plus/attach left, model selector + send right; no hint text, no permission selector — sessions are hardwired to skip-permissions). `ComposerModelMenu.tsx`, `CommandMenu.tsx` — composer menus (portal + `bg-popover` pattern).
+- `subcomponents/ChatComposer.tsx` — input composer (unified single box: textarea on top, one control row below; plus/attach left, model selector + send right; no hint text, no permission selector — sessions are hardwired to skip-permissions). `ComposerModelMenu.tsx` — Claude.ai-style model switcher (pill: friendly name + effort + chevron; card + Effort and More models submenus; friendly labels only, wire values unchanged), `CommandMenu.tsx` — composer menus (portal + `bg-popover` pattern).
 - `subcomponents/ChatMessagesPane.tsx` — scroll container; `TokenUsageSummary.tsx` — circular context-usage progress ring, click opens the usage menu.
 - `tools/ToolRenderer.tsx` (+ `tools/components/`) — tool input/result rendering.
 
