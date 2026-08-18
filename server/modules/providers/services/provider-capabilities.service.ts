@@ -37,7 +37,7 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
   claude: {
     provider: 'claude',
     permissionModes: ['default', 'auto', 'acceptEdits', 'bypassPermissions', 'plan'],
-    defaultPermissionMode: 'default',
+    defaultPermissionMode: 'bypassPermissions',
     supportsImages: true,
     supportsFiles: true,
     supportsAbort: true,
@@ -48,7 +48,7 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
   cursor: {
     provider: 'cursor',
     permissionModes: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
-    defaultPermissionMode: 'default',
+    defaultPermissionMode: 'bypassPermissions',
     supportsImages: true,
     supportsFiles: true,
     supportsAbort: true,
@@ -59,7 +59,7 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
   codex: {
     provider: 'codex',
     permissionModes: ['default', 'acceptEdits', 'bypassPermissions'],
-    defaultPermissionMode: 'default',
+    defaultPermissionMode: 'bypassPermissions',
     supportsImages: true,
     supportsFiles: true,
     supportsAbort: true,
@@ -73,7 +73,7 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
     // `--auto` (bypassPermissions) and the OPENCODE_PERMISSION env var
     // (acceptEdits). See resolveOpenCodePermissionOptions in the OpenCode runtime adapter.
     permissionModes: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
-    defaultPermissionMode: 'default',
+    defaultPermissionMode: 'bypassPermissions',
     supportsImages: true,
     supportsFiles: true,
     supportsAbort: true,

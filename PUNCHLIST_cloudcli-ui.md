@@ -57,12 +57,12 @@ Done check: agent-browser on a scoped URL shows only that project's sessions; th
 Goal and scope: the bottom bar becomes one unified Claude.ai-style box. Composer components and styles; behavior stays wired.
 Dependencies: phase 1 tokens. Parallelism: solo.
 
-- [ ] 15. One unified rounded box: text input on top; one control row inside the same box below it. Left: plus button; right: model selector, then send button. Consistent sizing, nothing split into separate boxes, nothing overlapping at any pane width.
-- [ ] 14. Placeholder text is "Write a message..."
-- [ ] 13. All composer hint text removed (Enter to send / Shift+Enter / Tab modes / slash-command hints).
-- [ ] 16. Slash-command button kept; its count badge (the 40) removed.
-- [ ] 18. Permission selector removed from the composer; sessions always start with skip-permissions as the hardwired default wherever session spawn options are set.
-- [ ] 17. Token usage indicator replaced with a small circular progress ring (Claude-desktop style) showing percent of context used; clicking it opens the existing usage menu unchanged.
+- [x] 15. One unified rounded box: text input on top; one control row inside the same box below it. Left: plus button; right: model selector, then send button. Consistent sizing, nothing split into separate boxes, nothing overlapping at any pane width.
+- [x] 14. Placeholder text is "Write a message..."
+- [x] 13. All composer hint text removed (Enter to send / Shift+Enter / Tab modes / slash-command hints).
+- [x] 16. Slash-command button kept; its count badge (the 40) removed.
+- [x] 18. Permission selector removed from the composer; sessions always start with skip-permissions as the hardwired default wherever session spawn options are set.
+- [x] 17. Token usage indicator replaced with a small circular progress ring (Claude-desktop style) showing percent of context used; clicking it opens the existing usage menu unchanged.
 
 Done check: agent-browser snapshot shows the unified composer with exactly the specified controls and none of the removed text/badges; DOM confirms no overlap at ~700px and full width (bounding boxes disjoint); a test message still sends; sessions spawn with skip-permissions; bundle rebuilt and served. Fresh-context verifier on the diff. Commit, push.
 
