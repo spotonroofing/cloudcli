@@ -24,6 +24,7 @@ import {
   buildClaudeUserContent,
   normalizeImageDescriptors
 } from '@/shared/image-attachments.js';
+import { appConfigDb } from '@/modules/database/index.js';
 import { CLAUDE_PREDEFINED_MODELS } from '@/modules/providers/list/claude/claude-models.provider.js';
 import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import {
@@ -400,6 +401,27 @@ function applyContextUsageSnapshot(budget, snapshot) {
 }
 
 /**
+ * Persists the SDK-reported context window per model id so the token-usage
+ * route can serve the honest denominator for idle and historical sessions on
+ * load, before any live turn runs.
+ * @param {string} model - Real model id the window was observed for
+ * @param {Object} budget - Budget whose total came from the SDK
+ */
+function persistModelContextWindow(model, budget) {
+  if (!model || !readNumber(budget?.total)) {
+    return;
+  }
+  try {
+    appConfigDb.set(`claude_context_window:${model}`, JSON.stringify({
+      total: budget.total,
+      totalIsUsableWindow: budget.totalIsUsableWindow === true,
+    }));
+  } catch {
+    // A failed persist only delays the honest denominator until the next turn.
+  }
+}
+
+/**
  * Builds the SDK `prompt` payload for one turn.
  *
  * Plain text turns pass the string through unchanged. Turns with image
@@ -719,10 +741,14 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
         const snapshot = contextUsagePromise ? await contextUsagePromise : null;
         if (snapshot) {
           tokenBudgetData = applyContextUsageSnapshot(tokenBudgetData, snapshot);
+          if (tokenBudgetData.contextUsageSource === 'sdk') {
+            persistModelContextWindow(snapshot.model, tokenBudgetData);
+          }
         } else {
           // No snapshot landed: the model's raw window from the result payload
           // still beats the env guess as a denominator.
-          const modelData = message.modelUsage ? Object.values(message.modelUsage)[0] : null;
+          const modelKey = message.modelUsage ? Object.keys(message.modelUsage)[0] : null;
+          const modelData = modelKey ? message.modelUsage[modelKey] : null;
           const modelWindow = readNumber(modelData?.contextWindow);
           if (modelWindow > 0) {
             tokenBudgetData = {
@@ -732,6 +758,7 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
               totalIsUsableWindow: false,
               contextUsageSource: 'model',
             };
+            persistModelContextWindow(modelKey, tokenBudgetData);
           }
         }
       }

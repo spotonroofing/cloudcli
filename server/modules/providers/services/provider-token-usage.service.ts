@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import Database from 'better-sqlite3';
 
-import { sessionsDb } from '@/modules/database/index.js';
+import { appConfigDb, sessionsDb } from '@/modules/database/index.js';
 import type { AnyRecord } from '@/shared/types.js';
 import { AppError, getOpenCodeDatabasePath } from '@/shared/utils.js';
 
@@ -19,11 +19,18 @@ type ProviderTokenUsageServiceDependencies = {
   readDirectory: (directoryPath: string) => Promise<Dirent[]>;
   readTextFile: (filePath: string) => Promise<string>;
   getClaudeContextWindow: () => string | undefined;
+  getPersistedClaudeWindow: (model: string) => PersistedClaudeWindow | null;
+};
+
+type PersistedClaudeWindow = {
+  total: number;
+  totalIsUsableWindow?: boolean;
 };
 
 type TokenUsageResult = {
   used: number;
   total?: number;
+  totalIsUsableWindow?: boolean;
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens?: number;
@@ -53,6 +60,24 @@ const defaultDependencies: ProviderTokenUsageServiceDependencies = {
   readDirectory: (directoryPath) => fsp.readdir(directoryPath, { withFileTypes: true }),
   readTextFile: (filePath) => fsp.readFile(filePath, 'utf8'),
   getClaudeContextWindow: () => process.env.CONTEXT_WINDOW,
+  // The Claude runtime provider persists the SDK-reported window per model id
+  // whenever a live turn observes it, so idle and historical sessions get the
+  // honest denominator on load instead of the CONTEXT_WINDOW env guess.
+  getPersistedClaudeWindow: (model) => {
+    const raw = appConfigDb.get(`claude_context_window:${model}`);
+    if (!raw) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(raw) as { total?: unknown; totalIsUsableWindow?: unknown };
+      const total = Number(parsed.total);
+      return Number.isFinite(total) && total > 0
+        ? { total, totalIsUsableWindow: parsed.totalIsUsableWindow === true }
+        : null;
+    } catch {
+      return null;
+    }
+  },
 };
 
 function readUsageNumber(value: unknown): number {
@@ -131,11 +156,16 @@ function readCodexTokenUsage(fileContent: string): TokenUsageResult {
   };
 }
 
-function readClaudeTokenUsage(fileContent: string, configuredContextWindow: string | undefined): TokenUsageResult {
+function readClaudeTokenUsage(
+  fileContent: string,
+  configuredContextWindow: string | undefined,
+  persistedWindowForModel: (model: string | null) => PersistedClaudeWindow | null,
+): TokenUsageResult {
   let inputTokens = 0;
   let outputTokens = 0;
   let cacheReadTokens = 0;
   let cacheCreationTokens = 0;
+  let model: string | null = null;
   const lines = fileContent.trim().split('\n');
 
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -146,6 +176,7 @@ function readClaudeTokenUsage(fileContent: string, configuredContextWindow: stri
         continue;
       }
 
+      model = typeof entry.message?.model === 'string' ? entry.message.model : null;
       const directInputTokens = readUsageNumber(usage.input_tokens ?? usage.inputTokens);
       cacheReadTokens = readUsageNumber(
         usage.cache_read_input_tokens ?? usage.cacheReadInputTokens ?? usage.cacheReadTokens,
@@ -163,13 +194,15 @@ function readClaudeTokenUsage(fileContent: string, configuredContextWindow: stri
     }
   }
 
+  const persistedWindow = persistedWindowForModel(model);
   const parsedContextWindow = Number.parseInt(configuredContextWindow ?? '', 10);
   const contextWindow = Number.isFinite(parsedContextWindow) ? parsedContextWindow : 160_000;
   const cacheTokens = cacheReadTokens + cacheCreationTokens;
 
   return {
     used: inputTokens + outputTokens,
-    total: contextWindow,
+    total: persistedWindow?.total ?? contextWindow,
+    ...(persistedWindow ? { totalIsUsableWindow: persistedWindow.totalIsUsableWindow === true } : {}),
     inputTokens,
     outputTokens,
     cacheReadTokens,
@@ -346,7 +379,10 @@ export function createProviderTokenUsageService(
       }
 
       const fileContent = await dependencies.readTextFile(sessionFilePath);
-      return readClaudeTokenUsage(fileContent, dependencies.getClaudeContextWindow());
+      return readClaudeTokenUsage(fileContent, dependencies.getClaudeContextWindow(), (model) => {
+        const resolvedModel = model ?? session.model;
+        return resolvedModel ? dependencies.getPersistedClaudeWindow(resolvedModel) : null;
+      });
     },
   };
 }

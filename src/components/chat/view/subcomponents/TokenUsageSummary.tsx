@@ -60,7 +60,16 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const close = useCallback(() => setIsOpen(false), []);
-  const { triggerRef, menuRef, anchor, updateAnchor } = useComposerMenuAnchor(isOpen, close);
+  // Desktop anchors the popover's left edge to the ring button (Claude-desktop
+  // style, growing rightward away from the sidebar); mobile keeps the original
+  // right-aligned anchor. Recomputed on every render, so each open is fresh.
+  const alignLeft = typeof window !== 'undefined' && window.innerWidth >= 768;
+  const { triggerRef, menuRef, anchor, updateAnchor } = useComposerMenuAnchor(
+    isOpen,
+    close,
+    320,
+    alignLeft ? 'left' : 'right',
+  );
 
   const breakdown =
     usage?.breakdown && typeof usage.breakdown === 'object'
@@ -136,6 +145,7 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
           data-usage-popover
           className="fixed z-[100] w-72 overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-xl"
           style={{
+            left: anchor.left,
             right: anchor.right,
             bottom: anchor.bottom,
             maxHeight: anchor.maxHeight,
