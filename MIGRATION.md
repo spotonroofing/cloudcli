@@ -19,4 +19,4 @@ Test baseline (this machine): `npm test` server suite — **270 pass / 0 fail** 
 
 ## Phase log
 
-- Phase 0 — environment and audit: complete. Orca removed, era agents archived, Bitwarden zero-touch + ccsync verified, repos updated, scratch created, fresh install + clean build, baseline 270/0, pmset set. Commit: (this commit)
+- Phase 0 — environment and audit: complete. Orca removed, era agents archived, Bitwarden zero-touch + ccsync verified, repos updated, scratch created, fresh install + clean build, baseline 270/0, pmset set. Commit: 5e1305b
