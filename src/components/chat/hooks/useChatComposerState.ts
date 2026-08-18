@@ -70,6 +70,8 @@ interface UseChatComposerStateArgs {
   addMessage: (msg: ChatMessage) => void;
   setIsUserScrolledUp: (isScrolledUp: boolean) => void;
   setPendingPermissionRequests: Dispatch<SetStateAction<PendingPermissionRequest[]>>;
+  /** Monotonic counter from useProjectsState; each increment is one explicit New Session action. */
+  newSessionTrigger?: number;
 }
 
 interface MentionableFile {
@@ -253,6 +255,7 @@ export function useChatComposerState({
   addMessage,
   setIsUserScrolledUp,
   setPendingPermissionRequests,
+  newSessionTrigger,
 }: UseChatComposerStateArgs) {
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
@@ -513,6 +516,29 @@ export function useChatComposerState({
     textareaRef,
     onExecuteCommand: executeCommand,
   });
+
+  // A New Session action boots the planner automatically. The provider layer
+  // has no slash-command passthrough, so this rides the same custom-command
+  // path as typing /planner: /api/commands/execute expands
+  // ~/.claude/commands/planner.md and the body is sent as the first message.
+  // Fires once per trigger increment, waiting until the command list has
+  // loaded and the chat state has reset to "no session".
+  const lastPlannerBootTriggerRef = useRef(newSessionTrigger ?? 0);
+  useEffect(() => {
+    const trigger = newSessionTrigger ?? 0;
+    if (trigger === lastPlannerBootTriggerRef.current) {
+      return;
+    }
+    if (selectedSession || currentSessionId || isLoading) {
+      return;
+    }
+    const plannerCommand = slashCommands.find((command) => command.name === '/planner');
+    if (!plannerCommand) {
+      return;
+    }
+    lastPlannerBootTriggerRef.current = trigger;
+    void executeCommand(plannerCommand, plannerCommand.name);
+  }, [newSessionTrigger, selectedSession, currentSessionId, isLoading, slashCommands, executeCommand]);
 
   const {
     showFileDropdown,

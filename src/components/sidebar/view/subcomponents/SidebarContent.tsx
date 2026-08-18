@@ -186,6 +186,9 @@ export default function SidebarContent({
   const isRenamingOnMobile = isMobile && Boolean(
     projectListProps.editingProject || projectListProps.editingSession,
   );
+  // Desktop is pinned to one project (phase 3), so the header's New Session
+  // button always targets the current scoped project.
+  const scopedProject = projectListProps.selectedProject;
 
   return (
     <div
@@ -208,6 +211,7 @@ export default function SidebarContent({
         onRefresh={onRefresh}
         isRefreshing={isRefreshing}
         onCreateProject={onCreateProject}
+        onNewSession={scopedProject ? () => projectListProps.onNewSession(scopedProject) : null}
         onCollapseSidebar={onCollapseSidebar}
         t={t}
       />

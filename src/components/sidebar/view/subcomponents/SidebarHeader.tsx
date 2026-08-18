@@ -23,6 +23,8 @@ type SidebarHeaderProps = {
   onRefresh: () => void;
   isRefreshing: boolean;
   onCreateProject: () => void;
+  /** Desktop header action: new session in the scoped project. Null until a project is scoped. */
+  onNewSession: (() => void) | null;
   onCollapseSidebar: () => void;
   t: TFunction;
 };
@@ -43,6 +45,7 @@ export default function SidebarHeader({
   onRefresh,
   isRefreshing,
   onCreateProject,
+  onNewSession,
   onCollapseSidebar,
   t,
 }: SidebarHeaderProps) {
@@ -99,8 +102,10 @@ export default function SidebarHeader({
               variant="ghost"
               size="sm"
               className="h-7 w-7 rounded-lg p-0 text-muted-foreground hover:bg-accent/80 hover:text-foreground"
-              onClick={onCreateProject}
-              title={t('tooltips.createProject')}
+              onClick={onNewSession ?? undefined}
+              disabled={!onNewSession}
+              title={t('sessions.newSession')}
+              aria-label={t('sessions.newSession')}
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>

@@ -214,6 +214,7 @@ function ChatInterface({
     setIsUserScrolledUp,
     setPendingPermissionRequests,
     resolvePermissionModeForProvider,
+    newSessionTrigger,
   });
 
   // On WebSocket reconnect, re-fetch the current session's messages from the

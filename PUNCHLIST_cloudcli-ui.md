@@ -71,8 +71,8 @@ Done check: agent-browser snapshot shows the unified composer with exactly the s
 Goal and scope: session-creation flow and command wiring.
 Dependencies: phase 3 (scoping supplies the project). Parallelism: solo.
 
-- [ ] 19. Sidebar-header create button relabeled New Session (refresh button stays); it creates a session in the current scoped project.
-- [ ] 20. A newly created session automatically sends the planner boot for that project. Read ~/.claude/commands/planner.md first: if CloudCLI's session layer can invoke Claude Code slash commands, boot by sending /planner with the project argument that command expects; if it cannot, send the equivalent full boot text the command performs, templated with the scoped project's name and paths (the per-project planner dirs under spoton-worker/planner/<project>/). One source of truth: derive the text from the command file, do not hand-copy a stale prompt.
-- [ ] 21. Typing /planner in the composer triggers the same boot in the current session, recognized natively by CloudCLI's command handling.
+- [x] 19. Sidebar-header create button relabeled New Session (refresh button stays); it creates a session in the current scoped project.
+- [x] 20. A newly created session automatically sends the planner boot for that project. Read ~/.claude/commands/planner.md first: if CloudCLI's session layer can invoke Claude Code slash commands, boot by sending /planner with the project argument that command expects; if it cannot, send the equivalent full boot text the command performs, templated with the scoped project's name and paths (the per-project planner dirs under spoton-worker/planner/<project>/). One source of truth: derive the text from the command file, do not hand-copy a stale prompt.
+- [x] 21. Typing /planner in the composer triggers the same boot in the current session, recognized natively by CloudCLI's command handling.
 
 Done check: agent-browser creates a new session in a scoped project and the first message in the transcript is the planner boot (slash or templated text) for that project; typing /planner in an existing session sends the same; bundle rebuilt and served. Fresh-context verifier on the diff. Commit, push. Final line of the run states which boot path shipped (slash passthrough or templated text).
