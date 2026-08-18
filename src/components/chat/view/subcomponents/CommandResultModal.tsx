@@ -115,7 +115,7 @@ function MetricCard({
         compact ? 'p-3' : 'p-4'
       }`}
     >
-      <div className={`inline-flex rounded-xl border ${compact ? 'mb-2 p-1.5' : 'mb-3 p-2'} ${toneClass}`}>
+      <div className={`inline-flex rounded-lg border ${compact ? 'mb-2 p-1.5' : 'mb-3 p-2'} ${toneClass}`}>
         <Icon className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
       </div>
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
@@ -140,7 +140,7 @@ function SearchField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-10 rounded-xl border-border/70 bg-background/75 pl-9 pr-3 shadow-none focus-visible:ring-primary/40"
+        className="h-10 rounded-lg border-border/70 bg-background/75 pl-9 pr-3 shadow-none focus-visible:ring-primary/40"
       />
     </div>
   );
@@ -335,7 +335,7 @@ function ModelsContent({
           variant="outline"
           size="sm"
           onClick={() => setManagingModels(true)}
-          className="h-9 shrink-0 rounded-xl bg-background px-3 text-xs"
+          className="h-9 shrink-0 rounded-lg bg-background px-3 text-xs"
         >
           <Plus className="h-3.5 w-3.5" />
           Manage models
@@ -466,7 +466,7 @@ function CostContent({ data }: { data: CostCommandData }) {
               className="flex items-center justify-between gap-4 border-b border-border/60 px-4 py-3 last:border-b-0"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className="truncate text-sm font-medium text-foreground">{row.label}</span>
@@ -587,7 +587,7 @@ export default function CommandResultModal({
         >
           <div className="flex min-w-0 items-center gap-3">
             <div
-              className={`flex shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-foreground ${
+              className={`flex shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-foreground ${
                 isModelsModal ? 'h-9 w-9' : 'h-10 w-10'
               }`}
             >
@@ -640,7 +640,7 @@ export default function CommandResultModal({
             <Gauge className="h-3.5 w-3.5" />
             <span>Esc closes the modal.</span>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={onClose} className="rounded-xl">
+          <Button type="button" variant="outline" size="sm" onClick={onClose} className="rounded-lg">
             Close
           </Button>
         </div>

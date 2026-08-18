@@ -45,7 +45,7 @@
     --border: 44 14% 87%;
     --input: 44 14% 87%;
     --ring: 15 56% 52%;
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
     /* Typography tokens — see DESIGN.md. Same self-hosted family, two cuts:
        UI chrome sits at the default optical size; message content gets the

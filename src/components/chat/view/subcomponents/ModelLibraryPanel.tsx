@@ -154,7 +154,7 @@ export default function ModelLibraryPanel({
       <div className="flex shrink-0 flex-col gap-3 border-b border-border/70 pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
               <Plus className="h-4 w-4" />
             </span>
             <div>
@@ -166,14 +166,14 @@ export default function ModelLibraryPanel({
           </div>
         </div>
         {onDone && (
-          <Button type="button" variant="outline" size="sm" onClick={onDone} className="shrink-0 rounded-xl">
+          <Button type="button" variant="outline" size="sm" onClick={onDone} className="shrink-0 rounded-lg">
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to models
           </Button>
         )}
       </div>
 
-      <div className="scrollbar-thin flex shrink-0 gap-1 overflow-x-auto rounded-xl border border-border/70 bg-muted/25 p-1">
+      <div className="scrollbar-thin flex shrink-0 gap-1 overflow-x-auto rounded-lg border border-border/70 bg-muted/25 p-1">
         {PROVIDERS.map((provider) => {
           const selected = provider.id === selectedProvider;
           return (
@@ -233,7 +233,7 @@ export default function ModelLibraryPanel({
             maxLength={80}
             placeholder="e.g. GPT-5.5 Pro"
             autoComplete="off"
-            className="mt-1.5 h-10 rounded-xl bg-background"
+            className="mt-1.5 h-10 rounded-lg bg-background"
           />
 
           <label className="mt-4 block text-xs font-semibold text-foreground" htmlFor="custom-model-id">
@@ -247,25 +247,25 @@ export default function ModelLibraryPanel({
             placeholder="e.g. gpt-5.5-pro"
             autoComplete="off"
             spellCheck={false}
-            className="mt-1.5 h-10 rounded-xl bg-background font-mono"
+            className="mt-1.5 h-10 rounded-lg bg-background font-mono"
           />
           <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
             Use the exact identifier accepted by the provider CLI. IDs cannot contain spaces.
           </p>
 
           {error && (
-            <div role="alert" className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <div role="alert" className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {error}
             </div>
           )}
           {notice && !error && (
-            <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
               <Check className="h-3.5 w-3.5" />
               {notice}
             </div>
           )}
 
-          <Button type="submit" disabled={saving} className="mt-4 w-full rounded-xl">
+          <Button type="submit" disabled={saving} className="mt-4 w-full rounded-lg">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
             {saving ? 'Saving…' : editing ? 'Save changes' : 'Add model'}
           </Button>

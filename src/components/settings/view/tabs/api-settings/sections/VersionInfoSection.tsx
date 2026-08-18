@@ -139,7 +139,7 @@ export default function VersionInfoSection({
 
         {/* Hosted CTA (OSS mode only) */}
         {!IS_PLATFORM && (
-          <div className="rounded-xl border border-primary/10 bg-primary/5 p-4">
+          <div className="rounded-lg border border-primary/10 bg-primary/5 p-4">
             <h4 className="text-sm font-medium text-foreground">Try CloudCLI Hosted</h4>
             <p className="mt-1 text-xs text-muted-foreground">
               Team collaboration, shared MCP configs, settings sync across environments, and managed infrastructure.

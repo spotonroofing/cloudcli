@@ -72,7 +72,7 @@ function ConfigLine({ label, children }: { label: string; children: string }) {
 
 function TeamMcpFeatureCard() {
   return (
-    <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-5">
+    <div className="rounded-lg border border-dashed border-border/60 bg-muted/20 p-5">
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
           <Users className="h-5 w-5" />

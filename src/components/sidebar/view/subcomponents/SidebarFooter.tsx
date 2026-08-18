@@ -1,6 +1,5 @@
-import { Settings, ArrowUpCircle, Bug, AlertTriangle } from 'lucide-react';
+import { Settings, Bug, AlertTriangle } from 'lucide-react';
 import type { TFunction } from 'i18next';
-import type { ReleaseInfo } from '../../../../types/sharedTypes';
 
 const GITHUB_ISSUES_URL = 'https://github.com/siteboon/claudecodeui/issues/new';
 
@@ -15,22 +14,13 @@ function DiscordIcon({ className }: { className?: string }) {
 }
 
 type SidebarFooterProps = {
-  updateAvailable: boolean;
   restartRequired: boolean;
-  releaseInfo: ReleaseInfo | null;
-  latestVersion: string | null;
-  currentVersion: string;
-  onShowVersionModal: () => void;
   onShowSettings: () => void;
   t: TFunction;
 };
 
 export default function SidebarFooter({
-  updateAvailable,
   restartRequired,
-  releaseInfo,
-  latestVersion,
-  onShowVersionModal,
   onShowSettings,
   t,
 }: SidebarFooterProps) {
@@ -48,54 +38,6 @@ export default function SidebarFooter({
                 {t('version.restartRequired')}
               </span>
             </div>
-          </div>
-        </>
-      )}
-
-      {/* Update banner */}
-      {updateAvailable && (
-        <>
-          <div className="nav-divider" />
-          {/* Desktop update */}
-          <div className="hidden px-2 py-1.5 md:block">
-            <button
-              className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-primary/10"
-              onClick={onShowVersionModal}
-            >
-              <div className="relative flex-shrink-0">
-                <ArrowUpCircle className="h-4 w-4 text-primary" />
-                <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-normal text-primary">
-                  {releaseInfo?.title || `v${latestVersion}`}
-                </span>
-                <span className="text-[10px] text-primary/70">
-                  {t('version.updateAvailable')}
-                </span>
-              </div>
-            </button>
-          </div>
-
-          {/* Mobile update */}
-          <div className="px-3 py-2 md:hidden">
-            <button
-              className="flex h-11 w-full items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 px-3.5 transition-all active:scale-[0.98]"
-              onClick={onShowVersionModal}
-            >
-              <div className="relative flex-shrink-0">
-                <ArrowUpCircle className="h-4 w-4 text-primary" />
-                <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-              </div>
-              <div className="min-w-0 flex-1 text-left">
-                <span className="block truncate text-sm font-normal text-primary">
-                  {releaseInfo?.title || `v${latestVersion}`}
-                </span>
-                <span className="text-xs text-primary/70">
-                  {t('version.updateAvailable')}
-                </span>
-              </div>
-            </button>
           </div>
         </>
       )}

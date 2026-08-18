@@ -85,7 +85,7 @@ export default function NewWorktreeModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="relative w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+        className="relative w-full max-w-md overflow-hidden rounded-lg border border-border bg-card shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-worktree-title"
@@ -122,7 +122,7 @@ export default function NewWorktreeModal({
                 }
               }}
               placeholder="feature/new-feature"
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
               autoFocus
             />
             {branchExists && (
@@ -141,7 +141,7 @@ export default function NewWorktreeModal({
                 id="worktree-base-branch"
                 value={selectedBaseBranch}
                 onChange={(event) => setSelectedBaseBranch(event.target.value)}
-                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-foreground focus:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
                 {localBranches.map((branch) => (
                   <option key={branch} value={branch}>

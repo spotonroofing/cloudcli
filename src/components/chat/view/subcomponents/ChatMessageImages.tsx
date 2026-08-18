@@ -131,14 +131,14 @@ function ChatMessageImage({ image, projectId }: { image: ChatImage; projectId?: 
 
   if (failed) {
     return (
-      <div className="flex h-28 w-28 items-center justify-center rounded-xl border border-border/50 bg-muted px-2 text-center text-[10px] text-muted-foreground">
+      <div className="flex h-28 w-28 items-center justify-center rounded-lg border border-border/50 bg-muted px-2 text-center text-[10px] text-muted-foreground">
         {alt}
       </div>
     );
   }
 
   if (!src) {
-    return <div className="h-28 w-28 animate-pulse rounded-xl border border-border/50 bg-muted" />;
+    return <div className="h-28 w-28 animate-pulse rounded-lg border border-border/50 bg-muted" />;
   }
 
   return (
@@ -147,7 +147,7 @@ function ChatMessageImage({ image, projectId }: { image: ChatImage; projectId?: 
         type="button"
         onClick={() => setExpanded(true)}
         aria-label={`Expand ${alt}`}
-        className="block overflow-hidden rounded-xl border border-border/50 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+        className="block overflow-hidden rounded-lg border border-border/50 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
       >
         <img
           src={src}

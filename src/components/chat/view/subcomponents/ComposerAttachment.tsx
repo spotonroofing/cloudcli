@@ -38,14 +38,14 @@ const ComposerAttachment = ({ file, onRemove, uploadProgress, error }: ComposerA
           type="button"
           onClick={() => preview && setExpanded(true)}
           aria-label={`Expand ${file.name}`}
-          className="block overflow-hidden rounded-xl border border-border/50 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+          className="block overflow-hidden rounded-lg border border-border/50 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
         >
           {preview
             ? <img src={preview} alt={file.name} className="h-20 w-20 cursor-zoom-in object-cover" />
             : <div className="h-20 w-20 animate-pulse bg-muted" />}
         </button>
       ) : (
-        <div className="flex h-20 w-56 max-w-full items-center gap-3 rounded-xl border border-border/50 bg-background/80 px-3 shadow-sm">
+        <div className="flex h-20 w-56 max-w-full items-center gap-3 rounded-lg border border-border/50 bg-background/80 px-3 shadow-sm">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <FileIcon className="h-5 w-5" aria-hidden />
           </div>
@@ -56,12 +56,12 @@ const ComposerAttachment = ({ file, onRemove, uploadProgress, error }: ComposerA
         </div>
       )}
       {uploadProgress !== undefined && uploadProgress < 100 && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-black/50">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-black/50">
           <div className="text-xs text-white">{uploadProgress}%</div>
         </div>
       )}
       {error && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-red-500/50">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-red-500/50">
           <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>

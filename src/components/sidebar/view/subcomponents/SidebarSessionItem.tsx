@@ -538,7 +538,7 @@ export default function SidebarSessionItem({
                 size="icon"
                 onOpenChange={setOptionsOpen}
                 triggerClassName="h-7 w-7 text-muted-foreground opacity-70 hover:bg-muted hover:opacity-100"
-                menuClassName="w-[260px] rounded-xl p-1.5 shadow-xl"
+                menuClassName="w-[260px] rounded-lg p-1.5 shadow-xl"
                 header={(
                   <div className="mb-1 border-b border-border px-3 py-2">
                     <p className="truncate text-xs font-medium text-foreground" title={sessionView.sessionName}>

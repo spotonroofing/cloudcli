@@ -517,6 +517,17 @@ export function useChatComposerState({
     onExecuteCommand: executeCommand,
   });
 
+  // The composer's Handoff button rides the same custom-command path as
+  // typing /handoff: /api/commands/execute expands ~/.claude/commands/handoff.md
+  // and the body is sent into the current session.
+  const runHandoff = useCallback(() => {
+    const handoffCommand = slashCommands.find((command) => command.name === '/handoff');
+    if (!handoffCommand) {
+      return;
+    }
+    void executeCommand(handoffCommand, handoffCommand.name);
+  }, [slashCommands, executeCommand]);
+
   // A New Session action boots the planner automatically. The provider layer
   // has no slash-command passthrough, so this rides the same custom-command
   // path as typing /planner: /api/commands/execute expands
@@ -1339,5 +1350,6 @@ export function useChatComposerState({
     commandModalPayload,
     closeCommandModal,
     showCostModal,
+    runHandoff,
   };
 }

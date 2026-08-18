@@ -1,5 +1,4 @@
 import { Cloud, ExternalLink, MessageSquare, Star, Users } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 
 import { CLOUDCLI_WORDMARK_FONT_FAMILY } from '../../../../constants/branding';
 import { IS_PLATFORM } from '../../../../constants/config';
@@ -28,15 +27,14 @@ function DiscordIcon({ className }: { className?: string }) {
 }
 
 export default function AboutTab() {
-  const { t } = useTranslation('settings');
-  const { updateAvailable, latestVersion, currentVersion, releaseInfo } = useVersionCheck('siteboon', 'claudecodeui');
-  const releasesUrl = releaseInfo?.htmlUrl || `${GITHUB_REPO_URL}/releases`;
+  const { currentVersion } = useVersionCheck();
+  const releasesUrl = `${GITHUB_REPO_URL}/releases`;
 
   return (
     <div className="space-y-6">
       {/* Logo + name + version */}
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary/90 shadow-sm">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/90 shadow-sm">
           <MessageSquare className="h-5 w-5 text-primary-foreground" />
         </div>
         <div>
@@ -55,17 +53,6 @@ export default function AboutTab() {
             >
               v{currentVersion}
             </a>
-            {updateAvailable && latestVersion && (
-              <a
-                href={releasesUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium text-green-600 transition-colors hover:bg-green-500/20 dark:text-green-400"
-              >
-                {t('apiKeys.version.updateAvailable', { version: latestVersion })}
-                <ExternalLink className="h-2.5 w-2.5" />
-              </a>
-            )}
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Open-source AI coding assistant interface
@@ -127,7 +114,7 @@ export default function AboutTab() {
 
       {/* Hosted CTA (OSS mode only) */}
       {!IS_PLATFORM && (
-        <div className="rounded-xl border border-primary/10 bg-primary/5 p-4">
+        <div className="rounded-lg border border-primary/10 bg-primary/5 p-4">
           <h4 className="text-sm font-medium text-foreground">Try CloudCLI Hosted</h4>
           <p className="mt-1 text-xs text-muted-foreground">
             Team collaboration, shared MCP configs, settings sync across environments, and managed infrastructure.

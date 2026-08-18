@@ -17,7 +17,7 @@ Both currently point at the same family; keep them separate so the cuts can dive
 
 ### Radius
 
-- `--radius: 0.75rem` — the one app-wide corner radius token (Claude.ai-like). Tailwind `rounded-lg` = token, `rounded-md` = token − 2px, `rounded-sm` = token − 4px.
+- `--radius: 0.5rem` (8px) — the one app-wide corner radius token. Tailwind `rounded-lg` = token, `rounded-md` = token − 2px, `rounded-sm` = token − 4px. Do not use `rounded-xl`/`rounded-2xl` on standard surfaces; desktop surfaces that carried hardcoded 12px radii were migrated to `rounded-lg`.
 - Never apply asymmetric per-corner radii (`rounded-br-*` etc.) in the chat view. Fully-round pills/avatars use `rounded-full`.
 
 ### Colors (semantic, light/dark via `.dark`)
@@ -45,7 +45,7 @@ Chat view: `src/components/chat/view/`
 - `subcomponents/MessageCopyControl.tsx` — single copy button, always copies plain text.
 - `subcomponents/MessageSpeakControl.tsx` — TTS button.
 - `subcomponents/Markdown.tsx` — markdown renderer (`prose prose-sm font-serif dark:prose-invert` pattern).
-- `subcomponents/ChatComposer.tsx` — input composer (unified single box: textarea on top, one control row below; plus/attach left, model selector + send right; no hint text, no permission selector — sessions are hardwired to skip-permissions). `ComposerModelMenu.tsx` — Claude.ai-style model switcher (pill: friendly name + effort + chevron; card + Effort and More models submenus; friendly labels only, wire values unchanged), `CommandMenu.tsx` — composer menus (portal + `bg-popover` pattern).
+- `subcomponents/ChatComposer.tsx` — input composer (unified single box: textarea on top, one control row below; plus/attach left, model selector + send right; no hint text, no permission selector — sessions are hardwired to skip-permissions). At rest the box is exactly one text line tall (`rows={1}` textarea) and autogrows upward as content wraps. Focus state is a quiet gray (`focus-within:border-muted-foreground/40` + `ring-muted-foreground/20`), not the accent. The slash-commands icon is a custom single diagonal stroke matching the plus icon's arm length and stroke width; a desktop-only Handoff button (document icon, `FileTextIcon`) sits immediately right of it and fires the `/handoff` user command through `/api/commands/execute`. `ComposerModelMenu.tsx` — Claude.ai-style model switcher (pill: friendly name + effort + chevron; card + Effort and More models submenus; friendly labels only, wire values unchanged), `CommandMenu.tsx` — composer menus (portal + `bg-popover` pattern).
 - `subcomponents/ChatMessagesPane.tsx` — scroll container; `TokenUsageSummary.tsx` — circular context-usage progress ring; click opens the context-usage popover (a "Context window" header row `<used>k / <limit> (<percent>)` with a chevron that expands the SDK-reported per-category breakdown; no billing/plan section). Ring and popover divide the same `used` by the same `total` (the SDK-reported usable window; env `CONTEXT_WINDOW` is only a pre-first-result fallback). The composer commands button (slash icon) sits immediately left of the ring.
 - `tools/ToolRenderer.tsx` (+ `tools/components/`) — tool input/result rendering. Every tool row (one-line, collapsible, Bash command row, grouped rows, subagent) carries one treatment: a solid `border-l-2` left rule in `border-gray-400 dark:border-gray-500` (error rows use the same rule in red). No rounded cards, backgrounds, or per-category border colors on tool rows.
 

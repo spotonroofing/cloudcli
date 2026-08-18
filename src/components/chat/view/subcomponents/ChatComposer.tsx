@@ -10,7 +10,8 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { PlusIcon, SlashIcon, XIcon, Loader2, ArrowUpIcon } from 'lucide-react';
+import { PlusIcon, FileTextIcon, XIcon, Loader2, ArrowUpIcon } from 'lucide-react';
+import type { SVGProps } from 'react';
 
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
@@ -37,6 +38,28 @@ import PermissionRequestsBanner from './PermissionRequestsBanner';
 import TokenUsageSummary from './TokenUsageSummary';
 import QueuedMessageCard from './QueuedMessageCard';
 import ComposerModelMenu from './ComposerModelMenu';
+
+// Slash-commands icon drawn in the plus icon's visual language: one diagonal
+// stroke whose length (14 units) and stroke width match a single plus arm.
+function CommandSlashIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M16.95 7.05 7.05 16.95" />
+    </svg>
+  );
+}
 
 interface MentionableFile {
   name: string;
@@ -72,6 +95,7 @@ interface ChatComposerProps {
   modelsLoading: boolean;
   tokenBudget: Record<string, unknown> | null;
   onToggleCommandMenu: () => void;
+  onHandoff: () => void;
   hasInput: boolean;
   onClearInput: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement> | MouseEvent<HTMLButtonElement> | TouchEvent<HTMLButtonElement>) => void;
@@ -129,6 +153,7 @@ export default function ChatComposer({
   modelsLoading,
   tokenBudget,
   onToggleCommandMenu,
+  onHandoff,
   hasInput,
   onClearInput,
   onSubmit,
@@ -251,7 +276,7 @@ export default function ChatComposer({
 
       {!hasQuestionPanel && <div className="relative mx-auto max-w-[54.25rem]">
         {showFileDropdown && filteredFiles.length > 0 && (
-          <div className="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-48 overflow-y-auto rounded-xl border border-border/50 bg-card/95 shadow-lg backdrop-blur-md">
+          <div className="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-48 overflow-y-auto rounded-lg border border-border/50 bg-card/95 shadow-lg backdrop-blur-md">
             {filteredFiles.map((file, index) => (
               <div
                 key={file.path}
@@ -295,7 +320,7 @@ export default function ChatComposer({
         >
           {isDragActive && (
             <div className="absolute inset-0 z-50 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/50 bg-primary/15">
-              <div className="rounded-xl border border-border/30 bg-card p-4 shadow-lg">
+              <div className="rounded-lg border border-border/30 bg-card p-4 shadow-lg">
                 <svg className="mx-auto mb-2 h-8 w-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
@@ -311,7 +336,7 @@ export default function ChatComposer({
 
           {attachedFiles.length > 0 && (
             <PromptInputHeader>
-              <div className="rounded-xl bg-muted/40 p-2">
+              <div className="rounded-lg bg-muted/40 p-2">
                 <div className="flex flex-wrap gap-2">
                   {attachedFiles.map((file, index) => (
                     <ComposerAttachment
@@ -330,7 +355,7 @@ export default function ChatComposer({
           <input {...getInputProps()} />
 
           <PromptInputBody>
-            <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
+            <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
               <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words px-4 py-2 text-sm leading-6 text-transparent">
                 {renderInputWithMentions(input)}
               </div>
@@ -371,7 +396,16 @@ export default function ChatComposer({
               onClick={onToggleCommandMenu}
               className="relative"
             >
-              <SlashIcon />
+              <CommandSlashIcon />
+            </PromptInputButton>
+
+            <PromptInputButton
+              tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
+              onClick={onHandoff}
+              className="hidden md:flex"
+              aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
+            >
+              <FileTextIcon />
             </PromptInputButton>
 
             <TokenUsageSummary usage={tokenBudget} />

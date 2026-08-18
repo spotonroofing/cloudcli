@@ -67,7 +67,7 @@ export default function ConfirmActionModal({ action, onCancel, onConfirm }: Conf
         Cancel/Confirm buttons off screen.
       */}
       <div
-        className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+        className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-lg border border-border bg-card shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

@@ -38,7 +38,7 @@ export default function GitConfigurationStep({
             id="gitName"
             value={gitName}
             onChange={(event) => onGitNameChange(event.target.value)}
-            className="w-full rounded-xl border border-border bg-background/60 px-4 py-2.5 text-foreground shadow-sm transition-colors placeholder:text-muted-foreground/60 hover:border-foreground/20 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-lg border border-border bg-background/60 px-4 py-2.5 text-foreground shadow-sm transition-colors placeholder:text-muted-foreground/60 hover:border-foreground/20 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="John Doe"
             required
             disabled={isSubmitting}
@@ -56,7 +56,7 @@ export default function GitConfigurationStep({
             id="gitEmail"
             value={gitEmail}
             onChange={(event) => onGitEmailChange(event.target.value)}
-            className="w-full rounded-xl border border-border bg-background/60 px-4 py-2.5 text-foreground shadow-sm transition-colors placeholder:text-muted-foreground/60 hover:border-foreground/20 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-lg border border-border bg-background/60 px-4 py-2.5 text-foreground shadow-sm transition-colors placeholder:text-muted-foreground/60 hover:border-foreground/20 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             placeholder="john@example.com"
             required
             disabled={isSubmitting}

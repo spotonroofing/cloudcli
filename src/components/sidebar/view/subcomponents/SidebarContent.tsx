@@ -4,7 +4,6 @@ import type { TFunction } from 'i18next';
 
 import { ScrollArea } from '../../../../shared/view/ui';
 import type { Project } from '../../../../types/app';
-import type { ReleaseInfo } from '../../../../types/sharedTypes';
 import type { ConversationSearchResults, SearchProgress } from '../../hooks/useSidebarController';
 import type { ArchivedProjectListItem, ArchivedSessionListItem, RecentConversationListItem, SidebarSearchMode } from '../../types/types';
 import SessionProviderLogo from '../../../llm-logo-provider/SessionProviderLogo';
@@ -123,12 +122,7 @@ type SidebarContentProps = {
   isRefreshing: boolean;
   onCreateProject: () => void;
   onCollapseSidebar: () => void;
-  updateAvailable: boolean;
   restartRequired: boolean;
-  releaseInfo: ReleaseInfo | null;
-  latestVersion: string | null;
-  currentVersion: string;
-  onShowVersionModal: () => void;
   onShowSettings: () => void;
   projectListProps: SidebarProjectListProps;
   t: TFunction;
@@ -169,12 +163,7 @@ export default function SidebarContent({
   isRefreshing,
   onCreateProject,
   onCollapseSidebar,
-  updateAvailable,
   restartRequired,
-  releaseInfo,
-  latestVersion,
-  currentVersion,
-  onShowVersionModal,
   onShowSettings,
   projectListProps,
   t,
@@ -378,7 +367,7 @@ export default function SidebarContent({
                 </div>
               </div>
               {[0, 1].map((skeleton) => (
-                <div key={skeleton} className="animate-pulse rounded-xl border border-border/50 bg-card/40 p-3">
+                <div key={skeleton} className="animate-pulse rounded-lg border border-border/50 bg-card/40 p-3">
                   <div className="flex items-center gap-2.5">
                     <div className="h-8 w-8 rounded-lg bg-muted" />
                     <div className="min-w-0 flex-1 space-y-2">
@@ -392,7 +381,7 @@ export default function SidebarContent({
           ) : archivedProjects.length === 0 && groupedArchivedSessions.length === 0 ? (
             <div className="px-3 py-8 text-center">
               <div className="mx-auto max-w-[240px] rounded-2xl border border-dashed border-border/80 bg-muted/20 px-5 py-7">
-                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-background shadow-sm">
+                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-border/70 bg-background shadow-sm">
                   <Archive className="h-[18px] w-[18px] text-muted-foreground" />
                 </div>
                 <h3 className="text-sm font-medium text-foreground">
@@ -440,7 +429,7 @@ export default function SidebarContent({
                 return (
                   <section
                     key={project.projectId}
-                    className="group/archive overflow-hidden rounded-xl border border-border/70 bg-card/45 shadow-[0_1px_0_hsl(var(--border)/0.2)] transition-colors hover:border-border"
+                    className="group/archive overflow-hidden rounded-lg border border-border/70 bg-card/45 shadow-[0_1px_0_hsl(var(--border)/0.2)] transition-colors hover:border-border"
                   >
                     <div className="flex items-center gap-2.5 px-2.5 py-2.5">
                       <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/45 text-muted-foreground">
@@ -540,7 +529,7 @@ export default function SidebarContent({
               {groupedArchivedSessions.map((group) => (
                 <section
                   key={group.key}
-                  className="group/archive overflow-hidden rounded-xl border border-border/70 bg-card/45 shadow-[0_1px_0_hsl(var(--border)/0.2)] transition-colors hover:border-border"
+                  className="group/archive overflow-hidden rounded-lg border border-border/70 bg-card/45 shadow-[0_1px_0_hsl(var(--border)/0.2)] transition-colors hover:border-border"
                 >
                   <div className="flex items-center gap-2.5 px-2.5 py-2.5">
                     <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/45 text-muted-foreground">
@@ -624,12 +613,7 @@ export default function SidebarContent({
 
       {!isRenamingOnMobile && (
         <SidebarFooter
-          updateAvailable={updateAvailable}
           restartRequired={restartRequired}
-          releaseInfo={releaseInfo}
-          latestVersion={latestVersion}
-          currentVersion={currentVersion}
-          onShowVersionModal={onShowVersionModal}
           onShowSettings={onShowSettings}
           t={t}
         />

@@ -134,7 +134,7 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
           role="menu"
           aria-label={ariaLabel}
           data-usage-popover
-          className="fixed z-[100] w-72 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-xl"
+          className="fixed z-[100] w-72 overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-xl"
           style={{
             right: anchor.right,
             bottom: anchor.bottom,
