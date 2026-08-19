@@ -1,8 +1,11 @@
 import { execFile } from 'node:child_process';
+import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
-import { sessionsDb } from '@/modules/database/index.js';
-import { providerRuntimeService } from '@/modules/providers/index.js';
+import { appConfigDb, sessionsDb } from '@/modules/database/index.js';
+import { providerRuntimeService, providerTokenUsageService } from '@/modules/providers/index.js';
 import { sendFleetNotification } from '@/modules/notifications/index.js';
 import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/websocket/index.js';
 
@@ -29,8 +32,14 @@ type DispatchRunRecord = {
   ended: boolean;
 };
 
+type WakeItem = {
+  prompt: string;
+  /** Always boots a brand-new planner session instead of resuming. */
+  freshBoot?: boolean;
+};
+
 type WakeQueue = {
-  prompts: string[];
+  prompts: WakeItem[];
   draining: boolean;
 };
 
@@ -53,6 +62,7 @@ const log = (message: string, meta?: Record<string, unknown>) => {
  */
 class WatchdogService {
   private chains = new Map<string, ChainRecord>();
+  private rotatedSessions = new Set<string>();
   private dispatchRuns = new Map<string, DispatchRunRecord>();
   private wakeQueues = new Map<string, WakeQueue>();
   private resourceAlertAt = new Map<string, number>();
@@ -200,9 +210,9 @@ class WatchdogService {
 
   // ----- planner wakes (queued, serialized, retried while mid-turn) -----
 
-  queueWake(projectPath: string, prompt: string): void {
+  queueWake(projectPath: string, prompt: string, options: { freshBoot?: boolean } = {}): void {
     const queue = this.wakeQueues.get(projectPath) ?? { prompts: [], draining: false };
-    queue.prompts.push(prompt);
+    queue.prompts.push({ prompt, freshBoot: options.freshBoot });
     this.wakeQueues.set(projectPath, queue);
     log(`wake queued for ${projectPath} (${queue.prompts.length} pending)`);
     void this.drainWakes(projectPath);
@@ -237,22 +247,25 @@ class WatchdogService {
           return;
         }
 
-        const prompt = queue.prompts[0];
-        log(`waking planner ${planner.session_id} for ${projectPath}`);
+        const item = queue.prompts[0];
+        log(`waking planner ${planner.session_id} for ${projectPath}${item.freshBoot ? ' (fresh boot)' : ''}`);
         try {
           // Resume by provider-native id, but only when a transcript actually
           // exists on disk; otherwise boot a fresh planner session — the
           // planner is stateless by design and re-grounds from STATE.md.
-          const resumeId = planner.jsonl_path ? planner.provider_session_id : null;
-          const result = await this.runPlannerTurn(resumeId, planner.model, projectPath, prompt);
+          const resumeId = item.freshBoot ? null : (planner.jsonl_path ? planner.provider_session_id : null);
+          const result = await this.runPlannerTurn(resumeId, planner.model, projectPath, item.prompt);
           if (result.errored && resumeId && /no conversation found/i.test(result.errorMessage ?? '')) {
             log(`planner session ${planner.session_id} is dead; booting a fresh planner`);
-            const fresh = await this.runPlannerTurn(null, planner.model, projectPath, prompt);
+            const fresh = await this.runPlannerTurn(null, planner.model, projectPath, item.prompt);
             if (fresh.errored) {
               throw new Error(fresh.errorMessage ?? 'fresh planner boot failed');
             }
+            this.tagFreshPlanner(fresh.announcedSessionId);
           } else if (result.errored) {
             throw new Error(result.errorMessage ?? 'wake run failed');
+          } else if (item.freshBoot) {
+            this.tagFreshPlanner(result.announcedSessionId);
           }
           queue.prompts.shift();
           log(`wake delivered to planner for ${projectPath} (${queue.prompts.length} left)`);
@@ -285,7 +298,7 @@ class WatchdogService {
     model: string | null,
     projectPath: string,
     prompt: string,
-  ): Promise<{ errored: boolean; errorMessage: string | null }> {
+  ): Promise<{ errored: boolean; errorMessage: string | null; announcedSessionId: string | null }> {
     const runner = providerRuntimeService.getRunner('claude');
     let announcedId: string | null = providerSessionId;
     let errorMessage: string | null = null;
@@ -315,7 +328,19 @@ class WatchdogService {
       },
       writer,
     );
-    return { errored: errorMessage !== null, errorMessage };
+    return { errored: errorMessage !== null, errorMessage, announcedSessionId: announcedId };
+  }
+
+  /** A watchdog-booted planner session joins the rotation sweep's target set. */
+  private tagFreshPlanner(providerSessionId: string | null): void {
+    if (!providerSessionId) {
+      return;
+    }
+    try {
+      sessionsDb.setSessionOrigin(providerSessionId, 'planner');
+    } catch {
+      // tagging is best-effort
+    }
   }
 
   // ----- periodic sweep: stuck runs + machine resources -----
@@ -347,6 +372,48 @@ class WatchdogService {
     }
 
     await this.checkResources(now);
+    await this.checkPlannerRotation();
+  }
+
+  // ----- planner auto-rotation (spec B7): /handoff at the context threshold -----
+
+  private async checkPlannerRotation(): Promise<void> {
+    if (appConfigDb.get('planner_rotation_enabled') === '0') {
+      return;
+    }
+    const threshold = Number(appConfigDb.get('planner_rotation_threshold') ?? 60);
+
+    for (const planner of sessionsDb.listPlannerSessions()) {
+      if (this.rotatedSessions.has(planner.session_id) || !planner.project_path) {
+        continue;
+      }
+      try {
+        const usage = (await providerTokenUsageService.getSessionTokenUsage(planner.session_id)) as {
+          used?: number;
+          total?: number;
+        };
+        const used = Number(usage?.used ?? 0);
+        const total = Number(usage?.total ?? 0);
+        if (!used || !total) {
+          continue;
+        }
+        const pct = (used / total) * 100;
+        if (pct < threshold) {
+          continue;
+        }
+        this.rotatedSessions.add(planner.session_id);
+        log(`planner ${planner.session_id} at ${pct.toFixed(1)}% of its window (threshold ${threshold}%); rotating`);
+        this.queueWake(
+          planner.project_path,
+          `Watchdog: this planner session's context usage is ${pct.toFixed(0)}% of the model's real window `
+          + `(threshold ${threshold}%). Run /handoff now per doctrine: file the handoff, refresh STATE.md, `
+          + 'commit and push planner memory. A fresh planner will boot from STATE.md right after.',
+        );
+        this.queueWake(planner.project_path, readPlannerBootPrompt(), { freshBoot: true });
+      } catch {
+        // usage may be unavailable for sessions without transcripts; skip
+      }
+    }
   }
 
   private async checkResources(now: number): Promise<void> {
@@ -419,6 +486,24 @@ class WatchdogService {
       ),
     };
   }
+}
+
+/**
+ * The /planner boot ritual as a plain prompt: a fresh rotated planner boots
+ * through the same steps the slash command runs, grounding from STATE.md.
+ */
+function readPlannerBootPrompt(): string {
+  try {
+    const raw = fs.readFileSync(path.join(os.homedir(), '.claude', 'commands', 'planner.md'), 'utf8');
+    const body = raw.replace(/^---[\s\S]*?---\n/, '').trim();
+    if (body) {
+      return body;
+    }
+  } catch {
+    // fall through to the minimal boot instruction
+  }
+  return 'Boot as this project\'s planner: read PLANNER.md, the project\'s PROJECT.md and STATE.md '
+    + 'in the planner memory repo, and open with the session-start summary.';
 }
 
 function readMemoryFreePercentage(): Promise<number | null> {

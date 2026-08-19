@@ -5,6 +5,8 @@ import { Button } from '../../../../shared/view/ui';
 import { playChatCompletionSound } from '../../../../utils/notificationSound';
 import type { NotificationPreferencesState } from '../../types/types';
 
+import PlannerRotationSection from './PlannerRotationSection';
+
 type NotificationsSettingsTabProps = {
   notificationPreferences: NotificationPreferencesState;
   onNotificationPreferencesChange: (value: NotificationPreferencesState) => void;
@@ -255,6 +257,8 @@ export default function NotificationsSettingsTab({
           </label>
         </div>
       </div>
+
+      <PlannerRotationSection />
     </div>
   );
 }

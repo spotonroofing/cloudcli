@@ -1,5 +1,7 @@
 import express from 'express';
 
+import { appConfigDb } from '@/modules/database/index.js';
+
 import type { createSettingsService } from './settings.service.js';
 
 type AuthenticatedRequest = express.Request & { user?: { id?: number | string } };
@@ -21,6 +23,29 @@ export function createSettingsRouter(
     async (req: express.Request, res: express.Response, next: express.NextFunction) => {
       try { res.json(await operation(req)); } catch (error) { next(error); }
     };
+
+  // Planner auto-rotation (spec B7): on/off + threshold percent against the
+  // session model's real window. The watchdog sweep reads these each pass.
+  router.get('/planner-rotation', respond(() => ({
+    success: true,
+    enabled: appConfigDb.get('planner_rotation_enabled') !== '0',
+    thresholdPercent: Number(appConfigDb.get('planner_rotation_threshold') ?? 60),
+  })));
+  router.put('/planner-rotation', respond((req) => {
+    const body = (req.body ?? {}) as { enabled?: unknown; thresholdPercent?: unknown };
+    if (typeof body.enabled === 'boolean') {
+      appConfigDb.set('planner_rotation_enabled', body.enabled ? '1' : '0');
+    }
+    const threshold = Number(body.thresholdPercent);
+    if (Number.isFinite(threshold) && threshold >= 5 && threshold <= 95) {
+      appConfigDb.set('planner_rotation_threshold', String(Math.round(threshold)));
+    }
+    return {
+      success: true,
+      enabled: appConfigDb.get('planner_rotation_enabled') !== '0',
+      thresholdPercent: Number(appConfigDb.get('planner_rotation_threshold') ?? 60),
+    };
+  }));
 
   router.get('/api-keys', respond((req) => service.listApiKeys(userId(req))));
   router.post('/api-keys', respond((req) => service.createApiKey(userId(req), req.body?.keyName)));

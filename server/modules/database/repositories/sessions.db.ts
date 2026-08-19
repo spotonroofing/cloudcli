@@ -250,6 +250,30 @@ export const sessionsDb = {
   },
 
   /**
+   * Latest explicitly-tagged planner session per project (rotation sweep).
+   */
+  listPlannerSessions(): SessionRow[] {
+    const db = getConnection();
+    const rows = db
+      .prepare(
+        `SELECT ${SESSION_ROW_COLUMNS}
+         FROM sessions
+         WHERE session_id IN (
+           SELECT session_id FROM sessions s2
+           WHERE s2.origin = 'planner' AND s2.isArchived = 0
+             AND datetime(COALESCE(s2.updated_at, s2.created_at)) = (
+               SELECT MAX(datetime(COALESCE(s3.updated_at, s3.created_at)))
+               FROM sessions s3
+               WHERE s3.origin = 'planner' AND s3.isArchived = 0
+                 AND COALESCE(s3.assigned_project_path, s3.project_path) = COALESCE(s2.assigned_project_path, s2.project_path)
+             )
+         )`
+      )
+      .all() as SessionRow[];
+    return normalizeSessionRows(rows);
+  },
+
+  /**
    * The most recent worker session (origin direct or dispatch) for a project,
    * by effective project path. The worker pane auto-follows this row.
    */
