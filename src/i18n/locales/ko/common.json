@@ -24,7 +24,8 @@
     "git": "소스 관리",
     "tasks": "작업",
     "browser": "Browser",
-    "computer": "Computer"
+    "computer": "Computer",
+    "worker": "Worker"
   },
   "status": {
     "loading": "로딩 중...",

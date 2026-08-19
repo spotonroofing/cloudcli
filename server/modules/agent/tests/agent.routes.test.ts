@@ -28,6 +28,7 @@ function createDependencies(
     users: { getFirstUser: () => ({ id: 1, username: 'test-user' }) },
     apiKeys: { validateApiKey: () => undefined },
     githubTokens: { getActiveGithubToken: () => null },
+    sessions: { setSessionOrigin: () => {} },
     projects: { createProjectPath: () => ({ outcome: 'created' }) },
     models: {} as AgentDependencies['models'],
     queryClaude: unexpectedProviderCall as AgentDependencies['queryClaude'],

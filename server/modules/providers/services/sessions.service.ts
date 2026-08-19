@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -107,6 +108,19 @@ function resolveProjectDisplayName(
   }
 
   return path.basename(projectPath) || projectPath;
+}
+
+/** Repo HEAD for a path, or null when it is not a git repo. */
+function readGitHead(projectPath: string): string | null {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: projectPath,
+      encoding: 'utf8',
+      timeout: 5_000,
+    }).trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -247,6 +261,7 @@ export const sessionsService = {
     provider: LLMProvider,
     projectPath: string,
     initialMessage: string,
+    origin: 'direct' | 'dispatch' | null = null,
   ): CreateAppSessionResult {
     // Standalone chats (no project chosen) run in the hidden scratch repo and
     // display as project-less until attached to a real project.
@@ -254,7 +269,10 @@ export const sessionsService = {
 
     const sessionId = randomUUID();
     const sessionName = buildCloudCliSessionName(initialMessage);
-    sessionsDb.createAppSession(sessionId, provider, normalizedProjectPath, sessionName);
+    // Worker sessions record the repo HEAD at start so the pane can surface
+    // the files a run touched (git diff base..HEAD).
+    const baseCommit = origin ? readGitHead(normalizedProjectPath) : null;
+    sessionsDb.createAppSession(sessionId, provider, normalizedProjectPath, sessionName, origin, baseCommit);
 
     return {
       sessionId,
@@ -262,6 +280,56 @@ export const sessionsService = {
       projectPath: normalizedProjectPath,
       sessionName,
     };
+  },
+
+  /**
+   * The most recent worker session (origin direct or dispatch) for a project.
+   * The worker pane auto-follows this.
+   */
+  getLatestWorkerSession(projectPath: string) {
+    const session = sessionsDb.getLatestWorkerSession(projectPath);
+    if (!session) {
+      return { session: null };
+    }
+    return {
+      session: {
+        sessionId: session.session_id,
+        provider: session.provider as LLMProvider,
+        origin: session.origin,
+        baseCommit: session.base_commit,
+        sessionTitle: session.custom_name?.trim() || session.session_id,
+        lastActivity: session.updated_at ?? session.created_at ?? null,
+      },
+    };
+  },
+
+  /**
+   * Files touched since a worker session's base commit (committed or not),
+   * for the pane's "files this run produced" view.
+   */
+  getSessionTouchedFiles(sessionId: string): { baseCommit: string | null; files: string[] } {
+    const session = sessionsDb.getSessionById(sessionId);
+    if (!session) {
+      throw new AppError(`Session "${sessionId}" was not found.`, {
+        code: 'SESSION_NOT_FOUND',
+        statusCode: 404,
+      });
+    }
+    const projectPath = session.project_path;
+    if (!session.base_commit || !projectPath) {
+      return { baseCommit: session.base_commit ?? null, files: [] };
+    }
+    try {
+      const output = execFileSync(
+        'git',
+        ['diff', '--name-only', session.base_commit],
+        { cwd: projectPath, encoding: 'utf8', timeout: 10_000 },
+      );
+      const files = output.split('\n').map((line) => line.trim()).filter(Boolean);
+      return { baseCommit: session.base_commit, files };
+    } catch {
+      return { baseCommit: session.base_commit, files: [] };
+    }
   },
 
   /**

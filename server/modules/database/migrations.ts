@@ -445,6 +445,21 @@ const addSessionAssignedProjectColumn = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'assigned_project_path', 'TEXT');
 };
 
+/**
+ * Adds worker-lane metadata (spec B2/B4): `origin` tags how a session was
+ * started ('direct' = Willem in the worker pane, 'dispatch' = headless chain
+ * runner; NULL = ordinary chat/planner session) and `base_commit` records the
+ * project HEAD when the run began, so the pane can surface files the run
+ * touched.
+ */
+const addSessionWorkerColumns = (db: Database): void => {
+  const sessionsTableInfo = getTableInfo(db, 'sessions');
+  const columnNames = sessionsTableInfo.map((column) => column.name);
+
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'origin', 'TEXT');
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'base_commit', 'TEXT');
+};
+
 const ensureProjectsForSessionPaths = (db: Database): void => {
   if (!tableExists(db, 'sessions')) {
     return;
@@ -503,6 +518,7 @@ export const runMigrations = (db: Database) => {
     addSessionModelColumn(db);
     addSessionEffortColumn(db);
     addSessionAssignedProjectColumn(db);
+    addSessionWorkerColumns(db);
     ensureProjectsForSessionPaths(db);
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id)');

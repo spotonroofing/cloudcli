@@ -16,6 +16,8 @@ function createSessionRow(overrides: Record<string, unknown> = {}) {
     provider_session_id: 'provider-session',
     project_path: null,
     assigned_project_path: null,
+    origin: null,
+    base_commit: null,
     jsonl_path: null,
     custom_name: null,
     model: null,

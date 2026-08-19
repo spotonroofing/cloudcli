@@ -1,0 +1,4 @@
+- status [ref=f8e4]:
+  - img "CloudCLI" [ref=f8e7]
+  - heading "CloudCLI" [level=1] [ref=f8e8]
+  - paragraph [ref=f8e9]: Loading authentication state…

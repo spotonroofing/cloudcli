@@ -24,7 +24,8 @@
     "git": "Contrôle de source",
     "tasks": "Tâches",
     "browser": "Navigateur",
-    "computer": "Ordinateur"
+    "computer": "Ordinateur",
+    "worker": "Worker"
   },
   "status": {
     "loading": "Chargement...",

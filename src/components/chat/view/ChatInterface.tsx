@@ -35,6 +35,8 @@ function ChatInterface({
   sendByCtrlEnter,
   externalMessageUpdate,
   newSessionTrigger,
+  bootCommandName,
+  sessionOrigin,
   onShowAllTasks,
 }: ChatInterfaceProps) {
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
@@ -218,6 +220,8 @@ function ChatInterface({
     setPendingPermissionRequests,
     resolvePermissionModeForProvider,
     newSessionTrigger,
+    bootCommandName,
+    sessionOrigin,
   });
 
   // On WebSocket reconnect, request a bounded persisted-tail sync (deferred

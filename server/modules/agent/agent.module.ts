@@ -9,6 +9,7 @@ import {
   apiKeysDb,
   githubTokensDb,
   projectsDb,
+  sessionsDb,
   userDb,
 } from '@/modules/database/index.js';
 import { providerModelsService } from '@/modules/providers/index.js';
@@ -44,6 +45,10 @@ export function createAgentModule(externalDependencies: AgentExternalDependencie
     projects: {
       createProjectPath: (projectPath, customName) =>
         projectsDb.createProjectPath(projectPath, customName),
+    },
+    sessions: {
+      setSessionOrigin: (sessionId, origin, baseCommit) =>
+        sessionsDb.setSessionOrigin(sessionId, origin, baseCommit),
     },
     models: providerModelsService,
     GithubClient: Octokit,

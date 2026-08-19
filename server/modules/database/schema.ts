@@ -118,6 +118,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- synchronizer never touches it; reads prefer it over the cwd-derived
     -- project_path.
     assigned_project_path TEXT,
+    -- Worker-lane metadata: how the session was started ('direct' from the
+    -- worker pane, 'dispatch' from the chain runner, NULL otherwise) and the
+    -- project HEAD when the run began.
+    origin TEXT,
+    base_commit TEXT,
     isArchived BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
+import WorkerPane from '../../worker-pane/WorkerPane';
 import FileTree from '../../file-tree/view/FileTree';
 import StandaloneShell from '../../standalone-shell/view/StandaloneShell';
 import GitPanel from '../../git-panel/view/GitPanel';
@@ -16,6 +17,7 @@ import { authenticatedFetch } from '../../../utils/api';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
 import EditorSidebar from '../../code-editor/view/EditorSidebar';
 import type { Project } from '../../../types/app';
+import { STANDALONE_PROJECT_ID } from '../../../types/app';
 import { TaskMasterPanel } from '../../task-master';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
@@ -61,6 +63,26 @@ function MainContent({
   const { currentProject, setCurrentProject } = useTaskMaster() as TaskMasterContextValue;
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings() as TasksSettingsContextValue;
   const [browserUseEnabled, setBrowserUseEnabled] = useState(false);
+  // Desktop worker split (spec B2): persisted so the pane survives reloads.
+  const [workerPaneOpen, setWorkerPaneOpen] = useState(() => {
+    try {
+      return localStorage.getItem('worker-pane-open') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleWorkerPane = useCallback((open: boolean) => {
+    setWorkerPaneOpen(open);
+    try {
+      localStorage.setItem('worker-pane-open', open ? '1' : '0');
+    } catch {
+      // localStorage unavailable
+    }
+  }, []);
+  // Standalone chats have no repo of their own to work; no worker surface.
+  const workerPaneAvailable = Boolean(
+    selectedProject && selectedProject.projectId !== STANDALONE_PROJECT_ID,
+  );
 
   const shouldShowTasksTab = Boolean(tasksEnabled && isTaskMasterInstalled);
   const shouldShowBrowserTab = browserUseEnabled;
@@ -100,6 +122,12 @@ function MainContent({
       setActiveTab('chat');
     }
   }, [shouldShowTasksTab, activeTab, setActiveTab]);
+
+  useEffect(() => {
+    if (!workerPaneAvailable && activeTab === 'worker') {
+      setActiveTab('chat');
+    }
+  }, [workerPaneAvailable, activeTab, setActiveTab]);
 
   // Desktop is chat-only (phase 2 chrome strip): the view-mode bar is gone, and
   // any other route into a non-chat tab (palette, notifications) snaps back.
@@ -193,6 +221,23 @@ function MainContent({
             </ErrorBoundary>
           </div>
 
+          {isMobile && workerPaneAvailable && (
+            <div className={`h-full overflow-hidden ${activeTab === 'worker' ? 'block' : 'hidden'}`}>
+              <WorkerPane
+                selectedProject={selectedProject}
+                ws={ws}
+                sendMessage={sendMessage}
+                isActive={activeTab === 'worker'}
+                onFileOpen={resolvedFileOpen}
+                onInputFocusChange={onInputFocusChange}
+                onSessionProcessing={onSessionProcessing}
+                onSessionIdle={onSessionIdle}
+                processingSessions={processingSessions}
+                onShowSettings={onShowSettings}
+              />
+            </div>
+          )}
+
           {activeTab === 'files' && (
             <div className="h-full overflow-hidden">
               <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
@@ -240,6 +285,36 @@ function MainContent({
             </div>
           )}
         </div>
+
+        {!isMobile && workerPaneAvailable && workerPaneOpen && (
+          <div className="w-[44%] min-w-[380px] flex-shrink-0 border-l border-border/60">
+            <WorkerPane
+              selectedProject={selectedProject}
+              ws={ws}
+              sendMessage={sendMessage}
+              isActive
+              onFileOpen={resolvedFileOpen}
+              onInputFocusChange={onInputFocusChange}
+              onSessionProcessing={onSessionProcessing}
+              onSessionIdle={onSessionIdle}
+              processingSessions={processingSessions}
+              onShowSettings={onShowSettings}
+              onClose={() => toggleWorkerPane(false)}
+            />
+          </div>
+        )}
+
+        {!isMobile && workerPaneAvailable && !workerPaneOpen && (
+          <button
+            type="button"
+            onClick={() => toggleWorkerPane(true)}
+            className="flex w-6 flex-shrink-0 items-center justify-center border-l border-border/60 bg-muted/30 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            title="Show worker pane"
+            aria-label="Show worker pane"
+          >
+            <span className="rotate-90 whitespace-nowrap text-[10px] font-medium tracking-wide">Worker</span>
+          </button>
+        )}
 
         <EditorSidebar
           editingFile={editingFile}

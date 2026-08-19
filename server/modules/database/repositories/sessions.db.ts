@@ -14,6 +14,10 @@ type SessionRow = {
   project_path: string | null;
   /** Raw app-owned assignment; NULL when the session was never attached. */
   assigned_project_path: string | null;
+  /** 'direct' (worker pane) | 'dispatch' (chain runner) | null (ordinary chat). */
+  origin: string | null;
+  /** Project HEAD when the run began; feeds the pane's files-touched view. */
+  base_commit: string | null;
   jsonl_path: string | null;
   custom_name: string | null;
   /** Model this session runs with; NULL until the app records one for it. */
@@ -34,7 +38,7 @@ type RecentSessionsPage = {
 // list/feed reader prefers the app-owned attach-to-project choice without each
 // call site repeating the COALESCE. Writes always name real columns explicitly.
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
 
 // WHERE-clause form of the same preference (SQLite cannot reference SELECT
 // aliases in WHERE).
@@ -189,6 +193,8 @@ export const sessionsDb = {
     provider: string,
     projectPath: string,
     customName?: string,
+    origin?: string | null,
+    baseCommit?: string | null,
   ): string {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPathForProvider(provider, projectPath);
@@ -196,11 +202,48 @@ export const sessionsDb = {
     projectsDb.createProjectPath(normalizedProjectPath);
 
     db.prepare(
-      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, jsonl_path, isArchived, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).run(sessionId, provider, customName ?? null, normalizedProjectPath);
+      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, origin, base_commit, jsonl_path, isArchived, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).run(sessionId, provider, customName ?? null, normalizedProjectPath, origin ?? null, baseCommit ?? null);
 
     return sessionId;
+  },
+
+  /**
+   * Tags a session with its worker origin (and optionally the base commit)
+   * after the fact — used by the external run surface, which only learns the
+   * session id once the provider announces it.
+   */
+  setSessionOrigin(sessionId: string, origin: string, baseCommit?: string | null): void {
+    const db = getConnection();
+    db.prepare(
+      `UPDATE sessions
+       SET origin = ?,
+           base_commit = COALESCE(?, base_commit)
+       WHERE session_id = ? OR provider_session_id = ?`
+    ).run(origin, baseCommit ?? null, sessionId, sessionId);
+  },
+
+  /**
+   * The most recent worker session (origin direct or dispatch) for a project,
+   * by effective project path. The worker pane auto-follows this row.
+   */
+  getLatestWorkerSession(projectPath: string): SessionRow | null {
+    const db = getConnection();
+    const normalizedProjectPath = normalizeProjectPath(projectPath);
+    const row = db
+      .prepare(
+        `SELECT ${SESSION_ROW_COLUMNS}
+         FROM sessions
+         WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+           AND origin IN ('direct', 'dispatch')
+           AND isArchived = 0
+         ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
+         LIMIT 1`
+      )
+      .get(normalizedProjectPath) as SessionRow | undefined;
+
+    return normalizeSessionRow(row) ?? null;
   },
 
   /**

@@ -73,6 +73,8 @@ interface UseChatComposerStateArgs {
   setPendingPermissionRequests: Dispatch<SetStateAction<PendingPermissionRequest[]>>;
   /** Monotonic counter from useProjectsState; each increment is one explicit New Session action. */
   newSessionTrigger?: number;
+  bootCommandName?: string;
+  sessionOrigin?: 'direct' | null;
 }
 
 interface MentionableFile {
@@ -257,6 +259,8 @@ export function useChatComposerState({
   setIsUserScrolledUp,
   setPendingPermissionRequests,
   newSessionTrigger,
+  bootCommandName,
+  sessionOrigin,
 }: UseChatComposerStateArgs) {
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
@@ -549,13 +553,13 @@ export function useChatComposerState({
       lastPlannerBootTriggerRef.current = trigger;
       return;
     }
-    const plannerCommand = slashCommands.find((command) => command.name === '/planner');
-    if (!plannerCommand) {
+    const bootCommand = slashCommands.find((command) => command.name === (bootCommandName ?? '/planner'));
+    if (!bootCommand) {
       return;
     }
     lastPlannerBootTriggerRef.current = trigger;
-    void executeCommand(plannerCommand, plannerCommand.name);
-  }, [newSessionTrigger, selectedSession, currentSessionId, isLoading, slashCommands, executeCommand]);
+    void executeCommand(bootCommand, bootCommand.name);
+  }, [newSessionTrigger, selectedSession, currentSessionId, isLoading, slashCommands, executeCommand, bootCommandName]);
 
   const {
     showFileDropdown,
@@ -883,6 +887,7 @@ export function useChatComposerState({
               provider,
               projectPath: resolvedProjectPath,
               initialMessage: messageContent,
+              origin: sessionOrigin ?? undefined,
             }),
           });
           if (!response.ok) {

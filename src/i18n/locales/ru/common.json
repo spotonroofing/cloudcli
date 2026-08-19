@@ -24,7 +24,8 @@
     "git": "Система контроля версий",
     "tasks": "Задачи",
     "browser": "Browser",
-    "computer": "Компьютер"
+    "computer": "Компьютер",
+    "worker": "Worker"
   },
   "status": {
     "loading": "Загрузка...",

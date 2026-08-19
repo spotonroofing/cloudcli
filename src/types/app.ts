@@ -37,7 +37,7 @@ export type ProviderModelActions = {
   remove(provider: LLMProvider, existing: ProviderModelOption): Promise<void>;
 };
 
-export type AppTab = 'chat' | 'files' | 'shell' | 'git' | 'tasks' | 'browser' | `plugin:${string}`;
+export type AppTab = 'chat' | 'worker' | 'files' | 'shell' | 'git' | 'tasks' | 'browser' | `plugin:${string}`;
 
 export interface ProjectSession {
   id: string;

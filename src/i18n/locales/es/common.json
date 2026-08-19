@@ -24,7 +24,8 @@
     "git": "Control de versiones",
     "tasks": "Tareas",
     "browser": "Navegador",
-    "computer": "Equipo"
+    "computer": "Equipo",
+    "worker": "Worker"
   },
   "status": {
     "loading": "Cargando...",

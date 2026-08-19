@@ -17,6 +17,7 @@ type AgentRouterDependencies = {
   apiKeys: { validateApiKey(apiKey: string): unknown };
   githubTokens: { getActiveGithubToken(userId: number): string | null };
   projects: { createProjectPath(projectPath: string, customName: string | null): unknown };
+  sessions: { setSessionOrigin(sessionId: string, origin: string, baseCommit?: string | null): void };
   models: typeof import('../providers/index.js').providerModelsService;
   queryClaude: ProviderRunFunction;
   queryCursor: ProviderRunFunction;
@@ -39,6 +40,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
   const apiKeysDb = dependencies.apiKeys;
   const githubTokensDb = dependencies.githubTokens;
   const projectsDb = dependencies.projects;
+  const sessionsTagDb = dependencies.sessions;
   const providerModelsService = dependencies.models;
   const queryClaudeSDK = dependencies.queryClaude;
   const spawnCursor = dependencies.queryCursor;
@@ -981,6 +983,16 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
       const codexModels = (await providerModelsService.getProviderModels('codex')).models;
       const opencodeModels = (await providerModelsService.getProviderModels('opencode')).models;
 
+      // Repo HEAD before the run starts: worker-lane metadata so the pane can
+      // surface files this run touched.
+      let preRunHead = null;
+      try {
+        const { execFileSync } = await import('node:child_process');
+        preRunHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: finalProjectPath, encoding: 'utf8', timeout: 5000 }).trim() || null;
+      } catch {
+        preRunHead = null;
+      }
+
       // Start the appropriate session
       if (provider === 'claude') {
         console.log('🤖 Starting Claude SDK session');
@@ -1026,6 +1038,19 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           effort,
           permissionMode: 'bypassPermissions' // Agent runs are non-interactive, like the other providers above
         }, writer);
+      }
+
+      // External API runs are dispatched worker runs unless the caller says
+      // origin=direct (spec B2/B4); the tag drives the worker pane and the
+      // watchdog's direct-session exemption.
+      try {
+        const announcedSessionId = writer.getSessionId() || sessionId || null;
+        if (announcedSessionId) {
+          const runOrigin = req.body.origin === 'direct' ? 'direct' : 'dispatch';
+          sessionsTagDb.setSessionOrigin(announcedSessionId, runOrigin, preRunHead);
+        }
+      } catch (originError) {
+        console.warn('Could not tag session origin:', originError?.message ?? originError);
       }
 
       // Handle GitHub branch and PR creation after successful agent completion

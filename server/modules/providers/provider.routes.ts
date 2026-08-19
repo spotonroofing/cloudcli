@@ -709,7 +709,8 @@ router.post(
     const provider = parseProvider(body.provider);
     const projectPath = typeof body.projectPath === 'string' ? body.projectPath : '';
     const initialMessage = typeof body.initialMessage === 'string' ? body.initialMessage : '';
-    const result = sessionsService.createAppSession(provider, projectPath, initialMessage);
+    const origin = body.origin === 'direct' || body.origin === 'dispatch' ? body.origin : null;
+    const result = sessionsService.createAppSession(provider, projectPath, initialMessage, origin);
     res.status(201).json(createApiSuccessResponse(result));
   }),
 );
@@ -733,6 +734,28 @@ router.get(
         : null;
     const page = sessionsService.listRecentSessions(limit, offset, projectId);
     res.json(createApiSuccessResponse(page));
+  }),
+);
+
+// The most recent worker session (origin direct or dispatch) for a project.
+// The worker pane polls this to auto-follow dispatched and direct runs.
+router.get(
+  '/sessions/worker-latest',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectPath = typeof req.query.projectPath === 'string' ? req.query.projectPath.trim() : '';
+    if (!projectPath) {
+      throw new AppError('projectPath is required.', { code: 'PROJECT_PATH_REQUIRED', statusCode: 400 });
+    }
+    res.json(createApiSuccessResponse(sessionsService.getLatestWorkerSession(projectPath)));
+  }),
+);
+
+// Files touched since a worker session's base commit (the pane's files view).
+router.get(
+  '/sessions/:sessionId/touched-files',
+  asyncHandler(async (req: Request, res: Response) => {
+    const sessionId = parseSessionId(req.params.sessionId);
+    res.json(createApiSuccessResponse(sessionsService.getSessionTouchedFiles(sessionId)));
   }),
 );
 

@@ -141,6 +141,10 @@ export interface ChatInterfaceProps {
   sendByCtrlEnter?: boolean;
   externalMessageUpdate?: number;
   newSessionTrigger?: number;
+  /** Slash command auto-sent on a New Session trigger; defaults to /planner. */
+  bootCommandName?: string;
+  /** Origin tag recorded on sessions this surface creates (worker pane: 'direct'). */
+  sessionOrigin?: 'direct' | null;
   onTaskClick?: (...args: unknown[]) => void;
   onShowAllTasks?: (() => void) | null;
 }
