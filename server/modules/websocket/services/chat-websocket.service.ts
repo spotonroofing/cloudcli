@@ -19,7 +19,11 @@ import type {
   ProviderPermissionDecision,
   ProviderRuntimeWriter,
 } from '@/shared/types.js';
-import { parseIncomingJsonObject } from '@/shared/utils.js';
+import {
+  NEW_SESSION_PLACEHOLDER_TITLE,
+  buildSessionTitleFromMessage,
+  parseIncomingJsonObject,
+} from '@/shared/utils.js';
 
 /**
  * Trust boundary for client-supplied image attachments: chat.send options come
@@ -192,6 +196,16 @@ async function handleChatSend(
 
   const clientOptions = (data.options ?? {}) as AnyRecord;
   const command = typeof data.content === 'string' ? data.content : '';
+
+  // Boot sessions carry a placeholder title until the first real user-typed
+  // message arrives; auto-sent boot prompts flag themselves and never title.
+  if (
+    session.custom_name === NEW_SESSION_PLACEHOLDER_TITLE
+    && clientOptions.bootPrompt !== true
+    && command.trim()
+  ) {
+    sessionsDb.updateSessionCustomName(sessionId, buildSessionTitleFromMessage(command));
+  }
 
   // Record what this turn runs with so reopening the session later restores the
   // same model and reasoning effort, and so the resume path has a

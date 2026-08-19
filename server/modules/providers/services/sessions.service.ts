@@ -12,7 +12,13 @@ import type {
   LLMProvider,
   NormalizedMessage,
 } from '@/shared/types.js';
-import { AppError, getScratchProjectPath, isScratchProjectPath } from '@/shared/utils.js';
+import {
+  AppError,
+  NEW_SESSION_PLACEHOLDER_TITLE,
+  buildSessionTitleFromMessage,
+  getScratchProjectPath,
+  isScratchProjectPath,
+} from '@/shared/utils.js';
 
 type CreateAppSessionResult = {
   sessionId: string;
@@ -51,6 +57,8 @@ type SessionDetails = {
   sessionId: string;
   provider: LLMProvider;
   summary: string;
+  /** Worker/planner tag ('direct' | 'dispatch' | 'planner') or null; boot-prologue hiding keys off it. */
+  origin: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   lastActivity: string | null;
@@ -64,13 +72,6 @@ type SessionDetails = {
     isArchived: boolean;
   } | null;
 };
-
-const MAX_CLOUDCLI_SESSION_NAME_WORDS = 4;
-
-function buildCloudCliSessionName(initialMessage: string): string {
-  const words = initialMessage.trim().split(/\s+/).filter(Boolean);
-  return words.slice(0, MAX_CLOUDCLI_SESSION_NAME_WORDS).join(' ') || 'Untitled Session';
-}
 
 /**
  * Removes one file if it exists.
@@ -255,20 +256,25 @@ export const sessionsService = {
    * for the lifetime of the conversation. The provider-native id is mapped to
    * this row later, when the provider runtime announces it mid-run. Its title
    * comes directly from the first visible CloudCLI message and is limited to
-   * four whole words before any provider-owned storage exists.
+   * four whole words before any provider-owned storage exists — except boot
+   * sessions (auto-sent /planner or /worker first message), which start with
+   * a placeholder title and are named from the first user-typed message.
    */
   createAppSession(
     provider: LLMProvider,
     projectPath: string,
     initialMessage: string,
     origin: 'direct' | 'dispatch' | 'planner' | null = null,
+    boot = false,
   ): CreateAppSessionResult {
     // Standalone chats (no project chosen) run in the hidden scratch repo and
     // display as project-less until attached to a real project.
     const normalizedProjectPath = projectPath.trim() || getScratchProjectPath();
 
     const sessionId = randomUUID();
-    const sessionName = buildCloudCliSessionName(initialMessage);
+    const sessionName = boot
+      ? NEW_SESSION_PLACEHOLDER_TITLE
+      : buildSessionTitleFromMessage(initialMessage);
     // Worker sessions record the repo HEAD at start so the pane can surface
     // the files a run touched (git diff base..HEAD).
     const baseCommit = origin ? readGitHead(normalizedProjectPath) : null;
@@ -434,6 +440,7 @@ export const sessionsService = {
         sessionId: session.session_id,
         provider: session.provider as LLMProvider,
         summary: session.custom_name?.trim() || '',
+        origin: session.origin ?? null,
         createdAt: session.created_at ?? null,
         updatedAt: session.updated_at ?? null,
         lastActivity: session.updated_at ?? session.created_at ?? null,
@@ -455,6 +462,7 @@ export const sessionsService = {
       sessionId: session.session_id,
       provider: session.provider as LLMProvider,
       summary: session.custom_name?.trim() || '',
+      origin: session.origin ?? null,
       createdAt: session.created_at ?? null,
       updatedAt: session.updated_at ?? null,
       lastActivity: session.updated_at ?? session.created_at ?? null,

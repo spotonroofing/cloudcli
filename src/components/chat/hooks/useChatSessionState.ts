@@ -30,6 +30,15 @@ interface UseChatSessionStateArgs {
   /** Highest live seq observed per session; sent as `lastSeq` on subscribe. */
   lastSeqRef: MutableRefObject<Map<string, number>>;
   sessionStore: SessionStore;
+  /**
+   * True for boot sessions (origin planner/direct, or a fresh new-session view
+   * on a booting surface): the auto-sent boot prompt and its tool-call turn
+   * hide from the transcript, so the planner's ready message is the first
+   * visible content. Applied only when the transcript start is loaded.
+   */
+  hideBootPrologue?: boolean;
+  /** True while the New Session boot turn is in flight ('booting' phase). */
+  bootTurnActive?: boolean;
 }
 
 interface ScrollRestoreState {
@@ -110,6 +119,77 @@ function chatMessageToNormalized(
   } as NormalizedMessage;
 }
 
+function isAssistantText(message: ChatMessage): boolean {
+  return (
+    message.type === 'assistant'
+    && !message.isToolUse
+    && !message.isThinking
+    && !message.isInteractivePrompt
+    && !message.isTaskNotification
+    && Boolean(message.content?.trim())
+  );
+}
+
+/**
+ * Hides a boot session's prologue: the auto-sent boot prompt and its whole
+ * tool-call turn, so the boot turn's final assistant text — the planner's
+ * ready message — is the first visible content. Errors always stay visible.
+ *
+ * Turns are delimited by user text messages. The ready message is the last
+ * assistant text of the first turn that ended on it — no error, tool call, or
+ * thinking after it (a turn that narrated and then died or was stopped is a
+ * failed boot attempt, hidden too). The composer stays locked until ready, so
+ * every user message before the ready message is a boot attempt, never real
+ * input.
+ *
+ * `excludeTrailingTurn` is set while the boot turn is still streaming: an
+ * in-flight turn's texts may be narration before tool calls, so the trailing
+ * turn only becomes eligible once the run completes.
+ */
+function stripBootPrologue(messages: ChatMessage[], excludeTrailingTurn: boolean): ChatMessage[] {
+  const userIndexes: number[] = [];
+  messages.forEach((message, index) => {
+    if (message.type === 'user') {
+      userIndexes.push(index);
+    }
+  });
+
+  // Turn spans: start of transcript / each user text -> next user text or end.
+  const turnStarts = userIndexes.length > 0 && userIndexes[0] === 0 ? userIndexes : [0, ...userIndexes];
+  let readyIndex = -1;
+  for (let turn = 0; turn < turnStarts.length; turn += 1) {
+    const start = turnStarts[turn];
+    const end = turn + 1 < turnStarts.length ? turnStarts[turn + 1] : messages.length;
+    const isTrailingTurn = turn === turnStarts.length - 1;
+    if (isTrailingTurn && excludeTrailingTurn) {
+      break;
+    }
+    let lastText = -1;
+    let lastError = -1;
+    let lastWork = -1;
+    for (let index = start; index < end; index += 1) {
+      const message = messages[index];
+      if (isAssistantText(message)) lastText = index;
+      if (message.type === 'error') lastError = index;
+      if (message.isToolUse || message.isThinking) lastWork = index;
+    }
+    if (lastText !== -1 && lastError < lastText && lastWork < lastText) {
+      readyIndex = lastText;
+      break;
+    }
+  }
+
+  const boundary = readyIndex === -1 ? messages.length : readyIndex;
+  if (boundary === 0) {
+    return messages;
+  }
+  const visiblePrologue = messages.slice(0, boundary).filter((message) => message.type === 'error');
+  if (visiblePrologue.length === boundary) {
+    return messages;
+  }
+  return [...visiblePrologue, ...messages.slice(boundary)];
+}
+
 /* ------------------------------------------------------------------ */
 /*  Hook                                                              */
 /* ------------------------------------------------------------------ */
@@ -128,6 +208,8 @@ export function useChatSessionState({
   statusCheckSentAtRef,
   lastSeqRef,
   sessionStore,
+  hideBootPrologue = false,
+  bootTurnActive = false,
 }: UseChatSessionStateArgs) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
@@ -335,13 +417,21 @@ export function useChatSessionState({
 
   const chatMessages = useMemo(() => {
     const all = normalizedToChatMessages(storeMessages);
+    // The boot prologue only hides when the loaded window includes the
+    // transcript start; a mid-transcript window has no boot prompt in view.
+    const applyBootFilter = hideBootPrologue && !hasMoreMessages;
+    // While the boot turn streams, its texts may be narration before tool
+    // calls — the trailing turn only counts as ready once the run completes.
+    const excludeTrailingTurn = bootTurnActive && isProcessing;
     // Show pending user message when no session data exists yet (new session, pre-backend-response)
     if (pendingUserMessage && all.length === 0) {
-      return [pendingUserMessage];
+      return applyBootFilter ? stripBootPrologue([pendingUserMessage], excludeTrailingTurn) : [pendingUserMessage];
     }
-    if (viewHiddenCount > 0 && viewHiddenCount < all.length) return all.slice(0, -viewHiddenCount);
-    return all;
-  }, [storeMessages, viewHiddenCount, pendingUserMessage]);
+    const windowed = viewHiddenCount > 0 && viewHiddenCount < all.length
+      ? all.slice(0, -viewHiddenCount)
+      : all;
+    return applyBootFilter ? stripBootPrologue(windowed, excludeTrailingTurn) : windowed;
+  }, [storeMessages, viewHiddenCount, pendingUserMessage, hideBootPrologue, hasMoreMessages, bootTurnActive, isProcessing]);
 
   /* ---------------------------------------------------------------- */
   /*  addMessage / clearMessages / rewindMessages                     */

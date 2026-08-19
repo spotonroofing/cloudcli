@@ -50,6 +50,8 @@ export interface ProjectSession {
   lastActivity?: string;
   messageCount?: number;
   provider?: LLMProvider;
+  /** Worker/planner tag ('direct' | 'dispatch' | 'planner') or null. Boot-prologue hiding keys off it. */
+  origin?: string | null;
   __provider?: LLMProvider;
   // Tags the session with the owning project's DB `projectId` so UI handlers
   // (session switching, sidebar focus, etc.) can match against selectedProject.

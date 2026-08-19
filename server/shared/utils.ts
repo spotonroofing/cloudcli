@@ -147,6 +147,23 @@ export const isScratchProjectPath = (projectPath: string | null | undefined): bo
   Boolean(projectPath) && normalizeProjectPath(projectPath as string) === getScratchProjectPath();
 
 /**
+ * Placeholder title for boot-created sessions. The real title is set from the
+ * first user-typed message (chat.send without the bootPrompt flag); a non-null
+ * placeholder also stops the disk indexer from adopting a boot-derived title.
+ */
+export const NEW_SESSION_PLACEHOLDER_TITLE = 'New session';
+
+const MAX_SESSION_TITLE_WORDS = 4;
+
+/**
+ * Derives a CloudCLI session title from a message: its first four whole words.
+ */
+export function buildSessionTitleFromMessage(message: string): string {
+  const words = message.trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, MAX_SESSION_TITLE_WORDS).join(' ') || 'Untitled Session';
+}
+
+/**
  * Path of Claude's global .claude.json: inside CLAUDE_CONFIG_DIR when set
  * (matching the CLI's behavior), else the legacy ~/.claude.json.
  */

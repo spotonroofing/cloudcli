@@ -120,6 +120,8 @@ export type SessionEstablishedContext = {
   provider: LLMProvider;
   project: Project;
   summary?: string | null;
+  /** Origin tag the session was created with, so optimistic session rows carry it. */
+  origin?: 'direct' | 'planner' | null;
 };
 
 export interface ChatInterfaceProps {

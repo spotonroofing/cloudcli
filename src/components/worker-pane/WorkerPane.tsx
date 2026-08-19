@@ -118,6 +118,7 @@ export default function WorkerPane({
       id: latest.sessionId,
       __provider: (latest.provider || 'claude') as ProjectSession['__provider'],
       summary: latest.sessionTitle,
+      origin: latest.origin ?? null,
     });
   }, [latest, paneSession?.id]);
 
@@ -245,7 +246,7 @@ export default function WorkerPane({
               setPaneSession((previous) =>
                 previous?.id === targetSessionId
                   ? previous
-                  : { id: targetSessionId, __provider: 'claude' },
+                  : { id: targetSessionId, __provider: 'claude', origin: 'direct' },
               );
             }}
             onSessionEstablished={(targetSessionId: string) => {
@@ -253,7 +254,7 @@ export default function WorkerPane({
               setPaneSession((previous) =>
                 previous?.id === targetSessionId
                   ? previous
-                  : { id: targetSessionId, __provider: 'claude' },
+                  : { id: targetSessionId, __provider: 'claude', origin: 'direct' },
               );
               void refreshLatest();
             }}

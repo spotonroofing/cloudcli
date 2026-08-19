@@ -12,6 +12,7 @@ import type {
 } from '../../../../types/app';
 import { getIntrinsicMessageKey } from '../../utils/messageKeys';
 import { groupConsecutiveTools, isToolGroupItem } from '../../utils/toolGrouping';
+import { Button } from '../../../../shared/view/ui';
 
 import MessageComponent from './MessageComponent';
 import ProviderSelectionEmptyState from './ProviderSelectionEmptyState';
@@ -26,6 +27,11 @@ interface ChatMessagesPaneProps {
   isLoadingSessionMessages: boolean;
   /** True while the viewed session has an active provider run in flight. */
   isProcessing?: boolean;
+  /** True while a New Session boot is in flight (boot prologue hidden, composer locked). */
+  isBootingSession?: boolean;
+  /** True when the boot turn errored or ended without a ready message. */
+  bootFailed?: boolean;
+  onRetryBoot?: () => void;
   /** True while ChatComposer's floating activity/stop tab is rendered above the input. */
   hasActivityIndicator?: boolean;
   chatMessages: ChatMessage[];
@@ -76,6 +82,9 @@ function ChatMessagesPane({
   onTouchMove,
   isLoadingSessionMessages,
   isProcessing = false,
+  isBootingSession = false,
+  bootFailed = false,
+  onRetryBoot,
   hasActivityIndicator = false,
   chatMessages,
   selectedSession,
@@ -176,11 +185,24 @@ function ChatMessagesPane({
         </div>
       )}
       <div className="mx-auto w-full max-w-[54.25rem] space-y-3 px-4 sm:space-y-4">
-      {(isLoadingSessionMessages || isProcessing) && chatMessages.length === 0 ? (
+      {bootFailed && chatMessages.length === 0 ? (
+        <div className="mt-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            {t('session.boot.failed', { defaultValue: 'The session failed to start.' })}
+          </p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={onRetryBoot}>
+            {t('session.boot.retry', { defaultValue: 'Retry' })}
+          </Button>
+        </div>
+      ) : (isLoadingSessionMessages || isProcessing || isBootingSession) && chatMessages.length === 0 ? (
         <div className="mt-8 text-center text-gray-500 dark:text-gray-400">
           <div className="flex items-center justify-center space-x-2">
             <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-gray-400" />
-            <p>{t('session.loading.sessionMessages')}</p>
+            <p>
+              {isBootingSession
+                ? t('session.boot.starting', { defaultValue: 'Starting session...' })
+                : t('session.loading.sessionMessages')}
+            </p>
           </div>
         </div>
       ) : chatMessages.length === 0 ? (
@@ -301,6 +323,17 @@ function ChatMessagesPane({
               );
             });
           })()}
+
+          {bootFailed && (
+            <div className="py-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                {t('session.boot.failed', { defaultValue: 'The session failed to start.' })}
+              </p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={onRetryBoot}>
+                {t('session.boot.retry', { defaultValue: 'Retry' })}
+              </Button>
+            </div>
+          )}
         </>
       )}
       </div>

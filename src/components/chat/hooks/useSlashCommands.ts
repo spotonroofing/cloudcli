@@ -144,6 +144,15 @@ export function useSlashCommands({
   onExecuteCommand,
 }: UseSlashCommandsOptions) {
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
+  // Fetch lifecycle for consumers that must distinguish "still loading" from
+  // "loaded/failed without the command" (the New Session boot and its retry).
+  // `commandsFetchSeq` increments per completed fetch, success or error.
+  const [commandsFetchState, setCommandsFetchState] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [commandsFetchSeq, setCommandsFetchSeq] = useState(0);
+  const [commandsRefreshTick, setCommandsRefreshTick] = useState(0);
+  const refreshSlashCommands = useCallback(() => {
+    setCommandsRefreshTick((tick) => tick + 1);
+  }, []);
   const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>([]);
   const [showCommandMenu, setShowCommandMenu] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
@@ -177,6 +186,7 @@ export function useSlashCommands({
         return;
       }
 
+      setCommandsFetchState('loading');
       try {
         const workspacePath = selectedProject.fullPath || selectedProject.path || '';
         const response = await authenticatedFetch('/api/commands/list', {
@@ -228,11 +238,15 @@ export function useSlashCommands({
 
         if (!cancelled) {
           setSlashCommands(sortedCommands);
+          setCommandsFetchState('loaded');
+          setCommandsFetchSeq((seq) => seq + 1);
         }
       } catch (error) {
         console.error('Error fetching slash commands:', error);
         if (!cancelled) {
           setSlashCommands([]);
+          setCommandsFetchState('error');
+          setCommandsFetchSeq((seq) => seq + 1);
         }
       }
     };
@@ -241,7 +255,7 @@ export function useSlashCommands({
     return () => {
       cancelled = true;
     };
-  }, [selectedProject, provider]);
+  }, [selectedProject, provider, commandsRefreshTick]);
 
   useEffect(() => {
     if (!showCommandMenu) {
@@ -480,6 +494,9 @@ export function useSlashCommands({
   return {
     slashCommands,
     slashCommandsCount: slashCommands.length,
+    commandsFetchState,
+    commandsFetchSeq,
+    refreshSlashCommands,
     filteredCommands,
     frequentCommands,
     commandQuery,

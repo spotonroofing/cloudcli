@@ -85,6 +85,8 @@ interface ChatComposerProps {
   handleGrantToolPermission: (suggestion: { entry: string; toolName: string }) => { success: boolean };
   activity: SessionActivity | null;
   isLoading: boolean;
+  /** True while a New Session boot is in flight or failed: typing is locked until the ready message posts. */
+  isBootLocked?: boolean;
   onAbortSession: () => void;
   effort: string;
   availableEffortOptions: NonNullable<ProviderModelOption['effort']>['values'];
@@ -143,6 +145,7 @@ export default function ChatComposer({
   handleGrantToolPermission,
   activity,
   isLoading,
+  isBootLocked = false,
   onAbortSession,
   effort,
   availableEffortOptions,
@@ -398,7 +401,8 @@ export default function ChatComposer({
               onFocus={() => onInputFocusChange?.(true)}
               onBlur={() => onInputFocusChange?.(false)}
               onInput={onTextareaInput}
-              placeholder={placeholder}
+              placeholder={isBootLocked ? t('input.bootLocked', { defaultValue: 'Starting session...' }) : placeholder}
+              disabled={isBootLocked}
             />
         </PromptInputBody>
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowDownIcon } from 'lucide-react';
 
@@ -9,7 +9,7 @@ import type { ChatInterfaceProps, Provider  } from '../types/types';
 import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
 import { useChatRealtimeHandlers } from '../hooks/useChatRealtimeHandlers';
-import { useChatComposerState } from '../hooks/useChatComposerState';
+import { useChatComposerState, type BootState } from '../hooks/useChatComposerState';
 import { useSessionStore } from '../../../stores/useSessionStore';
 
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
@@ -92,6 +92,19 @@ function ChatInterface({
     selectedProject,
   });
 
+  // Boot sessions hide their auto-sent boot prologue. Known origins come from
+  // session payloads; a fresh new-session view on a booting surface (non-null
+  // sessionOrigin) always boots.
+  const hideBootPrologue =
+    selectedSession?.origin === 'planner'
+    || selectedSession?.origin === 'direct'
+    || (!selectedSession && sessionOrigin != null);
+
+  // Lifecycle of the auto-sent New Session boot. The composer hook initiates
+  // boots and ties them to their session; the message-derived ready/failed
+  // transitions live in the effect below.
+  const [bootState, setBootState] = useState<BootState>({ phase: 'idle', sessionId: null, attempt: 0 });
+
   const {
     chatMessages,
     addMessage,
@@ -136,6 +149,8 @@ function ChatInterface({
     statusCheckSentAtRef,
     lastSeqRef,
     sessionStore,
+    hideBootPrologue,
+    bootTurnActive: bootState.phase === 'booting',
   });
 
   // Brand-new conversation: the composer allocated a stable session id via
@@ -194,6 +209,9 @@ function ChatInterface({
     commandModalPayload,
     closeCommandModal,
     runHandoff,
+    retryBoot,
+    markBootReady,
+    markBootFailed,
   } = useChatComposerState({
     selectedProject,
     selectedSession,
@@ -222,7 +240,73 @@ function ChatInterface({
     newSessionTrigger,
     bootCommandName,
     sessionOrigin,
+    bootState,
+    setBootState,
   });
+
+  // ------------------------------------------------------------------
+  // Silent boot lifecycle: the composer stays locked and the pane shows a
+  // loading indicator from the New Session boot until the ready message posts.
+  // `chatMessages` is already boot-filtered, so a visible assistant text means
+  // the ready boundary is determined (the filter holds the in-flight turn back
+  // until the run completes). An error during the attempt, or a turn that ends
+  // without a ready message, flips to a retryable failure.
+  // ------------------------------------------------------------------
+  const activeSessionKey = selectedSession?.id || currentSessionId || null;
+  const viewingBootSession =
+    bootState.phase !== 'idle'
+    && (bootState.sessionId ? bootState.sessionId === activeSessionKey : activeSessionKey === null);
+  const isBootingView = viewingBootSession && bootState.phase === 'booting';
+  const bootFailedView = viewingBootSession && bootState.phase === 'failed';
+
+  const hasReadyAssistantText = useMemo(
+    () =>
+      chatMessages.some(
+        (message) =>
+          message.type === 'assistant'
+          && !message.isToolUse
+          && !message.isThinking
+          && !message.isInteractivePrompt
+          && Boolean(message.content?.trim()),
+      ),
+    [chatMessages],
+  );
+  const errorMessageCount = useMemo(
+    () => chatMessages.filter((message) => message.type === 'error').length,
+    [chatMessages],
+  );
+  // Errors are counted against a per-attempt baseline so a retry in the same
+  // session is not failed by the previous attempt's error still in view.
+  const bootErrorBaselineRef = useRef({ attempt: bootState.attempt, errors: errorMessageCount });
+  if (bootErrorBaselineRef.current.attempt !== bootState.attempt) {
+    bootErrorBaselineRef.current = { attempt: bootState.attempt, errors: errorMessageCount };
+  }
+  const bootSawRunRef = useRef(false);
+  useEffect(() => {
+    if (!isBootingView) {
+      bootSawRunRef.current = false;
+      return;
+    }
+    if (hasReadyAssistantText) {
+      bootSawRunRef.current = false;
+      markBootReady();
+      return;
+    }
+    if (errorMessageCount > bootErrorBaselineRef.current.errors) {
+      bootSawRunRef.current = false;
+      markBootFailed();
+      return;
+    }
+    if (isProcessing) {
+      bootSawRunRef.current = true;
+      return;
+    }
+    // The boot turn ran and ended without a ready message: a dead boot.
+    if (bootSawRunRef.current) {
+      bootSawRunRef.current = false;
+      markBootFailed();
+    }
+  }, [isBootingView, hasReadyAssistantText, errorMessageCount, isProcessing, markBootReady, markBootFailed]);
 
   // On WebSocket reconnect, request a bounded persisted-tail sync (deferred
   // while Chat is hidden), then re-subscribe — the
@@ -348,6 +432,9 @@ function ChatInterface({
           onTouchMove={handleScroll}
           isLoadingSessionMessages={isLoadingSessionMessages}
           isProcessing={isProcessing}
+          isBootingSession={isBootingView}
+          bootFailed={bootFailedView}
+          onRetryBoot={retryBoot}
           hasActivityIndicator={hasActivityIndicator}
           chatMessages={chatMessages}
           selectedSession={selectedSession}
@@ -412,6 +499,7 @@ function ChatInterface({
           handleGrantToolPermission={handleGrantToolPermission}
           activity={sessionActivity}
           isLoading={isProcessing}
+          isBootLocked={viewingBootSession}
           onAbortSession={handleAbortSession}
           effort={currentProviderEffort}
           availableEffortOptions={currentProviderEffortOptions}

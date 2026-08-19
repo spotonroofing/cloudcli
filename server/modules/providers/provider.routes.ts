@@ -710,7 +710,10 @@ router.post(
     const projectPath = typeof body.projectPath === 'string' ? body.projectPath : '';
     const initialMessage = typeof body.initialMessage === 'string' ? body.initialMessage : '';
     const origin = body.origin === 'direct' || body.origin === 'dispatch' || body.origin === 'planner' ? body.origin : null;
-    const result = sessionsService.createAppSession(provider, projectPath, initialMessage, origin);
+    // Boot sessions (auto-sent /planner or /worker) get a placeholder title;
+    // the first user-typed chat.send names them.
+    const boot = body.boot === true;
+    const result = sessionsService.createAppSession(provider, projectPath, initialMessage, origin, boot);
     res.status(201).json(createApiSuccessResponse(result));
   }),
 );

@@ -75,6 +75,9 @@ interface UseChatComposerStateArgs {
   newSessionTrigger?: number;
   bootCommandName?: string;
   sessionOrigin?: 'direct' | 'planner' | null;
+  /** Boot lifecycle owned by ChatInterface (the message-derived transitions live there). */
+  bootState: BootState;
+  setBootState: Dispatch<SetStateAction<BootState>>;
 }
 
 interface MentionableFile {
@@ -140,6 +143,17 @@ export type HelpCommandData = {
     description?: string;
     namespace?: string;
   }>;
+};
+
+/**
+ * Lifecycle of the auto-sent New Session boot (/planner or /worker).
+ * `sessionId` is null until the boot submission establishes one; `attempt`
+ * increments per boot attempt so failure detection can baseline per attempt.
+ */
+export type BootState = {
+  phase: 'idle' | 'booting' | 'failed';
+  sessionId: string | null;
+  attempt: number;
 };
 
 export type CommandModalKind = 'help' | 'models' | 'cost' | 'status';
@@ -261,6 +275,8 @@ export function useChatComposerState({
   newSessionTrigger,
   bootCommandName,
   sessionOrigin,
+  bootState,
+  setBootState,
 }: UseChatComposerStateArgs) {
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
@@ -466,8 +482,10 @@ export function useChatComposerState({
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         console.error('Error executing command:', error);
+        // A failed command is an error, not assistant prose; the boot failure
+        // detection also keys off the error type.
         addMessage({
-          type: 'assistant',
+          type: 'error',
           content: `Error executing command: ${message}`,
           timestamp: Date.now(),
         });
@@ -503,6 +521,9 @@ export function useChatComposerState({
   const {
     slashCommands,
     slashCommandsCount,
+    commandsFetchState,
+    commandsFetchSeq,
+    refreshSlashCommands,
     filteredCommands,
     frequentCommands,
     commandQuery,
@@ -539,6 +560,18 @@ export function useChatComposerState({
   // ~/.claude/commands/planner.md and the body is sent as the first message.
   // Fires once per trigger increment, waiting until the command list has
   // loaded and the chat state has reset to "no session".
+  //
+  // The boot is silent: the composer locks and the boot prompt hides while
+  // `bootState` is not idle. ChatInterface owns the state and flips the phase
+  // to idle when the boot turn completes with a ready message, or to failed
+  // when the turn errors or ends without one.
+  //
+  // Claim ticket consumed by the next handleSubmit run: marks that submission
+  // as the auto-sent boot prompt (placeholder title, bootPrompt send flag).
+  const bootSubmissionRef = useRef(false);
+  // Armed by retryBoot; the retry effect fires the boot once the refreshed
+  // command list lands.
+  const pendingBootRetryRef = useRef<{ seqAtRequest: number } | null>(null);
   const lastPlannerBootTriggerRef = useRef(newSessionTrigger ?? 0);
   useEffect(() => {
     const trigger = newSessionTrigger ?? 0;
@@ -553,13 +586,74 @@ export function useChatComposerState({
       lastPlannerBootTriggerRef.current = trigger;
       return;
     }
+    // Lock the fresh view right away, even while the command list still loads.
+    setBootState((previous) =>
+      previous.phase === 'booting' && previous.sessionId === null
+        ? previous
+        : { phase: 'booting', sessionId: null, attempt: previous.attempt + 1 },
+    );
     const bootCommand = slashCommands.find((command) => command.name === (bootCommandName ?? '/planner'));
     if (!bootCommand) {
+      // Still loading keeps the trigger unconsumed (the effect re-fires when
+      // the list arrives). A finished fetch without the boot command is a dead
+      // boot: surface it instead of leaving a silent dead session.
+      if (commandsFetchState !== 'loading') {
+        lastPlannerBootTriggerRef.current = trigger;
+        setBootState((previous) => ({ ...previous, phase: 'failed' }));
+      }
       return;
     }
     lastPlannerBootTriggerRef.current = trigger;
+    bootSubmissionRef.current = true;
     void executeCommand(bootCommand, bootCommand.name);
-  }, [newSessionTrigger, selectedSession, currentSessionId, isLoading, slashCommands, executeCommand, bootCommandName]);
+  }, [newSessionTrigger, selectedSession, currentSessionId, isLoading, slashCommands, commandsFetchState, executeCommand, bootCommandName, selectedProject?.projectId, setBootState]);
+
+  // A different project means a different boot context; drop any stale state.
+  useEffect(() => {
+    pendingBootRetryRef.current = null;
+    setBootState({ phase: 'idle', sessionId: null, attempt: 0 });
+  }, [selectedProjectId, setBootState]);
+
+  // Retry re-sends the boot command: into the same session when one was
+  // established (the transcript keeps hiding pre-ready boot prompts), or as a
+  // fresh session-creating submission when the failure happened before one.
+  // The command list is refetched first — an outage that failed the boot has
+  // usually emptied it too — and the effect below fires the boot once the
+  // refreshed list lands (or fails again when the refetch comes back dry).
+  const [bootRetryTick, setBootRetryTick] = useState(0);
+  const retryBoot = useCallback(() => {
+    setBootState((previous) => ({ ...previous, phase: 'booting', attempt: previous.attempt + 1 }));
+    pendingBootRetryRef.current = { seqAtRequest: commandsFetchSeq };
+    setBootRetryTick((tick) => tick + 1);
+    refreshSlashCommands();
+  }, [commandsFetchSeq, refreshSlashCommands, setBootState]);
+
+  useEffect(() => {
+    const pending = pendingBootRetryRef.current;
+    if (!pending) {
+      return;
+    }
+    const bootCommand = slashCommands.find((command) => command.name === (bootCommandName ?? '/planner'));
+    if (bootCommand) {
+      pendingBootRetryRef.current = null;
+      bootSubmissionRef.current = true;
+      void executeCommand(bootCommand, bootCommand.name);
+      return;
+    }
+    // A post-retry fetch completed and the boot command is still missing.
+    if (commandsFetchSeq > pending.seqAtRequest && commandsFetchState !== 'loading') {
+      pendingBootRetryRef.current = null;
+      setBootState((previous) => (previous.phase === 'failed' ? previous : { ...previous, phase: 'failed' }));
+    }
+  }, [bootRetryTick, slashCommands, commandsFetchSeq, commandsFetchState, executeCommand, bootCommandName, setBootState]);
+
+  const markBootReady = useCallback(() => {
+    setBootState((previous) => (previous.phase === 'idle' ? previous : { ...previous, phase: 'idle' }));
+  }, []);
+
+  const markBootFailed = useCallback(() => {
+    setBootState((previous) => (previous.phase === 'failed' ? previous : { ...previous, phase: 'failed' }));
+  }, []);
 
   const {
     showFileDropdown,
@@ -732,6 +826,11 @@ export function useChatComposerState({
         return;
       }
 
+      // Consume the boot claim ticket: this submission is the auto-sent boot
+      // prompt exactly when the boot effect (or retry) armed it just before.
+      const isBootSubmission = bootSubmissionRef.current;
+      bootSubmissionRef.current = false;
+
       // A turn is already in flight: stash this message instead of sending it.
       // Upload attached files now so the queued record contains durable image
       // descriptors that can be sent even if another session is open later.
@@ -888,6 +987,7 @@ export function useChatComposerState({
               projectPath: resolvedProjectPath,
               initialMessage: messageContent,
               origin: sessionOrigin ?? undefined,
+              boot: isBootSubmission || undefined,
             }),
           });
           if (!response.ok) {
@@ -927,7 +1027,19 @@ export function useChatComposerState({
           provider,
           project: selectedProject,
           summary: createdSessionName,
+          origin: sessionOrigin ?? null,
         });
+      }
+
+      // Tie an in-flight boot to its now-concrete session so the composer
+      // lock and ready/failed detection stay scoped to this session.
+      if (isBootSubmission && targetSessionId) {
+        const bootSessionId = targetSessionId;
+        setBootState((previous) =>
+          previous.phase === 'idle' || previous.sessionId === bootSessionId
+            ? previous
+            : { ...previous, sessionId: bootSessionId },
+        );
       }
 
       const attachmentRecords = uploadedAttachments as ChatAttachment[];
@@ -961,6 +1073,8 @@ export function useChatComposerState({
         options: {
           ...(queuedSubmission?.options ?? buildSendOptions(messageContent)),
           attachments: uploadedAttachments,
+          // Auto-sent boot prompts never title the session server-side.
+          bootPrompt: isBootSubmission || undefined,
         },
       });
 
@@ -996,6 +1110,7 @@ export function useChatComposerState({
       addMessage,
       setIsUserScrolledUp,
       slashCommands,
+      sessionOrigin,
     ],
   );
 
@@ -1362,5 +1477,8 @@ export function useChatComposerState({
     closeCommandModal,
     showCostModal,
     runHandoff,
+    retryBoot,
+    markBootReady,
+    markBootFailed,
   };
 }

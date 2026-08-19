@@ -55,6 +55,7 @@ type RegisterOptimisticSessionArgs = {
   provider: LLMProvider;
   project: Project;
   summary?: string | null;
+  origin?: 'direct' | 'planner' | null;
 };
 
 /**
@@ -67,6 +68,7 @@ type SessionDetailsApiPayload = {
     sessionId?: string;
     provider?: string;
     summary?: string;
+    origin?: string | null;
     createdAt?: string | null;
     lastActivity?: string | null;
     project?: {
@@ -537,6 +539,7 @@ export function useProjectsState({
     provider,
     project,
     summary,
+    origin,
   }: RegisterOptimisticSessionArgs) => {
     if (!newSessionId || !project?.projectId) {
       return;
@@ -546,6 +549,7 @@ export function useProjectsState({
     const optimisticSession: ProjectSession = {
       id: newSessionId,
       summary: summary ?? '',
+      origin: origin ?? null,
       messageCount: 0,
       createdAt: now,
       created_at: now,
@@ -1033,6 +1037,7 @@ export function useProjectsState({
       const resolvedSession: ProjectSession = {
         id: sessionId,
         summary: details.summary ?? '',
+        origin: details.origin ?? null,
         createdAt: details.createdAt ?? undefined,
         lastActivity: details.lastActivity ?? undefined,
         __provider:
