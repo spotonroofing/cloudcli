@@ -989,7 +989,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
       const chainSlug = typeof req.body.chainSlug === 'string' && req.body.chainSlug.trim()
         ? req.body.chainSlug.trim()
         : null;
-      const isDispatch = req.body.origin !== 'direct';
+      const isDispatch = req.body.origin !== 'direct' && req.body.origin !== 'planner';
       if (isDispatch) {
         const originalSend = writer.send.bind(writer);
         writer.send = (data) => {
@@ -1077,7 +1077,9 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
       try {
         const announcedSessionId = writer.getSessionId() || sessionId || null;
         if (announcedSessionId) {
-          const runOrigin = req.body.origin === 'direct' ? 'direct' : 'dispatch';
+          const runOrigin = req.body.origin === 'direct' || req.body.origin === 'planner'
+            ? req.body.origin
+            : 'dispatch';
           sessionsTagDb.setSessionOrigin(announcedSessionId, runOrigin, preRunHead);
           if (runOrigin === 'dispatch') {
             watchdogService.runEnded(announcedSessionId, finalProjectPath, chainSlug);

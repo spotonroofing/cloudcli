@@ -35,7 +35,7 @@
         <key>CLOUDCLI_INSTANCE</key>
         <string>live</string>
         <key>PATH</key>
-        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:__HOME__/.local/bin</string>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:__HOME__/.local/bin:__HOME__/.npm-global/bin:__HOME__/Library/pnpm</string>
         <key>HOME</key>
         <string>__HOME__</string>
     </dict>
