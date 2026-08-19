@@ -261,7 +261,7 @@ export const sessionsService = {
     provider: LLMProvider,
     projectPath: string,
     initialMessage: string,
-    origin: 'direct' | 'dispatch' | null = null,
+    origin: 'direct' | 'dispatch' | 'planner' | null = null,
   ): CreateAppSessionResult {
     // Standalone chats (no project chosen) run in the hidden scratch repo and
     // display as project-less until attached to a real project.

@@ -50,6 +50,7 @@ import browserUseMcpRoutes from './modules/browser-use/browser-use-mcp.routes.js
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, sessionsDb } from './modules/database/index.js';
 import { configureWebPush } from './modules/notifications/index.js';
+import { createWatchdogRouter, watchdogService } from './modules/watchdog/index.js';
 
 const __dirname = getModuleDirectory(import.meta.url);
 // The server source runs from /server, while the compiled output runs from /dist-server/server.
@@ -193,6 +194,9 @@ app.use('/api/providers', authenticateToken, providerRoutes);
 
 // Agent API Routes (uses API key authentication)
 app.use('/api/agent', agentRoutes);
+
+// Watchdog API Routes (uses API key authentication; spec B3/B4)
+app.use('/api/watchdog', createWatchdogRouter());
 
 app.use('/api/voice', authenticateToken, voiceRoutes);
 
@@ -369,6 +373,10 @@ async function startServer() {
 
             // Start watching the projects folder for changes
             await initializeSessionsWatcher();
+
+            // Watchdog + scheduler (spec B3): zero-token monitoring of
+            // dispatched runs, resource thresholds, weekly push self-test.
+            watchdogService.start();
 
             // Start server-side plugin processes for enabled plugins
             startEnabledPluginServers().catch(err => {

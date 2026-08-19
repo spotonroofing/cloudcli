@@ -1,6 +1,6 @@
 import webPush from 'web-push';
 
-import { notificationPreferencesDb, pushSubscriptionsDb, sessionsDb } from '@/modules/database/index.js';
+import { notificationPreferencesDb, pushSubscriptionsDb, sessionsDb, userDb } from '@/modules/database/index.js';
 import { sendDesktopNotification as sendDesktopNotificationToClients } from '@/modules/notifications/services/desktop-notification-clients.service.js';
 
 const KIND_TO_PREF_KEY = {
@@ -300,11 +300,37 @@ function notifyRunFailed({ userId, provider, sessionId = null, error, sessionNam
   });
 }
 
+/**
+ * Fleet broadcast (spec B8): every subscribed endpoint gets every fleet
+ * notification — no per-event preference filtering and no per-device routing.
+ * `kind` is one of exactly two: 'decision-needed' or 'verified-done'.
+ */
+function sendFleetNotification({ kind, title, body, data = {} }) {
+  const user = userDb.getFirstUser();
+  if (!user) {
+    return Promise.resolve();
+  }
+  const payload = {
+    title,
+    body,
+    data: {
+      ...data,
+      kind,
+      tag: `fleet:${kind}:${title}`
+    }
+  };
+  return Promise.allSettled([
+    sendWebPushPayload(user.id, payload),
+    Promise.resolve(sendDesktopNotificationToClients(user.id, payload))
+  ]);
+}
+
 export {
   buildNotificationPayload,
   createNotificationEvent,
   notifyUserIfEnabled,
   notifyRunStopped,
   notifyRunFailed,
-  notifyBackgroundWorkCompleted
+  notifyBackgroundWorkCompleted,
+  sendFleetNotification
 };

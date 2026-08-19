@@ -74,7 +74,7 @@ interface UseChatComposerStateArgs {
   /** Monotonic counter from useProjectsState; each increment is one explicit New Session action. */
   newSessionTrigger?: number;
   bootCommandName?: string;
-  sessionOrigin?: 'direct' | null;
+  sessionOrigin?: 'direct' | 'planner' | null;
 }
 
 interface MentionableFile {

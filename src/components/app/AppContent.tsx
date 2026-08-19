@@ -13,6 +13,7 @@ import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useProjectsState } from '../../hooks/useProjectsState';
 import { useQueuedMessageAutoSend } from '../../hooks/useQueuedMessageAutoSend';
 import { api } from '../../utils/api';
+import { isNotificationSoundEnabled } from '../../utils/notificationSound';
 
 type RunningSessionApiItem = {
   sessionId?: unknown;
@@ -106,6 +107,37 @@ function AppContentInner() {
     sendMessage,
     markSessionProcessing,
   });
+
+  // Foreground enhancement (spec B8): a visible tab plays the Orca
+  // notification sound when a fleet notification lands. Background pushes keep
+  // the system default sound; this is deliberately a foreground-only behavior.
+  useEffect(() => {
+    const unsubscribe = subscribe?.((event: { kind?: string } | null) => {
+      if (event?.kind !== 'fleet_notification') {
+        return;
+      }
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
+        return;
+      }
+      if (!isNotificationSoundEnabled()) {
+        return;
+      }
+      try {
+        const audio = new Audio('/sounds/orca-notification.mp3');
+        void audio.play().then(() => {
+          const w = window as typeof window & { __fleetSoundPlays?: number };
+          w.__fleetSoundPlays = (w.__fleetSoundPlays ?? 0) + 1;
+        }).catch(() => {
+          // Autoplay may be blocked before first interaction; the push still lands.
+        });
+      } catch {
+        // Audio unavailable; the push notification still lands.
+      }
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [subscribe]);
 
   const refreshRunningSessions = useCallback(async () => {
     try {

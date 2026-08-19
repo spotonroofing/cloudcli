@@ -143,8 +143,8 @@ export interface ChatInterfaceProps {
   newSessionTrigger?: number;
   /** Slash command auto-sent on a New Session trigger; defaults to /planner. */
   bootCommandName?: string;
-  /** Origin tag recorded on sessions this surface creates (worker pane: 'direct'). */
-  sessionOrigin?: 'direct' | null;
+  /** Origin tag recorded on sessions this surface creates ('direct' worker pane, 'planner' main surface). */
+  sessionOrigin?: 'direct' | 'planner' | null;
   onTaskClick?: (...args: unknown[]) => void;
   onShowAllTasks?: (() => void) | null;
 }

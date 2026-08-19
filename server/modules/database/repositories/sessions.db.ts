@@ -225,6 +225,31 @@ export const sessionsDb = {
   },
 
   /**
+   * The most recent planner-lane session for a project: prefers sessions
+   * explicitly tagged 'planner', falls back to the newest untagged interactive
+   * session. The watchdog wakes this row.
+   */
+  getLatestPlannerSession(projectPath: string): SessionRow | null {
+    const db = getConnection();
+    const normalizedProjectPath = normalizeProjectPath(projectPath);
+    const pick = (originClause: string): SessionRow | undefined =>
+      db
+        .prepare(
+          `SELECT ${SESSION_ROW_COLUMNS}
+           FROM sessions
+           WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+             AND ${originClause}
+             AND isArchived = 0
+           ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
+           LIMIT 1`
+        )
+        .get(normalizedProjectPath) as SessionRow | undefined;
+
+    const row = pick(`origin = 'planner'`) ?? pick('origin IS NULL');
+    return normalizeSessionRow(row) ?? null;
+  },
+
+  /**
    * The most recent worker session (origin direct or dispatch) for a project,
    * by effective project path. The worker pane auto-follows this row.
    */

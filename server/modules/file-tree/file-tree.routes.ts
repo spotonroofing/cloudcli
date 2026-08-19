@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import express from 'express';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
@@ -134,6 +136,13 @@ export function createFileTreeRouter(
     const filePath = readRequiredString(request.query.path, 'path', 'Invalid file path');
     const file = await services.openFile(readProjectId(request), filePath);
     response.setHeader('Content-Type', file.contentType);
+    // Hardening (spec B8 rider): inline content must never be sniffed into an
+    // executable type, and downloads keep the real file name.
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader(
+      'Content-Disposition',
+      `inline; filename="${path.basename(filePath).replace(/"/g, '')}"`,
+    );
     file.stream.pipe(response);
     file.stream.on('error', (error) => {
       logger.error('Error streaming File Tree content', error);

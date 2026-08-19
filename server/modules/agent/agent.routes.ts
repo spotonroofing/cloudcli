@@ -6,6 +6,7 @@ import express from 'express';
 import type { ProviderRunFunction } from '@/shared/types.js';
 
 import { getClaudeConfigDir, normalizeProjectPath } from '../../shared/utils.js';
+import { watchdogService } from '../watchdog/index.js';
 
 type AgentRouterDependencies = {
   fileSystem: typeof import('node:fs/promises');
@@ -983,6 +984,36 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
       const codexModels = (await providerModelsService.getProviderModels('codex')).models;
       const opencodeModels = (await providerModelsService.getProviderModels('opencode')).models;
 
+      // Watchdog wiring (spec B3): dispatched runs report activity for stuck
+      // detection, and permission/interactive prompts escalate immediately.
+      const chainSlug = typeof req.body.chainSlug === 'string' && req.body.chainSlug.trim()
+        ? req.body.chainSlug.trim()
+        : null;
+      const isDispatch = req.body.origin !== 'direct';
+      if (isDispatch) {
+        const originalSend = writer.send.bind(writer);
+        writer.send = (data) => {
+          try {
+            const sid = writer.getSessionId() || sessionId || null;
+            if (sid) {
+              watchdogService.runStarted(sid, finalProjectPath, chainSlug);
+              watchdogService.runActivity(sid);
+              const eventType = typeof data?.type === 'string' ? data.type : '';
+              if (eventType.includes('permission') || eventType.includes('interactive_prompt')) {
+                watchdogService.permissionEvent(
+                  sid,
+                  eventType.includes('interactive') ? 'interactive_prompt' : 'permission_request',
+                  typeof data?.toolName === 'string' ? data.toolName : undefined,
+                );
+              }
+            }
+          } catch {
+            // watchdog tracking must never break the stream
+          }
+          return originalSend(data);
+        };
+      }
+
       // Repo HEAD before the run starts: worker-lane metadata so the pane can
       // surface files this run touched.
       let preRunHead = null;
@@ -1048,6 +1079,9 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
         if (announcedSessionId) {
           const runOrigin = req.body.origin === 'direct' ? 'direct' : 'dispatch';
           sessionsTagDb.setSessionOrigin(announcedSessionId, runOrigin, preRunHead);
+          if (runOrigin === 'dispatch') {
+            watchdogService.runEnded(announcedSessionId, finalProjectPath, chainSlug);
+          }
         }
       } catch (originError) {
         console.warn('Could not tag session origin:', originError?.message ?? originError);

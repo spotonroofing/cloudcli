@@ -709,7 +709,7 @@ router.post(
     const provider = parseProvider(body.provider);
     const projectPath = typeof body.projectPath === 'string' ? body.projectPath : '';
     const initialMessage = typeof body.initialMessage === 'string' ? body.initialMessage : '';
-    const origin = body.origin === 'direct' || body.origin === 'dispatch' ? body.origin : null;
+    const origin = body.origin === 'direct' || body.origin === 'dispatch' || body.origin === 'planner' ? body.origin : null;
     const result = sessionsService.createAppSession(provider, projectPath, initialMessage, origin);
     res.status(201).json(createApiSuccessResponse(result));
   }),
