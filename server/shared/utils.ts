@@ -121,6 +121,25 @@ export class AppError extends Error {
 export const WORKSPACES_ROOT = process.env.WORKSPACES_ROOT || os.homedir();
 
 /**
+ * Claude config directory for this server instance.
+ *
+ * Honors CLAUDE_CONFIG_DIR (the same variable the Claude CLI itself uses), so
+ * an isolated instance (dev on 4748) reads, watches, and spawns sessions in
+ * its own config tree instead of the user-level ~/.claude.
+ */
+export const getClaudeConfigDir = (): string =>
+  process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+
+/**
+ * Path of Claude's global .claude.json: inside CLAUDE_CONFIG_DIR when set
+ * (matching the CLI's behavior), else the legacy ~/.claude.json.
+ */
+export const getClaudeJsonPath = (): string =>
+  process.env.CLAUDE_CONFIG_DIR
+    ? path.join(process.env.CLAUDE_CONFIG_DIR, '.claude.json')
+    : path.join(os.homedir(), '.claude.json');
+
+/**
  * System-critical paths that must never be used as workspace roots.
  *
  * The validation helper blocks these values directly and also blocks paths

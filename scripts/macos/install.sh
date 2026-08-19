@@ -19,12 +19,17 @@ install_agent() {
     sed -e "s|__HOME__|$HOME|g" -e "s|__REPO__|$REPO|g" -e "s|__NODE__|$NODE|g" \
         "$SCRIPT_DIR/$template" > "$target"
     launchctl bootout "gui/$UID_NUM/$label" 2>/dev/null || true
+    sleep 1
     launchctl bootstrap "gui/$UID_NUM" "$target"
     echo "installed + bootstrapped $label"
 }
 
 chmod +x "$SCRIPT_DIR/cloudcli-backup.sh"
+mkdir -p "$HOME/.cloudcli-dev" "$HOME/.claude-dev/projects"
+# Dev's Claude CLI shares onboarding state but nothing else with the live tree.
+[[ -f "$HOME/.claude-dev/.claude.json" ]] || cp "$HOME/.claude.json" "$HOME/.claude-dev/.claude.json" 2>/dev/null || true
 install_agent com.spoton.cloudcli-live.plist.template com.spoton.cloudcli-live
 install_agent com.spoton.cloudcli-backup.plist.template com.spoton.cloudcli-backup
+install_agent com.spoton.cloudcli-dev.plist.template com.spoton.cloudcli-dev
 
 launchctl list | grep -E 'com\.spoton\.cloudcli' || true

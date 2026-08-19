@@ -7,7 +7,7 @@ import Database from 'better-sqlite3';
 
 import { appConfigDb, sessionsDb } from '@/modules/database/index.js';
 import type { AnyRecord } from '@/shared/types.js';
-import { AppError, getOpenCodeDatabasePath } from '@/shared/utils.js';
+import { AppError, getClaudeConfigDir, getOpenCodeDatabasePath } from '@/shared/utils.js';
 
 type SessionRow = NonNullable<ReturnType<typeof sessionsDb.getSessionById>>;
 
@@ -355,8 +355,7 @@ export function createProviderTokenUsageService(
 
         const encodedProjectPath = session.project_path.replace(/[^a-zA-Z0-9-]/g, '-');
         const projectDirectory = path.join(
-          dependencies.getHomeDirectory(),
-          '.claude',
+          getClaudeConfigDir(),
           'projects',
           encodedProjectPath,
         );

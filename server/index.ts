@@ -275,7 +275,14 @@ const SERVER_PORT = Number.parseInt(process.env.SERVER_PORT || '3001', 10);
 const HOST = process.env.HOST || '127.0.0.1';
 const DISPLAY_HOST = getConnectableHost(HOST);
 const VITE_PORT = process.env.VITE_PORT || 5173;
-const LOCAL_SERVER_MARKER_PATH = path.join(os.homedir(), '.cloudcli', 'local-server.json');
+// Per-instance marker so two instances (live 4747 / dev 4748) never clobber
+// each other's file. The unsuffixed legacy name is kept when CLOUDCLI_INSTANCE
+// is unset because electron/localServer.js discovers the server through it.
+const LOCAL_SERVER_MARKER_PATH = path.join(
+    os.homedir(),
+    '.cloudcli',
+    process.env.CLOUDCLI_INSTANCE ? `local-server-${process.env.CLOUDCLI_INSTANCE}.json` : 'local-server.json'
+);
 
 function getErrorCode(error: unknown): string | undefined {
     if (typeof error !== 'object' || error === null || !('code' in error)) {

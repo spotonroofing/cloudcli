@@ -7,6 +7,7 @@ import {
   buildLookupMap,
   extractFirstValidJsonlData,
   findFilesRecursivelyCreatedAfter,
+  getClaudeConfigDir,
   normalizeSessionName,
   readFileTimestamps,
 } from '@/shared/utils.js';
@@ -23,7 +24,7 @@ type ParsedSession = {
  */
 export class ClaudeSessionSynchronizer implements IProviderSessionSynchronizer {
   private readonly provider = 'claude' as const;
-  private readonly claudeHome = path.join(os.homedir(), '.claude');
+  private readonly claudeHome = getClaudeConfigDir();
 
   /**
    * Returns true when a JSONL file is a subagent transcript or tool result
