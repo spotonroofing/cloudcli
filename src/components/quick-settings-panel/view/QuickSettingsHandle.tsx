@@ -32,7 +32,7 @@ export default function QuickSettingsHandle({
   const placementClass = isOpen ? 'right-64' : 'right-0';
   const borderClass = isDragging
     ? 'border-primary'
-    : 'border-gray-200 dark:border-gray-700';
+    : 'border-border';
   const transitionClass = isDragging
     ? ''
     : 'transition-all duration-150 ease-out';
@@ -52,7 +52,7 @@ export default function QuickSettingsHandle({
       onClick={onClick}
       onMouseDown={onMouseDown}
       onTouchStart={onTouchStart}
-      className={`fixed ${placementClass} z-50 ${transitionClass} border bg-white dark:bg-gray-800 ${borderClass} rounded-l-md p-2 shadow-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 ${cursorClass} touch-none`}
+      className={`fixed ${placementClass} z-50 ${transitionClass} border bg-card ${borderClass} rounded-l-md p-2 shadow-lg transition-colors hover:bg-accent ${cursorClass} touch-none`}
       style={{
         ...style,
         touchAction: 'none',
@@ -65,9 +65,9 @@ export default function QuickSettingsHandle({
       {isDragging ? (
         <GripVertical className="h-5 w-5 text-primary" />
       ) : isOpen ? (
-        <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+        <ChevronRight className="h-5 w-5 text-muted-foreground" />
       ) : (
-        <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+        <ChevronLeft className="h-5 w-5 text-muted-foreground" />
       )}
     </button>
   );

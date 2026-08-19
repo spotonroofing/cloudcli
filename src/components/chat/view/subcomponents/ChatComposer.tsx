@@ -427,7 +427,6 @@ export default function ChatComposer({
             <PromptInputButton
               tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
               onClick={onHandoff}
-              className="hidden md:flex"
               aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
             >
               <FileTextIcon />
@@ -439,7 +438,6 @@ export default function ChatComposer({
               <PromptInputButton
                 tooltip={{ content: t('input.clearInput', { defaultValue: 'Clear input' }) }}
                 onClick={onClearInput}
-                className="hidden sm:flex"
               >
                 <XIcon />
               </PromptInputButton>

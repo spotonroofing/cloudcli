@@ -60,15 +60,14 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const close = useCallback(() => setIsOpen(false), []);
-  // Desktop anchors the popover's left edge to the ring button (Claude-desktop
-  // style, growing rightward away from the sidebar); mobile keeps the original
-  // right-aligned anchor. Recomputed on every render, so each open is fresh.
-  const alignLeft = typeof window !== 'undefined' && window.innerWidth >= 768;
+  // The popover's left edge anchors to the ring button on every form factor
+  // (Claude-desktop style, growing rightward); the anchor hook shrinks
+  // maxWidth on narrow viewports so it never runs off the right edge.
   const { triggerRef, menuRef, anchor, updateAnchor } = useComposerMenuAnchor(
     isOpen,
     close,
     320,
-    alignLeft ? 'left' : 'right',
+    'left',
   );
 
   const breakdown =

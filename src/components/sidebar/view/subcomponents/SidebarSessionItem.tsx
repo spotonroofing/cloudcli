@@ -291,13 +291,13 @@ export default function SidebarSessionItem({
             aria-describedby="mobile-session-options-description"
             wrapperClassName="md:hidden"
             animationClassName="animate-bottom-sheet-content-show motion-reduce:animate-none"
-            className="bottom-0 left-0 top-auto max-w-none translate-x-0 translate-y-0 rounded-b-none rounded-t-2xl border-x-0 border-b-0 px-4 pb-safe-area-inset-bottom pt-3"
+            className="bottom-0 left-0 top-auto max-w-none translate-x-0 translate-y-0 rounded-b-none rounded-t-lg border-x-0 border-b-0 px-4 pb-safe-area-inset-bottom pt-3"
           >
             <DialogTitle>Session options</DialogTitle>
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted-foreground/30" aria-hidden="true" />
 
             <div className="mb-4 flex items-center gap-3 px-1">
-              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-muted">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
                 <LLMProviderLogo provider={session.__provider} className="h-5 w-5" />
               </div>
               <div className="min-w-0">
@@ -326,7 +326,7 @@ export default function SidebarSessionItem({
                       saveMobileRename();
                     }
                   }}
-                  className="w-full rounded-xl border-2 border-primary/40 bg-background px-3 py-3 text-foreground shadow-sm focus:border-primary focus:outline-none"
+                  className="w-full rounded-lg border-2 border-primary/40 bg-background px-3 py-3 text-foreground shadow-sm focus:border-primary focus:outline-none"
                   autoFocus
                   autoComplete="off"
                   // 16px keeps iOS Safari from zooming the viewport on focus.
@@ -336,7 +336,7 @@ export default function SidebarSessionItem({
                   <button
                     type="button"
                     onClick={saveMobileRename}
-                    className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-transform active:scale-95"
+                    className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-transform active:scale-95"
                   >
                     <Check className="h-5 w-5 flex-shrink-0" />
                     Save
@@ -344,7 +344,7 @@ export default function SidebarSessionItem({
                   <button
                     type="button"
                     onClick={onCancelEditingSession}
-                    className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-muted/35 px-4 py-3 text-sm font-medium text-foreground transition-colors active:bg-muted"
+                    className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-muted/35 px-4 py-3 text-sm font-medium text-foreground transition-colors active:bg-muted"
                   >
                     <X className="h-5 w-5 flex-shrink-0" />
                     Cancel
@@ -356,7 +356,7 @@ export default function SidebarSessionItem({
                 <button
                   type="button"
                   onClick={startMobileRename}
-                  className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-border bg-muted/35 px-4 py-3 text-left text-foreground transition-colors active:bg-muted"
+                  className="flex min-h-12 w-full items-center gap-3 rounded-lg border border-border bg-muted/35 px-4 py-3 text-left text-foreground transition-colors active:bg-muted"
                 >
                   <Edit2 className="h-5 w-5 flex-shrink-0" />
                   <span className="text-sm font-medium">Rename session</span>
@@ -367,7 +367,7 @@ export default function SidebarSessionItem({
                   onClick={handleCopyAction}
                   disabled={isCopyPending}
                   className={cn(
-                    'flex min-h-12 w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors',
+                    'flex min-h-12 w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
                     copyState === 'copied'
                       ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300'
                       : copyState === 'error'
@@ -395,7 +395,7 @@ export default function SidebarSessionItem({
                       setMobileOptionsOpen(false);
                       requestDeleteSession();
                     }}
-                    className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-red-600 transition-colors active:bg-red-500/10 dark:text-red-400"
+                    className="flex min-h-12 w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-red-600 transition-colors active:bg-red-500/10 dark:text-red-400"
                   >
                     <Trash2 className="h-5 w-5 flex-shrink-0" />
                     <span className="text-sm font-medium">Archive or delete session</span>
@@ -408,7 +408,7 @@ export default function SidebarSessionItem({
               <button
                 type="button"
                 onClick={() => setMobileOptionsOpen(false)}
-                className="mb-3 mt-2 min-h-11 w-full rounded-xl text-sm font-medium text-muted-foreground transition-colors active:bg-muted"
+                className="mb-3 mt-2 min-h-11 w-full rounded-lg text-sm font-medium text-muted-foreground transition-colors active:bg-muted"
               >
                 Cancel
               </button>
