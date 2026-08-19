@@ -171,7 +171,11 @@ function readClaudeTokenUsage(
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     try {
       const entry = JSON.parse(lines[index]) as AnyRecord;
-      const usage = entry.type === 'assistant' ? entry.message?.usage : null;
+      // Sidechain rows are subagent turns with their own small context; the
+      // session's cumulative context lives on the last main-chain row only.
+      const usage = entry.type === 'assistant' && entry.isSidechain !== true
+        ? entry.message?.usage
+        : null;
       if (!usage) {
         continue;
       }

@@ -348,8 +348,10 @@ export function useChatSessionState({
       setHasMoreMessages(slot.hasMore);
       setTotalMessages(slot.total);
       messagesOffsetRef.current = slot.offset;
-      if (slot.tokenUsage !== undefined) {
-        setTokenBudget((slot.tokenUsage as Record<string, unknown> | null) ?? null);
+      // Claude history pages carry no usage, so the slot stays null; only a
+      // real value may replace the live streamed budget.
+      if (slot.tokenUsage != null) {
+        setTokenBudget(slot.tokenUsage as Record<string, unknown>);
       }
     }
     return !result.deferred;
@@ -501,8 +503,8 @@ export function useChatSessionState({
         setHasMoreMessages(slot.hasMore);
         setTotalMessages(slot.total);
         messagesOffsetRef.current = slot.offset;
-        if (slot.tokenUsage !== undefined) {
-          setTokenBudget((slot.tokenUsage as Record<string, unknown> | null) ?? null);
+        if (slot.tokenUsage != null) {
+          setTokenBudget(slot.tokenUsage as Record<string, unknown>);
         }
 
         if (prependedCount === 0) {
@@ -762,8 +764,8 @@ export function useChatSessionState({
         setHasMoreMessages(slot.hasMore);
         setTotalMessages(slot.total);
         messagesOffsetRef.current = slot.offset;
-        if (slot.tokenUsage !== undefined) {
-          setTokenBudget((slot.tokenUsage as Record<string, unknown> | null) ?? null);
+        if (slot.tokenUsage != null) {
+          setTokenBudget(slot.tokenUsage as Record<string, unknown>);
         }
       }
       setIsLoadingSessionMessages(false);
@@ -938,9 +940,10 @@ export function useChatSessionState({
         const response = await authenticatedFetch(url);
         if (response.ok) {
           const payload = await response.json();
-          setTokenBudget(payload.data ?? null);
-        } else {
-          setTokenBudget(null);
+          // A live streamed budget is always fresher than the file snapshot;
+          // only fill the gap when nothing has arrived yet. A miss (e.g. the
+          // JSONL does not exist yet on a fresh boot) never wipes a live value.
+          setTokenBudget((previous) => previous ?? (payload.data ?? null));
         }
       } catch (error) {
         console.error('Failed to fetch initial token usage:', error);

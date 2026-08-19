@@ -69,6 +69,51 @@ test('token usage lookup requires only the app-facing session id for Claude', as
   }
 });
 
+test('Claude token usage skips trailing sidechain (subagent) rows', async () => {
+  const tempDirectory = await mkdtemp(path.join(tmpdir(), 'provider-token-usage-sidechain-'));
+  const sessionFilePath = path.join(tempDirectory, 'provider-session.jsonl');
+
+  try {
+    await writeFile(sessionFilePath, [
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          usage: {
+            input_tokens: 200,
+            cache_read_input_tokens: 50_000,
+            cache_creation_input_tokens: 1_000,
+            output_tokens: 400,
+          },
+        },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        isSidechain: true,
+        message: {
+          usage: {
+            input_tokens: 10,
+            cache_read_input_tokens: 500,
+            cache_creation_input_tokens: 0,
+            output_tokens: 20,
+          },
+        },
+      }),
+    ].join('\n'));
+
+    const service = createProviderTokenUsageService({
+      getSessionById: () => createSessionRow({ jsonl_path: sessionFilePath }),
+      getClaudeContextWindow: () => '180000',
+    });
+
+    const result = await service.getSessionTokenUsage('app-session');
+    assert.equal(result.used, 51_600);
+    assert.equal(result.inputTokens, 51_200);
+    assert.equal(result.outputTokens, 400);
+  } finally {
+    await rm(tempDirectory, { recursive: true, force: true });
+  }
+});
+
 test('Codex token usage uses the latest token_count snapshot', async () => {
   const tempDirectory = await mkdtemp(path.join(tmpdir(), 'provider-token-usage-codex-'));
   const sessionFilePath = path.join(tempDirectory, 'rollout-provider-session.jsonl');

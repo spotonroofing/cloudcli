@@ -450,6 +450,32 @@ function applyContextUsageSnapshot(budget, snapshot) {
 }
 
 /**
+ * Reads the persisted SDK-reported window for a model id so mid-stream budgets
+ * carry the same honest denominator the result snapshot confirms, instead of
+ * flip-flopping through the CONTEXT_WINDOW env guess during a turn.
+ * @param {string|null|undefined} model - Model id from the assistant message
+ * @returns {{total: number, totalIsUsableWindow: boolean}|null}
+ */
+function readPersistedModelWindow(model) {
+  if (!model) {
+    return null;
+  }
+  try {
+    const raw = appConfigDb.get(`claude_context_window:${model}`);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    const total = Number(parsed.total);
+    return Number.isFinite(total) && total > 0
+      ? { total, totalIsUsableWindow: parsed.totalIsUsableWindow === true }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Persists the SDK-reported context window per model id so the token-usage
  * route can serve the honest denominator for idle and historical sessions on
  * load, before any live turn runs.
@@ -879,7 +905,9 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
       if (message.type === 'assistant') {
         contextUsagePromise = queryInstance.getContextUsage().catch(() => null);
       }
-      let tokenBudgetData = extractTokenBudget(message);
+      // Subagent messages carry the subagent's own (much smaller) usage, not
+      // the session's context, so they never produce a budget update.
+      let tokenBudgetData = message.parent_tool_use_id ? null : extractTokenBudget(message);
       if (message.type === 'result' && tokenBudgetData) {
         const snapshot = contextUsagePromise ? await contextUsagePromise : null;
         if (snapshot) {
@@ -903,6 +931,18 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
             };
             persistModelContextWindow(modelKey, tokenBudgetData);
           }
+        }
+      }
+      if (tokenBudgetData && !tokenBudgetData.contextUsageSource) {
+        // Mid-turn budgets otherwise carry the env-guess denominator; the
+        // window persisted from an earlier result keeps the ring honest.
+        const persistedWindow = readPersistedModelWindow(message.message?.model);
+        if (persistedWindow) {
+          tokenBudgetData = {
+            ...tokenBudgetData,
+            total: persistedWindow.total,
+            totalIsUsableWindow: persistedWindow.totalIsUsableWindow,
+          };
         }
       }
       if (tokenBudgetData) {

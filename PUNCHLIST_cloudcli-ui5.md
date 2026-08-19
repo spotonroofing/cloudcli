@@ -12,8 +12,8 @@ Whole-file rules: read DESIGN.md in the repo root before any UI work; it is the 
 Done when: in the dev instance browser, creating a session shows loading then a ready message with no boot prompt visible, the composer is disabled until ready, a simulated boot failure shows the indicator, and a new session titled from a typed test message appears in the sidebar. Commit.
 
 ## Phase 2: context ring truth
-- [ ] Diagnose why the ring jumps on boot and why it counts up then resets per message; read the ring math and the server usage source first
-- [ ] Fix so the ring shows cumulative session context against the session model's real window, monotonic within a session, matching the server's own usage numbers
+- [x] Diagnose why the ring jumps on boot and why it counts up then resets per message; read the ring math and the server usage source first
+- [x] Fix so the ring shows cumulative session context against the session model's real window, monotonic within a session, matching the server's own usage numbers
 Done when: on dev, after boot plus two messages, the ring percentage equals the server-reported cumulative context for that session and does not reset between messages. Commit.
 
 ## Phase 3: worker pane honesty
