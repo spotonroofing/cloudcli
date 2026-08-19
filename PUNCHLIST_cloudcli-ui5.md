@@ -23,7 +23,7 @@ Done when: on dev, after boot plus two messages, the ring percentage equals the 
 Done when: on dev with two dispatched runs present (create two trivial ones if none exist, in a scratch-safe way per repo docs), the switcher lists both, states render correctly, and each shows its own model. Commit.
 
 ## Phase 4: cosmetic sweep
-- [ ] Remove project stars from the sidebar; shift the project list left to reclaim the space
-- [ ] Sidebar session activity indicators show only while a session is actively mid-turn; no standing dots on idle sessions
-- [ ] Replace the floating bottom-left thinking box with an inline thinking indicator in the message flow using a subtle shimmer, consistent with DESIGN.md motion rules
+- [x] Remove project stars from the sidebar; shift the project list left to reclaim the space
+- [x] Sidebar session activity indicators show only while a session is actively mid-turn; no standing dots on idle sessions
+- [x] Replace the floating bottom-left thinking box with an inline thinking indicator in the message flow using a subtle shimmer, consistent with DESIGN.md motion rules
 Done when: on dev, an idle session shows no dot and a mid-turn session shows one; no star icons render; sending a message shows the inline shimmer where the reply will appear. Then run the promote flow. Commit and push.

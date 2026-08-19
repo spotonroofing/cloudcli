@@ -205,7 +205,6 @@ function ChatInterface({
     handlePermissionDecision,
     handleGrantToolPermission,
     handleInputFocusChange,
-    isInputFocused,
     commandModalPayload,
     closeCommandModal,
     runHandoff,
@@ -394,10 +393,9 @@ function ChatInterface({
     }
   }, [currentSessionId, provider, selectProviderEffort, selectedSession?.id]);
 
-  // Mirrors ChatComposer's own visibility check so the message pane can
-  // reserve enough bottom space to keep the floating status tab from
-  // overlapping the last message.
-  const hasActivityIndicator = Boolean(sessionActivity && pendingPermissionRequests.length === 0);
+  // The inline thinking indicator hides while a permission request is pending
+  // (the permission banner is the active status surface then).
+  const paneActivity = pendingPermissionRequests.length === 0 ? sessionActivity : null;
 
   const selectedProviderLabel =
     provider === 'cursor'
@@ -435,7 +433,7 @@ function ChatInterface({
           isBootingSession={isBootingView}
           bootFailed={bootFailedView}
           onRetryBoot={retryBoot}
-          hasActivityIndicator={hasActivityIndicator}
+          activity={paneActivity}
           chatMessages={chatMessages}
           selectedSession={selectedSession}
           currentSessionId={currentSessionId}
@@ -497,7 +495,6 @@ function ChatInterface({
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}
           handleGrantToolPermission={handleGrantToolPermission}
-          activity={sessionActivity}
           isLoading={isProcessing}
           isBootLocked={viewingBootSession}
           onAbortSession={handleAbortSession}
@@ -550,7 +547,6 @@ function ChatInterface({
           onTextareaPaste={handlePaste}
           onTextareaScrollSync={syncInputOverlayScroll}
           onTextareaInput={handleTextareaInput}
-          isInputFocused={isInputFocused}
           onInputFocusChange={handleInputFocusChange}
           placeholder="Write a message..."
           isTextareaExpanded={isTextareaExpanded}

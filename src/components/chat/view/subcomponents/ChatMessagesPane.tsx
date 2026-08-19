@@ -3,6 +3,7 @@ import { memo, useCallback, useMemo } from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 
 import type { ChatMessage } from '../../types/types';
+import type { SessionActivity } from '../../../../hooks/useSessionProtection';
 import type {
   Project,
   ProjectSession,
@@ -14,6 +15,7 @@ import { getIntrinsicMessageKey } from '../../utils/messageKeys';
 import { groupConsecutiveTools, isToolGroupItem } from '../../utils/toolGrouping';
 import { Button } from '../../../../shared/view/ui';
 
+import ActivityIndicator from './ActivityIndicator';
 import MessageComponent from './MessageComponent';
 import ProviderSelectionEmptyState from './ProviderSelectionEmptyState';
 import ToolGroupContainer from './ToolGroupContainer';
@@ -32,8 +34,8 @@ interface ChatMessagesPaneProps {
   /** True when the boot turn errored or ended without a ready message. */
   bootFailed?: boolean;
   onRetryBoot?: () => void;
-  /** True while ChatComposer's floating activity/stop tab is rendered above the input. */
-  hasActivityIndicator?: boolean;
+  /** The viewed session's in-flight activity; drives the inline thinking indicator. */
+  activity?: SessionActivity | null;
   chatMessages: ChatMessage[];
   selectedSession: ProjectSession | null;
   currentSessionId: string | null;
@@ -85,7 +87,7 @@ function ChatMessagesPane({
   isBootingSession = false,
   bootFailed = false,
   onRetryBoot,
-  hasActivityIndicator = false,
+  activity = null,
   chatMessages,
   selectedSession,
   currentSessionId,
@@ -173,9 +175,7 @@ function ChatMessagesPane({
       ref={scrollContainerRef}
       onWheel={onWheel}
       onTouchMove={onTouchMove}
-      className={`chat-messages-pane relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pt-3 sm:pt-4 ${
-        hasActivityIndicator ? 'pb-12 sm:pb-14' : 'pb-3 sm:pb-4'
-      }`}
+      className="chat-messages-pane relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-3 pt-3 sm:pb-4 sm:pt-4"
     >
       {chatMessages.length > 0 && (
         <div className="pointer-events-none sticky right-4 top-3 z-10 mb-2 flex justify-end sm:px-4">
@@ -323,6 +323,8 @@ function ChatMessagesPane({
               );
             });
           })()}
+
+          <ActivityIndicator activity={activity} />
 
           {bootFailed && (
             <div className="py-4 text-center">

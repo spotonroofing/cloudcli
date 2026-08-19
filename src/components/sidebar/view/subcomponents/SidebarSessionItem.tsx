@@ -73,7 +73,9 @@ export default function SidebarSessionItem({
   const [providerSessionId, setProviderSessionId] = useState<string | null>(null);
   const providerIdRequestRef = useRef(0);
   const showAttentionIndicator = needsAttention && !isSelected;
-  const showRecentIndicator = !showAttentionIndicator && !isProcessing && sessionView.isActive;
+  // The activity dot only renders while the session is actually mid-turn;
+  // recently-updated idle sessions carry no standing indicator.
+  const showProcessingIndicator = !showAttentionIndicator && isProcessing;
   const providerLabel = PROVIDER_LABELS[session.__provider];
 
   // While editing, dismiss only when the user clicks outside the inline rename panel
@@ -196,19 +198,19 @@ export default function SidebarSessionItem({
 
   return (
     <div className="group relative">
-      {(showAttentionIndicator || showRecentIndicator) && (
+      {(showAttentionIndicator || showProcessingIndicator) && (
         <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 transform">
           <Tooltip
             content={showAttentionIndicator
               ? t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })
-              : t('tooltips.activeSessionIndicator')}
+              : t('tooltips.processingSessionIndicator', 'Processing session')}
             position="right"
           >
             <div
               role="status"
               aria-label={showAttentionIndicator
                 ? t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })
-                : t('tooltips.activeSessionIndicator')}
+                : t('tooltips.processingSessionIndicator', 'Processing session')}
               className={cn(
                 'h-2 w-2 animate-pulse rounded-full',
                 showAttentionIndicator ? 'bg-amber-500' : 'bg-green-500',
@@ -223,11 +225,7 @@ export default function SidebarSessionItem({
           className={cn(
             'p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative',
             isSelected ? 'bg-primary/5 border-primary/20' : '',
-            !isSelected && isProcessing
-              ? 'border-border/60 bg-muted/20'
-              : !isSelected && sessionView.isActive
-              ? 'border-green-500/30 bg-green-50/5 dark:bg-green-900/5'
-              : 'border-border/30',
+            !isSelected && isProcessing ? 'border-border/60 bg-muted/20' : 'border-border/30',
           )}
           onClick={selectMobileSession}
         >
@@ -426,9 +424,7 @@ export default function SidebarSessionItem({
             isSelected ? 'border-primary/20 bg-primary/5' : 'border-border/30',
             !isSelected && isProcessing
               ? 'border-border/60 bg-muted/20 hover:bg-muted/25'
-              : !isSelected && sessionView.isActive
-                ? 'border-green-500/30 bg-green-50/5 hover:bg-green-50/10 dark:bg-green-900/5 dark:hover:bg-green-900/10'
-                : 'hover:bg-accent/50',
+              : 'hover:bg-accent/50',
           )}
           // Left-click keeps in-app navigation; Ctrl/Cmd/middle-click and the
           // native right-click menu use the href to open a new tab/window.

@@ -32,11 +32,9 @@ export type SidebarProjectListProps = {
   activeSessions: SessionActivityMap;
   attentionSessionIds: ReadonlySet<string>;
   forceExpanded?: boolean;
-  isProjectStarred: (projectName: string) => boolean;
   onEditingNameChange: (value: string) => void;
   onToggleProject: (projectName: string) => void;
   onProjectSelect: (project: Project) => void;
-  onToggleStarProject: (projectName: string) => void;
   onStartEditingProject: (project: Project) => void;
   onCancelEditingProject: () => void;
   onSaveProjectName: (projectName: string) => void;
@@ -80,11 +78,9 @@ export default function SidebarProjectList({
   activeSessions,
   attentionSessionIds,
   forceExpanded = false,
-  isProjectStarred,
   onEditingNameChange,
   onToggleProject,
   onProjectSelect,
-  onToggleStarProject,
   onStartEditingProject,
   onCancelEditingProject,
   onSaveProjectName,
@@ -130,7 +126,6 @@ export default function SidebarProjectList({
               selectedSession={selectedSession}
               isExpanded={forceExpanded || expandedProjects.has(project.projectId)}
               isDeleting={deletingProjects.has(project.projectId)}
-              isStarred={isProjectStarred(project.projectId)}
               editingProject={editingProject}
               editingName={editingName}
               sessions={getProjectSessions(project)}
@@ -144,7 +139,6 @@ export default function SidebarProjectList({
               onEditingNameChange={onEditingNameChange}
               onToggleProject={onToggleProject}
               onProjectSelect={onProjectSelect}
-              onToggleStarProject={onToggleStarProject}
               onStartEditingProject={onStartEditingProject}
               onCancelEditingProject={onCancelEditingProject}
               onSaveProjectName={onSaveProjectName}
