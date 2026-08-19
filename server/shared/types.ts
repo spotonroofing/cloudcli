@@ -138,6 +138,13 @@ export type CustomProviderModelInput = {
  */
 export type ProviderCurrentActiveModel = {
   model: string;
+  /**
+   * True when `model` was read from the provider's own session state (e.g. a
+   * transcript on disk). Distinguishes a genuine session-state read that
+   * happens to equal the catalog `DEFAULT` from the catalog-default fallback,
+   * so the model resolver can trust it. Absent/false on fallback results.
+   */
+  fromSessionState?: boolean;
 };
 
 /**

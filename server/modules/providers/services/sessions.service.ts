@@ -289,27 +289,6 @@ export const sessionsService = {
   },
 
   /**
-   * The most recent worker session (origin direct or dispatch) for a project.
-   * The worker pane auto-follows this.
-   */
-  getLatestWorkerSession(projectPath: string) {
-    const session = sessionsDb.getLatestWorkerSession(projectPath);
-    if (!session) {
-      return { session: null };
-    }
-    return {
-      session: {
-        sessionId: session.session_id,
-        provider: session.provider as LLMProvider,
-        origin: session.origin,
-        baseCommit: session.base_commit,
-        sessionTitle: session.custom_name?.trim() || session.session_id,
-        lastActivity: session.updated_at ?? session.created_at ?? null,
-      },
-    };
-  },
-
-  /**
    * Files touched since a worker session's base commit (committed or not),
    * for the pane's "files this run produced" view.
    */

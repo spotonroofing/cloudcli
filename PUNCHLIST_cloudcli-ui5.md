@@ -17,9 +17,9 @@ Done when: in the dev instance browser, creating a session shows loading then a 
 Done when: on dev, after boot plus two messages, the ring percentage equals the server-reported cumulative context for that session and does not reset between messages. Commit.
 
 ## Phase 3: worker pane honesty
-- [ ] Run switcher in the pane header: list active and recent dispatched runs for the project, newest selected by default, switching swaps the transcript
-- [ ] Header shows run slug and plain state (running, finished, stopped) instead of Untitled Claude Session
-- [ ] The pane's model indicator reflects the selected run's actual model; remove any hardcoded default (Haiku or otherwise); model is whatever the run was dispatched with
+- [x] Run switcher in the pane header: list active and recent dispatched runs for the project, newest selected by default, switching swaps the transcript
+- [x] Header shows run slug and plain state (running, finished, stopped) instead of Untitled Claude Session
+- [x] The pane's model indicator reflects the selected run's actual model; remove any hardcoded default (Haiku or otherwise); model is whatever the run was dispatched with
 Done when: on dev with two dispatched runs present (create two trivial ones if none exist, in a scratch-safe way per repo docs), the switcher lists both, states render correctly, and each shows its own model. Commit.
 
 ## Phase 4: cosmetic sweep

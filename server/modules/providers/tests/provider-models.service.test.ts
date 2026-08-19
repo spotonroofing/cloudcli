@@ -16,7 +16,10 @@ const createModels = (value: string): ProviderModelsDefinition => ({
   DEFAULT: value,
 });
 
-const createCurrentActiveModel = (model: string): ProviderCurrentActiveModel => ({ model });
+const createCurrentActiveModel = (
+  model: string,
+  fromSessionState?: boolean,
+): ProviderCurrentActiveModel => (fromSessionState ? { model, fromSessionState } : { model });
 
 /** In-memory stand-in for the `sessions` table rows the service reads and writes. */
 const createSessionStore = (
@@ -103,6 +106,8 @@ const createTestService = (options: {
   catalog?: ReturnType<typeof createCatalogStore>;
   sessions?: ReturnType<typeof createSessionStore>;
   activeModel?: (provider: LLMProvider, sessionId?: string) => string;
+  /** Marks the stubbed active-model result as a genuine session-state read. */
+  activeModelFromSessionState?: boolean;
   onCatalogRead?: (provider: LLMProvider) => void;
 } = {}) => {
   const catalog = options.catalog ?? createCatalogStore();
@@ -118,6 +123,7 @@ const createTestService = (options: {
         },
         getCurrentActiveModel: async (sessionId) => createCurrentActiveModel(
           options.activeModel?.(provider, sessionId) ?? `${provider}-default`,
+          options.activeModelFromSessionState,
         ),
       },
     }),
@@ -291,6 +297,22 @@ test('resolveSessionModel uses provider session state for unrecorded external se
   });
 
   assert.equal(resolved.model, 'provider-reported');
+  assert.equal(resolved.source, 'provider');
+});
+
+test('resolveSessionModel trusts a session-state read even when it equals the catalog default', async () => {
+  const { service } = createTestService({
+    sessions: createSessionStore({ 'session-1': null }),
+    activeModel: () => 'claude-default',
+    activeModelFromSessionState: true,
+  });
+
+  const resolved = await service.resolveSessionModel('claude', {
+    sessionId: 'session-1',
+    requestedModel: 'haiku',
+  });
+
+  assert.equal(resolved.model, 'claude-default');
   assert.equal(resolved.source, 'provider');
 });
 

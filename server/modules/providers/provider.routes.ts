@@ -8,6 +8,7 @@ import { providerTokenUsageService } from '@/modules/providers/services/provider
 import { providerSkillsService } from '@/modules/providers/services/skills.service.js';
 import { sessionConversationsSearchService } from '@/modules/providers/services/session-conversations-search.service.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
+import { watchdogService } from '@/modules/watchdog/index.js';
 import type {
   CustomProviderModelInput,
   LLMProvider,
@@ -740,16 +741,17 @@ router.get(
   }),
 );
 
-// The most recent worker session (origin direct or dispatch) for a project.
-// The worker pane polls this to auto-follow dispatched and direct runs.
+// Active and recent worker runs (origin direct or dispatch) for a project,
+// newest first, each with its honest state (running/finished/stopped), chain
+// slug, and model. The worker pane's run switcher polls this.
 router.get(
-  '/sessions/worker-latest',
+  '/sessions/worker-runs',
   asyncHandler(async (req: Request, res: Response) => {
     const projectPath = typeof req.query.projectPath === 'string' ? req.query.projectPath.trim() : '';
     if (!projectPath) {
       throw new AppError('projectPath is required.', { code: 'PROJECT_PATH_REQUIRED', statusCode: 400 });
     }
-    res.json(createApiSuccessResponse(sessionsService.getLatestWorkerSession(projectPath)));
+    res.json(createApiSuccessResponse(watchdogService.listWorkerRuns(projectPath)));
   }),
 );
 

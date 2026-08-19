@@ -18,7 +18,16 @@ type AgentRouterDependencies = {
   apiKeys: { validateApiKey(apiKey: string): unknown };
   githubTokens: { getActiveGithubToken(userId: number): string | null };
   projects: { createProjectPath(projectPath: string, customName: string | null): unknown };
-  sessions: { setSessionOrigin(sessionId: string, origin: string, baseCommit?: string | null): void };
+  sessions: {
+    setSessionOrigin(
+      sessionId: string,
+      origin: string,
+      baseCommit?: string | null,
+      chainSlug?: string | null,
+      model?: string | null,
+      upsertContext?: { provider: string; projectPath: string },
+    ): void;
+  };
   models: typeof import('../providers/index.js').providerModelsService;
   queryClaude: ProviderRunFunction;
   queryCursor: ProviderRunFunction;
@@ -990,13 +999,21 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
         ? req.body.chainSlug.trim()
         : null;
       const isDispatch = req.body.origin !== 'direct' && req.body.origin !== 'planner';
+      const dispatchedModel = typeof model === 'string' && model.trim() ? model.trim() : null;
       if (isDispatch) {
         const originalSend = writer.send.bind(writer);
+        // Tag the session as soon as its id is announced, not just at run end,
+        // so the pane sees the run's origin, slug, and model while it runs.
+        let originTagged = false;
         writer.send = (data) => {
           try {
             const sid = writer.getSessionId() || sessionId || null;
             if (sid) {
-              watchdogService.runStarted(sid, finalProjectPath, chainSlug);
+              if (!originTagged) {
+                originTagged = true;
+                sessionsTagDb.setSessionOrigin(sid, 'dispatch', preRunHead, chainSlug, dispatchedModel, { provider, projectPath: finalProjectPath });
+              }
+              watchdogService.runStarted(sid, finalProjectPath, chainSlug, provider, dispatchedModel);
               watchdogService.runActivity(sid);
               const eventType = typeof data?.type === 'string' ? data.type : '';
               if (eventType.includes('permission') || eventType.includes('interactive_prompt')) {
@@ -1080,7 +1097,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           const runOrigin = req.body.origin === 'direct' || req.body.origin === 'planner'
             ? req.body.origin
             : 'dispatch';
-          sessionsTagDb.setSessionOrigin(announcedSessionId, runOrigin, preRunHead);
+          sessionsTagDb.setSessionOrigin(announcedSessionId, runOrigin, preRunHead, chainSlug, dispatchedModel, { provider, projectPath: finalProjectPath });
           if (runOrigin === 'dispatch') {
             watchdogService.runEnded(announcedSessionId, finalProjectPath, chainSlug);
           }

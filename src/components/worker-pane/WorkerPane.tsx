@@ -6,18 +6,24 @@ import ErrorBoundary from '../main-content/view/ErrorBoundary';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
-import { Button, Tooltip } from '../../shared/view/ui';
+import { ActionMenu, Button, Tooltip } from '../../shared/view/ui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 
-type WorkerLatestSession = {
+type WorkerRun = {
   sessionId: string;
   provider: string;
   origin: 'direct' | 'dispatch' | string | null;
-  baseCommit: string | null;
-  sessionTitle: string;
+  chainSlug: string | null;
+  title: string | null;
+  state: 'running' | 'finished' | 'stopped';
+  model: string | null;
   lastActivity: string | null;
 };
+
+/** Run slug first, then the session title, then a short honest id — never a provider placeholder. */
+const runLabel = (run: WorkerRun): string =>
+  run.chainSlug || run.title || `run ${run.sessionId.slice(0, 8)}`;
 
 type WorkerPaneProps = {
   selectedProject: Project;
@@ -58,58 +64,62 @@ export default function WorkerPane({
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
 
   const [paneSession, setPaneSession] = useState<ProjectSession | null>(null);
-  const [latest, setLatest] = useState<WorkerLatestSession | null>(null);
+  const [runs, setRuns] = useState<WorkerRun[]>([]);
   const [newSessionTrigger, setNewSessionTrigger] = useState(0);
   const [touchedFiles, setTouchedFiles] = useState<string[] | null>(null);
-  // Auto-follow pauses while the user is composing a brand-new pane session,
-  // so a dispatched run landing mid-thought cannot steal the surface.
+  // Auto-follow pauses while the user is composing a brand-new pane session or
+  // has pinned an older run in the switcher, so a dispatched run landing
+  // mid-thought cannot steal the surface.
   const followLatestRef = useRef(true);
 
   const projectPath = selectedProject.fullPath || selectedProject.path || '';
 
-  const refreshLatest = useCallback(async () => {
+  const refreshRuns = useCallback(async () => {
     if (!projectPath) {
       return;
     }
     try {
       const response = await authenticatedFetch(
-        `/api/providers/sessions/worker-latest?projectPath=${encodeURIComponent(projectPath)}`,
+        `/api/providers/sessions/worker-runs?projectPath=${encodeURIComponent(projectPath)}`,
       );
       if (!response.ok) {
         return;
       }
-      const body = (await response.json()) as { data?: { session?: WorkerLatestSession | null } };
-      setLatest(body.data?.session ?? null);
+      const body = (await response.json()) as { data?: { runs?: WorkerRun[] } };
+      setRuns(body.data?.runs ?? []);
     } catch {
       // transient; the poll retries
     }
   }, [projectPath]);
 
-  // Project switch: reset and re-resolve which worker session to follow.
+  // Project switch: reset and re-resolve which worker runs to show.
   useEffect(() => {
     setPaneSession(null);
+    setRuns([]);
     setTouchedFiles(null);
     followLatestRef.current = true;
-    void refreshLatest();
-  }, [refreshLatest]);
+    void refreshRuns();
+  }, [refreshRuns]);
 
-  // Watcher deltas plus a slow poll keep "most recent worker session" honest
+  // Watcher deltas plus a slow poll keep the run list and its states honest
   // even when a dispatched chain starts sessions with no browser involved.
   useEffect(() => {
     const unsubscribe = subscribe?.((event: { kind?: string } | null) => {
       if (event?.kind === 'session_upserted') {
-        void refreshLatest();
+        void refreshRuns();
       }
     });
     const interval = setInterval(() => {
-      void refreshLatest();
+      void refreshRuns();
     }, 20_000);
     return () => {
       unsubscribe?.();
       clearInterval(interval);
     };
-  }, [subscribe, refreshLatest]);
+  }, [subscribe, refreshRuns]);
 
+  // Auto-follow: the newest run is selected until the user pins another one.
+  const latest = runs[0] ?? null;
   useEffect(() => {
     if (!latest || !followLatestRef.current || paneSession?.id === latest.sessionId) {
       return;
@@ -117,10 +127,26 @@ export default function WorkerPane({
     setPaneSession({
       id: latest.sessionId,
       __provider: (latest.provider || 'claude') as ProjectSession['__provider'],
-      summary: latest.sessionTitle,
+      summary: latest.title ?? undefined,
       origin: latest.origin ?? null,
     });
   }, [latest, paneSession?.id]);
+
+  const handleSelectRun = (run: WorkerRun) => {
+    // Picking the newest run resumes auto-follow; anything older pins it.
+    followLatestRef.current = run.sessionId === runs[0]?.sessionId;
+    setTouchedFiles(null);
+    setPaneSession((previous) =>
+      previous?.id === run.sessionId
+        ? previous
+        : {
+            id: run.sessionId,
+            __provider: (run.provider || 'claude') as ProjectSession['__provider'],
+            summary: run.title ?? undefined,
+            origin: run.origin ?? null,
+          },
+    );
+  };
 
   const handleNewWorkerSession = () => {
     followLatestRef.current = false;
@@ -152,21 +178,42 @@ export default function WorkerPane({
     }
   };
 
-  const originLabel = paneSession?.id === latest?.sessionId ? latest?.origin ?? null : null;
+  const selectedRun = runs.find((run) => run.sessionId === paneSession?.id) ?? null;
 
   return (
     <div className="flex h-full min-w-0 flex-col">
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
         <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         <span className="text-xs font-medium text-foreground">Worker</span>
-        {originLabel && (
-          <span className="rounded-full border border-border/60 bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            {originLabel}
+        {runs.length > 0 && (
+          <ActionMenu
+            label={selectedRun ? runLabel(selectedRun) : 'Runs'}
+            ariaLabel="Switch worker run"
+            align="left"
+            variant="ghost"
+            size="sm"
+            className="min-w-0"
+            triggerClassName="h-6 max-w-full gap-1 px-1.5 text-[11px] font-normal text-muted-foreground hover:text-foreground [&>span]:truncate [&_svg]:h-3 [&_svg]:w-3"
+            items={runs.map((run) => ({
+              key: run.sessionId,
+              label: runLabel(run),
+              description: [run.origin, run.state, run.model].filter(Boolean).join(' · '),
+              onSelect: () => handleSelectRun(run),
+            }))}
+          />
+        )}
+        {selectedRun && (
+          <span
+            className={`rounded-full border px-1.5 py-0.5 text-[10px] ${
+              selectedRun.state === 'running'
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'border-border/60 bg-muted/60 text-muted-foreground'
+            }`}
+          >
+            {selectedRun.state}
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
-          {paneSession?.summary || ''}
-        </span>
+        <span className="min-w-0 flex-1" />
         <Tooltip content="Files touched since the run's base commit" position="bottom">
           <Button
             variant="ghost"
@@ -256,7 +303,7 @@ export default function WorkerPane({
                   ? previous
                   : { id: targetSessionId, __provider: 'claude', origin: 'direct' },
               );
-              void refreshLatest();
+              void refreshRuns();
             }}
             onShowSettings={onShowSettings}
             showRawParameters={showRawParameters}

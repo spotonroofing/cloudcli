@@ -234,7 +234,7 @@ const readClaudeSessionModelFromJsonl = async (
       const event = JSON.parse(lines[index]) as ClaudeInitEvent;
       const model = extractClaudeEventModel(event, sessionId);
       if (model) {
-        return { model };
+        return { model, fromSessionState: true };
       }
     } catch {
       // Skip malformed JSONL lines that can happen during concurrent writes.

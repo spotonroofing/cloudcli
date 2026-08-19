@@ -324,7 +324,10 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
       const providerCatalog = await getProviderModels(provider);
       const providerModel = await getCurrentActiveModel(provider, normalizedSessionId);
       const resolvedProviderModel = providerModel.model?.trim();
-      if (resolvedProviderModel && resolvedProviderModel !== providerCatalog.DEFAULT) {
+      // A genuine session-state read (`fromSessionState`) is trusted even when
+      // it equals the catalog default; without the marker, a default-valued
+      // result is indistinguishable from the fallback and is ignored.
+      if (resolvedProviderModel && (providerModel.fromSessionState || resolvedProviderModel !== providerCatalog.DEFAULT)) {
         return {
           provider,
           sessionId: normalizedSessionId,

@@ -47,8 +47,8 @@ export function createAgentModule(externalDependencies: AgentExternalDependencie
         projectsDb.createProjectPath(projectPath, customName),
     },
     sessions: {
-      setSessionOrigin: (sessionId, origin, baseCommit) =>
-        sessionsDb.setSessionOrigin(sessionId, origin, baseCommit),
+      setSessionOrigin: (sessionId, origin, baseCommit, chainSlug, model, upsertContext) =>
+        sessionsDb.setSessionOrigin(sessionId, origin, baseCommit, chainSlug, model, upsertContext),
     },
     models: providerModelsService,
     GithubClient: Octokit,

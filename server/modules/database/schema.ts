@@ -119,10 +119,12 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- project_path.
     assigned_project_path TEXT,
     -- Worker-lane metadata: how the session was started ('direct' from the
-    -- worker pane, 'dispatch' from the chain runner, NULL otherwise) and the
-    -- project HEAD when the run began.
+    -- worker pane, 'dispatch' from the chain runner, NULL otherwise), the
+    -- project HEAD when the run began, and the dispatch chain slug the run
+    -- belongs to (NULL for direct and free-standing runs).
     origin TEXT,
     base_commit TEXT,
+    chain_slug TEXT,
     isArchived BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

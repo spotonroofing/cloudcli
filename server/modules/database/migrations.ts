@@ -448,9 +448,10 @@ const addSessionAssignedProjectColumn = (db: Database): void => {
 /**
  * Adds worker-lane metadata (spec B2/B4): `origin` tags how a session was
  * started ('direct' = Willem in the worker pane, 'dispatch' = headless chain
- * runner; NULL = ordinary chat/planner session) and `base_commit` records the
+ * runner; NULL = ordinary chat/planner session), `base_commit` records the
  * project HEAD when the run began, so the pane can surface files the run
- * touched.
+ * touched, and `chain_slug` names the dispatch chain a run belongs to so the
+ * pane's run switcher can label it.
  */
 const addSessionWorkerColumns = (db: Database): void => {
   const sessionsTableInfo = getTableInfo(db, 'sessions');
@@ -458,6 +459,7 @@ const addSessionWorkerColumns = (db: Database): void => {
 
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'origin', 'TEXT');
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'base_commit', 'TEXT');
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'chain_slug', 'TEXT');
 };
 
 const ensureProjectsForSessionPaths = (db: Database): void => {

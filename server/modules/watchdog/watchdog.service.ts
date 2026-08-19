@@ -7,6 +7,7 @@ import path from 'node:path';
 import { appConfigDb, sessionsDb } from '@/modules/database/index.js';
 import { providerRuntimeService, providerTokenUsageService } from '@/modules/providers/index.js';
 import { sendFleetNotification } from '@/modules/notifications/index.js';
+import { normalizeProjectPath } from '@/shared/utils.js';
 import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/websocket/index.js';
 
 type ChainStatus = 'running' | 'completed' | 'stopped' | 'failed';
@@ -26,10 +27,28 @@ type DispatchRunRecord = {
   sessionId: string;
   projectPath: string;
   chainSlug: string | null;
+  provider: string;
+  /** Model the run was dispatched with; null when the caller left it to the SDK default. */
+  model: string | null;
   startedAt: number;
   lastEventAt: number;
   stuckWakeSent: boolean;
   ended: boolean;
+};
+
+/**
+ * One row of the worker pane's run switcher: a worker session (or a live
+ * dispatched run the synchronizer has not indexed yet) with its honest state.
+ */
+type WorkerRun = {
+  sessionId: string;
+  provider: string;
+  origin: string | null;
+  chainSlug: string | null;
+  title: string | null;
+  state: 'running' | 'finished' | 'stopped';
+  model: string | null;
+  lastActivity: string | null;
 };
 
 type WakeItem = {
@@ -135,11 +154,19 @@ class WatchdogService {
 
   // ----- dispatched single runs (external run surface) -----
 
-  runStarted(sessionId: string, projectPath: string, chainSlug: string | null): void {
+  runStarted(
+    sessionId: string,
+    projectPath: string,
+    chainSlug: string | null,
+    provider = 'claude',
+    model: string | null = null,
+  ): void {
     this.dispatchRuns.set(sessionId, {
       sessionId,
       projectPath,
       chainSlug,
+      provider,
+      model,
       startedAt: Date.now(),
       lastEventAt: Date.now(),
       stuckWakeSent: false,
@@ -170,6 +197,80 @@ class WatchdogService {
         + 'Verify it against git log and the punch list before declaring anything done.',
       );
     }
+  }
+
+  /**
+   * Active and recent worker runs for a project, newest first — the worker
+   * pane's run switcher. DB rows (origin direct/dispatch) carry title, slug,
+   * and model; live in-memory dispatch records supply the running state and
+   * cover runs the filesystem synchronizer has not indexed yet. Used by the
+   * providers session routes.
+   */
+  listWorkerRuns(projectPath: string): { runs: WorkerRun[] } {
+    const normalizedPath = normalizeProjectPath(projectPath);
+    const rows = sessionsDb.listWorkerSessions(normalizedPath, 10);
+
+    const knownIds = new Set<string>();
+    for (const row of rows) {
+      knownIds.add(row.session_id);
+      if (row.provider_session_id) {
+        knownIds.add(row.provider_session_id);
+      }
+    }
+
+    // A live dispatched run whose session row is not indexed yet still shows
+    // up — this is the "concurrent dispatched runs are invisible" fix.
+    const liveOnly: WorkerRun[] = [...this.dispatchRuns.values()]
+      .filter((run) => !run.ended && run.projectPath === normalizedPath && !knownIds.has(run.sessionId))
+      .sort((a, b) => b.startedAt - a.startedAt)
+      .map((run) => ({
+        sessionId: run.sessionId,
+        provider: run.provider,
+        origin: 'dispatch',
+        chainSlug: run.chainSlug,
+        title: null,
+        state: 'running',
+        model: run.model,
+        lastActivity: new Date(run.lastEventAt).toISOString(),
+      }));
+
+    // Only the newest run of a chain can carry the chain's stopped/failed
+    // state; earlier phases of that chain completed normally.
+    const chainStateClaimed = new Set<string>();
+    const fromRows: WorkerRun[] = rows.map((row) => {
+      const live = this.dispatchRuns.get(row.session_id)
+        ?? (row.provider_session_id ? this.dispatchRuns.get(row.provider_session_id) : undefined);
+      const running = (live ? !live.ended : false) || chatRunRegistry.isProcessing(row.session_id);
+      const chainSlug = row.chain_slug ?? live?.chainSlug ?? null;
+
+      let state: WorkerRun['state'] = running ? 'running' : 'finished';
+      if (!running && chainSlug && !chainStateClaimed.has(chainSlug)) {
+        const chain = this.chains.get(chainSlug);
+        if (chain && (chain.status === 'stopped' || chain.status === 'failed')) {
+          state = 'stopped';
+        }
+      }
+      if (chainSlug) {
+        chainStateClaimed.add(chainSlug);
+      }
+
+      const title = row.custom_name?.trim() && row.custom_name !== 'Untitled Claude Session'
+        ? row.custom_name
+        : null;
+
+      return {
+        sessionId: row.session_id,
+        provider: row.provider,
+        origin: row.origin,
+        chainSlug,
+        title,
+        state,
+        model: row.model ?? live?.model ?? null,
+        lastActivity: row.updated_at ?? row.created_at ?? null,
+      };
+    });
+
+    return { runs: [...liveOnly, ...fromRows] };
   }
 
   permissionEvent(sessionId: string, kind: 'permission_request' | 'interactive_prompt', detail?: string): void {

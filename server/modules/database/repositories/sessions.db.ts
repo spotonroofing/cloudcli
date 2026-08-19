@@ -18,6 +18,8 @@ type SessionRow = {
   origin: string | null;
   /** Project HEAD when the run began; feeds the pane's files-touched view. */
   base_commit: string | null;
+  /** Dispatch chain slug the run belongs to; NULL for direct/free-standing runs. */
+  chain_slug: string | null;
   jsonl_path: string | null;
   custom_name: string | null;
   /** Model this session runs with; NULL until the app records one for it. */
@@ -38,7 +40,7 @@ type RecentSessionsPage = {
 // list/feed reader prefers the app-owned attach-to-project choice without each
 // call site repeating the COALESCE. Writes always name real columns explicitly.
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
 
 // WHERE-clause form of the same preference (SQLite cannot reference SELECT
 // aliases in WHERE).
@@ -210,18 +212,45 @@ export const sessionsDb = {
   },
 
   /**
-   * Tags a session with its worker origin (and optionally the base commit)
-   * after the fact — used by the external run surface, which only learns the
-   * session id once the provider announces it.
+   * Tags a session with its worker origin (and optionally the base commit,
+   * chain slug, and the model the run was dispatched with) after the fact —
+   * used by the external run surface, which only learns the session id once
+   * the provider announces it.
+   *
+   * A fast run can end before the filesystem watcher has indexed its
+   * transcript, so when `upsertContext` is given and no row matches, a row is
+   * inserted (keyed by the provider-native id) that the watcher's later
+   * upsert updates in place — otherwise the tag would be lost and the run
+   * invisible to the worker pane.
    */
-  setSessionOrigin(sessionId: string, origin: string, baseCommit?: string | null): void {
+  setSessionOrigin(
+    sessionId: string,
+    origin: string,
+    baseCommit?: string | null,
+    chainSlug?: string | null,
+    model?: string | null,
+    upsertContext?: { provider: string; projectPath: string },
+  ): void {
     const db = getConnection();
-    db.prepare(
+    const result = db.prepare(
       `UPDATE sessions
        SET origin = ?,
-           base_commit = COALESCE(?, base_commit)
+           base_commit = COALESCE(?, base_commit),
+           chain_slug = COALESCE(?, chain_slug),
+           model = COALESCE(?, model)
        WHERE session_id = ? OR provider_session_id = ?`
-    ).run(origin, baseCommit ?? null, sessionId, sessionId);
+    ).run(origin, baseCommit ?? null, chainSlug ?? null, model ?? null, sessionId, sessionId);
+
+    if (result.changes > 0 || !upsertContext) {
+      return;
+    }
+
+    const normalizedProjectPath = normalizeProjectPath(upsertContext.projectPath);
+    projectsDb.createProjectPath(normalizedProjectPath);
+    db.prepare(
+      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, origin, base_commit, chain_slug, model, jsonl_path, isArchived, created_at, updated_at)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).run(sessionId, upsertContext.provider, sessionId, normalizedProjectPath, origin, baseCommit ?? null, chainSlug ?? null, model ?? null);
   },
 
   /**
@@ -274,13 +303,13 @@ export const sessionsDb = {
   },
 
   /**
-   * The most recent worker session (origin direct or dispatch) for a project,
-   * by effective project path. The worker pane auto-follows this row.
+   * Active and recent worker sessions (origin direct or dispatch) for a
+   * project, newest first. Feeds the worker pane's run switcher.
    */
-  getLatestWorkerSession(projectPath: string): SessionRow | null {
+  listWorkerSessions(projectPath: string, limit: number): SessionRow[] {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPath(projectPath);
-    const row = db
+    const rows = db
       .prepare(
         `SELECT ${SESSION_ROW_COLUMNS}
          FROM sessions
@@ -288,11 +317,11 @@ export const sessionsDb = {
            AND origin IN ('direct', 'dispatch')
            AND isArchived = 0
          ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
-         LIMIT 1`
+         LIMIT ?`
       )
-      .get(normalizedProjectPath) as SessionRow | undefined;
+      .all(normalizedProjectPath, limit) as SessionRow[];
 
-    return normalizeSessionRow(row) ?? null;
+    return normalizeSessionRows(rows);
   },
 
   /**
