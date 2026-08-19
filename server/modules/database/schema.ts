@@ -114,6 +114,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- restores its exact runtime configuration instead of provider defaults.
     model TEXT,
     effort TEXT,
+    -- App-owned project assignment (attach-to-project). The filesystem
+    -- synchronizer never touches it; reads prefer it over the cwd-derived
+    -- project_path.
+    assigned_project_path TEXT,
     isArchived BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

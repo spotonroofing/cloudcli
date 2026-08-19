@@ -214,6 +214,15 @@ export const api = {
     authenticatedFetch(`/api/providers/sessions/${sessionId}/restore`, {
       method: 'POST',
     }),
+  // Attach a chat to a project; null projectPath detaches it back to standalone.
+  assignSessionToProject: (sessionId, projectPath) =>
+    authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/project`, {
+      method: 'PATCH',
+      body: JSON.stringify({ projectPath }),
+    }),
+  // The hidden scratch repo path that hosts standalone chats.
+  scratchProject: () =>
+    authenticatedFetch('/api/providers/sessions/scratch-project'),
   renameSession: (sessionId, summary) =>
     authenticatedFetch(`/api/providers/sessions/${sessionId}`, {
       method: 'PUT',

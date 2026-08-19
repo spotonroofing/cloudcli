@@ -10,6 +10,7 @@ import type {
   Project,
   ProjectSession,
 } from '../types/app';
+import { STANDALONE_PROJECT_ID } from '../types/app';
 
 import type { SessionActivityMap } from './useSessionProtection';
 
@@ -17,6 +18,8 @@ type UseProjectsStateArgs = {
   sessionId?: string;
   /** Route-pinned project id (`/project/:projectId`) that scopes this tab to one project. */
   scopedProjectId?: string;
+  /** True on the /standalone route: a chat with no project, hosted in scratch. */
+  standaloneMode?: boolean;
   navigate: NavigateFunction;
   /** Subscription to the unified websocket event stream. */
   subscribe: (listener: (event: ServerEvent) => void) => () => void;
@@ -376,6 +379,7 @@ const readPersistedTab = (): AppTab => {
 export function useProjectsState({
   sessionId,
   scopedProjectId,
+  standaloneMode,
   navigate,
   subscribe,
   isMobile,
@@ -691,7 +695,7 @@ export function useProjectsState({
   // lands on the selected project, else the most recently active one, through
   // the unchanged /project/:projectId route. Mobile keeps the global list.
   useEffect(() => {
-    if (isMobile || scopedProjectId || sessionId || isLoadingProjects || projects.length === 0) {
+    if (isMobile || scopedProjectId || standaloneMode || sessionId || isLoadingProjects || projects.length === 0) {
       return;
     }
 
@@ -708,7 +712,49 @@ export function useProjectsState({
       ?? [...projects].sort((a, b) => latestActivity(b) - latestActivity(a))[0].projectId;
 
     navigate(`/project/${targetProjectId}`, { replace: true });
-  }, [isLoadingProjects, isMobile, navigate, projects, scopedProjectId, selectedProject?.projectId, sessionId]);
+  }, [isLoadingProjects, isMobile, navigate, projects, scopedProjectId, standaloneMode, selectedProject?.projectId, sessionId]);
+
+  // /standalone: select the scratch-backed pseudo project so the composer has
+  // a working directory while the chat presents as project-less. The trigger
+  // bump resets the chat surface like any New Session (the planner auto-boot
+  // is suppressed for the standalone pseudo project).
+  useEffect(() => {
+    if (!standaloneMode || sessionId) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await api.scratchProject();
+        if (!response.ok) {
+          throw new Error(`scratch-project lookup failed (${response.status})`);
+        }
+        const body = (await response.json()) as { data?: { path?: string } };
+        const scratchPath = body.data?.path;
+        if (cancelled || !scratchPath) {
+          return;
+        }
+        setSelectedProject({
+          projectId: STANDALONE_PROJECT_ID,
+          displayName: 'No project',
+          fullPath: scratchPath,
+          path: scratchPath,
+          sessions: [],
+          sessionMeta: { hasMore: false, total: 0 },
+        });
+        setSelectedSession(null);
+        setActiveTab('chat');
+        setNewSessionTrigger((previous) => previous + 1);
+      } catch (error) {
+        console.error('Could not initialize a standalone chat:', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [standaloneMode, sessionId]);
 
   // Realtime sidebar updates. The backend pushes per-session deltas
   // (`session_upserted`) instead of full project snapshots, so each event is
@@ -1008,11 +1054,17 @@ export function useProjectsState({
     (project: Project) => {
       setSelectedProject(project);
       setSelectedSession(null);
-      navigate(rootPath);
 
       if (isMobile) {
+        navigate(rootPath);
         setSidebarOpen(false);
+        return;
       }
+
+      // Desktop: picking a project from the Projects tab re-docks the tab to
+      // that project's route (claude.ai model), instead of snapping back to
+      // the previously pinned project.
+      navigate(`/project/${project.projectId}`);
     },
     [isMobile, navigate, rootPath],
   );
@@ -1189,10 +1241,9 @@ export function useProjectsState({
 
   // Scoped tabs pin the sidebar to the one route-selected project, so there
   // is no project switcher to escape through.
-  const visibleProjects = useMemo(
-    () => (scopedProjectId ? projects.filter((project) => project.projectId === scopedProjectId) : projects),
-    [projects, scopedProjectId],
-  );
+  // The sidebar always sees the full project list (B1): the Projects tab and
+  // the attach-to-project picker need every project even on a docked tab.
+  const visibleProjects = projects;
 
   const sidebarSharedProps = useMemo(
     () => ({

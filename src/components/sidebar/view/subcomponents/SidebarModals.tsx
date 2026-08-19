@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import ReactDOM from 'react-dom';
-import { AlertTriangle, EyeOff, Trash2 } from 'lucide-react';
+import { AlertTriangle, EyeOff, Folder, FolderInput, MessageSquare, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import { Button } from '../../../../shared/view/ui';
 import Settings from '../../../settings/view/Settings';
 import type { Project } from '../../../../types/app';
 import { normalizeProjectForSettings } from '../../utils/utils';
-import type { DeleteProjectConfirmation, SessionDeleteConfirmation, SettingsProject } from '../../types/types';
+import type { DeleteProjectConfirmation, MoveSessionTarget, SessionDeleteConfirmation, SettingsProject } from '../../types/types';
 import ProjectCreationWizard from '../../../project-creation-wizard';
 
 type SidebarModalsProps = {
@@ -23,6 +23,9 @@ type SidebarModalsProps = {
   sessionDeleteConfirmation: SessionDeleteConfirmation | null;
   onCancelDeleteSession: () => void;
   onConfirmDeleteSession: (hardDelete?: boolean) => void;
+  moveSessionTarget: MoveSessionTarget | null;
+  onCancelMoveSession: () => void;
+  onMoveSessionToProject: (projectPath: string | null) => void;
   t: TFunction;
 };
 
@@ -53,6 +56,9 @@ export default function SidebarModals({
   sessionDeleteConfirmation,
   onCancelDeleteSession,
   onConfirmDeleteSession,
+  moveSessionTarget,
+  onCancelMoveSession,
+  onMoveSessionToProject,
   t,
 }: SidebarModalsProps) {
   // Settings expects project identity/path fields to be present for dropdown labels and local-scope MCP config.
@@ -80,6 +86,56 @@ export default function SidebarModals({
             projects={settingsProjects}
             initialTab={settingsInitialTab}
           />,
+          document.body,
+        )}
+
+      {moveSessionTarget &&
+        ReactDOM.createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
+              <div className="p-6 pb-4">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-muted">
+                    <FolderInput className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="mb-1 text-lg font-semibold text-foreground">
+                      {t('moveSession.title', 'Move chat to project')}
+                    </h3>
+                    <p className="truncate text-sm text-muted-foreground" title={moveSessionTarget.sessionTitle}>
+                      {moveSessionTarget.sessionTitle}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="max-h-72 space-y-1 overflow-y-auto border-t border-border p-3">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/60"
+                  onClick={() => onMoveSessionToProject(null)}
+                >
+                  <MessageSquare className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                  {t('moveSession.noProject', 'No project (standalone)')}
+                </button>
+                {projects.map((project) => (
+                  <button
+                    key={project.projectId}
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/60"
+                    onClick={() => onMoveSessionToProject(project.fullPath || project.path || '')}
+                  >
+                    <Folder className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                    <span className="truncate">{project.displayName || project.projectId}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="border-t border-border bg-muted/30 p-3">
+                <Button variant="ghost" className="w-full" onClick={onCancelMoveSession}>
+                  {t('actions.cancel')}
+                </Button>
+              </div>
+            </div>
+          </div>,
           document.body,
         )}
 

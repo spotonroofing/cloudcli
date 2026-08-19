@@ -112,6 +112,8 @@ type SidebarContentProps = {
   onRestoreArchivedProject: (projectId: string) => void;
   onLoadMoreRecentConversations: () => void;
   onRetryRecentConversations: () => void;
+  onMoveConversation: (sessionId: string, sessionTitle: string) => void;
+  onNewStandaloneChat: () => void;
   onArchivedSessionClick: (session: ArchivedSessionListItem) => void;
   onRestoreArchivedSession: (sessionId: string) => void;
   onDeleteArchivedSession: (session: ArchivedSessionListItem) => void;
@@ -155,6 +157,8 @@ export default function SidebarContent({
   onRestoreArchivedProject,
   onLoadMoreRecentConversations,
   onRetryRecentConversations,
+  onMoveConversation,
+  onNewStandaloneChat,
   onArchivedSessionClick,
   onRestoreArchivedSession,
   onDeleteArchivedSession,
@@ -387,6 +391,8 @@ export default function SidebarContent({
             onConversationSelect={onConversationResultClick}
             onLoadMore={onLoadMoreRecentConversations}
             onRetry={onRetryRecentConversations}
+            onMoveConversation={onMoveConversation}
+            onNewStandaloneChat={onNewStandaloneChat}
             t={t}
           />
         ) : searchMode === 'running' ? (

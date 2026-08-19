@@ -74,6 +74,13 @@ export interface ProjectTaskmasterInfo {
 // folder-derived `name` string. Projects are now addressed everywhere by the
 // DB-assigned `projectId` (primary key in the `projects` table), and the UI
 // uses the same identifier for routing, state keys and API calls.
+/**
+ * Pseudo projectId for standalone chats (hosted in the hidden scratch repo).
+ * Never a real DB project id; used to suppress project-bound behaviors like
+ * the New Session planner auto-boot.
+ */
+export const STANDALONE_PROJECT_ID = '__standalone__';
+
 export interface Project {
   projectId: string;
   displayName: string;

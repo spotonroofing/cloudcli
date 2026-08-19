@@ -6,7 +6,14 @@ type SessionRow = {
   session_id: string;
   provider: string;
   provider_session_id: string | null;
+  /**
+   * Effective project path: the app-owned assignment when present, else the
+   * cwd-derived value the synchronizer maintains. Readers of session rows see
+   * the effective value here (lists and feeds prefer the assignment).
+   */
   project_path: string | null;
+  /** Raw app-owned assignment; NULL when the session was never attached. */
+  assigned_project_path: string | null;
   jsonl_path: string | null;
   custom_name: string | null;
   /** Model this session runs with; NULL until the app records one for it. */
@@ -23,8 +30,15 @@ type RecentSessionsPage = {
   total: number;
 };
 
+// `project_path` is surfaced as the effective value (assignment wins) so every
+// list/feed reader prefers the app-owned attach-to-project choice without each
+// call site repeating the COALESCE. Writes always name real columns explicitly.
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
+
+// WHERE-clause form of the same preference (SQLite cannot reference SELECT
+// aliases in WHERE).
+const EFFECTIVE_PROJECT_PATH_SQL = 'COALESCE(assigned_project_path, project_path)';
 
 const SQLITE_UTC_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
@@ -236,6 +250,29 @@ export const sessionsDb = {
   },
 
   /**
+   * Attaches one session to a project (or detaches with null).
+   *
+   * Writes only the app-owned `assigned_project_path`; the cwd-derived
+   * `project_path` stays untouched so a filesystem rescan can never revert an
+   * explicit assignment.
+   */
+  assignSessionToProject(sessionId: string, projectPath: string | null): void {
+    const db = getConnection();
+    const normalizedProjectPath = projectPath ? normalizeProjectPath(projectPath) : null;
+
+    if (normalizedProjectPath) {
+      projectsDb.createProjectPath(normalizedProjectPath);
+    }
+
+    db.prepare(
+      `UPDATE sessions
+       SET assigned_project_path = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE session_id = ?`
+    ).run(normalizedProjectPath, sessionId);
+  },
+
+  /**
    * Records the model one session runs with.
    *
    * Called both when the user picks a model for the session and on every send,
@@ -382,9 +419,12 @@ export const sessionsDb = {
     const filterParams = projectId ? [projectId] : [];
     const rows = db
       .prepare(
-        `SELECT sessions.*
+        `SELECT sessions.session_id, sessions.provider, sessions.provider_session_id,
+                COALESCE(sessions.assigned_project_path, sessions.project_path) AS project_path,
+                sessions.assigned_project_path, sessions.jsonl_path, sessions.custom_name,
+                sessions.model, sessions.effort, sessions.isArchived, sessions.created_at, sessions.updated_at
          FROM sessions
-         LEFT JOIN projects ON projects.project_path = sessions.project_path
+         LEFT JOIN projects ON projects.project_path = COALESCE(sessions.assigned_project_path, sessions.project_path)
          WHERE ${visibilityClause}
          ORDER BY julianday(COALESCE(sessions.updated_at, sessions.created_at)) DESC,
                   sessions.session_id DESC
@@ -395,7 +435,7 @@ export const sessionsDb = {
       .prepare(
         `SELECT COUNT(*) AS count
          FROM sessions
-         LEFT JOIN projects ON projects.project_path = sessions.project_path
+         LEFT JOIN projects ON projects.project_path = COALESCE(sessions.assigned_project_path, sessions.project_path)
          WHERE ${visibilityClause}`
       )
       .get(...filterParams) as { count: number } | undefined;
@@ -431,7 +471,7 @@ export const sessionsDb = {
       .prepare(
         `SELECT ${SESSION_ROW_COLUMNS}
          FROM sessions
-         WHERE project_path = ?
+         WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
            AND isArchived = 0`
       )
       .all(normalizedProjectPath) as SessionRow[];
@@ -450,7 +490,7 @@ export const sessionsDb = {
       .prepare(
         `SELECT ${SESSION_ROW_COLUMNS}
          FROM sessions
-         WHERE project_path = ?`
+         WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?`
       )
       .all(normalizedProjectPath) as SessionRow[];
 
@@ -464,7 +504,7 @@ export const sessionsDb = {
       .prepare(
         `SELECT ${SESSION_ROW_COLUMNS}
          FROM sessions
-         WHERE project_path = ?
+         WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
            AND isArchived = 0
          ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
          LIMIT ? OFFSET ?`
@@ -481,7 +521,7 @@ export const sessionsDb = {
       .prepare(
         `SELECT COUNT(*) AS count
          FROM sessions
-         WHERE project_path = ?
+         WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
            AND isArchived = 0`
       )
       .get(normalizedProjectPath) as { count: number } | undefined;
@@ -492,7 +532,7 @@ export const sessionsDb = {
   deleteSessionsByProjectPath(projectPath: string): void {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPath(projectPath);
-    db.prepare(`DELETE FROM sessions WHERE project_path = ?`).run(normalizedProjectPath);
+    db.prepare(`DELETE FROM sessions WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?`).run(normalizedProjectPath);
   },
 
   getSessionName(sessionId: string, provider: string): string | null {

@@ -24,8 +24,17 @@ export type ArchivedSessionListItem = {
 
 export type RecentConversationListItem = Pick<
   ArchivedSessionListItem,
-  'sessionId' | 'provider' | 'projectId' | 'projectDisplayName' | 'sessionTitle' | 'lastActivity'
->;
+  'sessionId' | 'provider' | 'projectId' | 'sessionTitle' | 'lastActivity'
+> & {
+  /** Null for standalone (project-less) chats hosted in the scratch repo. */
+  projectDisplayName: string | null;
+};
+
+/** Chat picked for the attach-to-project dialog. */
+export type MoveSessionTarget = {
+  sessionId: string;
+  sessionTitle: string;
+};
 
 export type DeleteProjectConfirmation = {
   project: Project;

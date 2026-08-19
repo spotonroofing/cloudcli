@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { useDeviceSettings } from '../../../hooks/useDeviceSettings';
 import { useVersionCheck } from '../../../hooks/useVersionCheck';
@@ -44,6 +45,7 @@ function Sidebar({
   isMobile,
 }: SidebarProps) {
   const { t } = useTranslation(['sidebar', 'common']);
+  const navigate = useNavigate();
   const { isPWA } = useDeviceSettings({ trackMobile: false });
   const { restartRequired } = useVersionCheck();
   const { preferences, setPreference } = useUiPreferences();
@@ -86,6 +88,9 @@ function Sidebar({
     isLoadingMoreRecentConversations,
     recentConversationsError,
     reloadRecentConversations,
+    moveSessionTarget,
+    setMoveSessionTarget,
+    moveSessionToProject,
     loadMoreRecentConversations,
     toggleProject,
     handleSessionClick,
@@ -159,6 +164,13 @@ function Sidebar({
     void paletteOps.refreshProjects();
   };
 
+  // Standalone chat: navigate to /standalone, where the app selects the
+  // scratch-backed pseudo project itself (URL scoping would override any
+  // project object set from here).
+  const handleNewStandaloneChat = () => {
+    navigate('/standalone');
+  };
+
   const projectListProps: SidebarProjectListProps = {
     projects,
     filteredProjects,
@@ -208,6 +220,9 @@ function Sidebar({
     onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => {
       void updateSessionSummary(projectName, sessionId, summary, provider);
     },
+    onMoveSession: (sessionId: string, sessionTitle: string) => {
+      setMoveSessionTarget({ sessionId, sessionTitle });
+    },
     t,
   };
 
@@ -227,6 +242,11 @@ function Sidebar({
         sessionDeleteConfirmation={sessionDeleteConfirmation}
         onCancelDeleteSession={() => setSessionDeleteConfirmation(null)}
         onConfirmDeleteSession={confirmDeleteSession}
+        moveSessionTarget={moveSessionTarget}
+        onCancelMoveSession={() => setMoveSessionTarget(null)}
+        onMoveSessionToProject={(projectPath) => {
+          void moveSessionToProject(projectPath);
+        }}
         t={t}
       />
 
@@ -269,6 +289,10 @@ function Sidebar({
             onRestoreArchivedProject={restoreArchivedProject}
             onLoadMoreRecentConversations={loadMoreRecentConversations}
             onRetryRecentConversations={reloadRecentConversations}
+            onMoveConversation={(sessionId, sessionTitle) => {
+              setMoveSessionTarget({ sessionId, sessionTitle });
+            }}
+            onNewStandaloneChat={handleNewStandaloneChat}
             onArchivedSessionClick={openArchivedSession}
             onRestoreArchivedSession={restoreArchivedSession}
             onDeleteArchivedSession={(session) => {

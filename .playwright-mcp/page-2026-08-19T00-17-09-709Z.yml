@@ -1,0 +1,64 @@
+- generic [ref=f3e61]:
+  - generic [ref=f3e63]:
+    - generic [ref=f3e65]:
+      - generic [ref=f3e66]:
+        - generic [ref=f3e67]:
+          - button "Conversations" [pressed] [ref=f3e68] [cursor=pointer]
+          - button "Archive" [ref=f3e70] [cursor=pointer]
+        - generic [ref=f3e72]:
+          - button "Refresh projects and sessions (Ctrl+R)" [ref=f3e73] [cursor=pointer]
+          - button "New Session" [ref=f3e74] [cursor=pointer]
+          - button "Hide sidebar" [ref=f3e75] [cursor=pointer]
+      - textbox "Search in conversations..." [ref=f3e78]
+    - generic [ref=f3e14]:
+      - paragraph [ref=f3e84]: No conversations yet
+      - paragraph [ref=f3e85]: Your most recently updated conversations will appear here.
+      - button "New chat" [ref=f3e86] [cursor=pointer]
+    - button "Settings" [ref=f3e90] [cursor=pointer]
+  - generic [ref=f3e100]:
+    - generic [ref=f3e101]:
+      - button "Export chat" [ref=f3e149] [cursor=pointer]
+      - generic [ref=f3e102]:
+        - generic [ref=f3e156]:
+          - generic [ref=f3e157]: Reply with only the word ok. Do not use any tools.
+          - generic [ref=f3e160]:
+            - button "Copy message" [ref=f3e162] [cursor=pointer]
+            - generic [ref=f3e166]: 8:17:05 PM
+        - generic [ref=f3e174]:
+          - generic [ref=f3e175]:
+            - img "Claude" [ref=f3e177]
+            - generic [ref=f3e180]: Claude
+          - generic [ref=f3e181]:
+            - generic [ref=f3e182]:
+              - button [ref=f3e183] [cursor=pointer]:
+                - paragraph [ref=f3e194]: Thought for a few seconds
+              - generic:
+                - generic:
+                  - generic [ref=f3e197]: The user is asking me to reply with only the word "ok" and to not use any tools. This is a simple request that I should comply with.
+                  - button "Copy message" [ref=f3e201] [cursor=pointer]
+            - generic [ref=f3e205]: 8:17:08 PM
+        - generic [ref=f3e209]:
+          - generic [ref=f3e210]: ok
+          - button "Copy message" [ref=f3e215] [cursor=pointer]
+    - generic [ref=f3e125]:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic: Processing…
+              - generic: 4s
+            - button "Stop" [ref=f3e167] [cursor=pointer]:
+              - generic [ref=f3e171]: esc
+      - generic [ref=f3e126]:
+        - button "Choose File" [ref=f3e127]
+        - textbox "Write a message..." [active] [ref=f3e129]
+        - generic [ref=f3e130]:
+          - generic [ref=f3e131]:
+            - button "Attach files" [ref=f3e133] [cursor=pointer]
+            - button [ref=f3e135] [cursor=pointer]
+            - button "Handoff" [ref=f3e137] [cursor=pointer]
+            - button "Show context window usage" [ref=f3e138] [cursor=pointer]
+          - generic [ref=f3e142]:
+            - button "Select model and reasoning effort" [ref=f3e143] [cursor=pointer]:
+              - generic [ref=f3e144]: Haiku 4.5
+            - button "Stop" [ref=f3e172] [cursor=pointer]

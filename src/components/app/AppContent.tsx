@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import Sidebar from '../sidebar/view/Sidebar';
@@ -50,7 +50,10 @@ export default function AppContent() {
 
 function AppContentInner() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { sessionId, projectId } = useParams<{ sessionId?: string; projectId?: string }>();
+  // /standalone hosts project-less chats (backed by the hidden scratch repo).
+  const standaloneMode = location.pathname === '/standalone';
   // Scoped tab (`/project/:projectId`): session navigation keeps the prefix so
   // the tab stays docked to its project.
   const projectBasePath = projectId ? `/project/${projectId}` : '';
@@ -86,6 +89,7 @@ function AppContentInner() {
   } = useProjectsState({
     sessionId,
     scopedProjectId: projectId,
+    standaloneMode,
     navigate,
     subscribe,
     isMobile,

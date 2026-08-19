@@ -5,7 +5,7 @@ import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { sessionSynchronizerService } from '@/modules/providers/index.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { RealtimeClientConnection } from '@/shared/types.js';
-import { AppError } from '@/shared/utils.js';
+import { AppError, isScratchProjectPath } from '@/shared/utils.js';
 
 type SessionSummary = {
   id: string;
@@ -199,6 +199,11 @@ export async function getProjectsWithSessions(
 
     const projectId = row.project_id;
     const projectPath = row.project_path;
+
+    // The scratch repo hosts standalone chats and never shows as a project.
+    if (isScratchProjectPath(projectPath)) {
+      continue;
+    }
 
     broadcastProgress({
       phase: 'loading',

@@ -1,4 +1,4 @@
-import { ChevronRight, MessageSquare } from 'lucide-react';
+import { ChevronRight, FolderInput, MessageSquare, Plus } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import type { TFunction } from 'i18next';
 
@@ -25,6 +25,8 @@ type SidebarRecentConversationsProps = {
   ) => void;
   onLoadMore: () => void;
   onRetry: () => void;
+  onMoveConversation: (sessionId: string, sessionTitle: string) => void;
+  onNewStandaloneChat: () => void;
   t: TFunction;
 };
 
@@ -56,6 +58,8 @@ export default function SidebarRecentConversations({
   onConversationSelect,
   onLoadMore,
   onRetry,
+  onMoveConversation,
+  onNewStandaloneChat,
   t,
 }: SidebarRecentConversationsProps) {
   if (isLoading && conversations.length === 0) {
@@ -86,6 +90,10 @@ export default function SidebarRecentConversations({
         <p className="mt-1 text-xs text-muted-foreground">
           {t('recent.emptyDescription', 'Your most recently updated conversations will appear here.')}
         </p>
+        <Button variant="outline" size="sm" className="mt-3" onClick={onNewStandaloneChat}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          {t('recent.newChat', 'New chat')}
+        </Button>
       </div>
     );
   }
@@ -96,7 +104,18 @@ export default function SidebarRecentConversations({
         <span className="text-[11px] font-medium text-muted-foreground">
           {t('recent.title', 'Recent conversations')}
         </span>
-        <span className="text-[10px] tabular-nums text-muted-foreground/70">{total}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-[10px] tabular-nums text-muted-foreground/70">{total}</span>
+          <button
+            type="button"
+            className="flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            title={t('recent.newChat', 'New chat')}
+            aria-label={t('recent.newChat', 'New chat')}
+            onClick={onNewStandaloneChat}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </span>
       </div>
 
       <div className="space-y-0.5">
@@ -141,7 +160,9 @@ export default function SidebarRecentConversations({
                   {conversation.sessionTitle}
                 </span>
                 <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground">
-                  <span className="truncate">{conversation.projectDisplayName}</span>
+                  <span className={cn('truncate', !conversation.projectDisplayName && 'italic text-muted-foreground/70')}>
+                    {conversation.projectDisplayName ?? t('standalone.noProject', 'No project')}
+                  </span>
                   {age && (
                     <>
                       <span className="flex-shrink-0 text-muted-foreground/40">·</span>
@@ -153,6 +174,19 @@ export default function SidebarRecentConversations({
                 </span>
               </span>
 
+              <button
+                type="button"
+                className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground md:hidden md:group-hover:flex"
+                title={t('moveSession.title', 'Move chat to project')}
+                aria-label={t('moveSession.title', 'Move chat to project')}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onMoveConversation(conversation.sessionId, conversation.sessionTitle);
+                }}
+              >
+                <FolderInput className="h-3.5 w-3.5" />
+              </button>
               <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
             </a>
           );

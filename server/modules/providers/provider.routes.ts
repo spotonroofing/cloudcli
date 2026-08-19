@@ -17,7 +17,7 @@ import type {
   ProviderSkillCreateInput,
   UpsertProviderMcpServerInput,
 } from '@/shared/types.js';
-import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
+import { AppError, asyncHandler, createApiSuccessResponse, getScratchProjectPath } from '@/shared/utils.js';
 
 const router = express.Router();
 
@@ -733,6 +733,31 @@ router.get(
         : null;
     const page = sessionsService.listRecentSessions(limit, offset, projectId);
     res.json(createApiSuccessResponse(page));
+  }),
+);
+
+// The hidden scratch repo that hosts standalone chats. The frontend uses this
+// path to start a chat with no project selected. Registered before the
+// `/sessions/:sessionId` routes so the literal segment is not consumed as an id.
+router.get(
+  '/sessions/scratch-project',
+  asyncHandler(async (_req: Request, res: Response) => {
+    res.json(createApiSuccessResponse({ path: getScratchProjectPath() }));
+  }),
+);
+
+// Attach a chat to a project (projectPath) or detach it back to standalone
+// (null). Writes only the app-owned assignment; rescans cannot revert it.
+router.patch(
+  '/sessions/:sessionId/project',
+  asyncHandler(async (req: Request, res: Response) => {
+    const sessionId = parseSessionId(req.params.sessionId);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const projectPath = typeof body.projectPath === 'string' && body.projectPath.trim()
+      ? body.projectPath
+      : null;
+    sessionsService.assignSessionToProject(sessionId, projectPath);
+    res.json(createApiSuccessResponse({ sessionId, projectPath }));
   }),
 );
 

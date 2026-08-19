@@ -8,7 +8,7 @@ import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { sessionSynchronizerService } from '@/modules/providers/services/session-synchronizer.service.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { LLMProvider } from '@/shared/types.js';
-import { getClaudeConfigDir } from '@/shared/utils.js';
+import { getClaudeConfigDir, isScratchProjectPath } from '@/shared/utils.js';
 import { generateDisplayName } from '@/modules/projects/index.js';
 
 type WatcherEventType = 'add' | 'change';
@@ -141,7 +141,11 @@ async function buildSessionUpsertedEvent(updatedProviderSessionId: string): Prom
     return null;
   }
 
-  const projectPath = row.project_path;
+  // Scratch-hosted (standalone) sessions broadcast without a project so the
+  // sidebar renders them project-less.
+  const projectPath = row.project_path && !isScratchProjectPath(row.project_path)
+    ? row.project_path
+    : null;
   const project = projectPath ? projectsDb.getProjectPath(projectPath) : null;
   const displayName = project?.custom_project_name?.trim()
     ? project.custom_project_name

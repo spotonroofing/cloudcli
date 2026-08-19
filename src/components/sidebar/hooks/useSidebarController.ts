@@ -9,6 +9,7 @@ import type {
   ArchivedProjectListItem,
   ArchivedSessionListItem,
   DeleteProjectConfirmation,
+  MoveSessionTarget,
   ProjectSortOrder,
   RecentConversationListItem,
   SidebarSearchMode,
@@ -180,16 +181,13 @@ export function useSidebarController({
 
   const isSidebarCollapsed = !isMobile && !sidebarVisible;
 
-  // Desktop conversations are scoped to the current project (phase 3): the
-  // route-pinned project when scoped, else the selected project. Mobile keeps
-  // the global all-projects feed.
-  const conversationsProjectId = !isMobile
-    ? scopedProjectId ?? selectedProject?.projectId ?? null
-    : null;
+  // The Conversations tab is the global cross-project feed on every device
+  // (claude.ai model): no project narrowing anywhere.
+  const conversationsProjectId = null;
 
   // If a resize lands desktop in a mode whose tab was removed, snap back to Conversations.
   useEffect(() => {
-    if (!isMobile && (searchMode === 'projects' || searchMode === 'running')) {
+    if (!isMobile && searchMode === 'running') {
       setSearchMode('conversations');
     }
   }, [isMobile, searchMode]);
@@ -403,12 +401,6 @@ export function useSidebarController({
 
   useEffect(() => {
     if (searchMode !== 'conversations' || debouncedSearchQuery.length >= 2) {
-      return;
-    }
-
-    // Desktop never loads the global all-projects feed; wait until the
-    // current project is known (route scope or resolved selection).
-    if (!isMobile && !conversationsProjectId) {
       return;
     }
 
@@ -1086,6 +1078,31 @@ export function useSidebarController({
     [onRefresh, t],
   );
 
+  // Attach-to-project: which chat the move dialog is open for, and the move
+  // itself. Only the app-owned assignment changes server-side, so a rescan
+  // can never revert the choice.
+  const [moveSessionTarget, setMoveSessionTarget] = useState<MoveSessionTarget | null>(null);
+
+  const moveSessionToProject = useCallback(
+    async (projectPath: string | null) => {
+      if (!moveSessionTarget) {
+        return;
+      }
+      try {
+        const response = await api.assignSessionToProject(moveSessionTarget.sessionId, projectPath);
+        if (!response.ok) {
+          throw new Error(`Failed to move chat (${response.status})`);
+        }
+        setMoveSessionTarget(null);
+        await refreshProjects();
+      } catch (error) {
+        console.error('[Sidebar] Error moving chat to project:', error);
+        alert(t('messages.moveSessionError', 'Could not move the chat. Please try again.'));
+      }
+    },
+    [moveSessionTarget, refreshProjects, t],
+  );
+
   const collapseSidebar = useCallback(() => {
     setSidebarVisible(false);
   }, [setSidebarVisible]);
@@ -1124,6 +1141,9 @@ export function useSidebarController({
     isLoadingMoreRecentConversations,
     recentConversationsError,
     reloadRecentConversations,
+    moveSessionTarget,
+    setMoveSessionTarget,
+    moveSessionToProject,
     loadMoreRecentConversations,
     toggleProject,
     handleSessionClick,

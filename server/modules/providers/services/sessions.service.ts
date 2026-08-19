@@ -11,7 +11,7 @@ import type {
   LLMProvider,
   NormalizedMessage,
 } from '@/shared/types.js';
-import { AppError } from '@/shared/utils.js';
+import { AppError, getScratchProjectPath, isScratchProjectPath } from '@/shared/utils.js';
 
 type CreateAppSessionResult = {
   sessionId: string;
@@ -25,7 +25,8 @@ type ArchivedSessionListItem = {
   provider: LLMProvider;
   projectId: string | null;
   projectPath: string | null;
-  projectDisplayName: string;
+  /** Null for standalone (scratch-hosted) sessions, which render project-less. */
+  projectDisplayName: string | null;
   sessionTitle: string;
   createdAt: string | null;
   updatedAt: string | null;
@@ -146,7 +147,9 @@ export const sessionsService = {
     const page = sessionsDb.getRecentSessionsPage(limit, offset, projectId);
     const projectCache = new Map<string, ReturnType<typeof projectsDb.getProjectPath>>();
     const conversations = page.sessions.map((session) => {
-      const projectPath = session.project_path?.trim() ? session.project_path : null;
+      const rawProjectPath = session.project_path?.trim() ? session.project_path : null;
+      // Scratch hosts standalone chats; they present as project-less.
+      const projectPath = isScratchProjectPath(rawProjectPath) ? null : rawProjectPath;
       let project = null;
 
       if (projectPath) {
@@ -160,7 +163,9 @@ export const sessionsService = {
         sessionId: session.session_id,
         provider: session.provider as LLMProvider,
         projectId: project?.project_id ?? null,
-        projectDisplayName: resolveProjectDisplayName(projectPath, project?.custom_project_name),
+        projectDisplayName: projectPath
+          ? resolveProjectDisplayName(projectPath, project?.custom_project_name)
+          : null,
         sessionTitle: session.custom_name?.trim() || session.session_id,
         lastActivity: session.updated_at ?? session.created_at ?? null,
       };
@@ -171,6 +176,32 @@ export const sessionsService = {
       total: page.total,
       hasMore: offset + conversations.length < page.total,
     };
+  },
+
+  /**
+   * Attaches one chat to a project, or detaches it back to standalone.
+   *
+   * Only the app-owned assignment column changes; a filesystem rescan can
+   * never revert the choice because the synchronizer does not touch it.
+   */
+  assignSessionToProject(sessionId: string, projectPath: string | null): void {
+    const session = sessionsDb.getSessionById(sessionId);
+    if (!session) {
+      throw new AppError('Session not found.', {
+        code: 'SESSION_NOT_FOUND',
+        statusCode: 404,
+      });
+    }
+
+    const trimmed = projectPath?.trim() || null;
+    if (trimmed && isScratchProjectPath(trimmed)) {
+      throw new AppError('Cannot attach a chat to the scratch repo. Detach with null instead.', {
+        code: 'SCRATCH_NOT_ATTACHABLE',
+        statusCode: 400,
+      });
+    }
+
+    sessionsDb.assignSessionToProject(sessionId, trimmed);
   },
 
   /**
@@ -217,13 +248,9 @@ export const sessionsService = {
     projectPath: string,
     initialMessage: string,
   ): CreateAppSessionResult {
-    const normalizedProjectPath = projectPath.trim();
-    if (!normalizedProjectPath) {
-      throw new AppError('projectPath is required.', {
-        code: 'PROJECT_PATH_REQUIRED',
-        statusCode: 400,
-      });
-    }
+    // Standalone chats (no project chosen) run in the hidden scratch repo and
+    // display as project-less until attached to a real project.
+    const normalizedProjectPath = projectPath.trim() || getScratchProjectPath();
 
     const sessionId = randomUUID();
     const sessionName = buildCloudCliSessionName(initialMessage);
@@ -330,6 +357,30 @@ export const sessionsService = {
     }
 
     const projectPath = session.project_path?.trim() ? session.project_path : null;
+
+    // Standalone chats bind to the scratch repo for their working directory
+    // but present as project-less: a pseudo project keeps the chat runnable
+    // (it needs a path) without surfacing scratch as a real project anywhere.
+    if (isScratchProjectPath(projectPath)) {
+      return {
+        sessionId: session.session_id,
+        provider: session.provider as LLMProvider,
+        summary: session.custom_name?.trim() || '',
+        createdAt: session.created_at ?? null,
+        updatedAt: session.updated_at ?? null,
+        lastActivity: session.updated_at ?? session.created_at ?? null,
+        isArchived: Boolean(session.isArchived),
+        project: {
+          projectId: '__standalone__',
+          path: projectPath as string,
+          fullPath: projectPath as string,
+          displayName: 'No project',
+          isStarred: false,
+          isArchived: false,
+        },
+      };
+    }
+
     const project = projectPath ? projectsDb.getProjectPath(projectPath) : null;
 
     return {

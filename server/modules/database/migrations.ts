@@ -430,6 +430,21 @@ const addSessionEffortColumn = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'effort', 'TEXT');
 };
 
+/**
+ * Adds the app-owned `assigned_project_path` column (claude.ai model).
+ *
+ * The filesystem synchronizer never writes this column: it keeps rewriting the
+ * cwd-derived `project_path` on every rescan, while an explicit attach-to-
+ * project choice lives here and wins in every list/feed read. NULL means "no
+ * explicit assignment" and the cwd-derived value applies.
+ */
+const addSessionAssignedProjectColumn = (db: Database): void => {
+  const sessionsTableInfo = getTableInfo(db, 'sessions');
+  const columnNames = sessionsTableInfo.map((column) => column.name);
+
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'assigned_project_path', 'TEXT');
+};
+
 const ensureProjectsForSessionPaths = (db: Database): void => {
   if (!tableExists(db, 'sessions')) {
     return;
@@ -487,6 +502,7 @@ export const runMigrations = (db: Database) => {
     addProviderSessionIdMapping(db);
     addSessionModelColumn(db);
     addSessionEffortColumn(db);
+    addSessionAssignedProjectColumn(db);
     ensureProjectsForSessionPaths(db);
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id)');

@@ -29,6 +29,7 @@ import type {
   SessionEstablishedContext,
 } from '../types/types';
 import type { Project, ProjectSession, LLMProvider, ProviderModelOption } from '../../../types/app';
+import { STANDALONE_PROJECT_ID } from '../../../types/app';
 import { escapeRegExp } from '../utils/chatFormatting';
 
 import { useFileMentions } from './useFileMentions';
@@ -541,6 +542,11 @@ export function useChatComposerState({
       return;
     }
     if (selectedSession || currentSessionId || isLoading) {
+      return;
+    }
+    // Standalone chats are plain conversations: no planner boot in scratch.
+    if (selectedProject?.projectId === STANDALONE_PROJECT_ID) {
+      lastPlannerBootTriggerRef.current = trigger;
       return;
     }
     const plannerCommand = slashCommands.find((command) => command.name === '/planner');

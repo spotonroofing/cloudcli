@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Edit2, Loader2, MoreHorizontal, Trash2, X } from 'lucide-react';
+import { Check, Copy, Edit2, FolderInput, Loader2, MoreHorizontal, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { ActionMenu, Badge, Dialog, DialogContent, DialogTitle, Tooltip, buttonVariants } from '../../../../shared/view/ui';
@@ -22,6 +22,7 @@ type SidebarSessionItemProps = {
   editingSessionName: string;
   onEditingSessionNameChange: (value: string) => void;
   onStartEditingSession: (sessionId: string, initialName: string) => void;
+  onMoveSession: (sessionId: string, sessionTitle: string) => void;
   onCancelEditingSession: () => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
   onProjectSelect: (project: Project) => void;
@@ -54,6 +55,7 @@ export default function SidebarSessionItem({
   editingSessionName,
   onEditingSessionNameChange,
   onStartEditingSession,
+  onMoveSession,
   onCancelEditingSession,
   onSaveEditingSession,
   onProjectSelect,
@@ -553,6 +555,12 @@ export default function SidebarSessionItem({
                     label: 'Rename session',
                     icon: Edit2,
                     onSelect: () => onStartEditingSession(session.id, sessionView.sessionName),
+                  },
+                  {
+                    key: 'move',
+                    label: 'Move to project',
+                    icon: FolderInput,
+                    onSelect: () => onMoveSession(session.id, sessionView.sessionName),
                   },
                   {
                     key: 'copy',

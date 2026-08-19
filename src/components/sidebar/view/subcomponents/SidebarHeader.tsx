@@ -83,9 +83,21 @@ export default function SidebarHeader({
         style={{}}
       >
         <div className="flex items-center gap-2">
-          {/* Conversations | Archive segmented control, 50/50, inside the top button bar */}
+          {/* Conversations | Projects | Archive segmented control inside the top button bar */}
           {showSearchTools && (
             <div className="flex min-w-0 flex-1 rounded-lg bg-muted/50 p-0.5">
+              <button
+                onClick={() => onSearchModeChange('projects')}
+                aria-pressed={searchMode === 'projects'}
+                className={cn(
+                  "flex min-w-0 flex-1 basis-0 items-center justify-center rounded-md px-1 py-1.5 text-[11px] font-normal transition-all",
+                  searchMode === 'projects'
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className="truncate">{t('search.modeProjects', 'Projects')}</span>
+              </button>
               <button
                 onClick={() => onSearchModeChange('conversations')}
                 aria-pressed={searchMode === 'conversations'}

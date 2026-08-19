@@ -131,6 +131,22 @@ export const getClaudeConfigDir = (): string =>
   process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
 
 /**
+ * The hidden scratch repo that hosts standalone (project-less) chats.
+ *
+ * Sessions whose effective project is this path are displayed without a
+ * project, and the scratch project itself never appears in project lists.
+ * Scratch is local-only git: no remote, dispatched prompts end at commit.
+ */
+export const getScratchProjectPath = (): string =>
+  normalizeProjectPath(process.env.SCRATCH_PROJECT_PATH || path.join(os.homedir(), 'Projects', 'scratch'));
+
+/**
+ * True when a project path is the hidden scratch repo.
+ */
+export const isScratchProjectPath = (projectPath: string | null | undefined): boolean =>
+  Boolean(projectPath) && normalizeProjectPath(projectPath as string) === getScratchProjectPath();
+
+/**
  * Path of Claude's global .claude.json: inside CLAUDE_CONFIG_DIR when set
  * (matching the CLI's behavior), else the legacy ~/.claude.json.
  */
