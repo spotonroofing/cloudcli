@@ -24,7 +24,9 @@ install_agent() {
     echo "installed + bootstrapped $label"
 }
 
-chmod +x "$SCRIPT_DIR/cloudcli-backup.sh"
+chmod +x "$SCRIPT_DIR/cloudcli-backup.sh" "$SCRIPT_DIR/dispatch" "$SCRIPT_DIR/cloudcli-dev-start.sh"
+mkdir -p "$HOME/.local/bin"
+ln -sf "$SCRIPT_DIR/dispatch" "$HOME/.local/bin/dispatch"
 mkdir -p "$HOME/.cloudcli-dev" "$HOME/.claude-dev/projects"
 # Dev's Claude CLI shares onboarding state but nothing else with the live tree.
 [[ -f "$HOME/.claude-dev/.claude.json" ]] || cp "$HOME/.claude.json" "$HOME/.claude-dev/.claude.json" 2>/dev/null || true
