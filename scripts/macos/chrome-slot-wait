@@ -1,0 +1,27 @@
+#!/bin/zsh
+# chrome-slot-wait — block until a project-Chrome slot is free (spec 7 cap).
+# Concurrent project Chromes are capped at 3 on 16GB; the dispatch chain
+# runner calls this before a browser phase instead of launching a fourth.
+set -u
+ROOT="$HOME/browser-profiles"
+CAP="${CHROME_SLOT_CAP:-3}"
+WAITED=0
+while true; do
+  COUNT=$(python3 -c "
+import subprocess
+out = subprocess.run(['pgrep','-fl','user-data-dir=$ROOT/'], capture_output=True, text=True).stdout
+dirs = set()
+for line in out.splitlines():
+    for part in line.split():
+        if part.startswith('--user-data-dir=') and '/_seed' not in part:
+            dirs.add(part)
+print(len(dirs))")
+  if [[ "$COUNT" -lt "$CAP" ]]; then
+    exit 0
+  fi
+  if [[ $WAITED -eq 0 ]]; then
+    print -r -- "chrome-slot-wait: $COUNT project Chromes running (cap $CAP); queueing"
+  fi
+  sleep 15
+  WAITED=$((WAITED + 15))
+done

@@ -1,0 +1,121 @@
+#!/bin/zsh
+# project-chrome — dedicated real-Chrome per project over CDP (spec 7).
+#
+#   project-chrome <project>              launch (or report) the project's Chrome
+#   project-chrome <project> --port       print the project's fixed debug port
+#   project-chrome <project> --reclone    close it, wipe the profile, re-clone from seed
+#   project-chrome <project> --stop       close the project's Chrome
+#
+# Each project gets one fixed remote-debugging port (assigned once, recorded in
+# ~/browser-profiles/ports.json) and a persistent user-data-dir at
+# ~/browser-profiles/<project>/. On first need the profile clones from the seed
+# profile at ~/browser-profiles/_seed/ (real logins live there), and only while
+# the seed browser is closed. On a login failure inside a project profile,
+# re-clone from seed (--reclone) before falling back to the login protocol.
+set -u
+
+CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+ROOT="$HOME/browser-profiles"
+SEED="$ROOT/_seed"
+PORTS="$ROOT/ports.json"
+BASE_PORT=9500
+
+usage() { print -u2 "usage: project-chrome <project> [--port|--reclone|--stop]"; exit 64; }
+[[ $# -ge 1 ]] || usage
+PROJECT="$1"; ACTION="${2:-launch}"
+[[ "$PROJECT" == _seed ]] && { print -u2 "project-chrome: _seed is launched by hand, never as a project"; exit 64; }
+
+mkdir -p "$ROOT" "$SEED"
+[[ -f "$PORTS" ]] || print '{}' > "$PORTS"
+
+PORT=$(python3 - "$PORTS" "$PROJECT" <<'PYEOF'
+import json, sys
+ports_path, project = sys.argv[1], sys.argv[2]
+ports = json.load(open(ports_path))
+if project not in ports:
+    used = set(ports.values())
+    candidate = 9500
+    while candidate in used:
+        candidate += 1
+    ports[project] = candidate
+    json.dump(ports, open(ports_path, 'w'), indent=2)
+print(ports[project])
+PYEOF
+)
+
+PROFILE="$ROOT/$PROJECT"
+
+chrome_running() { pgrep -f -- "--user-data-dir=$PROFILE" >/dev/null 2>&1; }
+seed_running() { pgrep -f -- "--user-data-dir=$SEED" >/dev/null 2>&1; }
+
+case "$ACTION" in
+  --port)
+    print -r -- "$PORT"; exit 0 ;;
+  --stop)
+    pkill -f -- "--user-data-dir=$PROFILE" 2>/dev/null
+    print -r -- "project-chrome: $PROJECT stopped"; exit 0 ;;
+  --reclone)
+    pkill -f -- "--user-data-dir=$PROFILE" 2>/dev/null; sleep 1
+    rm -rf "$PROFILE"
+    ;;
+  launch) ;;
+  *) usage ;;
+esac
+
+if chrome_running; then
+  print -r -- "project-chrome: $PROJECT already running on port $PORT"
+  exit 0
+fi
+
+# First need (or after --reclone): clone the seed's logged-in state, but only
+# while the seed browser is closed — copying a live profile corrupts it.
+if [[ ! -d "$PROFILE" ]]; then
+  if [[ -d "$SEED/Default" ]]; then
+    if seed_running; then
+      print -u2 "project-chrome: seed profile is open; close it before the first clone of $PROJECT"
+      exit 75
+    fi
+    cp -R "$SEED" "$PROFILE"
+    # Chrome refuses cloned singleton locks; strip them.
+    rm -f "$PROFILE/SingletonLock" "$PROFILE/SingletonSocket" "$PROFILE/SingletonCookie" 2>/dev/null
+    print -r -- "project-chrome: cloned seed profile for $PROJECT"
+  else
+    mkdir -p "$PROFILE"
+    print -r -- "project-chrome: seed has no logins yet; starting $PROJECT with a fresh profile"
+  fi
+fi
+
+# The 3-instance cap protects 16GB of RAM; callers that can wait use
+# chrome-slot-wait first. Direct launches refuse instead of silently queueing.
+RUNNING=$(pgrep -f -- "--user-data-dir=$ROOT/" | wc -l | tr -d ' ')
+COUNT=$(python3 -c "
+import subprocess
+out = subprocess.run(['pgrep','-fl','user-data-dir=$ROOT/'], capture_output=True, text=True).stdout
+dirs = set()
+for line in out.splitlines():
+    for part in line.split():
+        if part.startswith('--user-data-dir=') and '/_seed' not in part:
+            dirs.add(part)
+print(len(dirs))")
+if [[ "$COUNT" -ge 3 ]]; then
+  print -u2 "project-chrome: 3 project Chromes already running (cap); run chrome-slot-wait or stop one"
+  exit 69
+fi
+
+"$CHROME" \
+  --user-data-dir="$PROFILE" \
+  --remote-debugging-port="$PORT" \
+  --no-first-run --no-default-browser-check \
+  --window-size=1440,900 \
+  "about:blank" >/dev/null 2>&1 &
+disown
+
+for i in {1..20}; do
+  sleep 0.5
+  if curl -s -m 2 "http://127.0.0.1:$PORT/json/version" | grep -q 'Browser'; then
+    print -r -- "project-chrome: $PROJECT running on port $PORT (profile $PROFILE)"
+    exit 0
+  fi
+done
+print -u2 "project-chrome: Chrome did not answer CDP on port $PORT"
+exit 1
