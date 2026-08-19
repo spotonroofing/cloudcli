@@ -94,6 +94,18 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
+  // Manual trigger for the Monday self-maintenance run (spec B9 done-check).
+  // ?classifyOnly=1 journals classifications without applying anything.
+  router.post(
+    '/maintenance/run',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const classifyOnly = req.query.classifyOnly === '1' || (req.body as { classifyOnly?: boolean } | undefined)?.classifyOnly === true;
+      const result = await watchdogService.runMaintenance(classifyOnly);
+      res.json(createApiSuccessResponse(result));
+    }),
+  );
+
   router.get(
     '/status',
     requireApiKey,
