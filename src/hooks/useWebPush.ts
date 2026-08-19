@@ -36,14 +36,27 @@ export function useWebPush(): WebPushState {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Check existing subscription on mount
+  // Check existing subscription on mount; a local subscription only counts as
+  // enabled once the server confirms it has the stored row.
   useEffect(() => {
     if (permission === 'unsupported') return;
 
-    navigator.serviceWorker.ready.then((registration) => {
-      registration.pushManager.getSubscription().then((sub) => {
-        setIsSubscribed(sub !== null);
-      });
+    navigator.serviceWorker.ready.then(async (registration) => {
+      const sub = await registration.pushManager.getSubscription();
+      if (!sub) {
+        setIsSubscribed(false);
+        return;
+      }
+      try {
+        const res = await authenticatedFetch(
+          `/api/settings/push/subscription-status?endpoint=${encodeURIComponent(sub.endpoint)}`,
+        );
+        const { subscribed } = await res.json();
+        setIsSubscribed(Boolean(subscribed));
+      } catch {
+        // Server unreachable; trust the local subscription
+        setIsSubscribed(true);
+      }
     }).catch(() => {
       // SW not ready yet
     });

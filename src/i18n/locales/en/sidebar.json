@@ -121,7 +121,7 @@
   },
   "search": {
     "modeProjects": "Projects",
-    "modeConversations": "Conversations",
+    "modeConversations": "Chats",
     "conversationsPlaceholder": "Search in conversations...",
     "searching": "Searching...",
     "sessionTitles": "Session",

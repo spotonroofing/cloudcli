@@ -42,6 +42,8 @@ const settingsService = createSettingsService({
     save: (userId, endpoint, p256dh, auth) =>
       pushSubscriptionsDb.saveSubscription(userId, endpoint, p256dh, auth),
     remove: (endpoint) => pushSubscriptionsDb.removeSubscription(endpoint),
+    has: (userId, endpoint) =>
+      pushSubscriptionsDb.getSubscriptions(userId).some((sub) => sub.endpoint === endpoint),
   },
   getVapidPublicKey: getPublicKey,
 });

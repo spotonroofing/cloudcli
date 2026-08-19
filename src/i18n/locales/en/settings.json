@@ -124,7 +124,12 @@
       "enabled": "Notifications are enabled for this browser",
       "loading": "Updating...",
       "unsupported": "Push notifications are not supported in this browser.",
-      "denied": "Push notifications are blocked. Please allow them in your browser settings."
+      "denied": "Push notifications are blocked. Please allow them in your browser settings.",
+      "enableDevice": "Enable notifications on this device",
+      "stateEnabled": "Enabled",
+      "stateBlocked": "Blocked",
+      "stateUnsupported": "Unsupported",
+      "stateOff": "Off"
     },
     "desktop": {
       "title": "Notify this desktop app",

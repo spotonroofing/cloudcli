@@ -15,7 +15,7 @@ function dependencies(overrides: Partial<Dependencies> = {}): Dependencies {
       createEnabledEvent: () => ({}),
       notifyUser: () => undefined,
     },
-    pushSubscriptions: { save: () => undefined, remove: () => undefined },
+    pushSubscriptions: { save: () => undefined, remove: () => undefined, has: () => false },
     getVapidPublicKey: () => null,
     ...overrides,
   };
@@ -37,6 +37,7 @@ test('subscribeToPush persists the subscription and enables Web Push', () => {
     pushSubscriptions: {
       save: (_id, endpoint) => operations.push(`save:${endpoint}`),
       remove: () => undefined,
+      has: () => false,
     },
     notifications: {
       getPreferences: () => ({ channels: { webPush: false } }),

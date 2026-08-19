@@ -106,48 +106,55 @@ export default function NotificationsSettingsTab({
       ) : (
         <div className="space-y-4 rounded-lg border border-border bg-card p-4">
           <h4 className="font-medium text-foreground">{t('notifications.webPush.title')}</h4>
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              disabled={isPushLoading || !pushSupported || pushDenied}
+              onClick={() => {
+                if (isPushSubscribed) {
+                  onDisablePush();
+                } else {
+                  onEnablePush();
+                }
+              }}
+              className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                isPushSubscribed
+                  ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90'
+              }`}
+            >
+              {isPushLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isPushSubscribed ? (
+                <BellOff className="h-4 w-4" />
+              ) : (
+                <BellRing className="h-4 w-4" />
+              )}
+              {isPushLoading
+                ? t('notifications.webPush.loading')
+                : isPushSubscribed
+                  ? t('notifications.webPush.disable')
+                  : t('notifications.webPush.enableDevice', { defaultValue: 'Enable notifications on this device' })}
+            </button>
+            <span
+              className={`flex-shrink-0 text-sm ${
+                isPushSubscribed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
+              }`}
+            >
+              {!pushSupported
+                ? t('notifications.webPush.stateUnsupported', { defaultValue: 'Unsupported' })
+                : pushDenied
+                  ? t('notifications.webPush.stateBlocked', { defaultValue: 'Blocked' })
+                  : isPushSubscribed
+                    ? t('notifications.webPush.stateEnabled', { defaultValue: 'Enabled' })
+                    : t('notifications.webPush.stateOff', { defaultValue: 'Off' })}
+            </span>
+          </div>
           {!pushSupported ? (
             <p className="text-sm text-muted-foreground">{t('notifications.webPush.unsupported')}</p>
           ) : pushDenied ? (
             <p className="text-sm text-muted-foreground">{t('notifications.webPush.denied')}</p>
-          ) : (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                disabled={isPushLoading}
-                onClick={() => {
-                  if (isPushSubscribed) {
-                    onDisablePush();
-                  } else {
-                    onEnablePush();
-                  }
-                }}
-                className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isPushSubscribed
-                    ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50'
-                    : 'bg-primary text-primary-foreground hover:bg-primary/90'
-                }`}
-              >
-                {isPushLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : isPushSubscribed ? (
-                  <BellOff className="h-4 w-4" />
-                ) : (
-                  <BellRing className="h-4 w-4" />
-                )}
-                {isPushLoading
-                  ? t('notifications.webPush.loading')
-                  : isPushSubscribed
-                    ? t('notifications.webPush.disable')
-                    : t('notifications.webPush.enable')}
-              </button>
-              {isPushSubscribed && (
-                <span className="text-sm text-green-600 dark:text-green-400">
-                  {t('notifications.webPush.enabled')}
-                </span>
-              )}
-            </div>
-          )}
+          ) : null}
         </div>
       )}
 

@@ -69,6 +69,9 @@ export function createSettingsRouter(
   )));
   router.get('/push/vapid-public-key', respond(() => service.getVapidPublicKey()));
   router.post('/push/subscribe', respond((req) => service.subscribeToPush(userId(req), req.body ?? {})));
+  router.get('/push/subscription-status', respond((req) => service.getPushSubscriptionStatus(
+    userId(req), req.query.endpoint,
+  )));
   router.post('/push/unsubscribe', respond((req) => service.unsubscribeFromPush(
     userId(req), req.body?.endpoint,
   )));

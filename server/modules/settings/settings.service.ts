@@ -33,6 +33,7 @@ type SettingsDependencies = {
   pushSubscriptions: {
     save(userId: number, endpoint: string, p256dh: string, auth: string): void;
     remove(endpoint: string): void;
+    has(userId: number, endpoint: string): boolean;
   };
   getVapidPublicKey(): string | null;
 };
@@ -169,6 +170,10 @@ export function createSettingsService(dependencies: SettingsDependencies) {
       const event = dependencies.notifications.createEnabledEvent();
       void dependencies.notifications.notifyUser(userId, event);
       return { success: true };
+    },
+    getPushSubscriptionStatus(userId: number, endpointInput: unknown) {
+      const endpoint = requiredString(endpointInput, 'Endpoint', 'PUSH_ENDPOINT_REQUIRED');
+      return { subscribed: dependencies.pushSubscriptions.has(userId, endpoint) };
     },
     unsubscribeFromPush(userId: number, endpointInput: unknown) {
       const endpoint = requiredString(endpointInput, 'Endpoint', 'PUSH_ENDPOINT_REQUIRED');
