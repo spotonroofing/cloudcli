@@ -89,7 +89,7 @@ export const projectsDb = {
     getProjectPaths(): ProjectRepositoryRow[] {
         const db = getConnection();
         return db.prepare(`
-            SELECT project_id, project_path, custom_project_name, isStarred, isArchived
+            SELECT project_id, project_path, custom_project_name, planner_memory_name, isStarred, isArchived
             FROM projects
             WHERE isArchived = 0
         `).all() as ProjectRepositoryRow[];
@@ -102,7 +102,7 @@ export const projectsDb = {
     getArchivedProjectPaths(): ProjectRepositoryRow[] {
         const db = getConnection();
         return db.prepare(`
-            SELECT project_id, project_path, custom_project_name, isStarred, isArchived
+            SELECT project_id, project_path, custom_project_name, planner_memory_name, isStarred, isArchived
             FROM projects
             WHERE isArchived = 1
         `).all() as ProjectRepositoryRow[];
@@ -118,6 +118,27 @@ export const projectsDb = {
         `).get(normalizedProjectPath) as Pick<ProjectRepositoryRow, 'custom_project_name'> | undefined;
 
         return row?.custom_project_name ?? null;
+    },
+
+    getPlannerMemoryName(projectPath: string): string | null {
+        const db = getConnection();
+        const normalizedProjectPath = normalizeProjectPath(projectPath);
+        const row = db.prepare(`
+            SELECT planner_memory_name
+            FROM projects
+            WHERE project_path = ?
+        `).get(normalizedProjectPath) as Pick<ProjectRepositoryRow, 'planner_memory_name'> | undefined;
+
+        return row?.planner_memory_name ?? null;
+    },
+
+    updatePlannerMemoryNameById(projectId: string, plannerMemoryName: string | null): void {
+        const db = getConnection();
+        db.prepare(`
+            UPDATE projects
+            SET planner_memory_name = ?
+            WHERE project_id = ?
+        `).run(plannerMemoryName, projectId);
     },
 
     updateCustomProjectName(projectPath: string, customProjectName: string | null): void {

@@ -145,6 +145,7 @@ export function useSidebarController({
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [editingName, setEditingName] = useState('');
+  const [editingPlannerName, setEditingPlannerName] = useState('');
   const [initialSessionsLoaded, setInitialSessionsLoaded] = useState<Set<string>>(new Set());
   const [currentTime, setCurrentTime] = useState(new Date());
   const [projectSortOrder, setProjectSortOrder] = useState<ProjectSortOrder>('name');
@@ -830,11 +831,17 @@ export function useSidebarController({
     // display-name mutations that happen while the input is open.
     setEditingProject(project.projectId);
     setEditingName(project.displayName);
+    // Prefill with the effective planner identity: the stored name, or the
+    // basename default the server falls back to.
+    setEditingPlannerName(
+      project.plannerMemoryName ?? (project.fullPath.split('/').filter(Boolean).pop() || project.fullPath),
+    );
   }, []);
 
   const cancelEditing = useCallback(() => {
     setEditingProject(null);
     setEditingName('');
+    setEditingPlannerName('');
   }, []);
 
   const saveProjectName = useCallback(
@@ -842,7 +849,7 @@ export function useSidebarController({
     // through the `projects` table before writing the new display name.
     async (projectId: string) => {
       try {
-        const response = await api.renameProject(projectId, editingName);
+        const response = await api.renameProject(projectId, editingName, editingPlannerName);
         if (response.ok) {
           await paletteOps.refreshProjects();
         } else {
@@ -853,9 +860,10 @@ export function useSidebarController({
       } finally {
         setEditingProject(null);
         setEditingName('');
+        setEditingPlannerName('');
       }
     },
-    [editingName, paletteOps],
+    [editingName, editingPlannerName, paletteOps],
   );
 
   const showDeleteSessionConfirmation = useCallback(
@@ -1168,6 +1176,8 @@ export function useSidebarController({
     expandSidebar,
     setShowNewProject,
     setEditingName,
+    editingPlannerName,
+    setEditingPlannerName,
     setEditingSession,
     setEditingSessionName,
     searchMode,

@@ -86,6 +86,8 @@ export const STANDALONE_PROJECT_ID = '__standalone__';
 export interface Project {
   projectId: string;
   displayName: string;
+  /** Stored planner identity; null/absent = sessions use the path basename. */
+  plannerMemoryName?: string | null;
   fullPath: string;
   path?: string;
   isStarred?: boolean;

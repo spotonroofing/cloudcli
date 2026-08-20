@@ -30,6 +30,8 @@ export type ProjectListItem = {
   projectId: string;
   path: string;
   displayName: string;
+  /** Stored planner identity; null = sessions use the project path basename. */
+  plannerMemoryName: string | null;
   fullPath: string;
   isStarred: boolean;
   sessions: SessionSummary[];
@@ -192,6 +194,7 @@ export async function getProjectsWithSessions(
     project_id: string;
     project_path: string;
     custom_project_name?: string | null;
+    planner_memory_name?: string | null;
     isStarred?: number;
   }>;
   const totalProjects = projectRows.length;
@@ -230,6 +233,7 @@ export async function getProjectsWithSessions(
       projectId,
       path: projectPath,
       displayName,
+      plannerMemoryName: row.planner_memory_name ?? null,
       fullPath: projectPath,
       isStarred: Boolean(row.isStarred),
       sessions: sessionsPage.sessions,
@@ -265,6 +269,7 @@ export async function getArchivedProjectsWithSessions(
     project_id: string;
     project_path: string;
     custom_project_name?: string | null;
+    planner_memory_name?: string | null;
     isStarred?: number;
   }>;
 
@@ -282,6 +287,7 @@ export async function getArchivedProjectsWithSessions(
       projectId: row.project_id,
       path: row.project_path,
       displayName,
+      plannerMemoryName: row.planner_memory_name ?? null,
       fullPath: row.project_path,
       isStarred: Boolean(row.isStarred),
       isArchived: true,

@@ -24,7 +24,7 @@ import {
   buildClaudeUserContent,
   normalizeImageDescriptors
 } from '@/shared/image-attachments.js';
-import { appConfigDb } from '@/modules/database/index.js';
+import { appConfigDb, projectsDb } from '@/modules/database/index.js';
 import { CLAUDE_PREDEFINED_MODELS } from '@/modules/providers/list/claude/claude-models.provider.js';
 import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import {
@@ -191,6 +191,15 @@ function mapCliOptionsToSDK(options = {}) {
   // Forward all host env vars (e.g. ANTHROPIC_BASE_URL) to the subprocess.
   // Since SDK 0.2.113, options.env replaces process.env instead of overlaying it.
   sdkOptions.env = { ...process.env, CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: String(BG_WAIT_CEILING_MS) };
+
+  // Per-project planner identity: every session in a project carries the
+  // project's planner_memory_name (path basename when unset) so /planner
+  // resolves its memory by env var instead of guessing from folder names.
+  const plannerProjectPath = options.projectPath || cwd;
+  if (plannerProjectPath) {
+    const plannerMemoryName = projectsDb.getPlannerMemoryName(plannerProjectPath);
+    sdkOptions.env.PLANNER_PROJECT = plannerMemoryName?.trim() || path.basename(plannerProjectPath);
+  }
 
   // Resolve the executable eagerly on Windows because the SDK uses raw child_process.spawn,
   // which does not reliably follow npm's shell wrappers like cross-spawn does.

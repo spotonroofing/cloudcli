@@ -611,6 +611,8 @@ export type ProjectRepositoryRow = {
   project_id: string;
   project_path: string;
   custom_project_name: string | null;
+  /** Planner identity injected as PLANNER_PROJECT; NULL = project path basename. */
+  planner_memory_name?: string | null;
   isStarred: number;
   isArchived: number;
 };

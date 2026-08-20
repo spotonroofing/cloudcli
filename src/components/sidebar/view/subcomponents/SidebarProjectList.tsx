@@ -19,6 +19,7 @@ export type SidebarProjectListProps = {
   expandedProjects: Set<string>;
   editingProject: string | null;
   editingName: string;
+  editingPlannerName: string;
   initialSessionsLoaded: Set<string>;
   currentTime: Date;
   editingSession: string | null;
@@ -33,6 +34,7 @@ export type SidebarProjectListProps = {
   attentionSessionIds: ReadonlySet<string>;
   forceExpanded?: boolean;
   onEditingNameChange: (value: string) => void;
+  onEditingPlannerNameChange: (value: string) => void;
   onToggleProject: (projectName: string) => void;
   onProjectSelect: (project: Project) => void;
   onStartEditingProject: (project: Project) => void;
@@ -65,6 +67,7 @@ export default function SidebarProjectList({
   expandedProjects,
   editingProject,
   editingName,
+  editingPlannerName,
   initialSessionsLoaded,
   currentTime,
   editingSession,
@@ -79,6 +82,7 @@ export default function SidebarProjectList({
   attentionSessionIds,
   forceExpanded = false,
   onEditingNameChange,
+  onEditingPlannerNameChange,
   onToggleProject,
   onProjectSelect,
   onStartEditingProject,
@@ -128,6 +132,7 @@ export default function SidebarProjectList({
               isDeleting={deletingProjects.has(project.projectId)}
               editingProject={editingProject}
               editingName={editingName}
+              editingPlannerName={editingPlannerName}
               sessions={getProjectSessions(project)}
               initialSessionsLoaded={initialSessionsLoaded.has(project.projectId)}
               isLoadingMoreSessions={loadingMoreProjects.has(project.projectId)}
@@ -137,6 +142,7 @@ export default function SidebarProjectList({
               tasksEnabled={tasksEnabled}
               mcpServerStatus={mcpServerStatus}
               onEditingNameChange={onEditingNameChange}
+              onEditingPlannerNameChange={onEditingPlannerNameChange}
               onToggleProject={onToggleProject}
               onProjectSelect={onProjectSelect}
               onStartEditingProject={onStartEditingProject}

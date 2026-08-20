@@ -8,6 +8,7 @@
     "loadingProjects": "Loading projects...",
     "searchPlaceholder": "Search projects...",
     "projectNamePlaceholder": "Project name",
+    "plannerMemoryNamePlaceholder": "Planner memory name",
     "starred": "Starred",
     "all": "All",
     "untitledSession": "Untitled Session",

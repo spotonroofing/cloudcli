@@ -20,6 +20,7 @@ type SidebarProjectItemProps = {
   isDeleting: boolean;
   editingProject: string | null;
   editingName: string;
+  editingPlannerName: string;
   sessions: SessionWithProvider[];
   initialSessionsLoaded: boolean;
   isLoadingMoreSessions: boolean;
@@ -29,6 +30,7 @@ type SidebarProjectItemProps = {
   tasksEnabled: boolean;
   mcpServerStatus: MCPServerStatus;
   onEditingNameChange: (name: string) => void;
+  onEditingPlannerNameChange: (name: string) => void;
   onToggleProject: (projectName: string) => void;
   onProjectSelect: (project: Project) => void;
   onStartEditingProject: (project: Project) => void;
@@ -67,6 +69,7 @@ export default function SidebarProjectItem({
   isDeleting,
   editingProject,
   editingName,
+  editingPlannerName,
   sessions,
   initialSessionsLoaded,
   isLoadingMoreSessions,
@@ -76,6 +79,7 @@ export default function SidebarProjectItem({
   tasksEnabled,
   mcpServerStatus,
   onEditingNameChange,
+  onEditingPlannerNameChange,
   onToggleProject,
   onProjectSelect,
   onStartEditingProject,
@@ -156,31 +160,56 @@ export default function SidebarProjectItem({
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <div className="min-w-0 flex-1">
                   {isEditing ? (
-                    <input
-                      ref={mobileRenameInputRef}
-                      type="text"
-                      value={editingName}
-                      onChange={(event) => onEditingNameChange(event.target.value)}
-                      className="w-full rounded-lg border-2 border-primary/40 bg-background px-3 py-2 text-sm text-foreground shadow-sm transition-all duration-200 focus:border-primary focus:shadow-md focus:outline-none"
-                      placeholder={t('projects.projectNamePlaceholder')}
-                      autoFocus
-                      autoComplete="off"
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          saveProjectName();
-                        }
+                    <div className="space-y-1">
+                      <input
+                        ref={mobileRenameInputRef}
+                        type="text"
+                        value={editingName}
+                        onChange={(event) => onEditingNameChange(event.target.value)}
+                        className="w-full rounded-lg border-2 border-primary/40 bg-background px-3 py-2 text-sm text-foreground shadow-sm transition-all duration-200 focus:border-primary focus:shadow-md focus:outline-none"
+                        placeholder={t('projects.projectNamePlaceholder')}
+                        autoFocus
+                        autoComplete="off"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            saveProjectName();
+                          }
 
-                        if (event.key === 'Escape') {
-                          onCancelEditingProject();
-                        }
-                      }}
-                      style={{
-                        fontSize: '16px',
-                        WebkitAppearance: 'none',
-                        borderRadius: '8px',
-                      }}
-                    />
+                          if (event.key === 'Escape') {
+                            onCancelEditingProject();
+                          }
+                        }}
+                        style={{
+                          fontSize: '16px',
+                          WebkitAppearance: 'none',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <input
+                        type="text"
+                        value={editingPlannerName}
+                        onChange={(event) => onEditingPlannerNameChange(event.target.value)}
+                        className="w-full rounded-lg border-2 border-primary/40 bg-background px-3 py-2 text-sm text-foreground shadow-sm transition-all duration-200 focus:border-primary focus:shadow-md focus:outline-none"
+                        placeholder={t('projects.plannerMemoryNamePlaceholder')}
+                        autoComplete="off"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            saveProjectName();
+                          }
+
+                          if (event.key === 'Escape') {
+                            onCancelEditingProject();
+                          }
+                        }}
+                        style={{
+                          fontSize: '16px',
+                          WebkitAppearance: 'none',
+                          borderRadius: '8px',
+                        }}
+                      />
+                    </div>
                   ) : (
                     <>
                       <div className="flex min-w-0 flex-1 items-center justify-between">
@@ -276,6 +305,21 @@ export default function SidebarProjectItem({
                     className="w-full rounded border border-border bg-background px-2 py-1 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
                     placeholder={t('projects.projectNamePlaceholder')}
                     autoFocus
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        saveProjectName();
+                      }
+                      if (event.key === 'Escape') {
+                        onCancelEditingProject();
+                      }
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={editingPlannerName}
+                    onChange={(event) => onEditingPlannerNameChange(event.target.value)}
+                    className="w-full rounded border border-border bg-background px-2 py-1 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
+                    placeholder={t('projects.plannerMemoryNamePlaceholder')}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         saveProjectName();

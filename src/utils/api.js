@@ -169,10 +169,12 @@ export const api = {
     const queryString = params.toString();
     return authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/messages${queryString ? `?${queryString}` : ''}`);
   },
-  renameProject: (projectId, displayName) =>
+  renameProject: (projectId, displayName, plannerMemoryName) =>
     authenticatedFetch(`/api/projects/${projectId}/rename`, {
       method: 'PUT',
-      body: JSON.stringify({ displayName }),
+      body: JSON.stringify(
+        plannerMemoryName === undefined ? { displayName } : { displayName, plannerMemoryName },
+      ),
     }),
   restoreProject: (projectId) =>
     authenticatedFetch(`/api/projects/${encodeURIComponent(projectId)}/restore`, {

@@ -462,6 +462,17 @@ const addSessionWorkerColumns = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'chain_slug', 'TEXT');
 };
 
+/**
+ * Adds `planner_memory_name`: the per-project planner identity injected into
+ * every session as PLANNER_PROJECT. NULL means "use the project path basename".
+ */
+const addProjectPlannerMemoryColumn = (db: Database): void => {
+  const projectsTableInfo = getTableInfo(db, 'projects');
+  const columnNames = projectsTableInfo.map((column) => column.name);
+
+  addColumnToTableIfNotExists(db, 'projects', columnNames, 'planner_memory_name', 'TEXT DEFAULT NULL');
+};
+
 const ensureProjectsForSessionPaths = (db: Database): void => {
   if (!tableExists(db, 'sessions')) {
     return;
@@ -521,6 +532,7 @@ export const runMigrations = (db: Database) => {
     addSessionEffortColumn(db);
     addSessionAssignedProjectColumn(db);
     addSessionWorkerColumns(db);
+    addProjectPlannerMemoryColumn(db);
     ensureProjectsForSessionPaths(db);
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id)');

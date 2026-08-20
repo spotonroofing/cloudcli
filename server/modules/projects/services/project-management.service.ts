@@ -142,3 +142,12 @@ export function updateProjectDisplayName(projectId: string, newDisplayName: unkn
   const trimmed = typeof newDisplayName === 'string' ? newDisplayName.trim() : '';
   projectsDb.updateCustomProjectNameById(projectId, trimmed.length > 0 ? trimmed : null);
 }
+
+/**
+ * Sets `projects.planner_memory_name` for the given `projectId` (or clears it
+ * when empty; sessions then fall back to the project path basename).
+ */
+export function updateProjectPlannerMemoryName(projectId: string, newPlannerMemoryName: unknown): void {
+  const trimmed = typeof newPlannerMemoryName === 'string' ? newPlannerMemoryName.trim() : '';
+  projectsDb.updatePlannerMemoryNameById(projectId, trimmed.length > 0 ? trimmed : null);
+}

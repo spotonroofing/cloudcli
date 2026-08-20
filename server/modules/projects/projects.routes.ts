@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { createProject, updateProjectDisplayName } from '@/modules/projects/services/project-management.service.js';
+import { createProject, updateProjectDisplayName, updateProjectPlannerMemoryName } from '@/modules/projects/services/project-management.service.js';
 import { startCloneProject } from '@/modules/projects/services/project-clone.service.js';
 import { getProjectTaskMaster } from '@/modules/projects/services/projects-has-taskmaster.service.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
@@ -230,8 +230,11 @@ router.get(
 router.put('/:projectId/rename', (req, res) => {
   try {
     const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : '';
-    const { displayName } = req.body as { displayName?: unknown };
+    const { displayName, plannerMemoryName } = req.body as { displayName?: unknown; plannerMemoryName?: unknown };
     updateProjectDisplayName(projectId, displayName);
+    if (plannerMemoryName !== undefined) {
+      updateProjectPlannerMemoryName(projectId, plannerMemoryName);
+    }
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to rename project' });
