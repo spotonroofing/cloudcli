@@ -90,6 +90,7 @@ test('provider session id reports a missing app session', { concurrency: false }
 
 test('recent sessions map project metadata and preserve database pagination', { concurrency: false }, async () => {
   await withIsolatedDatabase(() => {
+    projectsDb.createProjectPath('/tmp/recent-project');
     sessionsDb.createSession(
       'older-session',
       'claude',

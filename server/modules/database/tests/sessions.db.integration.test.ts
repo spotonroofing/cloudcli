@@ -33,6 +33,7 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
 
 test('session archive queries hide archived rows from active project views', async () => {
   await withIsolatedDatabase(() => {
+    projectsDb.createProjectPath('/workspace/demo-project');
     sessionsDb.createSession('session-active', 'claude', '/workspace/demo-project', 'Active Session');
     sessionsDb.createSession('session-archived', 'claude', '/workspace/demo-project', 'Archived Session');
     sessionsDb.updateSessionIsArchived('session-archived', true);
@@ -50,6 +51,24 @@ test('session archive queries hide archived rows from active project views', asy
       ['session-active', 'session-archived'],
     );
     assert.equal(sessionsDb.countSessionsByProjectPath('/workspace/demo-project'), 1);
+  });
+});
+
+test('discovery never creates project rows: unknown cwd lands project-less', async () => {
+  await withIsolatedDatabase(() => {
+    sessionsDb.createSession('session-foreign', 'claude', '/some/novel/cwd', 'Discovered');
+
+    assert.equal(projectsDb.getProjectPath('/some/novel/cwd'), null);
+    assert.equal(sessionsDb.getSessionById('session-foreign')?.project_path, null);
+
+    // A cwd matching an archived project keeps the association but must not
+    // reactivate the archived row.
+    projectsDb.createProjectPath('/workspace/dormant');
+    projectsDb.updateProjectIsArchived('/workspace/dormant', true);
+    sessionsDb.createSession('session-dormant', 'claude', '/workspace/dormant', 'Discovered');
+
+    assert.equal(sessionsDb.getSessionById('session-dormant')?.project_path, '/workspace/dormant');
+    assert.equal(projectsDb.getProjectPath('/workspace/dormant')?.isArchived, 1);
   });
 });
 
@@ -86,6 +105,9 @@ test('repository reads normalize SQLite UTC timestamps to ISO strings', async ()
 
 test('recent sessions are globally ordered, paginated, and limited to visible conversations', async () => {
   await withIsolatedDatabase(() => {
+    projectsDb.createProjectPath('/workspace/project-a');
+    projectsDb.createProjectPath('/workspace/project-b');
+    projectsDb.createProjectPath('/workspace/project-hidden');
     const fixtures: Array<Parameters<typeof sessionsDb.createSession>> = [
       ['session-oldest', 'claude', '/workspace/project-a', 'Oldest', '2026-07-18T09:00:00.000Z', '2026-07-18T10:00:00.000Z'],
       ['session-newest', 'codex', '/workspace/project-b', 'Newest', '2026-07-18T11:00:00.000Z', '2026-07-18T12:00:00.900Z'],

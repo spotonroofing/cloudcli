@@ -87,6 +87,16 @@ function normalizeProjectPathForProvider(provider: string, projectPath: string):
   return normalizeProjectPath(projectPath);
 }
 
+/**
+ * Discovery never creates project rows: a project exists only because it was
+ * created in the app. A discovered session keeps its cwd-derived project_path
+ * only when that project row already exists (satisfying the FK); otherwise it
+ * lands project-less and renders as a standalone chat.
+ */
+function resolveExistingProjectPath(normalizedProjectPath: string): string | null {
+  return projectsDb.getProjectPath(normalizedProjectPath) ? normalizedProjectPath : null;
+}
+
 export const sessionsDb = {
   /**
    * Upserts one session row discovered on disk by a provider synchronizer.
@@ -111,10 +121,7 @@ export const sessionsDb = {
     const createdAtValue = normalizeTimestamp(createdAt);
     const updatedAtValue = normalizeTimestamp(updatedAt);
     const normalizedProjectPath = normalizeProjectPathForProvider(provider, projectPath);
-
-    // First, ensure the project path is recorded in the projects table,
-    // since it's a foreign key in the sessions table.
-    projectsDb.createProjectPath(normalizedProjectPath);
+    const effectiveProjectPath = resolveExistingProjectPath(normalizedProjectPath);
 
     const existing = db
       .prepare(
@@ -140,7 +147,7 @@ export const sessionsDb = {
       ).run(
         provider,
         updatedAtValue,
-        normalizedProjectPath,
+        effectiveProjectPath,
         jsonlPath ?? null,
         customName ?? null,
         existing.session_id
@@ -172,7 +179,7 @@ export const sessionsDb = {
       provider,
       providerSessionId,
       customName ?? null,
-      normalizedProjectPath,
+      effectiveProjectPath,
       jsonlPath ?? null,
       createdAtValue,
       updatedAtValue
@@ -245,12 +252,11 @@ export const sessionsDb = {
       return;
     }
 
-    const normalizedProjectPath = normalizeProjectPath(upsertContext.projectPath);
-    projectsDb.createProjectPath(normalizedProjectPath);
+    const effectiveProjectPath = resolveExistingProjectPath(normalizeProjectPath(upsertContext.projectPath));
     db.prepare(
       `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, origin, base_commit, chain_slug, model, jsonl_path, isArchived, created_at, updated_at)
        VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).run(sessionId, upsertContext.provider, sessionId, normalizedProjectPath, origin, baseCommit ?? null, chainSlug ?? null, model ?? null);
+    ).run(sessionId, upsertContext.provider, sessionId, effectiveProjectPath, origin, baseCommit ?? null, chainSlug ?? null, model ?? null);
   },
 
   /**

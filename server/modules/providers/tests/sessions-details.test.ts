@@ -33,9 +33,10 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
 test('getSessionDetailsById resolves the owning project for a disk-indexed session', async () => {
   await withIsolatedDatabase(() => {
     const projectPath = '/home/user/example-project';
+    projectsDb.createProjectPath(projectPath);
     const sessionId = sessionsDb.createSession('provider-abc', 'claude', projectPath, 'My session');
     const projectRow = projectsDb.getProjectPath(projectPath);
-    assert.ok(projectRow, 'project row should exist after createSession');
+    assert.ok(projectRow, 'project row should exist');
 
     const details = sessionsService.getSessionDetailsById(sessionId);
 
