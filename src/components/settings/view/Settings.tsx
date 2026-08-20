@@ -2,18 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import ProviderLoginModal from '../../provider-auth/view/ProviderLoginModal';
 import { Button } from '../../../shared/view/ui';
 import SettingsSidebar from '../view/SettingsSidebar';
-import AgentsSettingsTab from '../view/tabs/agents-settings/AgentsSettingsTab';
 import AppearanceSettingsTab from '../view/tabs/AppearanceSettingsTab';
-import CredentialsSettingsTab from '../view/tabs/api-settings/CredentialsSettingsTab';
-import VoiceSettingsTab from '../view/tabs/VoiceSettingsTab';
-import GitSettingsTab from '../view/tabs/git-settings/GitSettingsTab';
-import BrowserUseSettingsTab from '../view/tabs/browser-use-settings/BrowserUseSettingsTab';
 import NotificationsSettingsTab from '../view/tabs/NotificationsSettingsTab';
-import TasksSettingsTab from '../view/tabs/tasks-settings/TasksSettingsTab';
-import PluginSettingsTab from '../../plugins/view/PluginSettingsTab';
 import AboutTab from '../view/tabs/AboutTab';
 import { useSettingsController } from '../hooks/useSettingsController';
 import { useWebPush } from '../../../hooks/useWebPush';
@@ -27,7 +19,7 @@ type DesktopNotificationsState = {
   lastError?: string | null;
 };
 
-function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: SettingsProps) {
+function Settings({ isOpen, onClose, initialTab = 'appearance' }: SettingsProps) {
   const { t } = useTranslation('settings');
   const desktopNotificationsBridge = useMemo(() => (
     typeof window === 'undefined'
@@ -43,20 +35,8 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     setProjectSortOrder,
     codeEditorSettings,
     updateCodeEditorSetting,
-    claudePermissions,
-    setClaudePermissions,
     notificationPreferences,
     setNotificationPreferences,
-    cursorPermissions,
-    setCursorPermissions,
-    codexPermissionMode,
-    setCodexPermissionMode,
-    providerAuthStatus,
-    openLoginForProvider,
-    showLoginModal,
-    setShowLoginModal,
-    loginProvider,
-    handleLoginComplete,
   } = useSettingsController({
     isOpen,
     initialTab
@@ -131,8 +111,6 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     return null;
   }
 
-  const isAuthenticated = Boolean(loginProvider && providerAuthStatus[loginProvider].authenticated);
-
   return (
     <div className="modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm md:p-4">
       <div className="flex h-full w-full flex-col overflow-hidden border border-border bg-background shadow-2xl md:h-[90vh] md:max-w-4xl md:rounded-lg">
@@ -173,26 +151,6 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
                 />
               )}
 
-              {activeTab === 'git' && <GitSettingsTab />}
-
-              {activeTab === 'agents' && (
-                <AgentsSettingsTab
-                  providerAuthStatus={providerAuthStatus}
-                  onProviderLogin={openLoginForProvider}
-                  claudePermissions={claudePermissions}
-                  onClaudePermissionsChange={setClaudePermissions}
-                  cursorPermissions={cursorPermissions}
-                  onCursorPermissionsChange={setCursorPermissions}
-                  codexPermissionMode={codexPermissionMode}
-                  onCodexPermissionModeChange={setCodexPermissionMode}
-                  projects={projects}
-                />
-              )}
-
-              {activeTab === 'tasks' && <TasksSettingsTab />}
-
-              {activeTab === 'browser' && <BrowserUseSettingsTab />}
-
               {activeTab === 'notifications' && (
                 <NotificationsSettingsTab
                   notificationPreferences={notificationPreferences}
@@ -209,26 +167,11 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
                 />
               )}
 
-              {activeTab === 'api' && <CredentialsSettingsTab />}
-
-              {activeTab === 'voice' && <VoiceSettingsTab />}
-
-              {activeTab === 'plugins' && <PluginSettingsTab />}
-
               {activeTab === 'about' && <AboutTab />}
             </div>
           </main>
         </div>
       </div>
-
-      <ProviderLoginModal
-        key={loginProvider || 'claude'}
-        isOpen={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
-        provider={loginProvider || 'claude'}
-        onComplete={handleLoginComplete}
-        isAuthenticated={isAuthenticated}
-      />
 
     </div>
   );

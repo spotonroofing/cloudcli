@@ -272,7 +272,7 @@ function MainContent({
 
           {shouldShowBrowserTab && activeTab === 'browser' && (
             <div className="h-full overflow-hidden">
-              <BrowserUsePanel isVisible={activeTab === 'browser'} onShowSettings={onShowSettings} />
+              <BrowserUsePanel isVisible={activeTab === 'browser'} />
             </div>
           )}
 

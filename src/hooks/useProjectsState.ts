@@ -413,7 +413,7 @@ export function useProjectsState({
   const [loadingProgress, setLoadingProgress] = useState<LoadingProgress | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState('agents');
+  const [settingsInitialTab, setSettingsInitialTab] = useState('appearance');
   const [externalMessageUpdate, setExternalMessageUpdate] = useState(0);
   /**
    * `newSessionTrigger` is an explicit, monotonic intent signal for user-driven
@@ -647,7 +647,7 @@ export function useProjectsState({
     }
   }, []);
 
-  const openSettings = useCallback((tab = 'tools') => {
+  const openSettings = useCallback((tab = 'appearance') => {
     setSettingsInitialTab(tab);
     setShowSettings(true);
   }, []);

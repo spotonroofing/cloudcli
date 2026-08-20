@@ -20,7 +20,7 @@ Done when: on dev, the Chats feed shows a freshly created project chat and a scr
 Done when: on dev, selecting Opus 5 shows Opus 5 in the switcher and its ring denominates against 200k before any turn completes; an id absent from OPTIONS renders prettified; the ring behavior for Fable 5 is unchanged. Commit.
 
 ## Phase 4: settings purge
-- [ ] Remove the Agents, Tasks, Browser, Plugins, Git, Voice, and API Tokens tabs from settings, including their routes and registration entries; leave the api_keys table, its auth middleware, and every guarded endpoint fully intact
+- [x] Remove the Agents, Tasks, Browser, Plugins, Git, Voice, and API Tokens tabs from settings, including their routes and registration entries; leave the api_keys table, its auth middleware, and every guarded endpoint fully intact (tab components/hooks deleted, registrations trimmed to appearance/notifications/about, /api/settings/api-keys CRUD removed; credentials routes kept for the project wizard, shared modules untouched; browser panel gear that opened the removed tab also gone)
 Done when: on dev, settings shows none of the removed tabs, no dead links or console errors, and a dispatch CLI call authenticated with the existing key still succeeds against the watchdog status endpoint. Commit.
 
 ## Phase 5: chrome cleanup
