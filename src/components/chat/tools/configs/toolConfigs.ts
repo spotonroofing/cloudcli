@@ -1,7 +1,9 @@
 /**
  * Centralized tool configuration registry
- * Defines display behavior for all tool types 
+ * Defines display behavior for all tool types
  */
+
+import { prettifyModelId } from '../../../../utils/modelLabels';
 
 export interface ToolDisplayConfig {
   input: {
@@ -403,7 +405,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
         const parts = [];
 
         if (input.model) {
-          parts.push(`**Model:** ${input.model}`);
+          parts.push(`**Model:** ${prettifyModelId(input.model)}`);
         }
 
         if (input.prompt) {

@@ -26,6 +26,7 @@ import {
   Badge,
   Button,
 } from "../../../../shared/view/ui";
+import { modelDisplayLabel } from "../../../../utils/modelLabels";
 
 import ModelLibraryPanel from "./ModelLibraryPanel";
 
@@ -156,10 +157,7 @@ export default function ProviderSelectionEmptyState({
 
   const currentModelLabel = useMemo(() => {
     const config = getModelConfig(provider, providerModelCatalog);
-    const found = config.OPTIONS.find(
-      (o: { value: string; label: string }) => o.value === currentModel,
-    );
-    return found?.label || currentModel;
+    return modelDisplayLabel(currentModel, config.OPTIONS);
   }, [provider, currentModel, providerModelCatalog]);
 
   const setModelForProvider = useCallback(
@@ -370,16 +368,16 @@ export default function ProviderSelectionEmptyState({
             {
               {
                 claude: t("providerSelection.readyPrompt.claude", {
-                  model: claudeModel,
+                  model: modelDisplayLabel(claudeModel, providerModelCatalog.claude?.OPTIONS),
                 }),
                 cursor: t("providerSelection.readyPrompt.cursor", {
-                  model: cursorModel,
+                  model: modelDisplayLabel(cursorModel, providerModelCatalog.cursor?.OPTIONS),
                 }),
                 codex: t("providerSelection.readyPrompt.codex", {
-                  model: codexModel,
+                  model: modelDisplayLabel(codexModel, providerModelCatalog.codex?.OPTIONS),
                 }),
                 opencode: t("providerSelection.readyPrompt.opencode", {
-                  model: opencodeModel,
+                  model: modelDisplayLabel(opencodeModel, providerModelCatalog.opencode?.OPTIONS),
                   defaultValue: "Ready with OpenCode {{model}}",
                 }),
               }[provider]

@@ -135,6 +135,39 @@ export const findClaudeModelOption = (model: string | undefined | null): Provide
 
   return CLAUDE_PREDEFINED_MODELS.OPTIONS.find((option) => option.value === normalizedModel) ?? null;
 };
+
+// Published context window per model id, the default denominator wherever a
+// live turn has not yet persisted the SDK-observed window. Fable 5 ships 1M by
+// default (observed live); Opus 5 is 200k unless the account's usage-credits
+// toggle grants 1M, so it is cataloged at the honest default. Ids in neither
+// this catalog nor the runtime cache keep the CONTEXT_WINDOW env / 160k fallback.
+export const CLAUDE_CONTEXT_WINDOWS: Record<string, number> = {
+  'claude-fable-5': 1_000_000,
+  'claude-opus-5': 200_000,
+  'claude-sonnet-5': 200_000,
+  'claude-haiku-4-5': 200_000,
+  'claude-opus-4-8': 200_000,
+  'claude-opus-4-7': 200_000,
+  'claude-opus-4-6': 200_000,
+  'claude-3-opus-20240229': 200_000,
+  'claude-sonnet-4-6': 200_000,
+};
+
+/** Resolves the cataloged window for a model id, matching date-suffixed ids to their base entry. */
+export const findClaudeContextWindow = (model: string | undefined | null): number | null => {
+  const normalizedModel = typeof model === 'string' ? model.trim() : '';
+  if (!normalizedModel) {
+    return null;
+  }
+
+  if (CLAUDE_CONTEXT_WINDOWS[normalizedModel]) {
+    return CLAUDE_CONTEXT_WINDOWS[normalizedModel];
+  }
+
+  const baseId = Object.keys(CLAUDE_CONTEXT_WINDOWS)
+    .find((id) => normalizedModel.startsWith(`${id}-`));
+  return baseId ? CLAUDE_CONTEXT_WINDOWS[baseId] : null;
+};
 type ClaudeInitEvent = {
   sessionId?: string;
   session_id?: string;

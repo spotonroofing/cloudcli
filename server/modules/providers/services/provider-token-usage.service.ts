@@ -6,6 +6,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 import { appConfigDb, sessionsDb } from '@/modules/database/index.js';
+import { findClaudeContextWindow } from '@/modules/providers/list/claude/claude-models.provider.js';
 import type { AnyRecord } from '@/shared/types.js';
 import { AppError, getClaudeConfigDir, getOpenCodeDatabasePath } from '@/shared/utils.js';
 
@@ -159,7 +160,10 @@ function readCodexTokenUsage(fileContent: string): TokenUsageResult {
 function readClaudeTokenUsage(
   fileContent: string,
   configuredContextWindow: string | undefined,
-  persistedWindowForModel: (model: string | null) => PersistedClaudeWindow | null,
+  windowsForModel: (model: string | null) => {
+    persisted: PersistedClaudeWindow | null;
+    catalog: number | null;
+  },
 ): TokenUsageResult {
   let inputTokens = 0;
   let outputTokens = 0;
@@ -198,9 +202,12 @@ function readClaudeTokenUsage(
     }
   }
 
-  const persistedWindow = persistedWindowForModel(model);
+  const { persisted: persistedWindow, catalog: catalogWindow } = windowsForModel(model);
   const parsedContextWindow = Number.parseInt(configuredContextWindow ?? '', 10);
-  const contextWindow = Number.isFinite(parsedContextWindow) ? parsedContextWindow : 160_000;
+  // Published catalog window beats the CONTEXT_WINDOW env guess; the env value
+  // and the 160k floor remain only for ids in neither catalog nor cache.
+  const contextWindow = catalogWindow
+    ?? (Number.isFinite(parsedContextWindow) ? parsedContextWindow : 160_000);
   const cacheTokens = cacheReadTokens + cacheCreationTokens;
 
   return {
@@ -384,7 +391,10 @@ export function createProviderTokenUsageService(
       const fileContent = await dependencies.readTextFile(sessionFilePath);
       return readClaudeTokenUsage(fileContent, dependencies.getClaudeContextWindow(), (model) => {
         const resolvedModel = model ?? session.model;
-        return resolvedModel ? dependencies.getPersistedClaudeWindow(resolvedModel) : null;
+        return {
+          persisted: resolvedModel ? dependencies.getPersistedClaudeWindow(resolvedModel) : null,
+          catalog: findClaudeContextWindow(resolvedModel),
+        };
       });
     },
   };

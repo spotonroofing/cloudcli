@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { Badge, Button, Dialog, DialogContent, DialogTitle, Input } from '../../../../shared/view/ui';
+import { modelDisplayLabel, prettifyModelId } from '../../../../utils/modelLabels';
 import type {
   LLMProvider,
   ProviderModelActions,
@@ -289,12 +290,12 @@ function ModelsContent({
       const result = await onSelectProviderModel(currentProvider, model, currentSessionId);
       if (result.scope === 'session') {
         setPendingSessionModel(result.model);
-        setSelectionNotice(`This session now uses ${result.model}.`);
+        setSelectionNotice(`This session now uses ${modelDisplayLabel(result.model, availableOptions)}.`);
         return;
       }
 
       setPendingSessionModel(null);
-      setSelectionNotice(`Default ${providerLabel} model set to ${result.model}.`);
+      setSelectionNotice(`Default ${providerLabel} model set to ${modelDisplayLabel(result.model, availableOptions)}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to change the model right now.';
       setSelectionNotice(message);
@@ -322,10 +323,10 @@ function ModelsContent({
             Active model · {providerLabel}
           </p>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="break-all font-mono text-sm font-semibold text-foreground">{currentModel}</span>
+            <span className="break-all font-mono text-sm font-semibold text-foreground">{modelDisplayLabel(currentModel, availableOptions)}</span>
             {pendingSessionModel && pendingSessionModel !== currentModel && (
               <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-500 dark:text-emerald-400">
-                → {pendingSessionModel} next
+                → {modelDisplayLabel(pendingSessionModel, availableOptions)} next
               </span>
             )}
           </p>
@@ -370,7 +371,7 @@ function ModelsContent({
                   style={{ animationDelay: `${Math.min(index * 14, 180)}ms` }}
                 >
                   <span className="flex items-center justify-between gap-2">
-                    <span className="break-words text-sm font-semibold text-foreground">{option.label || option.value}</span>
+                    <span className="break-words text-sm font-semibold text-foreground">{option.label || prettifyModelId(option.value)}</span>
                     <span className="flex shrink-0 items-center gap-2">
                       {option.isCustom && <Badge className="rounded-full px-2 py-0 text-[9px]">Custom</Badge>}
                       {isCurrent ? (
@@ -422,7 +423,7 @@ function ModelsContent({
 function CostContent({ data }: { data: CostCommandData }) {
   const used = Number(data.tokenUsage?.used ?? 0);
   const total = Number(data.tokenUsage?.total ?? 0);
-  const model = data.model || 'Unknown';
+  const model = data.model ? modelDisplayLabel(data.model) : 'Unknown';
   const provider = getProviderLabel(data.provider, data.provider || 'Unknown');
   const hasBreakdown =
     typeof data.tokenBreakdown?.input === 'number' ||

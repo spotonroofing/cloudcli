@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import type { ProviderModelOption } from '../../../../types/app';
+import { prettifyModelId } from '../../../../utils/modelLabels';
 import { DEFAULT_EFFORT_VALUE } from '../../constants/providerEffort';
 import { useComposerMenuAnchor } from '../../hooks/useComposerMenuAnchor';
 import { Badge } from '../../../../shared/view/ui';
@@ -81,7 +82,9 @@ export default function ComposerModelMenu({
     // match them to the catalog entry so the friendly name still renders.
     return modelOptions.find((option) => model.startsWith(`${option.value}-`)) ?? null;
   }, [model, modelOptions]);
-  const modelLabel = selectedModelOption?.label || model;
+  // Ids absent from the catalog render prettified (claude-opus-5 -> Opus 5),
+  // never as the raw wire id.
+  const modelLabel = selectedModelOption?.label || prettifyModelId(model);
 
   // Claude.ai parity: the selected model renders as the checked card above, so
   // More models hides it and splits the rest into current / legacy groups

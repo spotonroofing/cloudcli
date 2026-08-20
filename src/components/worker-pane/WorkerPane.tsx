@@ -6,6 +6,7 @@ import ErrorBoundary from '../main-content/view/ErrorBoundary';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
+import { modelDisplayLabel } from '../../utils/modelLabels';
 import { ActionMenu, Button, Tooltip } from '../../shared/view/ui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
@@ -197,7 +198,9 @@ export default function WorkerPane({
             items={runs.map((run) => ({
               key: run.sessionId,
               label: runLabel(run),
-              description: [run.origin, run.state, run.model].filter(Boolean).join(' · '),
+              description: [run.origin, run.state, run.model && modelDisplayLabel(run.model)]
+                .filter(Boolean)
+                .join(' · '),
               onSelect: () => handleSelectRun(run),
             }))}
           />

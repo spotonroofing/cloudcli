@@ -25,7 +25,7 @@ import {
   normalizeImageDescriptors
 } from '@/shared/image-attachments.js';
 import { appConfigDb, projectsDb } from '@/modules/database/index.js';
-import { CLAUDE_PREDEFINED_MODELS } from '@/modules/providers/list/claude/claude-models.provider.js';
+import { CLAUDE_PREDEFINED_MODELS, findClaudeContextWindow } from '@/modules/providers/list/claude/claude-models.provider.js';
 import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import {
   createNotificationEvent,
@@ -355,6 +355,22 @@ function readNumber(value) {
 }
 
 /**
+ * Default context window for a model id: the published catalog entry first,
+ * then the CONTEXT_WINDOW env guess, then 160k for ids known nowhere. The
+ * runtime-observed window (persisted per model id) still overrides this later.
+ * @param {string|null|undefined} model - Model id from the SDK message
+ * @returns {number} Context window in tokens
+ */
+function resolveDefaultContextWindow(model) {
+  const catalogWindow = findClaudeContextWindow(model);
+  if (catalogWindow) {
+    return catalogWindow;
+  }
+  const envWindow = parseInt(process.env.CONTEXT_WINDOW, 10);
+  return Number.isFinite(envWindow) ? envWindow : 160000;
+}
+
+/**
  * Extracts token usage from SDK messages.
  * Prefers per-step `message.usage` (Claude message payload), then falls back
  * to result-level usage/modelUsage for compatibility across SDK versions.
@@ -375,7 +391,7 @@ function extractTokenBudget(sdkMessage) {
     const inputTokens = directInputTokens + cacheTokens;
     const outputTokens = readNumber(messageUsage.output_tokens ?? messageUsage.outputTokens);
     const totalUsed = inputTokens + outputTokens;
-    const contextWindow = parseInt(process.env.CONTEXT_WINDOW, 10) || 160000;
+    const contextWindow = resolveDefaultContextWindow(sdkMessage.message?.model);
 
     return {
       used: totalUsed,
@@ -407,7 +423,7 @@ function extractTokenBudget(sdkMessage) {
   const inputTokens = readNumber(modelData.cumulativeInputTokens ?? modelData.inputTokens);
   const outputTokens = readNumber(modelData.cumulativeOutputTokens ?? modelData.outputTokens);
   const totalUsed = inputTokens + outputTokens;
-  const contextWindow = parseInt(process.env.CONTEXT_WINDOW, 10) || 160000;
+  const contextWindow = resolveDefaultContextWindow(modelKey);
 
   return {
     used: totalUsed,
