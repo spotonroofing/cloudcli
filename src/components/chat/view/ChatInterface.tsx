@@ -508,6 +508,7 @@ function ChatInterface({
           tokenBudget={tokenBudget}
           onToggleCommandMenu={handleToggleCommandMenu}
           onHandoff={runHandoff}
+          handoffAvailable={selectedSession ? selectedSession.origin === 'planner' : sessionOrigin === 'planner'}
           hasInput={Boolean(input.trim())}
           onClearInput={handleClearInput}
           onSubmit={handleSubmit}

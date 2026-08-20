@@ -95,6 +95,8 @@ interface ChatComposerProps {
   tokenBudget: Record<string, unknown> | null;
   onToggleCommandMenu: () => void;
   onHandoff: () => void;
+  /** Handoff applies only to planner project chats, not worker/scratch surfaces. */
+  handoffAvailable: boolean;
   hasInput: boolean;
   onClearInput: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement> | MouseEvent<HTMLButtonElement> | TouchEvent<HTMLButtonElement>) => void;
@@ -152,6 +154,7 @@ export default function ChatComposer({
   tokenBudget,
   onToggleCommandMenu,
   onHandoff,
+  handoffAvailable,
   hasInput,
   onClearInput,
   onSubmit,
@@ -414,13 +417,15 @@ export default function ChatComposer({
               <CommandSlashIcon />
             </PromptInputButton>
 
-            <PromptInputButton
-              tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
-              onClick={onHandoff}
-              aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
-            >
-              <FileTextIcon />
-            </PromptInputButton>
+            {handoffAvailable && (
+              <PromptInputButton
+                tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
+                onClick={onHandoff}
+                aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
+              >
+                <FileTextIcon />
+              </PromptInputButton>
+            )}
 
             <TokenUsageSummary usage={tokenBudget} />
 

@@ -538,9 +538,14 @@ export const sessionsDb = {
     const db = getConnection();
     // Optional projectId narrows the feed to one project (scoped desktop tabs);
     // pagination and totals then reflect only that project's sessions.
+    // Only conversations the user started in the UI appear: origin NULL
+    // (scratch/standalone and discovered ordinary chats) or 'planner' (project
+    // New Session chats). Machine-started runs — 'direct' (worker pane) and
+    // 'dispatch' (chain runner / watchdog) — stay in the worker pane surfaces.
     const visibilityClause = `
       sessions.isArchived = 0
       AND (projects.isArchived IS NULL OR projects.isArchived = 0)
+      AND (sessions.origin IS NULL OR sessions.origin = 'planner')
       ${projectId ? 'AND projects.project_id = ?' : ''}
     `;
     const filterParams = projectId ? [projectId] : [];

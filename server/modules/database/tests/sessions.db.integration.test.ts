@@ -121,18 +121,32 @@ test('recent sessions are globally ordered, paginated, and limited to visible co
     sessionsDb.updateSessionIsArchived('session-archived', true);
     projectsDb.updateProjectIsArchived('/workspace/project-hidden', true);
 
+    // Machine-started runs (worker pane 'direct', dispatched 'dispatch') never
+    // appear in the recent-conversations feed; planner chats do.
+    sessionsDb.createSession('session-worker', 'claude', '/workspace/project-a', 'Worker run', '2026-07-18T15:00:00.000Z', '2026-07-18T15:00:00.000Z');
+    sessionsDb.setSessionOrigin('session-worker', 'direct');
+    sessionsDb.createSession('session-dispatched', 'claude', '/workspace/project-a', 'Dispatched run', '2026-07-18T16:00:00.000Z', '2026-07-18T16:00:00.000Z');
+    sessionsDb.setSessionOrigin('session-dispatched', 'dispatch');
+    sessionsDb.createSession('session-planner', 'claude', '/workspace/project-a', 'Planner chat', '2026-07-17T09:00:00.000Z', '2026-07-17T09:00:00.000Z');
+    sessionsDb.setSessionOrigin('session-planner', 'planner');
+
     const firstPage = sessionsDb.getRecentSessionsPage(2, 0);
     const secondPage = sessionsDb.getRecentSessionsPage(2, 2);
+    const thirdPage = sessionsDb.getRecentSessionsPage(2, 4);
 
-    assert.equal(firstPage.total, 4);
+    assert.equal(firstPage.total, 5);
     assert.deepEqual(
       firstPage.sessions.map((session) => session.session_id),
       ['session-newest', 'session-same-second'],
     );
-    assert.equal(secondPage.total, 4);
+    assert.equal(secondPage.total, 5);
     assert.deepEqual(
       secondPage.sessions.map((session) => session.session_id),
       ['session-middle', 'session-oldest'],
+    );
+    assert.deepEqual(
+      thirdPage.sessions.map((session) => session.session_id),
+      ['session-planner'],
     );
   });
 });

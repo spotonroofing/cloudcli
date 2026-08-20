@@ -10,8 +10,8 @@ Whole-file rules: read DESIGN.md in the repo root before any UI work; it is the 
 Done when: the dev sidebar lists only the curated named projects, a synthetic transcript dropped into ~/.claude/projects under a novel cwd appears as a standalone session and creates no project row after a rescan, and manual attach still works. Commit.
 
 ## Phase 2: chats feed and worker hygiene
-- [ ] Read the origin tagging first and determine which origin values mean Willem started the session in the UI (project New Session chats and scratch chats) versus machine-started (dispatch, worker pane direct, watchdog-spawned); filter the recent-conversations query so only Willem-started sessions appear
-- [ ] The handoff button renders only in planner project chats; hidden in the worker pane and standalone/scratch chats
+- [x] Read the origin tagging first and determine which origin values mean Willem started the session in the UI (project New Session chats and scratch chats) versus machine-started (dispatch, worker pane direct, watchdog-spawned); filter the recent-conversations query so only Willem-started sessions appear (origin NULL = scratch/ordinary chats, 'planner' = project New Session chats; 'direct' and 'dispatch' are machine-started and now excluded from getRecentSessionsPage)
+- [x] The handoff button renders only in planner project chats; hidden in the worker pane and standalone/scratch chats (gated on the selected session's origin, falling back to the surface origin for a fresh new-session view)
 Done when: on dev, the Chats feed shows a freshly created project chat and a scratch chat but not a dispatched run or a worker-pane session; the worker pane composer has no handoff button while a project chat still does. Commit.
 
 ## Phase 3: model truth
