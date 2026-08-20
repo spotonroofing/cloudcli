@@ -1,23 +1,16 @@
 import { useTranslation } from 'react-i18next';
 import { memo, useCallback, useMemo } from 'react';
-import type { Dispatch, RefObject, SetStateAction } from 'react';
+import type { RefObject } from 'react';
 
 import type { ChatMessage } from '../../types/types';
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
-import type {
-  Project,
-  ProjectSession,
-  LLMProvider,
-  ProviderModelActions,
-  ProviderModelsDefinition,
-} from '../../../../types/app';
+import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import { getIntrinsicMessageKey } from '../../utils/messageKeys';
 import { groupConsecutiveTools, isToolGroupItem } from '../../utils/toolGrouping';
 import { Button } from '../../../../shared/view/ui';
 
 import ActivityIndicator from './ActivityIndicator';
 import MessageComponent from './MessageComponent';
-import ProviderSelectionEmptyState from './ProviderSelectionEmptyState';
 import ToolGroupContainer from './ToolGroupContainer';
 import LoadAllMessagesOverlay from './LoadAllMessagesOverlay';
 import ChatExportMenu from './ChatExportMenu';
@@ -38,25 +31,7 @@ interface ChatMessagesPaneProps {
   activity?: SessionActivity | null;
   chatMessages: ChatMessage[];
   selectedSession: ProjectSession | null;
-  currentSessionId: string | null;
   provider: LLMProvider;
-  setProvider: (provider: LLMProvider) => void;
-  textareaRef: RefObject<HTMLTextAreaElement>;
-  claudeModel: string;
-  setClaudeModel: (model: string) => void;
-  cursorModel: string;
-  setCursorModel: (model: string) => void;
-  codexModel: string;
-  setCodexModel: (model: string) => void;
-  opencodeModel: string;
-  setOpenCodeModel: (model: string) => void;
-  providerModelCatalog: Partial<Record<LLMProvider, ProviderModelsDefinition>>;
-  providerModelActions: ProviderModelActions;
-  providerModelsLoading: boolean;
-  tasksEnabled: boolean;
-  isTaskMasterInstalled: boolean | null;
-  onShowAllTasks?: (() => void) | null;
-  setInput: Dispatch<SetStateAction<string>>;
   isLoadingMoreMessages: boolean;
   hasMoreMessages: boolean;
   totalMessages: number;
@@ -90,25 +65,7 @@ function ChatMessagesPane({
   activity = null,
   chatMessages,
   selectedSession,
-  currentSessionId,
   provider,
-  setProvider,
-  textareaRef,
-  claudeModel,
-  setClaudeModel,
-  cursorModel,
-  setCursorModel,
-  codexModel,
-  setCodexModel,
-  opencodeModel,
-  setOpenCodeModel,
-  providerModelCatalog,
-  providerModelActions,
-  providerModelsLoading,
-  tasksEnabled,
-  isTaskMasterInstalled,
-  onShowAllTasks,
-  setInput,
   isLoadingMoreMessages,
   hasMoreMessages,
   totalMessages,
@@ -205,30 +162,7 @@ function ChatMessagesPane({
             </p>
           </div>
         </div>
-      ) : chatMessages.length === 0 ? (
-        <ProviderSelectionEmptyState
-          selectedSession={selectedSession}
-          currentSessionId={currentSessionId}
-          provider={provider}
-          setProvider={setProvider}
-          textareaRef={textareaRef}
-          claudeModel={claudeModel}
-          setClaudeModel={setClaudeModel}
-          cursorModel={cursorModel}
-          setCursorModel={setCursorModel}
-          codexModel={codexModel}
-          setCodexModel={setCodexModel}
-          opencodeModel={opencodeModel}
-          setOpenCodeModel={setOpenCodeModel}
-          providerModelCatalog={providerModelCatalog}
-          providerModelActions={providerModelActions}
-          providerModelsLoading={providerModelsLoading}
-          tasksEnabled={tasksEnabled}
-          isTaskMasterInstalled={isTaskMasterInstalled}
-          onShowAllTasks={onShowAllTasks}
-          setInput={setInput}
-        />
-      ) : (
+      ) : chatMessages.length === 0 ? null : (
         <>
           {/* Loading indicator for older messages (hide when load-all is active) */}
           {isLoadingMoreMessages && !isLoadingAllMessages && !allMessagesLoaded && (

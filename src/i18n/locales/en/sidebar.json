@@ -150,6 +150,9 @@
     "sessionCount_other": "This project contains {{count}} conversations.",
     "removeFromSidebar": "Remove from sidebar only",
     "deleteAllData": "Delete all data permanently",
+    "confirmArchiveTitle": "Remove this project?",
+    "confirmDeleteTitle": "Delete all project data?",
+    "deleteAllDataWarning": "This permanently deletes the project and all of its conversations. This cannot be undone.",
     "allConversationsDeleted": "The project will be removed from the sidebar. Your files, memories, and session data will be preserved.",
     "cannotUndo": "You can re-add the project later."
   }

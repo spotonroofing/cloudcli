@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { AlertTriangle, EyeOff, Folder, FolderInput, MessageSquare, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
@@ -66,6 +66,21 @@ export default function SidebarModals({
     () => projects.map(normalizeProjectForSettings),
     [projects],
   );
+
+  // Second stage of the project dialog: the chosen action ('archive' | 'delete')
+  // waits for an explicit confirm before anything happens.
+  const [confirmingProjectAction, setConfirmingProjectAction] = useState<'archive' | 'delete' | null>(null);
+
+  const cancelDeleteProject = () => {
+    setConfirmingProjectAction(null);
+    onCancelDeleteProject();
+  };
+
+  const confirmProjectAction = () => {
+    const action = confirmingProjectAction;
+    setConfirmingProjectAction(null);
+    onConfirmDeleteProject(action === 'delete');
+  };
 
   return (
     <>
@@ -145,21 +160,51 @@ export default function SidebarModals({
             <div className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
               <div className="p-6">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
-                    <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                  <div
+                    className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${
+                      confirmingProjectAction === 'delete'
+                        ? 'bg-red-100 dark:bg-red-900/30'
+                        : 'bg-orange-100 dark:bg-orange-900/30'
+                    }`}
+                  >
+                    <AlertTriangle
+                      className={`h-6 w-6 ${
+                        confirmingProjectAction === 'delete'
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-orange-600 dark:text-orange-400'
+                      }`}
+                    />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="mb-2 text-lg font-semibold text-foreground">
-                      {t('deleteConfirmation.deleteProject')}
+                      {confirmingProjectAction === 'delete'
+                        ? t('deleteConfirmation.confirmDeleteTitle', 'Delete all project data?')
+                        : confirmingProjectAction === 'archive'
+                          ? t('deleteConfirmation.confirmArchiveTitle', 'Remove this project?')
+                          : t('deleteConfirmation.deleteProject')}
                     </h3>
                     <p className="mb-1 text-sm text-muted-foreground">
-                      {t('deleteConfirmation.confirmDelete')}{' '}
+                      {confirmingProjectAction ? null : <>{t('deleteConfirmation.confirmDelete')}{' '}</>}
                       <span className="font-medium text-foreground">
                         {deleteConfirmation.project.displayName || deleteConfirmation.project.projectId}
                       </span>
-                      ?
+                      {confirmingProjectAction ? null : '?'}
                     </p>
-                    {deleteConfirmation.sessionCount > 0 && (
+                    {confirmingProjectAction === 'delete' && (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {t(
+                          'deleteConfirmation.deleteAllDataWarning',
+                          'This permanently deletes the project and all of its conversations. This cannot be undone.',
+                        )}
+                      </p>
+                    )}
+                    {confirmingProjectAction === 'archive' && (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {t('deleteConfirmation.allConversationsDeleted')}{' '}
+                        {t('deleteConfirmation.cannotUndo')}
+                      </p>
+                    )}
+                    {!confirmingProjectAction && deleteConfirmation.sessionCount > 0 && (
                       <p className="mt-2 text-sm text-muted-foreground">
                         {t('deleteConfirmation.sessionCount', { count: deleteConfirmation.sessionCount })}
                       </p>
@@ -168,25 +213,51 @@ export default function SidebarModals({
                 </div>
               </div>
               <div className="flex flex-col gap-2 border-t border-border bg-muted/30 p-4">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => onConfirmDeleteProject(false)}
-                >
-                  <EyeOff className="mr-2 h-4 w-4" />
-                  {t('deleteConfirmation.archiveProject', 'Archive project')}
-                </Button>
-                <Button
-                  variant="destructive"
-                  className="w-full justify-start bg-red-600 text-white hover:bg-red-700"
-                  onClick={() => onConfirmDeleteProject(true)}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {t('deleteConfirmation.deleteAllData')}
-                </Button>
-                <Button variant="ghost" className="w-full" onClick={onCancelDeleteProject}>
-                  {t('actions.cancel')}
-                </Button>
+                {confirmingProjectAction ? (
+                  <>
+                    <Button
+                      variant={confirmingProjectAction === 'delete' ? 'destructive' : 'outline'}
+                      className={`w-full justify-start ${
+                        confirmingProjectAction === 'delete' ? 'bg-red-600 text-white hover:bg-red-700' : ''
+                      }`}
+                      onClick={confirmProjectAction}
+                    >
+                      {confirmingProjectAction === 'delete' ? (
+                        <Trash2 className="mr-2 h-4 w-4" />
+                      ) : (
+                        <EyeOff className="mr-2 h-4 w-4" />
+                      )}
+                      {confirmingProjectAction === 'delete'
+                        ? t('deleteConfirmation.deleteAllData')
+                        : t('deleteConfirmation.archiveProject', 'Archive project')}
+                    </Button>
+                    <Button variant="ghost" className="w-full" onClick={() => setConfirmingProjectAction(null)}>
+                      {t('actions.cancel')}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => setConfirmingProjectAction('archive')}
+                    >
+                      <EyeOff className="mr-2 h-4 w-4" />
+                      {t('deleteConfirmation.archiveProject', 'Archive project')}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      className="w-full justify-start bg-red-600 text-white hover:bg-red-700"
+                      onClick={() => setConfirmingProjectAction('delete')}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {t('deleteConfirmation.deleteAllData')}
+                    </Button>
+                    <Button variant="ghost" className="w-full" onClick={cancelDeleteProject}>
+                      {t('actions.cancel')}
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </div>,

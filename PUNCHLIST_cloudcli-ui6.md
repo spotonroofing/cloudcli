@@ -24,7 +24,7 @@ Done when: on dev, selecting Opus 5 shows Opus 5 in the switcher and its ring de
 Done when: on dev, settings shows none of the removed tabs, no dead links or console errors, and a dispatch CLI call authenticated with the existing key still succeeds against the watchdog status endpoint. Commit.
 
 ## Phase 5: chrome cleanup
-- [ ] Remove the Choose Your AI Assistant empty state entirely; a new or empty chat opens straight to the composer
-- [ ] Remove the per-message Claude name tag and icon above assistant messages
-- [ ] Remove project and delete project actions get a confirmation dialog using the app's existing dialog pattern
+- [x] Remove the Choose Your AI Assistant empty state entirely; a new or empty chat opens straight to the composer (ProviderSelectionEmptyState.tsx deleted; ChatMessagesPane renders nothing for an empty chat; dead prop plumbing trimmed from ChatInterface)
+- [x] Remove the per-message Claude name tag and icon above assistant messages (MessageComponent header now renders only for error/tool rows; error and tool marks unchanged)
+- [x] Remove project and delete project actions get a confirmation dialog using the app's existing dialog pattern (the project dialog in SidebarModals gained a second stage: Archive project and Delete all data each show a named confirm view with Cancel returning to the chooser; nothing acts until the confirm button)
 Done when: on dev, an empty chat shows no provider chooser, assistant messages render without the name tag, and clicking remove or delete on a project shows a confirmation that cancels cleanly and only acts on confirm. Then run the promote flow. Commit and push.
