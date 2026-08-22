@@ -1,4 +1,6 @@
-import { Loader2, RotateCcw } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
+
+import { Loader } from '../../../../shared/view/beui/Loader';
 
 type ShellConnectionOverlayProps = {
   mode: 'loading' | 'connect' | 'connecting';
@@ -23,7 +25,7 @@ export default function ShellConnectionOverlay({
     return (
       <div className="absolute inset-0 z-20 flex items-center justify-center bg-gray-950/90">
         <div className="inline-flex items-center gap-2 text-sm font-medium text-gray-100">
-          <Loader2 className="h-4 w-4 animate-spin text-blue-300" aria-hidden="true" />
+          <Loader variant="dither" size={16} className="text-inherit" />
           <span>{loadingLabel}</span>
         </div>
       </div>
@@ -53,7 +55,7 @@ export default function ShellConnectionOverlay({
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-gray-950/90 p-6">
       <div className="flex w-full max-w-md flex-col items-center gap-3 text-center">
         <div className="flex items-center justify-center gap-3 text-yellow-300">
-          <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+          <Loader variant="dither" size={20} className="text-inherit" />
           <span className="text-base font-medium">{connectingLabel}</span>
         </div>
         <p className="max-w-md break-words px-2 text-sm leading-6 text-gray-300">{description}</p>

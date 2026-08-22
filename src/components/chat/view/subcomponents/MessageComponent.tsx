@@ -8,11 +8,12 @@ import type {
   PermissionGrantResult,
   Provider,
 } from '../../types/types';
-import { formatUsageLimitText, stripProposedPlanEnvelope } from '../../utils/chatFormatting';
+import { extractExternalLinks, formatUsageLimitText, stripProposedPlanEnvelope } from '../../utils/chatFormatting';
 import type { Project } from '../../../../types/app';
 import { ToolRenderer, ToolErrorDisplay, shouldHideToolResult } from '../../tools';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '../../../../shared/view/ui';
 import { MESSAGE_POP_UP, StreamingResponse, useStreamedReveal } from '../../../../shared/view/beui';
+import { Citations } from '../../../../shared/view/beui/Citations';
 
 import ChatMessageImages from './ChatMessageImages';
 import ChatMessageFiles from './ChatMessageFiles';
@@ -59,6 +60,28 @@ function StreamingAssistantText({ content }: { content: string }) {
       </Markdown>
     </StreamingResponse>
   );
+}
+
+/**
+ * beUI citations strip under an assistant turn whose markdown carries external
+ * http(s) links — one strip per message, deduped by URL. Inline links in the
+ * prose stay untouched.
+ */
+function AssistantCitations({ content }: { content: string }) {
+  const citations = useMemo(
+    () =>
+      extractExternalLinks(content).map((link) => ({
+        id: link.url,
+        title: link.title,
+        domain: link.domain,
+        url: link.url,
+      })),
+    [content],
+  );
+
+  if (citations.length === 0) return null;
+
+  return <Citations citations={citations} className="mt-2" />;
 }
 
 const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider }: MessageComponentProps) => {
@@ -385,9 +408,12 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                     message.isStreaming ? (
                       <StreamingAssistantText content={content} />
                     ) : (
-                      <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
-                        {content}
-                      </Markdown>
+                      <>
+                        <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
+                          {content}
+                        </Markdown>
+                        <AssistantCitations content={content} />
+                      </>
                     )
                   ) : (
                     <div className="whitespace-pre-wrap">

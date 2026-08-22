@@ -3,6 +3,7 @@ import { Activity, Archive, Folder, MessageSquare, RotateCcw, Search, Trash2 } f
 import type { TFunction } from 'i18next';
 
 import { ScrollArea } from '../../../../shared/view/ui';
+import { Loader } from '../../../../shared/view/beui/Loader';
 import type { Project } from '../../../../types/app';
 import type { ConversationSearchResults, SearchProgress } from '../../hooks/useSidebarController';
 import type { ArchivedProjectListItem, ArchivedSessionListItem, RecentConversationListItem, SidebarSearchMode } from '../../types/types';
@@ -217,7 +218,7 @@ export default function SidebarContent({
           isSearching && !conversationResults ? (
             <div className="px-4 py-12 text-center md:py-8">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted md:mb-3">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+                <Loader variant="dot-matrix" size={24} className="text-muted-foreground" />
               </div>
               <p className="text-sm text-muted-foreground">{t('search.searching')}</p>
               {searchProgress && (
@@ -433,7 +434,7 @@ export default function SidebarContent({
             <div className="space-y-2 px-2 py-1" aria-live="polite" aria-busy="true">
               <div className="flex items-center gap-2 px-1 py-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/70">
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-muted-foreground/40 border-t-muted-foreground" />
+                  <Loader variant="dot-matrix" size={14} className="text-muted-foreground" />
                 </div>
                 <div>
                   <h3 className="text-xs font-medium text-foreground">

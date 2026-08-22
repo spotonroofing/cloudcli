@@ -326,16 +326,14 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
       {toast && (
         <div
           className={cn(
-            'fixed bottom-4 right-4 z-[9999] px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-2',
-            toast.type === 'success'
-              ? 'bg-green-600 text-white'
-              : 'bg-red-600 text-white'
+            'fixed bottom-4 right-4 z-[9999] flex items-center gap-2 rounded-lg border border-border bg-popover px-4 py-2 text-popover-foreground shadow-lg',
+            'animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none',
           )}
         >
           {toast.type === 'success' ? (
-            <Check className="h-4 w-4" />
+            <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           ) : (
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4 text-rose-600 dark:text-rose-400" />
           )}
           <span className="text-sm">{toast.message}</span>
         </div>

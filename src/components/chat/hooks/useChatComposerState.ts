@@ -170,6 +170,14 @@ const createFakeSubmitEvent = () => {
 const MAX_ATTACHMENT_COUNT = 10;
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 
+/**
+ * A text paste longer than this collapses into a pasted-text file attachment
+ * (Claude-desktop style) instead of flooding the textarea. The file rides the
+ * existing attachment path: uploaded to /api/assets/files at send time and
+ * referenced through the provider-neutral <files_input> block.
+ */
+const PASTE_AS_FILE_THRESHOLD = 2000;
+
 const isImageAttachment = (attachment: ChatAttachment) => {
   if (attachment.mimeType?.startsWith('image/')) return true;
   return /\.(gif|jpe?g|png|svg|webp)$/i.test(attachment.path || attachment.name || '');
@@ -743,8 +751,22 @@ export function useChatComposerState({
     }
   }, []);
 
+  // Monotonic naming for pasted-text attachments: the upload progress and
+  // error maps key by file name, so every pasted file needs a distinct one.
+  const pastedFileCounterRef = useRef(0);
+
   const handlePaste = useCallback(
     (event: ClipboardEvent<HTMLTextAreaElement>) => {
+      const pastedText = event.clipboardData.getData('text/plain');
+      if (pastedText.length > PASTE_AS_FILE_THRESHOLD) {
+        event.preventDefault();
+        pastedFileCounterRef.current += 1;
+        const count = pastedFileCounterRef.current;
+        const fileName = count === 1 ? 'Pasted text.txt' : `Pasted text ${count}.txt`;
+        handleAttachmentFiles([new File([pastedText], fileName, { type: 'text/plain' })]);
+        return;
+      }
+
       const items = Array.from(event.clipboardData.items);
 
       items.forEach((item) => {

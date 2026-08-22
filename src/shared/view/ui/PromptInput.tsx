@@ -4,6 +4,7 @@ import * as React from 'react';
 import { ArrowUpIcon, SquareIcon } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';
+import { ActionSwapIcon } from '../beui/ActionSwap';
 import { Button } from './Button';
 import Tooltip from './Tooltip';
 
@@ -191,11 +192,30 @@ export interface PromptInputSubmitProps extends React.ButtonHTMLAttributes<HTMLB
   status?: PromptInputStatus;
 }
 
+/**
+ * Identity of the icon a caller passed in, so the beUI Action Swap knows when
+ * the slot's content actually changed. Element type (lucide displayName) is
+ * the identity — the same icon re-rendered never replays the swap.
+ */
+const submitSwapKey = (children: React.ReactNode): string => {
+  if (React.isValidElement(children)) {
+    const type = children.type as { displayName?: string; name?: string } | string;
+    if (typeof type === 'string') return type;
+    return type.displayName ?? type.name ?? 'custom';
+  }
+  return 'custom';
+};
+
 export const PromptInputSubmit = React.forwardRef<HTMLButtonElement, PromptInputSubmitProps>(
   ({ className, status: statusProp, children, ...props }, ref) => {
     const context = React.useContext(PromptInputContext);
     const status = statusProp ?? context?.status ?? 'ready';
     const isActive = status === 'submitted' || status === 'streaming';
+
+    let swapValue = children != null ? submitSwapKey(children) : isActive ? 'stop' : 'send';
+    // The queue arrow is the same glyph as the send arrow — one slot identity,
+    // so trading queue for send doesn't replay the swap between twin arrows.
+    if (swapValue === 'ArrowUp' || swapValue === 'ArrowUpIcon') swapValue = 'send';
 
     return (
       <Button
@@ -206,11 +226,13 @@ export const PromptInputSubmit = React.forwardRef<HTMLButtonElement, PromptInput
         className={cn('h-8 w-8 shrink-0 rounded-lg', className)}
         {...props}
       >
-        {children ?? (isActive ? (
-          <SquareIcon className="h-3.5 w-3.5 fill-current" />
-        ) : (
-          <ArrowUpIcon className="h-4 w-4" strokeWidth={2} />
-        ))}
+        <ActionSwapIcon value={swapValue} className="h-4 w-4">
+          {children ?? (isActive ? (
+            <SquareIcon className="h-3.5 w-3.5 fill-current" />
+          ) : (
+            <ArrowUpIcon className="h-4 w-4" strokeWidth={2} />
+          ))}
+        </ActionSwapIcon>
       </Button>
     );
   }

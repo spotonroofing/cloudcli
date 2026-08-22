@@ -1,4 +1,6 @@
 import { GitBranch, GitCommit, RefreshCw } from 'lucide-react';
+
+import { Loader } from '../../../../shared/view/beui/Loader';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ConfirmationRequest, FileStatusCode, GitDiffMap, GitStatusResponse } from '../../types/types';
 import { getAllChangedFiles, hasChangedFiles } from '../../utils/gitPanelUtils';
@@ -176,7 +178,7 @@ export default function ChangesView({
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex h-32 items-center justify-center">
-            <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+            <Loader variant="dot-matrix" size={20} className="text-muted-foreground" />
           </div>
         ) : gitStatus?.hasCommits === false && hasChangedFiles(gitStatus) ? (
           <div className="flex flex-col items-center justify-center p-8 text-center">

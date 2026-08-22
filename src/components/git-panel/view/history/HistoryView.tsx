@@ -1,4 +1,6 @@
-import { History, RefreshCw } from 'lucide-react';
+import { History } from 'lucide-react';
+
+import { Loader } from '../../../../shared/view/beui/Loader';
 import { useCallback, useMemo, useState } from 'react';
 import type { GitDiffMap, GitCommitSummary } from '../../types/types';
 import { computeCommitGraph } from '../../utils/commitGraph';
@@ -60,7 +62,7 @@ export default function HistoryView({
     <div className="flex-1 overflow-y-auto">
       {isLoading ? (
         <div className="flex h-32 items-center justify-center">
-          <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+          <Loader variant="dot-matrix" size={20} className="text-muted-foreground" />
         </div>
       ) : recentCommits.length === 0 ? (
         <div className="flex h-32 flex-col items-center justify-center text-muted-foreground">

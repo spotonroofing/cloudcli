@@ -26,6 +26,58 @@ export function stripProposedPlanEnvelope(text: string) {
   return withoutOpeningTag.replace(/(?:\r?\n)?[ \t]*<\/proposed_plan>\s*$/i, '');
 }
 
+export type ExternalLink = {
+  url: string;
+  title: string;
+  domain: string;
+};
+
+/**
+ * Pulls the external http(s) links out of a message's markdown: markdown link
+ * syntax first (keeping the link text as the title), then bare URLs in the
+ * remaining prose. Deduped by URL, first occurrence wins.
+ */
+export function extractExternalLinks(markdown: string): ExternalLink[] {
+  if (!markdown || typeof markdown !== 'string') return [];
+
+  const links: ExternalLink[] = [];
+  const seen = new Set<string>();
+
+  const add = (rawUrl: string, title?: string) => {
+    // Bare URLs in prose often carry trailing punctuation that is not part of the link.
+    const url = rawUrl.replace(/[.,;:!?)\]]+$/, '');
+    let domain: string;
+    try {
+      domain = new URL(url).hostname;
+    } catch {
+      return;
+    }
+    if (seen.has(url)) return;
+    seen.add(url);
+    links.push({ url, title: title?.trim() || domain, domain });
+  };
+
+  // Image embeds are content, not references; strip them before link matching
+  // so their URLs never become citations.
+  const withoutImages = markdown.replace(/!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g, ' ');
+
+  // Markdown links, removed from the text so their URLs are not re-matched as bare URLs.
+  const withoutMarkdownLinks = withoutImages.replace(
+    /\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g,
+    (_match, text: string, url: string) => {
+      add(url, text);
+      return ' ';
+    },
+  );
+
+  const bareUrlPattern = /https?:\/\/[^\s<>()"'\]]+/g;
+  for (const match of withoutMarkdownLinks.matchAll(bareUrlPattern)) {
+    add(match[0]);
+  }
+
+  return links;
+}
+
 export function formatUsageLimitText(text: string) {
   try {
     if (typeof text !== 'string') return text;

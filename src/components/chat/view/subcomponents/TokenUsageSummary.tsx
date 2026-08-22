@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown } from 'lucide-react';
 
 import { useComposerMenuAnchor } from '../../hooks/useComposerMenuAnchor';
+import { NumberTicker } from '../../../../shared/view/beui/NumberTicker';
 
 type UsageCategory = {
   name: string;
@@ -165,7 +166,14 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
               {t('composer.contextWindow', { defaultValue: 'Context window' })}
             </span>
             <span className="shrink-0 text-xs text-muted-foreground" data-usage-header-value>
-              {headerValue}
+              {/* Digits roll (beUI NumberTicker); the k/M/% glyphs render as plain text, so "70k / 1M (45%)" reads exactly as before. */}
+              <NumberTicker
+                value={usedTokens}
+                format={() => headerValue}
+                duration={0.35}
+                stagger={0}
+                startOnView={false}
+              />
             </span>
             <ChevronDown
               className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}

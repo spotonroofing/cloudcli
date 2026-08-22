@@ -9,6 +9,7 @@ import { getIntrinsicMessageKey } from '../../utils/messageKeys';
 import { groupConsecutiveTools, isToolGroupItem } from '../../utils/toolGrouping';
 import { Button } from '../../../../shared/view/ui';
 import { MessageScroller } from '../../../../shared/view/beui';
+import { Loader } from '../../../../shared/view/beui/Loader';
 
 import ActivityIndicator from './ActivityIndicator';
 import MessageComponent from './MessageComponent';
@@ -167,7 +168,7 @@ function ChatMessagesPane({
       ) : (isLoadingSessionMessages || isProcessing || isBootingSession) && chatMessages.length === 0 ? (
         <div className="mt-8 text-center text-gray-500 dark:text-gray-400">
           <div className="flex items-center justify-center space-x-2">
-            <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-gray-400" />
+            <Loader variant="dot-matrix" size={16} className="shrink-0 text-muted-foreground" />
             <p>
               {isBootingSession
                 ? t('session.boot.starting', { defaultValue: 'Starting session...' })
@@ -181,7 +182,7 @@ function ChatMessagesPane({
           {isLoadingMoreMessages && !isLoadingAllMessages && !allMessagesLoaded && (
             <div className="py-3 text-center text-gray-500 dark:text-gray-400">
               <div className="flex items-center justify-center space-x-2">
-                <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-gray-400" />
+                <Loader variant="dot-matrix" size={16} className="shrink-0 text-muted-foreground" />
                 <p className="text-sm">{t('session.loading.olderMessages')}</p>
               </div>
             </div>

@@ -1,9 +1,14 @@
-
-
 import { useTranslation } from 'react-i18next';
 import { Languages } from 'lucide-react';
 
 import { languages } from '../../../i18n/languages';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../beui/BeuiSelect';
 
 type LanguageSelectorProps = {
   compact?: boolean;
@@ -21,10 +26,28 @@ type LanguageSelectorProps = {
 export default function LanguageSelector({ compact = false }: LanguageSelectorProps) {
   const { i18n, t } = useTranslation('settings');
 
-  const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const newLanguage = event.target.value;
+  const handleLanguageChange = (newLanguage: string) => {
     i18n.changeLanguage(newLanguage);
   };
+
+  const select = (
+    <Select
+      value={i18n.language}
+      onValueChange={handleLanguageChange}
+      className={compact ? 'w-40' : 'w-44'}
+    >
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent listClassName="max-h-64 overflow-y-auto">
+        {languages.map((lang) => (
+          <SelectItem key={lang.value} value={lang.value}>
+            {lang.nativeName}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 
   // Compact style for QuickSettingsPanel
   if (compact) {
@@ -34,17 +57,7 @@ export default function LanguageSelector({ compact = false }: LanguageSelectorPr
           <Languages className="h-4 w-4 text-muted-foreground" />
           {t('account.language')}
         </span>
-        <select
-          value={i18n.language}
-          onChange={handleLanguageChange}
-          className="w-auto min-w-[120px] max-w-[160px] rounded-lg border border-input bg-card p-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-        >
-          {languages.map((lang) => (
-            <option key={lang.value} value={lang.value}>
-              {lang.nativeName}
-            </option>
-          ))}
-        </select>
+        {select}
       </div>
     );
   }
@@ -60,17 +73,7 @@ export default function LanguageSelector({ compact = false }: LanguageSelectorPr
           {t('account.languageDescription')}
         </div>
       </div>
-      <select
-        value={i18n.language}
-        onChange={handleLanguageChange}
-        className="w-36 rounded-lg border border-input bg-card p-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary"
-      >
-        {languages.map((lang) => (
-          <option key={lang.value} value={lang.value}>
-            {lang.nativeName}
-          </option>
-        ))}
-      </select>
+      {select}
     </div>
   );
 }

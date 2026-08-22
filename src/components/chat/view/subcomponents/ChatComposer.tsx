@@ -36,6 +36,7 @@ import PermissionRequestsBanner from './PermissionRequestsBanner';
 import TokenUsageSummary from './TokenUsageSummary';
 import QueuedMessageCard from './QueuedMessageCard';
 import ComposerModelMenu from './ComposerModelMenu';
+import { NumberTicker } from '../../../../shared/view/beui/NumberTicker';
 
 // Slash-commands icon drawn in the plus icon's visual language: one diagonal
 // stroke whose length (14 units) and stroke width match a single plus arm.
@@ -441,6 +442,15 @@ export default function ChatComposer({
           </PromptInputTools>
 
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            {input.length > 0 && (
+              <span
+                data-slot="char-counter"
+                title={t('input.characterCount', { defaultValue: 'Characters' })}
+                className="text-[10px] font-medium tabular-nums text-muted-foreground"
+              >
+                <NumberTicker value={input.length} locale duration={0.35} stagger={0} startOnView={false} />
+              </span>
+            )}
             <ComposerModelMenu
               effort={effort}
               effortOptions={availableEffortOptions}

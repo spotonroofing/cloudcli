@@ -9,6 +9,8 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+
+import { Loader } from '../../../../shared/view/beui/Loader';
 import { useState } from 'react';
 
 import type { Project } from '../../../../types/app';
@@ -191,7 +193,7 @@ export default function WorktreesView({
   if (isLoading && worktrees.length === 0) {
     return (
       <div className="flex h-32 items-center justify-center">
-        <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+        <Loader variant="dot-matrix" size={20} className="text-muted-foreground" />
       </div>
     );
   }

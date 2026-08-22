@@ -1,4 +1,6 @@
-import { Check, GitBranch, Globe, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
+import { Check, GitBranch, Globe, Plus, Search, Trash2, X } from 'lucide-react';
+
+import { Loader } from '../../../../shared/view/beui/Loader';
 import { useMemo, useState } from 'react';
 import type { ConfirmationRequest, GitRemoteStatus } from '../../types/types';
 import NewBranchModal from '../modals/NewBranchModal';
@@ -178,7 +180,7 @@ export default function BranchesView({
   if (isLoading && localBranches.length === 0) {
     return (
       <div className="flex h-32 items-center justify-center">
-        <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+        <Loader variant="dot-matrix" size={20} className="text-muted-foreground" />
       </div>
     );
   }

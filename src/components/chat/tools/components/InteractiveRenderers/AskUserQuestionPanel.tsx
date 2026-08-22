@@ -1,6 +1,9 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useId } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import type { PermissionPanelProps } from '../../configs/permissionPanelRegistry';
 import type { Question } from '../../../types/types';
+import { RadioDot } from '../../../../../shared/view/beui/BeuiRadio';
+import { SPRING_PRESS } from '../../../../../shared/view/beui/ease';
 
 export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
   request,
@@ -17,6 +20,10 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const otherInputRef = useRef<HTMLInputElement>(null);
+  const reduce = useReducedMotion();
+  // Unique per panel + step so the beUI radio dot glides only within the
+  // current question's options.
+  const radioLayoutBase = useId();
 
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
@@ -222,9 +229,11 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
             {q.options.map((opt, optIdx) => {
               const isSelected = selected.has(opt.label);
               return (
-                <button
+                <motion.button
                   key={opt.label}
                   type="button"
+                  whileTap={multi || reduce ? undefined : { scale: 0.98 }}
+                  transition={SPRING_PRESS}
                   onClick={() => toggleOption(currentStep, opt.label, multi)}
                   className={`group flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all duration-150 ${
                     isSelected
@@ -260,19 +269,30 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
                     )}
                   </div>
 
-                  {/* Selection check */}
-                  {isSelected && (
-                    <svg className="h-4 w-4 flex-shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
+                  {/* Selection marker: beUI radio dot glides between rows for
+                      single-select; multi-select keeps the checkmark. */}
+                  {!multi ? (
+                    <RadioDot
+                      selected={isSelected}
+                      layoutId={`${radioLayoutBase}-q${currentStep}`}
+                      className="ml-auto"
+                    />
+                  ) : (
+                    isSelected && (
+                      <svg className="h-4 w-4 flex-shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                      </svg>
+                    )
                   )}
-                </button>
+                </motion.button>
               );
             })}
 
             {/* "Other" option */}
-            <button
+            <motion.button
               type="button"
+              whileTap={multi || reduce ? undefined : { scale: 0.98 }}
+              transition={SPRING_PRESS}
               onClick={() => toggleOther(currentStep, multi)}
               className={`group flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all duration-150 ${
                 isOtherOn
@@ -294,12 +314,20 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
               }`}>
                 Other...
               </span>
-              {isOtherOn && (
-                <svg className="ml-auto h-4 w-4 flex-shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                </svg>
+              {!multi ? (
+                <RadioDot
+                  selected={isOtherOn}
+                  layoutId={`${radioLayoutBase}-q${currentStep}`}
+                  className="ml-auto"
+                />
+              ) : (
+                isOtherOn && (
+                  <svg className="ml-auto h-4 w-4 flex-shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                )
               )}
-            </button>
+            </motion.button>
 
             {/* Other text input — inline */}
             {isOtherOn && (

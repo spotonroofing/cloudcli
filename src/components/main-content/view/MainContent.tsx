@@ -21,6 +21,7 @@ import EditorSidebar from '../../code-editor/view/EditorSidebar';
 import type { Project } from '../../../types/app';
 import { STANDALONE_PROJECT_ID } from '../../../types/app';
 import { TaskMasterPanel } from '../../task-master';
+import { Badge } from '../../../shared/view/ui';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
@@ -239,14 +240,14 @@ function MainContent({
                   <span className="min-w-0 truncate text-[11px] text-muted-foreground">{sessionTitle}</span>
                 )}
                 {streamMismatch && (
-                  <span className="flex-shrink-0 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
+                  <Badge status="danger" size="sm" className="flex-shrink-0">
                     stream mismatch
-                  </span>
+                  </Badge>
                 )}
                 {!isConnected && (
-                  <span className="flex-shrink-0 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
+                  <Badge status="danger" size="sm" className="flex-shrink-0">
                     disconnected
-                  </span>
+                  </Badge>
                 )}
               </div>
             )}

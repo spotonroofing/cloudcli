@@ -1,7 +1,7 @@
 export { Alert, AlertTitle, AlertDescription, alertVariants } from './Alert';
 export { default as ActionMenu } from './ActionMenu';
 export type { ActionMenuItem } from './ActionMenu';
-export { Badge, badgeVariants } from './Badge';
+export { Badge, badgeVariants, type BadgeStatus, type BadgeSize } from './Badge';
 export { Button, buttonVariants } from './Button';
 export { Confirmation, ConfirmationTitle, ConfirmationRequest, ConfirmationAccepted, ConfirmationRejected, ConfirmationActions, ConfirmationAction } from './Confirmation';
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, CardAction } from './Card';
@@ -16,5 +16,3 @@ export { Shimmer } from './Shimmer';
 export { default as Tooltip } from './Tooltip';
 export { PromptInput, PromptInputHeader, PromptInputBody, PromptInputTextarea, PromptInputFooter, PromptInputTools, PromptInputButton, PromptInputSubmit } from './PromptInput';
 export { PillBar, Pill } from './PillBar';
-export { Queue, QueueItem, QueueItemIndicator, QueueItemContent } from './Queue';
-export type { QueueItemStatus } from './Queue';

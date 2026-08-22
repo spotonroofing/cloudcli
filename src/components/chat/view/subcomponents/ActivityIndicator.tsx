@@ -7,6 +7,7 @@ import {
   TEXT_SHIMMER_KEYFRAMES,
   textShimmerStyle,
 } from '../../../../shared/view/beui';
+import { NumberTicker } from '../../../../shared/view/beui/NumberTicker';
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
 
 type ActivityIndicatorProps = {
@@ -82,7 +83,16 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
         >
           {`${label}…`}
         </span>
-        <span className="text-xs tabular-nums text-muted-foreground/60">{elapsedLabel}</span>
+        <span className="text-xs tabular-nums text-muted-foreground/60">
+          {/* Digits roll (beUI NumberTicker); the m/s unit glyphs render as plain text, so the label reads exactly as before. */}
+          <NumberTicker
+            value={elapsedSeconds}
+            format={() => elapsedLabel}
+            duration={0.35}
+            stagger={0}
+            startOnView={false}
+          />
+        </span>
       </div>
     </div>
   );

@@ -1,5 +1,12 @@
 import { useTranslation } from 'react-i18next';
 import { DarkModeToggle } from '../../../../shared/view/ui';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../../shared/view/beui/BeuiSelect';
 import type { CodeEditorSettingsState, ProjectSortOrder } from '../../types/types';
 import LanguageSelector from '../../../../shared/view/ui/LanguageSelector';
 import { useUiPreferences } from '../../../../hooks/useUiPreferences';
@@ -89,14 +96,19 @@ export default function AppearanceSettingsTab({
             label={t('appearanceSettings.projectSorting.label')}
             description={t('appearanceSettings.projectSorting.description')}
           >
-            <select
+            <Select
               value={projectSortOrder}
-              onChange={(event) => onProjectSortOrderChange(event.target.value as ProjectSortOrder)}
-              className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground touch-manipulation focus:border-primary focus:ring-1 focus:ring-primary sm:w-36"
+              onValueChange={(value) => onProjectSortOrderChange(value as ProjectSortOrder)}
+              className="w-full sm:w-44"
             >
-              <option value="name">{t('appearanceSettings.projectSorting.alphabetical')}</option>
-              <option value="date">{t('appearanceSettings.projectSorting.recentActivity')}</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">{t('appearanceSettings.projectSorting.alphabetical')}</SelectItem>
+                <SelectItem value="date">{t('appearanceSettings.projectSorting.recentActivity')}</SelectItem>
+              </SelectContent>
+            </Select>
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>
@@ -140,21 +152,22 @@ export default function AppearanceSettingsTab({
             label={t('appearanceSettings.codeEditor.fontSize.label')}
             description={t('appearanceSettings.codeEditor.fontSize.description')}
           >
-            <select
+            <Select
               value={codeEditorSettings.fontSize}
-              onChange={(event) => onCodeEditorFontSizeChange(event.target.value)}
-              className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground touch-manipulation focus:border-primary focus:ring-1 focus:ring-primary sm:w-28"
+              onValueChange={onCodeEditorFontSizeChange}
+              className="w-full sm:w-28"
             >
-              <option value="10">10px</option>
-              <option value="11">11px</option>
-              <option value="12">12px</option>
-              <option value="13">13px</option>
-              <option value="14">14px</option>
-              <option value="15">15px</option>
-              <option value="16">16px</option>
-              <option value="18">18px</option>
-              <option value="20">20px</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent listClassName="max-h-64 overflow-y-auto">
+                {['10', '11', '12', '13', '14', '15', '16', '18', '20'].map((size) => (
+                  <SelectItem key={size} value={size}>
+                    {`${size}px`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>

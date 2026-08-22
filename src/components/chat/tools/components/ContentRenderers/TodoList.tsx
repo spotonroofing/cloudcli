@@ -1,6 +1,9 @@
 import { memo, useMemo } from 'react';
-import { Queue, QueueItem, QueueItemIndicator, QueueItemContent } from '../../../../../shared/view/ui';
-import type { QueueItemStatus } from '../../../../../shared/view/ui';
+
+import {
+  TodoList as BeuiTodoList,
+  type TodoListItemStatus,
+} from '../../../../../shared/view/beui/TodoList';
 
 export type TodoItem = {
   id?: string;
@@ -10,9 +13,9 @@ export type TodoItem = {
   activeForm?: string;
 };
 
-const normalizeStatus = (status: string): QueueItemStatus => {
+const normalizeStatus = (status: string): TodoListItemStatus => {
   if (status === 'completed') return 'completed';
-  if (status === 'in_progress') return 'in_progress';
+  if (status === 'in_progress') return 'in-progress';
   return 'pending';
 };
 
@@ -25,7 +28,12 @@ const TodoList = memo(
     isResult?: boolean;
   }) => {
     const normalized = useMemo(
-      () => todos.map((todo) => ({ ...todo, queueStatus: normalizeStatus(todo.status) })),
+      () =>
+        todos.map((todo, index) => ({
+          id: todo.id ?? `${todo.content}-${index}`,
+          title: todo.content,
+          status: normalizeStatus(todo.status),
+        })),
       [todos],
     );
 
@@ -38,14 +46,7 @@ const TodoList = memo(
             Todo List ({normalized.length} {normalized.length === 1 ? 'item' : 'items'})
           </div>
         )}
-        <Queue>
-          {normalized.map((todo, index) => (
-            <QueueItem key={todo.id ?? `${todo.content}-${index}`} status={todo.queueStatus}>
-              <QueueItemIndicator />
-              <QueueItemContent>{todo.content}</QueueItemContent>
-            </QueueItem>
-          ))}
-        </Queue>
+        <BeuiTodoList items={normalized} />
       </div>
     );
   },

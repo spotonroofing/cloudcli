@@ -8,6 +8,7 @@ import { prettifyModelId } from '../../../../utils/modelLabels';
 import { DEFAULT_EFFORT_VALUE } from '../../constants/providerEffort';
 import { useComposerMenuAnchor } from '../../hooks/useComposerMenuAnchor';
 import { Badge } from '../../../../shared/view/ui';
+import { SwapText } from '../../../../shared/view/beui';
 
 import {
   ComposerMenuItem,
@@ -130,9 +131,15 @@ export default function ComposerModelMenu({
         aria-label={ariaLabel}
         title={ariaLabel}
       >
-        <span className="truncate">{hasModelSection ? modelLabel : currentEffortLabel}</span>
+        <span className="truncate">
+          <SwapText value={hasModelSection ? modelLabel : currentEffortLabel}>
+            {hasModelSection ? modelLabel : currentEffortLabel}
+          </SwapText>
+        </span>
         {hasModelSection && hasEffortSection && (
-          <span className="hidden shrink-0 text-muted-foreground sm:inline">{currentEffortLabel}</span>
+          <span className="hidden shrink-0 text-muted-foreground sm:inline">
+            <SwapText value={currentEffortLabel}>{currentEffortLabel}</SwapText>
+          </span>
         )}
         <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
       </button>

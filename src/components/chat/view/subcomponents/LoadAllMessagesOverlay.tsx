@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
+import { Loader } from '../../../../shared/view/beui/Loader';
+
 const loadAllOverlayAnimationStyle = `
 @keyframes loadAllOverlayAutoFade {
   0%, 80% { opacity: 1; }
@@ -54,7 +56,7 @@ export default function LoadAllMessagesOverlay({
           disabled={isLoadingAllMessages}
         >
           {isLoadingAllMessages && (
-            <div className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            <Loader variant="dot-matrix" size={12} className="text-primary-foreground" />
           )}
           <span>
             {isLoadingAllMessages

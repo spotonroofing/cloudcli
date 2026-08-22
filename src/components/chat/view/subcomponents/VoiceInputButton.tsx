@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Mic, Square, Loader2 } from 'lucide-react';
 
 import { PromptInputButton } from '../../../../shared/view/ui';
+import { ActionSwapIcon } from '../../../../shared/view/beui/ActionSwap';
 import type { VoiceInputState } from '../../hooks/useVoiceInput';
 
 type Props = {
@@ -39,7 +40,9 @@ export default function VoiceInputButton({ state, onToggle, errorMsg }: Props) {
           onToggle();
         }}
       >
-        {icon}
+        <ActionSwapIcon value={state} className="h-4 w-4">
+          {icon}
+        </ActionSwapIcon>
       </PromptInputButton>
     </span>
   );

@@ -7,7 +7,7 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
 import { modelDisplayLabel } from '../../utils/modelLabels';
-import { ActionMenu, Button, Tooltip } from '../../shared/view/ui';
+import { ActionMenu, Badge, Button, Tooltip } from '../../shared/view/ui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 
@@ -239,25 +239,30 @@ export default function WorkerPane({
           />
         )}
         {selectedRun && (
-          <span
-            className={`rounded-full border px-1.5 py-0.5 text-[10px] ${
+          <Badge
+            status={
               selectedRun.state === 'running'
-                ? 'border-primary/40 bg-primary/10 text-primary'
-                : 'border-border/60 bg-muted/60 text-muted-foreground'
-            }`}
+                ? 'loading'
+                : selectedRun.state === 'finished'
+                  ? 'success'
+                  : 'neutral'
+            }
+            size="sm"
+            contentKey={selectedRun.state}
+            className="flex-shrink-0"
           >
             {selectedRun.state}
-          </span>
+          </Badge>
         )}
         {streamMismatch && (
-          <span className="flex-shrink-0 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
+          <Badge status="danger" size="sm" className="flex-shrink-0">
             stream mismatch
-          </span>
+          </Badge>
         )}
         {!isConnected && (
-          <span className="flex-shrink-0 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
+          <Badge status="danger" size="sm" className="flex-shrink-0">
             disconnected
-          </span>
+          </Badge>
         )}
         <span className="min-w-0 flex-1" />
         <Tooltip content="Files touched since the run's base commit" position="bottom">
