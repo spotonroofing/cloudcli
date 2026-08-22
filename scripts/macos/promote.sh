@@ -52,6 +52,8 @@ done
 [[ $DEV_OK -eq 1 ]] || fail "dev instance failed its health check on the new build"
 log "dev healthy on the new build"
 
+# Chains run out-of-process and survive the restart (their runner re-registers
+# with the watchdog via its events), so only in-server dispatched runs drain.
 log "draining live's in-flight dispatched turns (budget ${DRAIN_BUDGET_S}s)"
 WAITED=0
 while true; do
@@ -60,8 +62,7 @@ import json,sys
 try:
     d=json.load(sys.stdin)['data']
     runs=[r for r in d.get('dispatchRuns',[]) if not r.get('ended')]
-    chains=[c for c in d.get('chains',[]) if c.get('status')=='running']
-    print(len(runs)+len(chains))
+    print(len(runs))
 except Exception:
     print(0)")
   [[ "$BUSY" == 0 ]] && break

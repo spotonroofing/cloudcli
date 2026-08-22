@@ -1,0 +1,161 @@
+#!/bin/zsh
+# dispatch-chain-runner — the out-of-process chain executor behind `dispatch`.
+#
+#   dispatch-chain-runner <repo> <slug> <phase-file ...>
+#
+# Spawned fully detached (own session) by the dispatch CLI, so a CloudCLI
+# server restart or promote mid-chain never touches a running chain. Each
+# phase runs as a fresh headless `claude -p` session in the repo, with the
+# same commit gate, journal lines, and watchdog boundary events as before.
+# Phase transcripts land in ~/.claude/projects and surface in the worker
+# pane through external-session discovery.
+#
+# Watchdog events carry projectPath and phases so a server that restarted
+# mid-chain (and lost its in-memory chain registry) re-registers the chain
+# from the event itself; terminal events (completed/stopped/failed) retry
+# for the better part of an hour so the chain-end planner wake is never lost.
+set -u
+
+SERVER_URL="${DISPATCH_SERVER_URL:-http://127.0.0.1:4747}"
+DB_PATH="$HOME/.cloudcli/auth.db"
+
+[[ $# -ge 3 ]] || { print -u2 "usage: dispatch-chain-runner <repo> <slug> <phase-file ...>"; exit 64; }
+REPO="$1"; SLUG="$2"; shift 2
+typeset -a PHASE_FILES
+PHASE_FILES=("$@")
+
+cd "$REPO" || { print -u2 "dispatch-chain-runner: cannot cd to $REPO"; exit 66; }
+
+# Phase model/effort per runner doctrine: Fable by default with the Opus 4.8
+# capacity fallback; DISPATCH_MODEL/DISPATCH_EFFORT pin every phase when set.
+MODEL="${DISPATCH_MODEL:-claude-fable-5}"
+EFFORT="${DISPATCH_EFFORT:-high}"
+FALLBACK_MODEL="claude-opus-4-8"
+
+CLAUDE_BIN=$(command -v claude)
+[[ -n "$CLAUDE_BIN" ]] || { print -u2 "dispatch-chain-runner: claude CLI not on PATH"; exit 69; }
+
+# API key from server config; keep it out of argv (curl reads a header file).
+API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
+[[ -n "$API_KEY" ]] || { print -u2 "dispatch-chain-runner: no active API key in server config"; exit 78; }
+HEADER_FILE=$(mktemp)
+chmod 600 "$HEADER_FILE"
+print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
+trap 'rm -f "$HEADER_FILE"' EXIT
+
+JOURNAL_DIR="$HOME/forge-logs/$SLUG"
+mkdir -p "$JOURNAL_DIR"
+JOURNAL="$JOURNAL_DIR/JOURNAL.md"
+journal() { print -r -- "$(date +%H:%M) | $1 | $2 | $3" >> "$JOURNAL"; }
+
+TOTAL=${#PHASE_FILES[@]}
+
+# POST an event body to a watchdog path, retrying while the server is down
+# (promote restart). $3 is the attempt budget; boundary events use a short
+# one and keep going, terminal events retry long because the chain-end wake
+# must never be lost.
+api_post() {
+  # $1 path, $2 json body, $3 attempts
+  local attempt=1 max="${3:-3}" delay=5
+  while true; do
+    if curl -sf -K "$HEADER_FILE" -m 30 -X POST "$SERVER_URL$1" \
+        -H 'Content-Type: application/json' -d "$2" >/dev/null 2>&1; then
+      return 0
+    fi
+    if [[ $attempt -ge $max ]]; then
+      journal watchdog "unreachable" "gave up on POST $1 after $max attempts"
+      return 1
+    fi
+    sleep $delay
+    [[ $delay -lt 30 ]] && delay=$((delay * 2))
+    attempt=$((attempt + 1))
+  done
+}
+
+# Every event carries projectPath and phases so a restarted server can
+# re-register the chain it lost with the event itself.
+event_body() {
+  # $1 event, $2 phase (or empty), $3 summaryTail json string (or empty)
+  python3 - "$1" "$2" "$3" "$REPO" "$TOTAL" <<'PYEOF'
+import json, sys
+event, phase, tail, repo, total = sys.argv[1:6]
+body = {'event': event, 'projectPath': repo, 'phases': int(total)}
+if phase:
+    body['phase'] = int(phase)
+if tail:
+    body['summaryTail'] = json.loads(tail)
+print(json.dumps(body))
+PYEOF
+}
+
+# Chrome-cap queueing hook: browser-phase chains wait for a Chrome slot
+# instead of launching a fourth instance.
+wait_for_chrome_slot() {
+  local helper="$HOME/.local/bin/chrome-slot-wait"
+  [[ -x "$helper" ]] && "$helper" || true
+}
+
+CHAIN_BASE=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
+
+journal run "start" "chain $SLUG in $REPO ($TOTAL phases)"
+api_post "/api/watchdog/chains" "$(python3 - "$SLUG" "$REPO" "$TOTAL" <<'PYEOF'
+import json, sys
+print(json.dumps({'slug': sys.argv[1], 'projectPath': sys.argv[2], 'phases': int(sys.argv[3])}))
+PYEOF
+)" 3
+
+PHASE_NUM=0
+for PHASE_FILE in "${PHASE_FILES[@]}"; do
+  PHASE_NUM=$((PHASE_NUM + 1))
+  PHASE_NAME=$(basename "$PHASE_FILE")
+  BASE_COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
+
+  if grep -q '<!-- browser -->' "$PHASE_FILE" 2>/dev/null; then
+    wait_for_chrome_slot
+  fi
+
+  journal "phase $PHASE_NUM/$TOTAL" "start" "$PHASE_NAME"
+  api_post "/api/watchdog/chains/$SLUG/events" "$(event_body phase-start $PHASE_NUM '')" 3
+
+  # The phase itself: a fresh headless session in the repo. The two
+  # CLAUDE_CODE_ lines are load-bearing (runner doctrine): the first forces
+  # subagents synchronous so a turn cannot end while work runs, the second
+  # makes anything that slips through be waited on uncapped. Empty
+  # ANTHROPIC_API_KEY pins subscription auth. Fable phases carry the Opus 4.8
+  # capacity fallback; a chain pinned to 4.8 carries none.
+  typeset -a FALLBACK_ARGS
+  FALLBACK_ARGS=()
+  [[ "$MODEL" != "$FALLBACK_MODEL" ]] && FALLBACK_ARGS=(--fallback-model "$FALLBACK_MODEL")
+  ANTHROPIC_API_KEY="" \
+  CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 \
+  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
+    "$CLAUDE_BIN" -p --model "$MODEL" --effort "$EFFORT" "${FALLBACK_ARGS[@]}" \
+    --dangerously-skip-permissions \
+    < "$PHASE_FILE" > "$JOURNAL_DIR/phase$PHASE_NUM.log" 2>&1
+  RC=$?
+
+  NEW_COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
+
+  if [[ $RC -ne 0 ]]; then
+    journal "phase $PHASE_NUM/$TOTAL" "FAILED" "claude exited $RC; stopping chain (phase$PHASE_NUM.log)"
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) failed: claude exited $RC." | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" 80
+    exit 1
+  fi
+
+  # Commit gate: a phase that lands no commit stops the chain right here.
+  if [[ "$NEW_COMMIT" == "$BASE_COMMIT" ]]; then
+    journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME"
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body stopped $PHASE_NUM "$(print -rn -- "Commit gate stopped the chain: phase $PHASE_NUM ($PHASE_NAME) produced no commit." | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" 80
+    exit 2
+  fi
+
+  journal "phase $PHASE_NUM/$TOTAL" "end" "$(git -C "$REPO" log -1 --format=%h\ %s)"
+  api_post "/api/watchdog/chains/$SLUG/events" "$(event_body phase-end $PHASE_NUM '')" 3
+done
+
+TAIL=$(git -C "$REPO" log --oneline "$CHAIN_BASE"..HEAD 2>/dev/null | head -20 | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))")
+journal run "end" "all $TOTAL phases committed"
+api_post "/api/watchdog/chains/$SLUG/events" "$(event_body completed $TOTAL "$TAIL")" 80
+print -r -- "dispatch: chain $SLUG completed ($TOTAL phases)"

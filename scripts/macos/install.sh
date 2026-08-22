@@ -24,7 +24,7 @@ install_agent() {
     echo "installed + bootstrapped $label"
 }
 
-chmod +x "$SCRIPT_DIR/cloudcli-backup.sh" "$SCRIPT_DIR/dispatch" "$SCRIPT_DIR/cloudcli-dev-start.sh"
+chmod +x "$SCRIPT_DIR/cloudcli-backup.sh" "$SCRIPT_DIR/dispatch" "$SCRIPT_DIR/dispatch-chain-runner" "$SCRIPT_DIR/cloudcli-dev-start.sh"
 mkdir -p "$HOME/.local/bin"
 ln -sf "$SCRIPT_DIR/dispatch" "$HOME/.local/bin/dispatch"
 chmod +x "$SCRIPT_DIR/promote.sh"

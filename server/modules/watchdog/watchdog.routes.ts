@@ -56,14 +56,27 @@ export function createWatchdogRouter(): express.Router {
           statusCode: 400,
         });
       }
-      const known = watchdogService.chainEvent(
-        String(req.params.slug),
-        event as 'phase-start' | 'phase-end' | 'completed' | 'stopped' | 'failed',
-        {
-          phase: Number.isFinite(Number(body.phase)) ? Number(body.phase) : undefined,
-          summaryTail: typeof body.summaryTail === 'string' ? body.summaryTail : undefined,
-        },
-      );
+      const slug = String(req.params.slug);
+      const detail = {
+        phase: Number.isFinite(Number(body.phase)) ? Number(body.phase) : undefined,
+        summaryTail: typeof body.summaryTail === 'string' ? body.summaryTail : undefined,
+      };
+      const eventName = event as 'phase-start' | 'phase-end' | 'completed' | 'stopped' | 'failed';
+      let known = watchdogService.chainEvent(slug, eventName, detail);
+      // Chains run out-of-process and outlive server restarts; a restart
+      // empties the in-memory registry. Events carry projectPath so the chain
+      // re-registers itself here instead of losing its planner wake to a 404.
+      if (!known) {
+        const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
+        if (projectPath) {
+          watchdogService.registerChain({
+            slug,
+            projectPath,
+            phases: Number.isFinite(Number(body.phases)) ? Number(body.phases) : null,
+          });
+          known = watchdogService.chainEvent(slug, eventName, detail);
+        }
+      }
       if (!known) {
         throw new AppError(`Chain "${req.params.slug}" is not registered.`, {
           code: 'WATCHDOG_CHAIN_UNKNOWN',

@@ -5,18 +5,16 @@
 #
 # <project> is a folder name under ~/Projects or an absolute repo path.
 # Phase prompt files: explicit paths, or by convention every file matching
-# <repo>/.dispatch/<slug>/*.md in lexical order. Each phase runs as a fresh
-# headless session through the server's run surface; the commit gate between
-# phases stops the chain when a phase lands no commit. Progress journals to
-# ~/forge-logs/<slug>/ and the chain is registered with the watchdog, which
-# wakes the project's planner at the end. The planner invokes this once and
-# goes idle; it never polls.
-#
-# The server API key is resolved from the server's own config (auth DB) right
-# here; it never appears in a prompt, a transcript, or any output.
+# <repo>/.dispatch/<slug>/*.md in lexical order. Validation happens here;
+# execution is handed to dispatch-chain-runner, spawned fully detached (own
+# session) so a CloudCLI server restart or promote mid-chain never touches a
+# running chain. Each phase runs as a fresh headless `claude -p` session with
+# the commit gate between phases; progress journals to ~/forge-logs/<slug>/
+# and the runner reports boundaries to the watchdog, which wakes the
+# project's planner at the end. The planner invokes this once and goes idle;
+# it never polls.
 set -u
 
-SERVER_URL="${DISPATCH_SERVER_URL:-http://127.0.0.1:4747}"
 PROJECTS_ROOT="$HOME/Projects"
 DB_PATH="$HOME/.cloudcli/auth.db"
 
@@ -40,106 +38,37 @@ else
   PHASE_FILES=("$REPO/.dispatch/$SLUG"/*.md(N))
 fi
 [[ ${#PHASE_FILES[@]} -gt 0 ]] || { print -u2 "dispatch: no phase prompt files for $SLUG"; exit 66; }
+typeset -a ABS_PHASE_FILES
+ABS_PHASE_FILES=()
 for f in "${PHASE_FILES[@]}"; do
   [[ -r "$f" ]] || { print -u2 "dispatch: cannot read phase file $f"; exit 66; }
+  ABS_PHASE_FILES+=("${f:A}")
 done
 
-# API key from server config; keep it out of argv (curl reads a header file).
+# Fail fast while the planner is still listening; the runner re-reads the key
+# itself (it may outlive several server restarts).
 API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
 [[ -n "$API_KEY" ]] || { print -u2 "dispatch: no active API key in server config"; exit 78; }
-HEADER_FILE=$(mktemp)
-chmod 600 "$HEADER_FILE"
-print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
-trap 'rm -f "$HEADER_FILE"' EXIT
+
+RUNNER="${0:A:h}/dispatch-chain-runner"
+[[ -x "$RUNNER" ]] || { print -u2 "dispatch: runner missing at $RUNNER"; exit 70; }
 
 JOURNAL_DIR="$HOME/forge-logs/$SLUG"
 mkdir -p "$JOURNAL_DIR"
-JOURNAL="$JOURNAL_DIR/JOURNAL.md"
-journal() { print -r -- "$(date +%H:%M) | $1 | $2 | $3" >> "$JOURNAL"; }
 
-api() {
-  # $1 method, $2 path, $3 json body (or empty), $4 max-time
-  curl -s -K "$HEADER_FILE" -m "${4:-120}" -X "$1" "$SERVER_URL$2" \
-    -H 'Content-Type: application/json' ${3:+-d "$3"}
-}
-
-# Chrome-cap queueing hook: browser-phase chains wait for a Chrome slot
-# instead of launching a fourth instance. Phase 9 (browser subsystem) fills
-# this in; until then it is a no-op so non-browser chains never block.
-wait_for_chrome_slot() {
-  local helper="$HOME/.local/bin/chrome-slot-wait"
-  [[ -x "$helper" ]] && "$helper" || true
-}
-
-TOTAL=${#PHASE_FILES[@]}
-CHAIN_BASE=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
-
-journal run "start" "chain $SLUG in $REPO ($TOTAL phases)"
-api POST "/api/watchdog/chains" "$(python3 -c "
-import json,sys
-print(json.dumps({'slug': '$SLUG', 'projectPath': '$REPO', 'phases': $TOTAL}))")" 30 >/dev/null
-
-PHASE_NUM=0
-for PHASE_FILE in "${PHASE_FILES[@]}"; do
-  PHASE_NUM=$((PHASE_NUM + 1))
-  PHASE_NAME=$(basename "$PHASE_FILE")
-  BASE_COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
-
-  if grep -q '<!-- browser -->' "$PHASE_FILE" 2>/dev/null; then
-    wait_for_chrome_slot
-  fi
-
-  journal "phase $PHASE_NUM/$TOTAL" "start" "$PHASE_NAME"
-  api POST "/api/watchdog/chains/$SLUG/events" \
-    "{\"event\":\"phase-start\",\"phase\":$PHASE_NUM}" 30 >/dev/null
-
-  BODY=$(python3 - "$PHASE_FILE" "$REPO" "$SLUG" <<'PYEOF'
-import json, os, sys
-message = open(sys.argv[1]).read()
-payload = {
-    'projectPath': sys.argv[2],
-    'message': message,
-    'stream': False,
-    'chainSlug': sys.argv[3],
-}
-model = os.environ.get('DISPATCH_MODEL')
-if model:
-    payload['model'] = model
-print(json.dumps(payload))
+# Detach via setsid (start_new_session): the runner leaves this process tree
+# entirely, so neither the planner's session ending nor a server restart can
+# reach it.
+RUNNER_PID=$(DISPATCH_RUNNER_LOG="$JOURNAL_DIR/runner.log" \
+  python3 - "$RUNNER" "$REPO" "$SLUG" "${ABS_PHASE_FILES[@]}" <<'PYEOF'
+import os, subprocess, sys
+with open(os.environ['DISPATCH_RUNNER_LOG'], 'ab') as out:
+    proc = subprocess.Popen(
+        sys.argv[1:],
+        stdin=subprocess.DEVNULL, stdout=out, stderr=out,
+        start_new_session=True, cwd='/',
+    )
+print(proc.pid)
 PYEOF
 )
-  RESPONSE=$(api POST "/api/agent" "$BODY" 10800)
-  RUN_OK=$(print -r -- "$RESPONSE" | python3 -c "
-import json,sys
-try:
-    print('yes' if json.load(sys.stdin).get('success') else 'no')
-except Exception:
-    print('no')")
-
-  NEW_COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
-
-  if [[ "$RUN_OK" != yes ]]; then
-    journal "phase $PHASE_NUM/$TOTAL" "FAILED" "run surface returned an error; stopping chain"
-    api POST "/api/watchdog/chains/$SLUG/events" \
-      "{\"event\":\"failed\",\"phase\":$PHASE_NUM,\"summaryTail\":\"Phase $PHASE_NUM ($PHASE_NAME) failed at the run surface.\"}" 30 >/dev/null
-    exit 1
-  fi
-
-  # Commit gate: a phase that lands no commit stops the chain right here.
-  if [[ "$NEW_COMMIT" == "$BASE_COMMIT" ]]; then
-    journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME"
-    api POST "/api/watchdog/chains/$SLUG/events" \
-      "{\"event\":\"stopped\",\"phase\":$PHASE_NUM,\"summaryTail\":\"Commit gate stopped the chain: phase $PHASE_NUM ($PHASE_NAME) produced no commit.\"}" 30 >/dev/null
-    exit 2
-  fi
-
-  journal "phase $PHASE_NUM/$TOTAL" "end" "$(git -C "$REPO" log -1 --format=%h\ %s)"
-  api POST "/api/watchdog/chains/$SLUG/events" \
-    "{\"event\":\"phase-end\",\"phase\":$PHASE_NUM}" 30 >/dev/null
-done
-
-TAIL=$(git -C "$REPO" log --oneline "$CHAIN_BASE"..HEAD 2>/dev/null | head -20 | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))")
-journal run "end" "all $TOTAL phases committed"
-api POST "/api/watchdog/chains/$SLUG/events" \
-  "{\"event\":\"completed\",\"phase\":$TOTAL,\"summaryTail\":$TAIL}" 30 >/dev/null
-print -r -- "dispatch: chain $SLUG completed ($TOTAL phases)"
+print -r -- "dispatch: chain $SLUG started (${#ABS_PHASE_FILES[@]} phases, runner pid $RUNNER_PID); the watchdog wakes the planner at the end"
