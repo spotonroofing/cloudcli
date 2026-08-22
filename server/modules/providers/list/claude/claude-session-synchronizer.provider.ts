@@ -17,6 +17,13 @@ type ParsedSession = {
   sessionId: string;
   projectPath: string;
   sessionName?: string;
+  /**
+   * How the session was launched, from the transcript's `entrypoint` field:
+   * 'sdk-ts' = TS agent SDK (the app's runtime), 'cli' = interactive
+   * terminal, 'sdk-cli' = headless `claude -p`. Undefined on transcripts that
+   * predate the field.
+   */
+  entrypoint?: string;
 };
 
 /**
@@ -41,6 +48,17 @@ export class ClaudeSessionSynchronizer implements IProviderSessionSynchronizer {
   private isSubagentTranscript(filePath: string): boolean {
     const pathParts = path.normalize(filePath).split(path.sep);
     return pathParts.includes('subagents') || pathParts.includes('tool-results');
+  }
+
+  /**
+   * Discovery-time origin for a row that discovery itself creates: transcripts
+   * the app's SDK runtime wrote ('sdk-ts') are app sessions and stay untagged;
+   * everything else (interactive terminal 'cli', headless 'sdk-cli', or no
+   * marker at all) was launched outside the app and is 'external'. Rows the
+   * app created keep their origin regardless (see sessionsDb.createSession).
+   */
+  private discoveredOrigin(parsed: ParsedSession): string | null {
+    return parsed.entrypoint === 'sdk-ts' ? null : 'external';
   }
 
   /**
@@ -73,7 +91,8 @@ export class ClaudeSessionSynchronizer implements IProviderSessionSynchronizer {
         parsed.sessionName,
         timestamps.createdAt,
         timestamps.updatedAt,
-        filePath
+        filePath,
+        this.discoveredOrigin(parsed)
       );
       processed += 1;
     }
@@ -106,7 +125,8 @@ export class ClaudeSessionSynchronizer implements IProviderSessionSynchronizer {
       parsed.sessionName,
       timestamps.createdAt,
       timestamps.updatedAt,
-      filePath
+      filePath,
+      this.discoveredOrigin(parsed)
     );
   }
 
@@ -129,6 +149,7 @@ export class ClaudeSessionSynchronizer implements IProviderSessionSynchronizer {
       return {
         sessionId,
         projectPath,
+        entrypoint: typeof data.entrypoint === 'string' ? data.entrypoint : undefined,
       };
     });
 

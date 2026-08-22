@@ -201,7 +201,7 @@ class WatchdogService {
 
   /**
    * Active and recent worker runs for a project, newest first — the worker
-   * pane's run switcher. DB rows (origin direct/dispatch) carry title, slug,
+   * pane's run switcher. DB rows (origin direct/dispatch/external) carry title, slug,
    * and model; live in-memory dispatch records supply the running state and
    * cover runs the filesystem synchronizer has not indexed yet. Used by the
    * providers session routes.

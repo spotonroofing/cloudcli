@@ -14,7 +14,11 @@ type SessionRow = {
   project_path: string | null;
   /** Raw app-owned assignment; NULL when the session was never attached. */
   assigned_project_path: string | null;
-  /** 'direct' (worker pane) | 'dispatch' (chain runner) | null (ordinary chat). */
+  /**
+   * 'direct' (worker pane) | 'dispatch' (chain runner) | 'planner' (project
+   * chat) | 'external' (discovered on disk, not created through the app) |
+   * null (ordinary chat).
+   */
   origin: string | null;
   /** Project HEAD when the run began; feeds the pane's files-touched view. */
   base_commit: string | null;
@@ -107,6 +111,12 @@ export const sessionsDb = {
    * transcript shows up on disk, instead of producing a duplicate row. An
    * app-created row keeps its existing name; synchronizer names only update
    * rows that were themselves created by indexing provider storage.
+   *
+   * `origin` applies only when discovery itself creates the row: a row that
+   * exists only because indexing found it on disk was not started through the
+   * app, so it defaults to 'external' (a synchronizer with an honest
+   * transcript marker for app-run sessions may pass null instead). Rows that
+   * already exist keep whatever origin the app gave them.
    */
   createSession(
     providerSessionId: string,
@@ -115,7 +125,8 @@ export const sessionsDb = {
     customName?: string,
     createdAt?: string,
     updatedAt?: string,
-    jsonlPath?: string | null
+    jsonlPath?: string | null,
+    origin: string | null = 'external'
   ): string {
     const db = getConnection();
     const createdAtValue = normalizeTimestamp(createdAt);
@@ -159,9 +170,11 @@ export const sessionsDb = {
     // Sessions created outside the app (directly via the provider CLI) are
     // keyed by the provider-native id for both columns. The ON CONFLICT path
     // covers legacy rows that predate the provider_session_id mapping.
+    // `origin` is set only on the freshly inserted row; the conflict path hits
+    // an already-known row whose origin the app owns.
     db.prepare(
-      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, jsonl_path, isArchived, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, COALESCE(?, CURRENT_TIMESTAMP), COALESCE(?, CURRENT_TIMESTAMP))
+      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, origin, jsonl_path, isArchived, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, COALESCE(?, CURRENT_TIMESTAMP), COALESCE(?, CURRENT_TIMESTAMP))
        ON CONFLICT(session_id) DO UPDATE SET
          provider = excluded.provider,
          provider_session_id = excluded.provider_session_id,
@@ -180,6 +193,7 @@ export const sessionsDb = {
       providerSessionId,
       customName ?? null,
       effectiveProjectPath,
+      origin,
       jsonlPath ?? null,
       createdAtValue,
       updatedAtValue
@@ -309,8 +323,9 @@ export const sessionsDb = {
   },
 
   /**
-   * Active and recent worker sessions (origin direct or dispatch) for a
-   * project, newest first. Feeds the worker pane's run switcher.
+   * Active and recent worker sessions (origin direct, dispatch, or external)
+   * for a project, newest first. Feeds the worker pane's run switcher;
+   * terminal-launched runs ('external') surface here rather than as chats.
    */
   listWorkerSessions(projectPath: string, limit: number): SessionRow[] {
     const db = getConnection();
@@ -320,7 +335,7 @@ export const sessionsDb = {
         `SELECT ${SESSION_ROW_COLUMNS}
          FROM sessions
          WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
-           AND origin IN ('direct', 'dispatch')
+           AND origin IN ('direct', 'dispatch', 'external')
            AND isArchived = 0
          ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
          LIMIT ?`
@@ -539,9 +554,10 @@ export const sessionsDb = {
     // Optional projectId narrows the feed to one project (scoped desktop tabs);
     // pagination and totals then reflect only that project's sessions.
     // Only conversations the user started in the UI appear: origin NULL
-    // (scratch/standalone and discovered ordinary chats) or 'planner' (project
-    // New Session chats). Machine-started runs — 'direct' (worker pane) and
-    // 'dispatch' (chain runner / watchdog) — stay in the worker pane surfaces.
+    // (scratch/standalone chats) or 'planner' (project New Session chats).
+    // Machine-started runs — 'direct' (worker pane), 'dispatch' (chain runner
+    // / watchdog), and 'external' (terminal-launched, discovered on disk) —
+    // stay in the worker pane surfaces.
     const visibilityClause = `
       sessions.isArchived = 0
       AND (projects.isArchived IS NULL OR projects.isArchived = 0)
@@ -629,6 +645,8 @@ export const sessionsDb = {
     return normalizeSessionRows(rows);
   },
 
+  // Project chat lists hide terminal-launched runs ('external'); those belong
+  // to the worker pane's run switcher, not the conversation list.
   getSessionsByProjectPathPage(projectPath: string, limit: number, offset: number): SessionRow[] {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPath(projectPath);
@@ -638,6 +656,7 @@ export const sessionsDb = {
          FROM sessions
          WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
            AND isArchived = 0
+           AND (origin IS NULL OR origin <> 'external')
          ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
          LIMIT ? OFFSET ?`
       )
@@ -654,7 +673,8 @@ export const sessionsDb = {
         `SELECT COUNT(*) AS count
          FROM sessions
          WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
-           AND isArchived = 0`
+           AND isArchived = 0
+           AND (origin IS NULL OR origin <> 'external')`
       )
       .get(normalizedProjectPath) as { count: number } | undefined;
 

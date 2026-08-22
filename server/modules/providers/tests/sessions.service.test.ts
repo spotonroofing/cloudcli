@@ -91,6 +91,8 @@ test('provider session id reports a missing app session', { concurrency: false }
 test('recent sessions map project metadata and preserve database pagination', { concurrency: false }, async () => {
   await withIsolatedDatabase(() => {
     projectsDb.createProjectPath('/tmp/recent-project');
+    // Null origin = discovered app-run transcripts; discovery-default
+    // 'external' rows never reach the recent-conversations feed.
     sessionsDb.createSession(
       'older-session',
       'claude',
@@ -98,6 +100,8 @@ test('recent sessions map project metadata and preserve database pagination', { 
       'Older conversation',
       '2026-08-01T08:00:00.000Z',
       '2026-08-01T09:00:00.000Z',
+      null,
+      null,
     );
     sessionsDb.createSession(
       'newer-session',
@@ -106,6 +110,8 @@ test('recent sessions map project metadata and preserve database pagination', { 
       'Newer conversation',
       '2026-08-01T10:00:00.000Z',
       '2026-08-01T11:00:00.000Z',
+      null,
+      null,
     );
     projectsDb.updateCustomProjectName('/tmp/recent-project', 'Recent Project');
 

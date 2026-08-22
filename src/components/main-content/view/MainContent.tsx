@@ -1,3 +1,4 @@
+import { Compass } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
@@ -83,6 +84,9 @@ function MainContent({
   const workerPaneAvailable = Boolean(
     selectedProject && selectedProject.projectId !== STANDALONE_PROJECT_ID,
   );
+  // The Planner header mirrors the worker pane's header bar; the title is the
+  // open session's stored name.
+  const sessionTitle = (selectedSession?.summary || selectedSession?.title || '').trim();
 
   const shouldShowTasksTab = Boolean(tasksEnabled && isTaskMasterInstalled);
   const shouldShowBrowserTab = browserUseEnabled;
@@ -195,31 +199,42 @@ function MainContent({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}>
-          <div className={`h-full ${activeTab === 'chat' ? 'block' : 'hidden'}`}>
-            <ErrorBoundary showDetails>
-              <ChatInterface
-                isActive={activeTab === 'chat'}
-                selectedProject={selectedProject}
-                selectedSession={selectedSession}
-                ws={ws}
-                sendMessage={sendMessage}
-                onFileOpen={handleFileOpen}
-                onInputFocusChange={onInputFocusChange}
-                onSessionProcessing={onSessionProcessing}
-                onSessionIdle={onSessionIdle}
-                processingSessions={processingSessions}
-                onNavigateToSession={onNavigateToSession}
-                onSessionEstablished={onSessionEstablished}
-                onShowSettings={onShowSettings}
-                showRawParameters={showRawParameters}
-                showThinking={showThinking}
-                sendByCtrlEnter={sendByCtrlEnter}
-                externalMessageUpdate={externalMessageUpdate}
-                newSessionTrigger={newSessionTrigger}
-                sessionOrigin={workerPaneAvailable ? 'planner' : null}
-                onShowAllTasks={tasksEnabled ? () => setActiveTab('tasks') : null}
-              />
-            </ErrorBoundary>
+          <div className={`h-full ${activeTab === 'chat' ? 'flex flex-col' : 'hidden'}`}>
+            {workerPaneAvailable && (
+              <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+                <Compass className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                <span className="text-xs font-medium text-foreground">Planner</span>
+                {sessionTitle && (
+                  <span className="min-w-0 truncate text-[11px] text-muted-foreground">{sessionTitle}</span>
+                )}
+              </div>
+            )}
+            <div className="min-h-0 flex-1">
+              <ErrorBoundary showDetails>
+                <ChatInterface
+                  isActive={activeTab === 'chat'}
+                  selectedProject={selectedProject}
+                  selectedSession={selectedSession}
+                  ws={ws}
+                  sendMessage={sendMessage}
+                  onFileOpen={handleFileOpen}
+                  onInputFocusChange={onInputFocusChange}
+                  onSessionProcessing={onSessionProcessing}
+                  onSessionIdle={onSessionIdle}
+                  processingSessions={processingSessions}
+                  onNavigateToSession={onNavigateToSession}
+                  onSessionEstablished={onSessionEstablished}
+                  onShowSettings={onShowSettings}
+                  showRawParameters={showRawParameters}
+                  showThinking={showThinking}
+                  sendByCtrlEnter={sendByCtrlEnter}
+                  externalMessageUpdate={externalMessageUpdate}
+                  newSessionTrigger={newSessionTrigger}
+                  sessionOrigin={workerPaneAvailable ? 'planner' : null}
+                  onShowAllTasks={tasksEnabled ? () => setActiveTab('tasks') : null}
+                />
+              </ErrorBoundary>
+            </div>
           </div>
 
           {isMobile && workerPaneAvailable && (

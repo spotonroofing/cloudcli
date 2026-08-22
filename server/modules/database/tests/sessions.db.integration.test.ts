@@ -34,8 +34,8 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
 test('session archive queries hide archived rows from active project views', async () => {
   await withIsolatedDatabase(() => {
     projectsDb.createProjectPath('/workspace/demo-project');
-    sessionsDb.createSession('session-active', 'claude', '/workspace/demo-project', 'Active Session');
-    sessionsDb.createSession('session-archived', 'claude', '/workspace/demo-project', 'Archived Session');
+    sessionsDb.createSession('session-active', 'claude', '/workspace/demo-project', 'Active Session', undefined, undefined, null, null);
+    sessionsDb.createSession('session-archived', 'claude', '/workspace/demo-project', 'Archived Session', undefined, undefined, null, null);
     sessionsDb.updateSessionIsArchived('session-archived', true);
 
     const activeSessions = sessionsDb.getAllSessions();
@@ -60,6 +60,8 @@ test('discovery never creates project rows: unknown cwd lands project-less', asy
 
     assert.equal(projectsDb.getProjectPath('/some/novel/cwd'), null);
     assert.equal(sessionsDb.getSessionById('session-foreign')?.project_path, null);
+    // Discovery created the row, so it defaults to the external origin.
+    assert.equal(sessionsDb.getSessionById('session-foreign')?.origin, 'external');
 
     // A cwd matching an archived project keeps the association but must not
     // reactivate the archived row.
@@ -108,27 +110,45 @@ test('recent sessions are globally ordered, paginated, and limited to visible co
     projectsDb.createProjectPath('/workspace/project-a');
     projectsDb.createProjectPath('/workspace/project-b');
     projectsDb.createProjectPath('/workspace/project-hidden');
+    // Discovered app-run transcripts (the synchronizer's honest marker) index
+    // with a null origin so they stay visible as conversations.
     const fixtures: Array<Parameters<typeof sessionsDb.createSession>> = [
-      ['session-oldest', 'claude', '/workspace/project-a', 'Oldest', '2026-07-18T09:00:00.000Z', '2026-07-18T10:00:00.000Z'],
-      ['session-newest', 'codex', '/workspace/project-b', 'Newest', '2026-07-18T11:00:00.000Z', '2026-07-18T12:00:00.900Z'],
-      ['session-same-second', 'claude', '/workspace/project-a', 'Same second, slightly older', '2026-07-18T12:00:00.000Z', '2026-07-18T12:00:00.100Z'],
-      ['session-middle', 'claude', '/workspace/project-a', 'Middle', '2026-07-18T10:00:00.000Z', '2026-07-18T11:00:00.000Z'],
-      ['session-archived', 'claude', '/workspace/project-a', 'Archived session', '2026-07-18T13:00:00.000Z', '2026-07-18T13:00:00.000Z'],
-      ['session-hidden-project', 'claude', '/workspace/project-hidden', 'Archived project session', '2026-07-18T14:00:00.000Z', '2026-07-18T14:00:00.000Z'],
+      ['session-oldest', 'claude', '/workspace/project-a', 'Oldest', '2026-07-18T09:00:00.000Z', '2026-07-18T10:00:00.000Z', null, null],
+      ['session-newest', 'codex', '/workspace/project-b', 'Newest', '2026-07-18T11:00:00.000Z', '2026-07-18T12:00:00.900Z', null, null],
+      ['session-same-second', 'claude', '/workspace/project-a', 'Same second, slightly older', '2026-07-18T12:00:00.000Z', '2026-07-18T12:00:00.100Z', null, null],
+      ['session-middle', 'claude', '/workspace/project-a', 'Middle', '2026-07-18T10:00:00.000Z', '2026-07-18T11:00:00.000Z', null, null],
+      ['session-archived', 'claude', '/workspace/project-a', 'Archived session', '2026-07-18T13:00:00.000Z', '2026-07-18T13:00:00.000Z', null, null],
+      ['session-hidden-project', 'claude', '/workspace/project-hidden', 'Archived project session', '2026-07-18T14:00:00.000Z', '2026-07-18T14:00:00.000Z', null, null],
     ];
     fixtures.forEach((fixture) => sessionsDb.createSession(...fixture));
 
     sessionsDb.updateSessionIsArchived('session-archived', true);
     projectsDb.updateProjectIsArchived('/workspace/project-hidden', true);
 
-    // Machine-started runs (worker pane 'direct', dispatched 'dispatch') never
-    // appear in the recent-conversations feed; planner chats do.
+    // Machine-started runs (worker pane 'direct', dispatched 'dispatch',
+    // terminal-launched 'external') never appear in the recent-conversations
+    // feed; planner chats do.
     sessionsDb.createSession('session-worker', 'claude', '/workspace/project-a', 'Worker run', '2026-07-18T15:00:00.000Z', '2026-07-18T15:00:00.000Z');
     sessionsDb.setSessionOrigin('session-worker', 'direct');
     sessionsDb.createSession('session-dispatched', 'claude', '/workspace/project-a', 'Dispatched run', '2026-07-18T16:00:00.000Z', '2026-07-18T16:00:00.000Z');
     sessionsDb.setSessionOrigin('session-dispatched', 'dispatch');
+    sessionsDb.createSession('session-terminal', 'claude', '/workspace/project-a', 'Terminal chain run', '2026-07-18T17:00:00.000Z', '2026-07-18T17:00:00.000Z');
     sessionsDb.createSession('session-planner', 'claude', '/workspace/project-a', 'Planner chat', '2026-07-17T09:00:00.000Z', '2026-07-17T09:00:00.000Z');
     sessionsDb.setSessionOrigin('session-planner', 'planner');
+
+    // The discovery-created terminal run is external: hidden from the feed and
+    // the project chat list, surfaced by the worker pane's run switcher.
+    assert.equal(sessionsDb.getSessionById('session-terminal')?.origin, 'external');
+    assert.ok(
+      !sessionsDb
+        .getSessionsByProjectPathPage('/workspace/project-a', 50, 0)
+        .some((session) => session.session_id === 'session-terminal'),
+    );
+    assert.ok(
+      sessionsDb
+        .listWorkerSessions('/workspace/project-a', 10)
+        .some((session) => session.session_id === 'session-terminal'),
+    );
 
     const firstPage = sessionsDb.getRecentSessionsPage(2, 0);
     const secondPage = sessionsDb.getRecentSessionsPage(2, 2);
