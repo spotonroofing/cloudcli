@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -29,6 +29,7 @@ function Sidebar({
   selectedSession,
   activeSessions,
   attentionSessionIds,
+  runningRuns,
   onProjectSelect,
   onSessionSelect,
   onNewSession,
@@ -160,6 +161,46 @@ function Sidebar({
     document.title = selectedProject?.displayName?.trim() || 'CloudCLI UI';
   }, [selectedProject]);
 
+  // Planner/worker split and per-project activity for the counters and the
+  // border-beam shimmer. Live-run origin/project come from the enriched run
+  // registry poll; sessions the UI already loaded fill the gap between polls
+  // (activeSessions flips instantly on websocket events).
+  const { plannerRunningCount, workerRunningCount, runningByProject } = useMemo(() => {
+    const infoBySession = new Map<string, { origin: string | null; projectId: string | null }>();
+    for (const project of projects) {
+      for (const session of project.sessions ?? []) {
+        infoBySession.set(String(session.id), {
+          origin: (session.origin as string | null) ?? null,
+          projectId: project.projectId,
+        });
+      }
+    }
+    for (const run of runningRuns) {
+      infoBySession.set(run.sessionId, { origin: run.origin, projectId: run.projectId });
+    }
+
+    const runningIds = new Set<string>(runningRuns.map((run) => run.sessionId));
+    for (const sessionId of activeSessions.keys()) {
+      runningIds.add(sessionId);
+    }
+
+    let planner = 0;
+    let worker = 0;
+    const byProject = new Map<string, number>();
+    for (const sessionId of runningIds) {
+      const info = infoBySession.get(sessionId);
+      const origin = info?.origin ?? null;
+      // Same split as the pane headers: planner or null = Willem's chats.
+      if (origin === 'planner' || origin === null) planner += 1;
+      else worker += 1;
+      if (info?.projectId) {
+        byProject.set(info.projectId, (byProject.get(info.projectId) ?? 0) + 1);
+      }
+    }
+
+    return { plannerRunningCount: planner, workerRunningCount: worker, runningByProject: byProject };
+  }, [projects, runningRuns, activeSessions]);
+
   const handleProjectCreated = () => {
     void paletteOps.refreshProjects();
   };
@@ -193,6 +234,8 @@ function Sidebar({
     loadingMoreProjects,
     activeSessions,
     attentionSessionIds,
+    runningByProject,
+    selectedSessionId: selectedSession ? String(selectedSession.id) : null,
     forceExpanded: searchMode === 'running',
     onEditingNameChange: setEditingName,
     onEditingPlannerNameChange: setEditingPlannerName,
@@ -255,6 +298,8 @@ function Sidebar({
           onExpand={handleExpandSidebar}
           onShowSettings={onShowSettings}
           restartRequired={restartRequired}
+          plannerRunningCount={plannerRunningCount}
+          workerRunningCount={workerRunningCount}
           t={t}
         />
       ) : (
@@ -265,6 +310,8 @@ function Sidebar({
             isLoading={isLoading}
             projects={projects}
             runningSessionsCount={runningSessionsCount}
+            plannerRunningCount={plannerRunningCount}
+            workerRunningCount={workerRunningCount}
             archivedProjects={archivedProjects}
             archivedSessions={archivedSessions}
             archivedSessionsCount={archivedSessionsCount}

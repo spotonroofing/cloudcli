@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="SpotOn Book app icon">
+  <defs>
+    <linearGradient id="tile-book" x1="0.8473" y1="0.1403" x2="0.1527" y2="0.8597">
+      <stop offset="0" stop-color="#6eb2f2"/>
+      <stop offset="1" stop-color="#0b7cda"/>
+    </linearGradient>
+    <linearGradient id="hl-book" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="sh-book" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.5" stop-color="#0b477a" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0b477a" stop-opacity="0.32"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1024" height="1024" rx="225" fill="url(#tile-book)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="225" fill="url(#sh-book)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="225" fill="url(#hl-book)"/>
+  <g transform="translate(233 233) scale(23.25)" fill="none" stroke="#fafafa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2V6M8 2V6"/><path d="M3 10H21"/><path d="M13 4H11C7.22876 4 5.34315 4 4.17157 5.17157C3 6.34315 3 8.22876 3 12V14C3 17.7712 3 19.6569 4.17157 20.8284C5.34315 22 7.22876 22 11 22H13C16.7712 22 18.6569 22 19.8284 20.8284C21 19.6569 21 17.7712 21 14V12C21 8.22876 21 6.34315 19.8284 5.17157C18.6569 4 16.7712 4 13 4Z"/><path d="M8.5 16.8333C8.5 16.8333 9.375 16.8333 10.25 18.5C10.25 18.5 13.0294 14.3333 15.5 13.5"/></g>
+</svg>

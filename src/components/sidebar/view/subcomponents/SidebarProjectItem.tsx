@@ -1,8 +1,14 @@
-import { useEffect, useRef } from 'react';
-import { Check, ChevronDown, ChevronRight, Edit3, Trash2, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
+import { Check, ChevronDown, ChevronRight, Edit3, Folder, FolderOpen, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { Button } from '../../../../shared/view/ui';
+import {
+  BorderBeamOverlay,
+  MarqueeLabel,
+  SPRING_LAYOUT,
+  useBeamPresence,
+} from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { SessionActivityMap } from '../../../../hooks/useSessionProtection';
@@ -29,6 +35,8 @@ type SidebarProjectItemProps = {
   editingSessionName: string;
   tasksEnabled: boolean;
   mcpServerStatus: MCPServerStatus;
+  /** Live runs inside this project; the row shimmers while nonzero and collapsed. */
+  runningSessionCount: number;
   onEditingNameChange: (name: string) => void;
   onEditingPlannerNameChange: (name: string) => void;
   onToggleProject: (projectName: string) => void;
@@ -61,6 +69,25 @@ const getSessionCountDisplay = (project: Project, sessions: SessionWithProvider[
   return String(total);
 };
 
+/**
+ * Project identity mark, left of the name: the project's own icon (repo-root
+ * convention or bundled SpotOn icon, delivered as a data URL) when it has
+ * one, else the beUI ai-sidebar default — lucide Folder/FolderOpen in a
+ * size-5 grid tile.
+ */
+export function ProjectIcon({ project, expanded }: { project: Project; expanded: boolean }) {
+  const FallbackIcon = expanded ? FolderOpen : Folder;
+  return (
+    <span aria-hidden="true" className="grid size-5 shrink-0 place-items-center" data-slot="project-icon">
+      {project.iconDataUrl ? (
+        <img src={project.iconDataUrl} alt="" className="h-4 w-4 rounded-[3px] object-contain" />
+      ) : (
+        <FallbackIcon className="size-4" />
+      )}
+    </span>
+  );
+}
+
 export default function SidebarProjectItem({
   project,
   selectedProject,
@@ -78,6 +105,7 @@ export default function SidebarProjectItem({
   editingSessionName,
   tasksEnabled,
   mcpServerStatus,
+  runningSessionCount,
   onEditingNameChange,
   onEditingPlannerNameChange,
   onToggleProject,
@@ -108,6 +136,11 @@ export default function SidebarProjectItem({
   const sessionCountLabel = `${sessionCountDisplay} session${totalSessionCount === 1 ? '' : 's'}`;
   const taskStatus = getTaskIndicatorStatus(project, mcpServerStatus);
   const mobileRenameInputRef = useRef<HTMLInputElement>(null);
+  const [hovered, setHovered] = useState(false);
+  // Activity shimmer: the project row carries the beam while any of its
+  // sessions runs; expanding hands the shimmer to the running chat rows —
+  // every hand-off is the engine's fade, never a hard cutoff.
+  const beam = useBeamPresence(runningSessionCount > 0 && !isExpanded);
 
   useEffect(() => {
     if (!isEditing || !mobileRenameInputRef.current) {
@@ -146,18 +179,20 @@ export default function SidebarProjectItem({
   };
 
   return (
-    <div className={cn('md:space-y-1', isDeleting && 'opacity-50 pointer-events-none')}>
+    <div className={cn('md:space-y-0.5', isDeleting && 'opacity-50 pointer-events-none')}>
       <div className="md:group group">
         <div className="md:hidden">
           <div
             className={cn(
-              'p-3 mx-3 my-1 rounded-lg bg-card border border-border/50 active:scale-[0.98] transition-all duration-150',
+              'relative p-3 mx-3 my-1 rounded-lg bg-card border border-border/50 active:scale-[0.98] transition-all duration-150',
               isSelected && 'bg-primary/5 border-primary/20',
             )}
             onClick={toggleProject}
           >
+            {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
             <div className="flex items-center justify-between">
               <div className="flex min-w-0 flex-1 items-center gap-3">
+                {!isEditing && <ProjectIcon project={project} expanded={isExpanded} />}
                 <div className="min-w-0 flex-1">
                   {isEditing ? (
                     <div className="space-y-1">
@@ -286,71 +321,72 @@ export default function SidebarProjectItem({
           </div>
         </div>
 
-        <Button
-          variant="ghost"
-          className={cn(
-            'hidden md:flex w-full justify-between p-2 h-auto font-normal hover:bg-accent/50',
-            isSelected && 'bg-accent text-accent-foreground',
-          )}
+        {/* Desktop project row on the beUI ai-sidebar anatomy: min-h-9 rounded
+            row, icon tile, overflow-aware marquee label, hover-revealed
+            actions, spring-rotated chevron. */}
+        <div
+          role="button"
+          tabIndex={0}
+          title={project.fullPath}
           onClick={selectAndToggleProject}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              selectAndToggleProject();
+            }
+          }}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          className={cn(
+            'group/project relative hidden min-h-9 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2 text-sm outline-none md:flex',
+            'text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+            'focus-visible:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+            isSelected && 'bg-muted text-foreground',
+          )}
         >
-          <div className="flex min-w-0 flex-1 items-center">
-            <div className="min-w-0 flex-1 text-left">
-              {isEditing ? (
-                <div className="space-y-1">
-                  <input
-                    type="text"
-                    value={editingName}
-                    onChange={(event) => onEditingNameChange(event.target.value)}
-                    className="w-full rounded border border-border bg-background px-2 py-1 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
-                    placeholder={t('projects.projectNamePlaceholder')}
-                    autoFocus
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        saveProjectName();
-                      }
-                      if (event.key === 'Escape') {
-                        onCancelEditingProject();
-                      }
-                    }}
-                  />
-                  <input
-                    type="text"
-                    value={editingPlannerName}
-                    onChange={(event) => onEditingPlannerNameChange(event.target.value)}
-                    className="w-full rounded border border-border bg-background px-2 py-1 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
-                    placeholder={t('projects.plannerMemoryNamePlaceholder')}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        saveProjectName();
-                      }
-                      if (event.key === 'Escape') {
-                        onCancelEditingProject();
-                      }
-                    }}
-                  />
-                  <div className="truncate text-xs text-muted-foreground" title={project.fullPath}>
-                    {project.fullPath}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div className="truncate text-sm font-normal text-foreground" title={project.displayName}>
-                    {project.displayName}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {sessionCountDisplay}
-                    {project.fullPath !== project.displayName && (
-                      <span className="ml-1 opacity-60" title={project.fullPath}>
-                        {' - '}
-                        {project.fullPath.length > 25 ? `...${project.fullPath.slice(-22)}` : project.fullPath}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
+          {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
+          <ProjectIcon project={project} expanded={isExpanded} />
+
+          {isEditing ? (
+            <div className="min-w-0 flex-1 space-y-1 py-1.5" onClick={(event) => event.stopPropagation()}>
+              <input
+                type="text"
+                value={editingName}
+                onChange={(event) => onEditingNameChange(event.target.value)}
+                className="w-full rounded border border-border bg-background px-2 py-1 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
+                placeholder={t('projects.projectNamePlaceholder')}
+                autoFocus
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    saveProjectName();
+                  }
+                  if (event.key === 'Escape') {
+                    onCancelEditingProject();
+                  }
+                }}
+              />
+              <input
+                type="text"
+                value={editingPlannerName}
+                onChange={(event) => onEditingPlannerNameChange(event.target.value)}
+                className="w-full rounded border border-border bg-background px-2 py-1 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
+                placeholder={t('projects.plannerMemoryNamePlaceholder')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    saveProjectName();
+                  }
+                  if (event.key === 'Escape') {
+                    onCancelEditingProject();
+                  }
+                }}
+              />
+              <div className="truncate text-xs text-muted-foreground" title={project.fullPath}>
+                {project.fullPath}
+              </div>
             </div>
-          </div>
+          ) : (
+            <MarqueeLabel active={hovered}>{project.displayName}</MarqueeLabel>
+          )}
 
           <div className="flex flex-shrink-0 items-center gap-1">
             {isEditing ? (
@@ -376,8 +412,11 @@ export default function SidebarProjectItem({
               </>
             ) : (
               <>
+                <span className="text-[10px] tabular-nums text-muted-foreground/70">
+                  {sessionCountDisplay}
+                </span>
                 <div
-                  className="touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded opacity-0 transition-all duration-200 hover:bg-accent group-hover:opacity-100"
+                  className="touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded opacity-0 transition-all duration-200 hover:bg-accent group-hover/project:opacity-100"
                   onClick={(event) => {
                     event.stopPropagation();
                     onStartEditingProject(project);
@@ -387,7 +426,7 @@ export default function SidebarProjectItem({
                   <Edit3 className="h-3 w-3" />
                 </div>
                 <div
-                  className="touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded opacity-0 transition-all duration-200 hover:bg-red-50 group-hover:opacity-100 dark:hover:bg-red-900/20"
+                  className="touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded opacity-0 transition-all duration-200 hover:bg-red-50 group-hover/project:opacity-100 dark:hover:bg-red-900/20"
                   onClick={(event) => {
                     event.stopPropagation();
                     onDeleteProject(project);
@@ -396,15 +435,17 @@ export default function SidebarProjectItem({
                 >
                   <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
                 </div>
-                {isExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-                )}
+                <motion.span
+                  className="flex h-4 w-4 items-center justify-center"
+                  animate={{ rotate: isExpanded ? 90 : 0 }}
+                  transition={SPRING_LAYOUT}
+                >
+                  <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover/project:text-foreground" />
+                </motion.span>
               </>
             )}
           </div>
-        </Button>
+        </div>
       </div>
 
       <SidebarProjectSessions

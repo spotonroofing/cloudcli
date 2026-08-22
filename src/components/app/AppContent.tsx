@@ -1,8 +1,9 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import Sidebar from '../sidebar/view/Sidebar';
+import type { RunningRunInfo } from '../sidebar/types/types';
 import MainContent from '../main-content/view/MainContent';
 import CommandPalette from '../command-palette/CommandPalette';
 import { QuickSettingsPanel } from '../quick-settings-panel';
@@ -20,7 +21,12 @@ type RunningSessionApiItem = {
   startedAt?: unknown;
   statusText?: unknown;
   canInterrupt?: unknown;
+  origin?: unknown;
+  projectId?: unknown;
 };
+
+const RUN_ORIGINS = ['planner', 'direct', 'dispatch', 'external'] as const;
+type RunOrigin = (typeof RUN_ORIGINS)[number];
 
 type RunningSessionsApiPayload = {
   data?: {
@@ -68,6 +74,8 @@ function AppContentInner() {
     markSessionIdle,
     syncProcessingSessions,
   } = useSessionProtection();
+
+  const [runningRuns, setRunningRuns] = useState<RunningRunInfo[]>([]);
 
   const {
     scopedProjectNotFound,
@@ -148,6 +156,19 @@ function AppContentInner() {
 
       const payload = (await response.json()) as RunningSessionsApiPayload;
       const sessions = Array.isArray(payload.data?.sessions) ? payload.data.sessions : [];
+
+      // Sidebar identity: planner/worker counters and project-row shimmer key
+      // off each live run's origin and owning project.
+      setRunningRuns(
+        sessions
+          .filter((session): session is RunningSessionApiItem & { sessionId: string } =>
+            typeof session.sessionId === 'string' && session.sessionId.length > 0)
+          .map((session) => ({
+            sessionId: session.sessionId,
+            origin: RUN_ORIGINS.includes(session.origin as RunOrigin) ? (session.origin as RunOrigin) : null,
+            projectId: typeof session.projectId === 'string' ? session.projectId : null,
+          })),
+      );
 
       syncProcessingSessions(
         sessions
@@ -260,7 +281,7 @@ function AppContentInner() {
     <div className="fixed inset-0 flex bg-background" style={{ bottom: 'var(--keyboard-height, 0px)' }}>
       {!isMobile ? (
         <div className="h-full flex-shrink-0 border-r border-border/50">
-          <Sidebar {...sidebarSharedProps} />
+          <Sidebar {...sidebarSharedProps} runningRuns={runningRuns} />
         </div>
       ) : (
         <div
@@ -286,7 +307,7 @@ function AppContentInner() {
             onClick={(event) => event.stopPropagation()}
             onTouchStart={(event) => event.stopPropagation()}
           >
-            <Sidebar {...sidebarSharedProps} />
+            <Sidebar {...sidebarSharedProps} runningRuns={runningRuns} />
           </div>
         </div>
       )}

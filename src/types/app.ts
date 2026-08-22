@@ -90,6 +90,8 @@ export interface Project {
   displayName: string;
   /** Stored planner identity; null/absent = sessions use the path basename. */
   plannerMemoryName?: string | null;
+  /** Project icon as a data URL (repo-root convention or bundled SpotOn icon); null = client default icon. */
+  iconDataUrl?: string | null;
   fullPath: string;
   path?: string;
   isStarred?: boolean;

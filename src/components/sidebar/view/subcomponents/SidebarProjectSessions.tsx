@@ -1,7 +1,9 @@
 import { Plus } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { TFunction } from 'i18next';
 
 import { Button } from '../../../../shared/view/ui';
+import { EASE_OUT } from '../../../../shared/view/beui';
 import type { SessionActivityMap } from '../../../../hooks/useSessionProtection';
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { SessionWithProvider } from '../../types/types';
@@ -82,14 +84,23 @@ export default function SidebarProjectSessions({
   onNewSession,
   t,
 }: SidebarProjectSessionsProps) {
-  if (!isExpanded) {
-    return null;
-  }
-
   const hasSessions = sessions.length > 0;
 
+  // beUI ai-sidebar reveal: the session block unfolds and folds with the same
+  // eased height/opacity motion in both directions; indent is depth padding,
+  // not a tree rule.
   return (
-    <div className="ml-3 space-y-1 border-l border-border pl-3">
+    <AnimatePresence initial={false}>
+      {isExpanded && (
+        <motion.div
+          key="sessions"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.18, ease: EASE_OUT }}
+          className="overflow-hidden"
+        >
+          <div className="space-y-0.5 md:pl-5">
       <div className="px-3 pb-1 pt-1 md:hidden">
         <button
           className="flex h-8 w-full items-center justify-center gap-2 rounded-md bg-primary text-xs font-medium text-primary-foreground transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"
@@ -157,6 +168,9 @@ export default function SidebarProjectSessions({
           )}
         </>
       )}
-    </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

@@ -92,6 +92,8 @@ type SidebarContentProps = {
   isLoading: boolean;
   projects: Project[];
   runningSessionsCount: number;
+  plannerRunningCount: number;
+  workerRunningCount: number;
   archivedProjects: ArchivedProjectListItem[];
   archivedSessions: ArchivedSessionListItem[];
   archivedSessionsCount: number;
@@ -137,6 +139,8 @@ export default function SidebarContent({
   isLoading,
   projects,
   runningSessionsCount,
+  plannerRunningCount,
+  workerRunningCount,
   archivedProjects,
   archivedSessions,
   archivedSessionsCount,
@@ -198,6 +202,8 @@ export default function SidebarContent({
         isLoading={isLoading}
         projectsCount={projects.length}
         runningSessionsCount={runningSessionsCount}
+        plannerRunningCount={plannerRunningCount}
+        workerRunningCount={workerRunningCount}
         archivedSessionsCount={archivedSessionsCount}
         isArchivedSessionsLoading={isArchivedSessionsLoading}
         searchFilter={searchFilter}

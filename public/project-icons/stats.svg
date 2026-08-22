@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="SpotOn Stats app icon">
+  <defs>
+    <linearGradient id="tile-stats" x1="0.6545" y1="0.0245" x2="0.3455" y2="0.9755">
+      <stop offset="0" stop-color="#6ec6f2"/>
+      <stop offset="1" stop-color="#0b90da"/>
+    </linearGradient>
+    <linearGradient id="hl-stats" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="sh-stats" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.5" stop-color="#0b527a" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0b527a" stop-opacity="0.32"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1024" height="1024" rx="225" fill="url(#tile-stats)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="225" fill="url(#sh-stats)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="225" fill="url(#hl-stats)"/>
+  <g transform="translate(233 233) scale(23.25)" fill="none" stroke="#fafafa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9V17"/><path d="M13 5V17"/><path d="M18 13V17"/><path d="M3 3V13C3 16.7712 3 18.6569 4.17157 19.8284C5.34315 21 7.22876 21 11 21H21"/></g>
+</svg>

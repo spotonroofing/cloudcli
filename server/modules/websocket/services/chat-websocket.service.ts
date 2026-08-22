@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { WebSocket } from 'ws';
 
 import { sessionsDb } from '@/modules/database/index.js';
-import { providerModelsService } from '@/modules/providers/index.js';
+import { providerModelsService, scheduleSessionShortLabel } from '@/modules/providers/index.js';
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import {
@@ -204,7 +204,14 @@ async function handleChatSend(
     && clientOptions.bootPrompt !== true
     && command.trim()
   ) {
-    sessionsDb.updateSessionCustomName(sessionId, buildSessionTitleFromMessage(command));
+    const typedTitle = buildSessionTitleFromMessage(command);
+    sessionsDb.updateSessionCustomName(sessionId, typedTitle);
+    scheduleSessionShortLabel({
+      sessionId,
+      provider,
+      message: command,
+      currentTitle: typedTitle,
+    });
   }
 
   // Stamp boot-started sessions so the client hides exactly those prologues —

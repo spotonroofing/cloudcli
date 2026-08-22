@@ -127,6 +127,15 @@ function queuePendingWatcherUpdate(
 }
 
 /**
+ * Lets other services broadcast a `session_upserted` delta for a session row
+ * they changed directly in the DB (e.g. the Haiku short-label writer), reusing
+ * the watcher's debounced flush pipeline.
+ */
+export function notifySessionRowChanged(provider: LLMProvider, sessionId: string): void {
+  queuePendingWatcherUpdate('change', provider, sessionId);
+}
+
+/**
  * Builds one `session_upserted` delta event for a provider-native session id.
  *
  * The event carries everything a sidebar needs to upsert the session in place

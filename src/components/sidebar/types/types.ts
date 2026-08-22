@@ -51,6 +51,13 @@ export type SessionDeleteConfirmation = {
   isArchived: boolean;
 };
 
+/** One live run from the server's run registry, joined with origin and owning project. */
+export type RunningRunInfo = {
+  sessionId: string;
+  origin: 'planner' | 'direct' | 'dispatch' | 'external' | null;
+  projectId: string | null;
+};
+
 export type SidebarProps = {
   projects: Project[];
   selectedProject: Project | null;
@@ -59,6 +66,8 @@ export type SidebarProps = {
   selectedSession: ProjectSession | null;
   activeSessions: SessionActivityMap;
   attentionSessionIds: ReadonlySet<string>;
+  /** Live runs enriched with origin/project (5s poll of the run registry). */
+  runningRuns: RunningRunInfo[];
   onProjectSelect: (project: Project) => void;
   onSessionSelect: (session: ProjectSession) => void;
   onNewSession: (project: Project) => void;

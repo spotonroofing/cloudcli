@@ -6,6 +6,7 @@ import path from 'node:path';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { chatRunRegistry } from '@/modules/websocket/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import { scheduleSessionShortLabel } from '@/modules/providers/services/session-label.service.js';
 import type {
   FetchHistoryOptions,
   FetchHistoryResult,
@@ -152,8 +153,27 @@ export const sessionsService = {
     provider: LLMProvider;
     startedAt: number;
     lastSeq: number;
+    origin: 'planner' | 'direct' | 'dispatch' | 'external' | null;
+    projectId: string | null;
   }> {
-    return chatRunRegistry.listRunningRuns();
+    // Origin and owning project are joined from the DB so the sidebar can
+    // split planner vs worker activity and shimmer project rows without
+    // attaching to any chat stream.
+    return chatRunRegistry.listRunningRuns().map((run) => {
+      const row = sessionsDb.getSessionById(run.sessionId);
+      const projectPath = row?.project_path && !isScratchProjectPath(row.project_path)
+        ? row.project_path
+        : null;
+      const project = projectPath ? projectsDb.getProjectPath(projectPath) : null;
+      const origin = row?.origin === 'planner' || row?.origin === 'direct' || row?.origin === 'dispatch' || row?.origin === 'external'
+        ? row.origin
+        : null;
+      return {
+        ...run,
+        origin,
+        projectId: project?.project_id ?? null,
+      };
+    });
   },
 
   /**
@@ -281,6 +301,15 @@ export const sessionsService = {
     // the files a run touched (git diff base..HEAD).
     const baseCommit = origin ? readGitHead(normalizedProjectPath) : null;
     sessionsDb.createAppSession(sessionId, provider, normalizedProjectPath, sessionName, origin, baseCommit);
+
+    if (!boot && initialMessage.trim()) {
+      scheduleSessionShortLabel({
+        sessionId,
+        provider,
+        message: initialMessage,
+        currentTitle: sessionName,
+      });
+    }
 
     return {
       sessionId,

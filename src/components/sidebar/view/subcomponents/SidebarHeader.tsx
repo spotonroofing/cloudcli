@@ -1,9 +1,59 @@
-import { FolderPlus, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
+import { Compass, FolderPlus, Hammer, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Button, Input } from '../../../../shared/view/ui';
+import {
+  NumberTicker,
+  TEXT_SHIMMER_CLASS_NAME,
+  TEXT_SHIMMER_KEYFRAMES,
+  textShimmerStyle,
+} from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 import type { SidebarSearchMode } from '../../types/types';
+
+/**
+ * One planner/worker live-run counter pill. Distinct colorways tell the two
+ * apart at a glance (planner = primary silver-blue, worker = emerald, echoing
+ * the running-view emerald); the label shimmers softly while the count is
+ * nonzero and the digits roll through NumberTicker per the control laws.
+ */
+export function ActivityCounter({
+  kind,
+  count,
+  label,
+}: {
+  kind: 'planner' | 'worker';
+  count: number;
+  label: string;
+}) {
+  const Icon = kind === 'planner' ? Compass : Hammer;
+  const active = count > 0;
+
+  return (
+    <span
+      data-slot={`${kind}-counter`}
+      data-count={count}
+      className={cn(
+        'flex min-w-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors duration-500',
+        active
+          ? kind === 'planner'
+            ? 'border-primary/30 bg-primary/10 text-primary'
+            : 'border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+          : 'border-border/60 bg-muted/40 text-muted-foreground',
+      )}
+      title={`${label}: ${count}`}
+    >
+      <Icon className="h-3 w-3 flex-shrink-0" />
+      <span
+        className={cn('truncate', active && TEXT_SHIMMER_CLASS_NAME)}
+        style={active ? textShimmerStyle(2.5) : undefined}
+      >
+        {label}
+      </span>
+      <NumberTicker value={count} className="tabular-nums" />
+    </span>
+  );
+}
 
 type SidebarHeaderProps = {
   isPWA: boolean;
@@ -24,6 +74,10 @@ type SidebarHeaderProps = {
   /** Header action: new session in the scoped project. Null until a project is scoped. */
   onNewSession: (() => void) | null;
   onCollapseSidebar: () => void;
+  /** Live planner-origin runs (origin planner or null — Willem's chats). */
+  plannerRunningCount: number;
+  /** Live worker-origin runs (direct, dispatch, external). */
+  workerRunningCount: number;
   t: TFunction;
 };
 
@@ -45,6 +99,8 @@ export default function SidebarHeader({
   onCreateProject,
   onNewSession,
   onCollapseSidebar,
+  plannerRunningCount,
+  workerRunningCount,
   t,
 }: SidebarHeaderProps) {
   const showSearchTools = (projectsCount > 0 || runningSessionsCount > 0 || archivedSessionsCount > 0 || isArchivedSessionsLoading) && !isLoading;
@@ -187,6 +243,24 @@ export default function SidebarHeader({
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Active-session counters: a new slim row below the search bar, so
+            the existing top-bar layout stays untouched. */}
+        {showSearchTools && (
+          <div className="mt-2 flex items-center gap-1.5" data-slot="activity-counters">
+            <style>{TEXT_SHIMMER_KEYFRAMES}</style>
+            <ActivityCounter
+              kind="planner"
+              count={plannerRunningCount}
+              label={t('running.plannerCounter', 'Planner')}
+            />
+            <ActivityCounter
+              kind="worker"
+              count={workerRunningCount}
+              label={t('running.workerCounter', 'Worker')}
+            />
           </div>
         )}
       </div>

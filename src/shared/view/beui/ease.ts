@@ -31,3 +31,11 @@ export const MESSAGE_POP_UP = {
   damping: 32,
   mass: 0.62,
 } as const;
+
+/** Shared-layout glides — pills, indicators and panels morphing between positions. */
+export const SPRING_LAYOUT = {
+  type: 'spring',
+  stiffness: 360,
+  damping: 32,
+  mass: 0.6,
+} as const;

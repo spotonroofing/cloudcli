@@ -7,6 +7,8 @@ import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { RealtimeClientConnection } from '@/shared/types.js';
 import { AppError, isScratchProjectPath } from '@/shared/utils.js';
 
+import { getProjectIconDataUrl } from './project-icon.service.js';
+
 type SessionSummary = {
   id: string;
   provider: string;
@@ -37,6 +39,8 @@ export type ProjectListItem = {
   plannerMemoryName: string | null;
   fullPath: string;
   isStarred: boolean;
+  /** Project icon as a data URL; null = the client renders its default. */
+  iconDataUrl: string | null;
   sessions: SessionSummary[];
   sessionMeta: {
     hasMore: boolean;
@@ -240,6 +244,7 @@ export async function getProjectsWithSessions(
       plannerMemoryName: row.planner_memory_name ?? null,
       fullPath: projectPath,
       isStarred: Boolean(row.isStarred),
+      iconDataUrl: getProjectIconDataUrl(projectPath),
       sessions: sessionsPage.sessions,
       sessionMeta: {
         hasMore: sessionsPage.hasMore,
@@ -294,6 +299,7 @@ export async function getArchivedProjectsWithSessions(
       plannerMemoryName: row.planner_memory_name ?? null,
       fullPath: row.project_path,
       isStarred: Boolean(row.isStarred),
+      iconDataUrl: null,
       isArchived: true,
       sessions: sessionsPage.sessions,
       sessionMeta: {

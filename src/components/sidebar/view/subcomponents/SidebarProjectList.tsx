@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { TFunction } from 'i18next';
 
+import { BounceIndicator } from '../../../../shared/view/beui';
 import type { LoadingProgress, Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { SessionActivityMap } from '../../../../hooks/useSessionProtection';
 import { getPageTitle } from '../../../../utils/pageTitle';
@@ -32,6 +33,10 @@ export type SidebarProjectListProps = {
   loadingMoreProjects: Set<string>;
   activeSessions: SessionActivityMap;
   attentionSessionIds: ReadonlySet<string>;
+  /** Live-run count per projectId; drives the project-row activity shimmer. */
+  runningByProject: ReadonlyMap<string, number>;
+  /** Bounce-dot destination: the selected session's row, when it is in this list. */
+  selectedSessionId: string | null;
   forceExpanded?: boolean;
   onEditingNameChange: (value: string) => void;
   onEditingPlannerNameChange: (value: string) => void;
@@ -80,6 +85,8 @@ export default function SidebarProjectList({
   loadingMoreProjects,
   activeSessions,
   attentionSessionIds,
+  runningByProject,
+  selectedSessionId,
   forceExpanded = false,
   onEditingNameChange,
   onEditingPlannerNameChange,
@@ -99,6 +106,7 @@ export default function SidebarProjectList({
   onSaveEditingSession,
   t,
 }: SidebarProjectListProps) {
+  const listRef = useRef<HTMLDivElement>(null);
   const pageTitle = getPageTitle(selectedProject, selectedSession);
   const state = (
     <SidebarProjectsState
@@ -117,7 +125,12 @@ export default function SidebarProjectList({
   const showProjects = !isLoading && projects.length > 0 && filteredProjects.length > 0;
 
   return (
-    <div className="pb-safe-area-inset-bottom md:space-y-1">
+    <div ref={listRef} className="relative pb-safe-area-inset-bottom md:space-y-1">
+      {/* beUI bounce-sidebar behavior: the active dot arcs to the selected
+          session's row on a curved spring path. */}
+      {showProjects && (
+        <BounceIndicator activeKey={selectedSessionId} containerRef={listRef} />
+      )}
       {!showProjects
         ? state
         : filteredProjects.map((project) => (
@@ -154,6 +167,7 @@ export default function SidebarProjectList({
               onLoadMoreSessions={onLoadMoreSessions}
               activeSessions={activeSessions}
               attentionSessionIds={attentionSessionIds}
+              runningSessionCount={runningByProject.get(project.projectId) ?? 0}
               onNewSession={onNewSession}
               onEditingSessionNameChange={onEditingSessionNameChange}
               onStartEditingSession={onStartEditingSession}

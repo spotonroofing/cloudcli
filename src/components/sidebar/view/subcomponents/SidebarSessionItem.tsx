@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Edit2, FolderInput, Loader2, MoreHorizontal, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { ActionMenu, Badge, Dialog, DialogContent, DialogTitle, Tooltip, buttonVariants } from '../../../../shared/view/ui';
+import { ActionMenu, Badge, Dialog, DialogContent, DialogTitle, Tooltip } from '../../../../shared/view/ui';
+import { BorderBeamOverlay, MarqueeLabel, useBeamPresence } from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import { api } from '../../../../utils/api';
@@ -73,10 +74,11 @@ export default function SidebarSessionItem({
   const [providerSessionId, setProviderSessionId] = useState<string | null>(null);
   const providerIdRequestRef = useRef(0);
   const showAttentionIndicator = needsAttention && !isSelected;
-  // The activity dot only renders while the session is actually mid-turn;
-  // recently-updated idle sessions carry no standing indicator.
-  const showProcessingIndicator = !showAttentionIndicator && isProcessing;
   const providerLabel = PROVIDER_LABELS[session.__provider];
+  const [rowHovered, setRowHovered] = useState(false);
+  // Activity shimmer: a mid-turn chat row carries the border beam (it replaced
+  // the old green pulse dot); appearance and disappearance are engine fades.
+  const beam = useBeamPresence(isProcessing);
 
   // While editing, dismiss only when the user clicks outside the inline rename panel
   // (matches Escape / cancel-button behaviour). The mobile rename lives inside the
@@ -198,23 +200,16 @@ export default function SidebarSessionItem({
 
   return (
     <div className="group relative">
-      {(showAttentionIndicator || showProcessingIndicator) && (
+      {showAttentionIndicator && (
         <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 transform">
           <Tooltip
-            content={showAttentionIndicator
-              ? t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })
-              : t('tooltips.processingSessionIndicator', 'Processing session')}
+            content={t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })}
             position="right"
           >
             <div
               role="status"
-              aria-label={showAttentionIndicator
-                ? t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })
-                : t('tooltips.processingSessionIndicator', 'Processing session')}
-              className={cn(
-                'h-2 w-2 animate-pulse rounded-full',
-                showAttentionIndicator ? 'bg-amber-500' : 'bg-green-500',
-              )}
+              aria-label={t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })}
+              className="h-2 w-2 animate-pulse rounded-full bg-amber-500"
             />
           </Tooltip>
         </div>
@@ -229,6 +224,7 @@ export default function SidebarSessionItem({
           )}
           onClick={selectMobileSession}
         >
+          {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
           <div className="flex items-center gap-2">
             <div
               className={cn(
@@ -242,7 +238,7 @@ export default function SidebarSessionItem({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <div
-                  className="min-w-0 flex-1 truncate text-sm font-normal text-foreground"
+                  className="min-w-0 flex-1 truncate text-[13px] font-normal leading-4 text-foreground"
                   title={sessionView.sessionName}
                 >
                   {sessionView.sessionName}
@@ -416,15 +412,20 @@ export default function SidebarSessionItem({
       </div>
 
       <div className="hidden md:block">
+        {/* beUI ai-sidebar row anatomy: min-h-9 borderless rounded row, icon
+            tile, overflow-aware marquee label; `data-bounce-key` is the
+            bounce-dot destination when this row is the selected session. */}
         <a
           href={`/session/${session.id}`}
+          data-bounce-key={session.id}
+          title={sessionView.sessionName}
+          onMouseEnter={() => setRowHovered(true)}
+          onMouseLeave={() => setRowHovered(false)}
           className={cn(
-            buttonVariants({ variant: 'ghost' }),
-            'h-auto w-full justify-start rounded-md border bg-card p-2 pr-11 text-left font-normal transition-all duration-150',
-            isSelected ? 'border-primary/20 bg-primary/5' : 'border-border/30',
-            !isSelected && isProcessing
-              ? 'border-border/60 bg-muted/20 hover:bg-muted/25'
-              : 'hover:bg-accent/50',
+            'relative flex min-h-9 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 pr-11 text-left text-[13px] font-normal leading-4 outline-none',
+            'text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+            'focus-visible:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+            isSelected && 'bg-muted text-foreground',
           )}
           // Left-click keeps in-app navigation; Ctrl/Cmd/middle-click and the
           // native right-click menu use the href to open a new tab/window.
@@ -434,52 +435,44 @@ export default function SidebarSessionItem({
             onSessionSelect(session, project.projectId);
           }}
         >
-          <div className="flex w-full min-w-0 items-center gap-2">
-            <div
+          {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
+          <div
+            className={cn(
+              'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md',
+              isSelected ? 'bg-primary/10' : 'bg-muted/50',
+            )}
+          >
+            <LLMProviderLogo provider={session.__provider} className="h-3 w-3" />
+          </div>
+          <MarqueeLabel active={rowHovered}>{sessionView.sessionName}</MarqueeLabel>
+          {sessionView.messageCount > 0 && (
+            <Badge variant="secondary" className="flex-shrink-0 px-1 py-0 text-[10px]">
+              {sessionView.messageCount}
+            </Badge>
+          )}
+          {isProcessing ? (
+            <span
               className={cn(
-                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md',
-                isSelected ? 'bg-primary/10' : 'bg-muted/50',
+                'flex-shrink-0 transition-opacity duration-200',
+                isEditing ? 'opacity-0' : 'group-hover:opacity-0',
               )}
             >
-              <LLMProviderLogo provider={session.__provider} className="h-3 w-3" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <div
-                  className="min-w-0 flex-1 truncate text-sm font-normal text-foreground"
-                  title={sessionView.sessionName}
-                >
-                  {sessionView.sessionName}
-                </div>
-                {isProcessing ? (
-                  <span
-                    className={cn(
-                      'ml-auto flex-shrink-0 transition-opacity duration-200',
-                      isEditing ? 'opacity-0' : 'group-hover:opacity-0',
-                    )}
-                  >
-                    <Tooltip content={t('tooltips.processingSessionIndicator', 'Processing session')} position="top">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      </span>
-                    </Tooltip>
-                  </span>
-                ) : compactSessionAge && (
-                  <span
-                    className={cn(
-                      'ml-auto flex-shrink-0 text-[11px] text-muted-foreground transition-opacity duration-200',
-                      isEditing ? 'opacity-0' : 'group-hover:opacity-0',
-                    )}
-                  >
-                    {compactSessionAge}
-                  </span>
-                )}
-              </div>
-              <div className="mt-0.5 flex items-center">
-                {sessionView.messageCount > 0 && <Badge variant="secondary" className="px-1 py-0 text-xs">{sessionView.messageCount}</Badge>}
-              </div>
-            </div>
-          </div>
+              <Tooltip content={t('tooltips.processingSessionIndicator', 'Processing session')} position="top">
+                <span className="flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                </span>
+              </Tooltip>
+            </span>
+          ) : compactSessionAge && (
+            <span
+              className={cn(
+                'flex-shrink-0 text-[11px] tabular-nums text-muted-foreground transition-opacity duration-200',
+                isEditing ? 'opacity-0' : 'group-hover:opacity-0',
+              )}
+            >
+              {compactSessionAge}
+            </span>
+          )}
         </a>
 
         <div
