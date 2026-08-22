@@ -147,6 +147,8 @@ export interface ChatInterfaceProps {
   bootCommandName?: string;
   /** Origin tag recorded on sessions this surface creates ('direct' worker pane, 'planner' main surface). */
   sessionOrigin?: 'direct' | 'planner' | null;
+  /** Reports the session id this surface actually renders, so the host pane can flag a claim/stream mismatch. */
+  onRenderedSessionChange?: (sessionId: string | null) => void;
   onTaskClick?: (...args: unknown[]) => void;
   onShowAllTasks?: (() => void) | null;
 }

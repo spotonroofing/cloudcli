@@ -36,6 +36,7 @@ function ChatInterface({
   newSessionTrigger,
   bootCommandName,
   sessionOrigin,
+  onRenderedSessionChange,
 }: ChatInterfaceProps) {
   const { subscribe } = useWebSocket();
   const { t } = useTranslation('chat');
@@ -239,6 +240,14 @@ function ChatInterface({
   // without a ready message, flips to a retryable failure.
   // ------------------------------------------------------------------
   const activeSessionKey = selectedSession?.id || currentSessionId || null;
+
+  // Report the internally tracked session — set by the load/reset effects,
+  // not derived from the selectedSession prop — so the pane header can catch
+  // this surface holding a different session than the one it claims.
+  useEffect(() => {
+    onRenderedSessionChange?.(currentSessionId);
+  }, [currentSessionId, onRenderedSessionChange]);
+
   const viewingBootSession =
     bootState.phase !== 'idle'
     && (bootState.sessionId ? bootState.sessionId === activeSessionKey : activeSessionKey === null);

@@ -1,4 +1,4 @@
-import { Compass } from 'lucide-react';
+import { Compass, Hammer } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
@@ -10,6 +10,7 @@ import PluginTabContent from '../../plugins/view/PluginTabContent';
 import { BrowserUsePanel } from '../../browser-use';
 import type { MainContentProps } from '../types/types';
 import { useTaskMaster } from '../../../contexts/TaskMasterContext';
+import { useWebSocket } from '../../../contexts/WebSocketContext';
 import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
 import { useTasksSettings } from '../../../contexts/TasksSettingsContext';
 import { useUiPreferences } from '../../../hooks/useUiPreferences';
@@ -87,6 +88,30 @@ function MainContent({
   // The Planner header mirrors the worker pane's header bar; the title is the
   // open session's stored name.
   const sessionTitle = (selectedSession?.summary || selectedSession?.title || '').trim();
+  // The left pane hosts Willem's planner chats, but the sidebar and deep links
+  // can put any session here; the label follows the open session's real
+  // origin, so a worker-origin session never renders under a Planner label.
+  const leftPaneIsWorkerSession =
+    selectedSession?.origin === 'direct'
+    || selectedSession?.origin === 'dispatch'
+    || selectedSession?.origin === 'external';
+
+  // Fail-safes for the pane header: the socket dropping, or the rendered
+  // transcript diverging from the session the header claims.
+  const { isConnected } = useWebSocket();
+  const [renderedSessionId, setRenderedSessionId] = useState<string | null>(null);
+  const [streamMismatch, setStreamMismatch] = useState(false);
+  const claimedSessionId = selectedSession?.id ?? null;
+  useEffect(() => {
+    // A just-created session renders before the URL-derived selection catches
+    // up, so only a mismatch that persists counts as broken wiring.
+    if (!renderedSessionId || !claimedSessionId || renderedSessionId === claimedSessionId) {
+      setStreamMismatch(false);
+      return;
+    }
+    const timer = setTimeout(() => setStreamMismatch(true), 2000);
+    return () => clearTimeout(timer);
+  }, [renderedSessionId, claimedSessionId]);
 
   const shouldShowTasksTab = Boolean(tasksEnabled && isTaskMasterInstalled);
   const shouldShowBrowserTab = browserUseEnabled;
@@ -202,10 +227,26 @@ function MainContent({
           <div className={`h-full ${activeTab === 'chat' ? 'flex flex-col' : 'hidden'}`}>
             {workerPaneAvailable && (
               <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
-                <Compass className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                <span className="text-xs font-medium text-foreground">Planner</span>
+                {leftPaneIsWorkerSession ? (
+                  <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                ) : (
+                  <Compass className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                )}
+                <span className="text-xs font-medium text-foreground">
+                  {leftPaneIsWorkerSession ? 'Worker' : 'Planner'}
+                </span>
                 {sessionTitle && (
                   <span className="min-w-0 truncate text-[11px] text-muted-foreground">{sessionTitle}</span>
+                )}
+                {streamMismatch && (
+                  <span className="flex-shrink-0 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
+                    stream mismatch
+                  </span>
+                )}
+                {!isConnected && (
+                  <span className="flex-shrink-0 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
+                    disconnected
+                  </span>
                 )}
               </div>
             )}
@@ -231,6 +272,7 @@ function MainContent({
                   externalMessageUpdate={externalMessageUpdate}
                   newSessionTrigger={newSessionTrigger}
                   sessionOrigin={workerPaneAvailable ? 'planner' : null}
+                  onRenderedSessionChange={setRenderedSessionId}
                   onShowAllTasks={tasksEnabled ? () => setActiveTab('tasks') : null}
                 />
               </ErrorBoundary>

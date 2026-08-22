@@ -60,7 +60,7 @@ export default function WorkerPane({
   onShowSettings,
   onClose,
 }: WorkerPaneProps) {
-  const { subscribe } = useWebSocket();
+  const { subscribe, isConnected } = useWebSocket();
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
 
@@ -72,6 +72,25 @@ export default function WorkerPane({
   // has pinned an older run in the switcher, so a dispatched run landing
   // mid-thought cannot steal the surface.
   const followLatestRef = useRef(true);
+  // Typing into an existing worker chat continues that chat: while the
+  // composer is focused, a dispatched run landing must not swap the session
+  // out from under the message being written.
+  const [composerFocused, setComposerFocused] = useState(false);
+  // Fail-safes for the pane header: the socket dropping, or the rendered
+  // transcript diverging from the run the header claims.
+  const [renderedSessionId, setRenderedSessionId] = useState<string | null>(null);
+  const [streamMismatch, setStreamMismatch] = useState(false);
+  const claimedSessionId = paneSession?.id ?? null;
+  useEffect(() => {
+    // A just-created pane session renders before paneSession catches up, so
+    // only a mismatch that persists counts as broken wiring.
+    if (!renderedSessionId || !claimedSessionId || renderedSessionId === claimedSessionId) {
+      setStreamMismatch(false);
+      return;
+    }
+    const timer = setTimeout(() => setStreamMismatch(true), 2000);
+    return () => clearTimeout(timer);
+  }, [renderedSessionId, claimedSessionId]);
 
   const projectPath = selectedProject.fullPath || selectedProject.path || '';
 
@@ -120,9 +139,10 @@ export default function WorkerPane({
   }, [subscribe, refreshRuns]);
 
   // Auto-follow: the newest run is selected until the user pins another one.
+  // Held off while the composer is focused; it catches up on blur.
   const latest = runs[0] ?? null;
   useEffect(() => {
-    if (!latest || !followLatestRef.current || paneSession?.id === latest.sessionId) {
+    if (!latest || !followLatestRef.current || composerFocused || paneSession?.id === latest.sessionId) {
       return;
     }
     setPaneSession({
@@ -131,7 +151,15 @@ export default function WorkerPane({
       summary: latest.title ?? undefined,
       origin: latest.origin ?? null,
     });
-  }, [latest, paneSession?.id]);
+  }, [latest, paneSession?.id, composerFocused]);
+
+  const handleComposerFocusChange = useCallback(
+    (focused: boolean) => {
+      setComposerFocused(focused);
+      onInputFocusChange?.(focused);
+    },
+    [onInputFocusChange],
+  );
 
   const handleSelectRun = (run: WorkerRun) => {
     // Picking the newest run resumes auto-follow; anything older pins it.
@@ -217,6 +245,16 @@ export default function WorkerPane({
             {selectedRun.state}
           </span>
         )}
+        {streamMismatch && (
+          <span className="flex-shrink-0 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
+            stream mismatch
+          </span>
+        )}
+        {!isConnected && (
+          <span className="flex-shrink-0 rounded-full border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive">
+            disconnected
+          </span>
+        )}
         <span className="min-w-0 flex-1" />
         <Tooltip content="Files touched since the run's base commit" position="bottom">
           <Button
@@ -287,7 +325,7 @@ export default function WorkerPane({
             ws={ws}
             sendMessage={sendMessage}
             onFileOpen={onFileOpen}
-            onInputFocusChange={onInputFocusChange}
+            onInputFocusChange={handleComposerFocusChange}
             onSessionProcessing={onSessionProcessing}
             onSessionIdle={onSessionIdle}
             processingSessions={processingSessions}
@@ -316,6 +354,7 @@ export default function WorkerPane({
             newSessionTrigger={newSessionTrigger}
             bootCommandName="/worker"
             sessionOrigin="direct"
+            onRenderedSessionChange={setRenderedSessionId}
             onShowAllTasks={null}
           />
         </ErrorBoundary>

@@ -572,10 +572,24 @@ export function useChatComposerState({
   // Armed by retryBoot; the retry effect fires the boot once the refreshed
   // command list lands.
   const pendingBootRetryRef = useRef<{ seqAtRequest: number } | null>(null);
+  // One boot click creates exactly one session row: while a fired boot has
+  // not yet established its session (or failed), further triggers are
+  // swallowed instead of firing a second concurrent boot. Once the session
+  // row exists the normal currentSessionId guard takes over.
+  const bootInFlightRef = useRef(false);
+  useEffect(() => {
+    if (bootState.phase !== 'booting' || bootState.sessionId) {
+      bootInFlightRef.current = false;
+    }
+  }, [bootState.phase, bootState.sessionId]);
   const lastPlannerBootTriggerRef = useRef(newSessionTrigger ?? 0);
   useEffect(() => {
     const trigger = newSessionTrigger ?? 0;
     if (trigger === lastPlannerBootTriggerRef.current) {
+      return;
+    }
+    if (bootInFlightRef.current) {
+      lastPlannerBootTriggerRef.current = trigger;
       return;
     }
     if (selectedSession || currentSessionId || isLoading) {
@@ -605,6 +619,7 @@ export function useChatComposerState({
     }
     lastPlannerBootTriggerRef.current = trigger;
     bootSubmissionRef.current = true;
+    bootInFlightRef.current = true;
     void executeCommand(bootCommand, bootCommand.name);
   }, [newSessionTrigger, selectedSession, currentSessionId, isLoading, slashCommands, commandsFetchState, executeCommand, bootCommandName, selectedProject?.projectId, setBootState]);
 
@@ -636,8 +651,12 @@ export function useChatComposerState({
     const bootCommand = slashCommands.find((command) => command.name === (bootCommandName ?? '/planner'));
     if (bootCommand) {
       pendingBootRetryRef.current = null;
-      bootSubmissionRef.current = true;
-      void executeCommand(bootCommand, bootCommand.name);
+      // A trigger-fired boot already in flight covers this retry.
+      if (!bootInFlightRef.current) {
+        bootSubmissionRef.current = true;
+        bootInFlightRef.current = true;
+        void executeCommand(bootCommand, bootCommand.name);
+      }
       return;
     }
     // A post-retry fetch completed and the boot command is still missing.
