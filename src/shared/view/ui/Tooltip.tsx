@@ -169,7 +169,7 @@ function Tooltip({
   return (
     <div
       ref={containerRef}
-      className="relative inline-block"
+      className="relative inline-flex"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}

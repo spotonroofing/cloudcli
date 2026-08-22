@@ -1,4 +1,4 @@
-import { Compass, Hammer } from 'lucide-react';
+import { Compass, Hammer, X } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
@@ -21,7 +21,7 @@ import EditorSidebar from '../../code-editor/view/EditorSidebar';
 import type { Project } from '../../../types/app';
 import { STANDALONE_PROJECT_ID } from '../../../types/app';
 import { TaskMasterPanel } from '../../task-master';
-import { Badge } from '../../../shared/view/ui';
+import { Badge, Button } from '../../../shared/view/ui';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
@@ -78,6 +78,23 @@ function MainContent({
     setWorkerPaneOpen(open);
     try {
       localStorage.setItem('worker-pane-open', open ? '1' : '0');
+    } catch {
+      // localStorage unavailable
+    }
+  }, []);
+  // Desktop planner collapse (phase 6 pane chrome): persisted like
+  // worker-pane-open; the planner defaults open.
+  const [plannerPaneOpen, setPlannerPaneOpen] = useState(() => {
+    try {
+      return localStorage.getItem('planner-pane-open') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const togglePlannerPane = useCallback((open: boolean) => {
+    setPlannerPaneOpen(open);
+    try {
+      localStorage.setItem('planner-pane-open', open ? '1' : '0');
     } catch {
       // localStorage unavailable
     }
@@ -224,7 +241,18 @@ function MainContent({
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}>
+        {!isMobile && workerPaneAvailable && !plannerPaneOpen && (
+          <button
+            type="button"
+            onClick={() => togglePlannerPane(true)}
+            className="flex w-6 flex-shrink-0 items-center justify-center bg-muted/30 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            title="Show planner pane"
+            aria-label="Show planner pane"
+          >
+            <span className="rotate-90 whitespace-nowrap text-[10px] font-medium tracking-wide">Planner</span>
+          </button>
+        )}
+        <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded || (!isMobile && workerPaneAvailable && !plannerPaneOpen) ? 'hidden' : ''} flex-1`}>
           <div className={`h-full ${activeTab === 'chat' ? 'flex flex-col' : 'hidden'}`}>
             {workerPaneAvailable && (
               <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
@@ -248,6 +276,18 @@ function MainContent({
                   <Badge status="danger" size="sm" className="flex-shrink-0">
                     disconnected
                   </Badge>
+                )}
+                <span className="min-w-0 flex-1" />
+                {!isMobile && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => togglePlannerPane(false)}
+                    aria-label="Hide planner pane"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
                 )}
               </div>
             )}
@@ -346,7 +386,11 @@ function MainContent({
         </div>
 
         {!isMobile && workerPaneAvailable && workerPaneOpen && (
-          <div className="w-[44%] min-w-[380px] flex-shrink-0 border-l border-border/60">
+          <div
+            className={`min-w-[380px] border-l border-border/60 ${
+              plannerPaneOpen ? 'w-[44%] flex-shrink-0' : 'flex-1'
+            }`}
+          >
             <WorkerPane
               selectedProject={selectedProject}
               ws={ws}

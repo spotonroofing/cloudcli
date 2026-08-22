@@ -99,9 +99,9 @@ Done check: on dev, a running session's row carries the beam element and an idle
 
 Goal: the planner pane becomes a first-class pane like the worker. Files: `MainContent.tsx` header block, `WorkerPane.tsx` as reference. Dependencies: phase 2. Parallelism: small phase, run it straight.
 
-- [ ] Planner header matches the worker header's exact height and structure.
-- [ ] Planner close: an X that collapses the planner leftward into a slim vertical rail, mirroring the worker pane's collapsed rail, persisted like worker-pane-open.
-- [ ] Both headers keep the first-message/title text.
+- [x] Planner header matches the worker header's exact height and structure. (Same bar spec plus a trailing flex-1 spacer and h-6 X, mirroring the worker's spacer-then-buttons tail. The 2px mismatch was the shared Tooltip's `inline-block` wrapper adding line-box height around the worker's h-6 buttons — wrapper is now `inline-flex`; both headers measure 37px in the dev DOM.)
+- [x] Planner close: an X that collapses the planner leftward into a slim vertical rail, mirroring the worker pane's collapsed rail, persisted like worker-pane-open. (Desktop-only X; collapse hides the left pane behind a w-6 rotated "Planner" rail at the far left — the worker rail's exact classes — and the worker pane flexes to fill. `planner-pane-open` in localStorage, default open. Round-tripped on dev including reloads in both states.)
+- [x] Both headers keep the first-message/title text. (Planner keeps its truncate title span — "Hello world" asserted; worker keeps the run-switcher label — "Git panel stale diffs" asserted.)
 
 Done check: measured header heights equal in the DOM; collapse and restore round-trips on dev. Commit.
 
