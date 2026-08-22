@@ -15,6 +15,8 @@ type WorkerRun = {
   sessionId: string;
   provider: string;
   origin: 'direct' | 'dispatch' | string | null;
+  /** True when the run's first message was an auto-sent boot prompt. */
+  booted?: boolean;
   chainSlug: string | null;
   title: string | null;
   state: 'running' | 'finished' | 'stopped';
@@ -150,6 +152,7 @@ export default function WorkerPane({
       __provider: (latest.provider || 'claude') as ProjectSession['__provider'],
       summary: latest.title ?? undefined,
       origin: latest.origin ?? null,
+      booted: Boolean(latest.booted),
     });
   }, [latest, paneSession?.id, composerFocused]);
 
@@ -173,6 +176,7 @@ export default function WorkerPane({
             __provider: (run.provider || 'claude') as ProjectSession['__provider'],
             summary: run.title ?? undefined,
             origin: run.origin ?? null,
+            booted: Boolean(run.booted),
           },
     );
   };

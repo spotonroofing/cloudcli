@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, Provider } from '../../types/types';
 import type { Project } from '../../../../types/app';
 import type { ToolGroupItem } from '../../utils/toolGrouping';
 import { getToolConfig } from '../../tools';
+import { AgentDisclosure, MESSAGE_POP_UP, SPRING_SWAP } from '../../../../shared/view/beui';
 
 import MessageComponent from './MessageComponent';
 
@@ -16,6 +18,8 @@ type DiffLine = {
 
 interface ToolGroupContainerProps {
   group: ToolGroupItem;
+  /** Rows stamped after this epoch play the beUI pop-up on mount. */
+  animateFrom?: number;
   prevMessage: ChatMessage | null;
   createDiff: (oldStr: string, newStr: string) => DiffLine[];
   getMessageKey: (message: ChatMessage) => string;
@@ -59,6 +63,7 @@ function getToolGroupIcon(icon: string | undefined, toolName: string): string {
 
 export default function ToolGroupContainer({
   group,
+  animateFrom,
   prevMessage,
   createDiff,
   getMessageKey,
@@ -70,12 +75,13 @@ export default function ToolGroupContainer({
   selectedProject,
   provider,
 }: ToolGroupContainerProps) {
+  const reduce = useReducedMotion() ?? false;
   const [isExpanded, setIsExpanded] = useState(false);
   const config = getToolConfig(group.toolName).input;
   const label = config.label || group.toolName;
-  const borderClass = config.colorScheme?.border || 'border-gray-400 dark:border-gray-500';
-  const iconClass = config.colorScheme?.icon || 'text-muted-foreground';
   const icon = getToolGroupIcon(config.icon, group.toolName);
+  const stamp = group.timestamp ? new Date(group.timestamp).getTime() : 0;
+  const animateIn = Boolean(animateFrom && stamp > animateFrom && !reduce);
 
   const preview = useMemo(() => {
     const visiblePreviews = group.messages
@@ -94,34 +100,45 @@ export default function ToolGroupContainer({
   }, [group.messages]);
 
   return (
-    <div className="chat-message tool px-3 sm:px-0" data-message-timestamp={group.timestamp || undefined}>
+    <motion.div
+      className="chat-message tool px-3 sm:px-0"
+      data-message-timestamp={group.timestamp || undefined}
+      initial={animateIn ? { opacity: 0, transform: 'translateY(8px) scale(0.95)' } : false}
+      animate={animateIn ? { opacity: 1, transform: 'translateY(0px) scale(1)' } : undefined}
+      transition={MESSAGE_POP_UP}
+      style={{ transformOrigin: '0% 100%' }}
+    >
       <button
         type="button"
-        className={`group my-0.5 flex w-full items-center gap-2 border-l-2 ${borderClass} py-0.5 pl-3 text-left transition-colors hover:bg-muted/20`}
+        className="group flex min-h-9 w-full items-center gap-2 rounded-md py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => setIsExpanded((current) => !current)}
         aria-expanded={isExpanded}
       >
-        <ChevronRight
-          className={`h-3.5 w-3.5 flex-shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-          aria-hidden
-        />
-        <span className={`${iconClass} flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-background/80 text-xs font-medium`}>
+        <span
+          aria-hidden="true"
+          className="grid size-4 shrink-0 place-items-center text-xs text-muted-foreground"
+        >
           {icon}
         </span>
-        <span className="min-w-0 flex-shrink-0 text-xs font-medium text-foreground">{label}</span>
-        <span className="flex-shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <span className="min-w-0 shrink-0 text-xs font-medium text-foreground/90">{label}</span>
+        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
           x{group.messages.length}
         </span>
         {preview && (
-          <>
-            <span className="text-[10px] text-muted-foreground/40">/</span>
-            <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{preview}</span>
-          </>
+          <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/55">{preview}</span>
         )}
+        <motion.span
+          aria-hidden="true"
+          animate={{ rotate: isExpanded ? 180 : 0 }}
+          transition={reduce ? { duration: 0 } : SPRING_SWAP}
+          className="ml-auto shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground"
+        >
+          <ChevronDown className="size-3.5" />
+        </motion.span>
       </button>
 
-      {isExpanded && (
-        <div className="mt-2 space-y-3 sm:space-y-4">
+      <AgentDisclosure open={isExpanded}>
+        <div className="mt-1.5 space-y-3 pl-6 sm:space-y-4">
           {group.messages.map((message, index) => (
             <MessageComponent
               key={getMessageKey(message)}
@@ -138,7 +155,7 @@ export default function ToolGroupContainer({
             />
           ))}
         </div>
-      )}
-    </div>
+      </AgentDisclosure>
+    </motion.div>
   );
 }

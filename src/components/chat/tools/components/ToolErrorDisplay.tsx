@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown, CircleX } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 
 import { cn } from '../../../../lib/utils';
+import { AgentDisclosure, SPRING_SWAP } from '../../../../shared/view/beui';
 import { Markdown } from '../../view/subcomponents/Markdown';
 
 interface ToolErrorDisplayProps {
@@ -12,12 +14,13 @@ interface ToolErrorDisplayProps {
 }
 
 /**
- * Collapsed-by-default error row for non-Bash tool results, matching the
- * command-row (`BashCommandDisplay`) look: a compact header with a chevron
- * and a one-line preview that expands to the full error content. Errors are
- * signalled by the red styling — the details stay one click away.
+ * Collapsed-by-default error row for non-Bash tool results in the beUI
+ * tool-result error treatment (rose status colorway, spring chevron,
+ * AgentDisclosure reveal into a rounded muted viewport). The details stay
+ * one click away.
  */
 export const ToolErrorDisplay: React.FC<ToolErrorDisplayProps> = ({ content, label }) => {
+  const reduce = useReducedMotion() ?? false;
   const trimmedContent = content.trim();
   const hasContent = trimmedContent.length > 0;
   const [open, setOpen] = useState(false);
@@ -29,7 +32,7 @@ export const ToolErrorDisplay: React.FC<ToolErrorDisplayProps> = ({ content, lab
   };
 
   return (
-    <div className="my-0.5 border-l-2 border-red-500/60 py-0.5 pl-3 dark:border-red-400/60">
+    <div className="my-0.5 w-full text-sm">
       <div
         role={hasContent ? 'button' : undefined}
         tabIndex={hasContent ? 0 : undefined}
@@ -42,42 +45,42 @@ export const ToolErrorDisplay: React.FC<ToolErrorDisplayProps> = ({ content, lab
           }
         }}
         className={cn(
-          'flex items-center gap-2 outline-none',
-          hasContent && 'cursor-pointer focus-visible:ring-1 focus-visible:ring-ring',
+          'flex min-h-7 items-center gap-2 rounded-md py-0.5 outline-none',
+          hasContent && 'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring',
         )}
       >
-        <ChevronRight
-          className={cn(
-            'h-3.5 w-3.5 flex-shrink-0 text-red-500/70 transition-transform duration-200 dark:text-red-400/70',
-            open && 'rotate-90',
-            !hasContent && 'opacity-0',
-          )}
-        />
-        <svg
-          className="h-3.5 w-3.5 flex-shrink-0 text-red-500 dark:text-red-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-        <span className="flex-shrink-0 text-xs font-medium text-red-700 dark:text-red-300">{label}</span>
+        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-rose-600 dark:text-rose-400">
+          <CircleX className="size-3" />
+          {label}
+        </span>
         {!open && hasContent && (
           /* Not a <code>/<pre> tag: the global `.chat-message code` rule forces
              `white-space: pre-wrap !important`, which would defeat `truncate`. */
-          <span className="min-w-0 flex-1 truncate text-xs text-red-900/70 dark:text-red-100/70">
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
             {trimmedContent}
           </span>
         )}
+        {hasContent && (
+          <motion.span
+            aria-hidden="true"
+            animate={{ rotate: open ? 180 : 0 }}
+            transition={reduce ? { duration: 0 } : SPRING_SWAP}
+            className="ml-auto shrink-0 text-muted-foreground/50"
+          >
+            <ChevronDown className="size-3.5" />
+          </motion.span>
+        )}
       </div>
 
-      {open && hasContent && (
-        <div className="settings-content-enter py-1 pl-[1.375rem] text-sm text-red-900 dark:text-red-100">
-          <Markdown className="prose prose-sm prose-red max-w-none font-serif dark:prose-invert">
-            {trimmedContent}
-          </Markdown>
+      <AgentDisclosure open={open && hasContent}>
+        <div className="pl-6 pt-1.5">
+          <div className="overflow-hidden rounded-lg bg-muted/80 p-3 text-sm">
+            <Markdown className="prose prose-sm max-w-none font-serif dark:prose-invert">
+              {trimmedContent}
+            </Markdown>
+          </div>
         </div>
-      )}
+      </AgentDisclosure>
     </div>
   );
 };

@@ -126,6 +126,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     origin TEXT,
     base_commit TEXT,
     chain_slug TEXT,
+    -- 1 when the first message was an auto-sent boot prompt (/planner or
+    -- /worker New Session); the client hides exactly those prologues.
+    booted INTEGER DEFAULT 0,
     isArchived BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

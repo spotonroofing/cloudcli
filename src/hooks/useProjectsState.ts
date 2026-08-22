@@ -69,6 +69,7 @@ type SessionDetailsApiPayload = {
     provider?: string;
     summary?: string;
     origin?: string | null;
+    booted?: boolean;
     createdAt?: string | null;
     lastActivity?: string | null;
     project?: {
@@ -1038,6 +1039,7 @@ export function useProjectsState({
         id: sessionId,
         summary: details.summary ?? '',
         origin: details.origin ?? null,
+        booted: Boolean(details.booted),
         createdAt: details.createdAt ?? undefined,
         lastActivity: details.lastActivity ?? undefined,
         __provider:

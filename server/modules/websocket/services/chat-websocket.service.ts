@@ -207,6 +207,12 @@ async function handleChatSend(
     sessionsDb.updateSessionCustomName(sessionId, buildSessionTitleFromMessage(command));
   }
 
+  // Stamp boot-started sessions so the client hides exactly those prologues —
+  // a session whose first message was typed never gets its first turn hidden.
+  if (clientOptions.bootPrompt === true) {
+    sessionsDb.markSessionBooted(sessionId);
+  }
+
   // Record what this turn runs with so reopening the session later restores the
   // same model and reasoning effort, and so the resume path has a
   // session-scoped model answer to use.

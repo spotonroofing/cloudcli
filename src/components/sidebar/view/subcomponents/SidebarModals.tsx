@@ -164,14 +164,14 @@ export default function SidebarModals({
                     className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${
                       confirmingProjectAction === 'delete'
                         ? 'bg-red-100 dark:bg-red-900/30'
-                        : 'bg-orange-100 dark:bg-orange-900/30'
+                        : 'bg-amber-100 dark:bg-amber-900/30'
                     }`}
                   >
                     <AlertTriangle
                       className={`h-6 w-6 ${
                         confirmingProjectAction === 'delete'
                           ? 'text-red-600 dark:text-red-400'
-                          : 'text-orange-600 dark:text-orange-400'
+                          : 'text-amber-600 dark:text-amber-400'
                       }`}
                     />
                   </div>

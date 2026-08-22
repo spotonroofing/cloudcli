@@ -245,6 +245,11 @@ function mapCliOptionsToSDK(options = {}) {
 
   sdkOptions.model = options.model || CLAUDE_PREDEFINED_MODELS.DEFAULT;
 
+  // Live text streaming: partial-message events feed the stream_delta path
+  // (content_block_delta → stream_delta) so replies play back as they arrive
+  // instead of landing whole at the end of the turn.
+  sdkOptions.includePartialMessages = true;
+
   const resolvedEffort = resolveClaudeEffort(
     sdkOptions.model,
     effort,
@@ -339,6 +344,16 @@ function getAllSessions() {
  * @returns {Object} Transformed message ready for WebSocket
  */
 function transformMessage(sdkMessage) {
+  // Partial-message stream events carry the delta payload one level down.
+  // Unwrap so the normalizer sees content_block_delta/content_block_stop.
+  // Subagent partials are dropped — their text belongs to the subagent row,
+  // not the main transcript.
+  if (sdkMessage.type === 'stream_event') {
+    if (sdkMessage.parent_tool_use_id) {
+      return { type: 'stream_event_subagent' };
+    }
+    return { ...(sdkMessage.event || {}), session_id: sdkMessage.session_id };
+  }
   // Extract parent_tool_use_id for subagent tool grouping
   if (sdkMessage.parent_tool_use_id) {
     return {

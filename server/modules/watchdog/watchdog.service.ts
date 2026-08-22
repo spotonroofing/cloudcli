@@ -44,6 +44,8 @@ type WorkerRun = {
   sessionId: string;
   provider: string;
   origin: string | null;
+  /** True when the run's first message was an auto-sent boot prompt. */
+  booted: boolean;
   chainSlug: string | null;
   title: string | null;
   state: 'running' | 'finished' | 'stopped';
@@ -227,6 +229,7 @@ class WatchdogService {
         sessionId: run.sessionId,
         provider: run.provider,
         origin: 'dispatch',
+        booted: false,
         chainSlug: run.chainSlug,
         title: null,
         state: 'running',
@@ -262,6 +265,7 @@ class WatchdogService {
         sessionId: row.session_id,
         provider: row.provider,
         origin: row.origin,
+        booted: Boolean(row.booted),
         chainSlug,
         title,
         state,

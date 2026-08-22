@@ -81,18 +81,23 @@ function ChatInterface({
     selectedProject,
   });
 
-  // Boot sessions hide their auto-sent boot prologue. Known origins come from
-  // session payloads; a fresh new-session view on a booting surface (non-null
-  // sessionOrigin) always boots.
-  const hideBootPrologue =
-    selectedSession?.origin === 'planner'
-    || selectedSession?.origin === 'direct'
-    || (!selectedSession && sessionOrigin != null);
-
   // Lifecycle of the auto-sent New Session boot. The composer hook initiates
   // boots and ties them to their session; the message-derived ready/failed
   // transitions live in the effect below.
   const [bootState, setBootState] = useState<BootState>({ phase: 'idle', sessionId: null, attempt: 0 });
+
+  // Only sessions whose first message was an auto-sent boot prompt hide their
+  // prologue: the persisted `booted` stamp covers reopened sessions, and the
+  // local latch covers this pane's own boots until the refreshed session
+  // payload lands. A chat started by typing never gets its first turn hidden.
+  const bootedSessionsRef = useRef(new Set<string>());
+  if (bootState.phase !== 'idle' && bootState.sessionId) {
+    bootedSessionsRef.current.add(bootState.sessionId);
+  }
+  const hideBootPrologue =
+    Boolean(selectedSession?.booted)
+    || bootState.phase !== 'idle'
+    || (selectedSession ? bootedSessionsRef.current.has(selectedSession.id) : false);
 
   const {
     chatMessages,

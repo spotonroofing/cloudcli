@@ -57,8 +57,10 @@ type SessionDetails = {
   sessionId: string;
   provider: LLMProvider;
   summary: string;
-  /** Worker/planner tag ('direct' | 'dispatch' | 'planner') or null; boot-prologue hiding keys off it. */
+  /** Worker/planner tag ('direct' | 'dispatch' | 'planner') or null; pane labels key off it. */
   origin: string | null;
+  /** True when the session's first message was an auto-sent boot prompt; boot-prologue hiding keys off it. */
+  booted: boolean;
   createdAt: string | null;
   updatedAt: string | null;
   lastActivity: string | null;
@@ -420,6 +422,7 @@ export const sessionsService = {
         provider: session.provider as LLMProvider,
         summary: session.custom_name?.trim() || '',
         origin: session.origin ?? null,
+        booted: Boolean(session.booted),
         createdAt: session.created_at ?? null,
         updatedAt: session.updated_at ?? null,
         lastActivity: session.updated_at ?? session.created_at ?? null,
@@ -442,6 +445,7 @@ export const sessionsService = {
       provider: session.provider as LLMProvider,
       summary: session.custom_name?.trim() || '',
       origin: session.origin ?? null,
+      booted: Boolean(session.booted),
       createdAt: session.created_at ?? null,
       updatedAt: session.updated_at ?? null,
       lastActivity: session.updated_at ?? session.created_at ?? null,

@@ -11,8 +11,10 @@ type SessionSummary = {
   id: string;
   provider: string;
   summary: string;
-  /** Worker/planner tag; boot-prologue hiding in the chat view keys off it. */
+  /** Worker/planner tag; the chat view's pane labels key off it. */
   origin: string | null;
+  /** True when the first message was an auto-sent boot prompt; boot-prologue hiding keys off it. */
+  booted: boolean;
   messageCount: number;
   lastActivity: string;
 };
@@ -22,6 +24,7 @@ type SessionRepositoryRow = {
   session_id: string;
   custom_name?: string | null;
   origin?: string | null;
+  booted?: number | null;
   updated_at?: string | null;
   created_at?: string | null;
 };
@@ -128,6 +131,7 @@ function mapSessionRowToSummary(row: SessionRepositoryRow): SessionSummary {
     provider: row.provider,
     summary: row.custom_name || '',
     origin: row.origin ?? null,
+    booted: Boolean(row.booted),
     messageCount: 0,
     lastActivity: row.updated_at ?? row.created_at ?? new Date().toISOString(),
   };

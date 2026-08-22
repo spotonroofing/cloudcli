@@ -1,5 +1,6 @@
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { motion, useReducedMotion } from 'motion/react';
 
 import type {
   ChatMessage,
@@ -11,6 +12,7 @@ import { formatUsageLimitText, stripProposedPlanEnvelope } from '../../utils/cha
 import type { Project } from '../../../../types/app';
 import { ToolRenderer, ToolErrorDisplay, shouldHideToolResult } from '../../tools';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '../../../../shared/view/ui';
+import { MESSAGE_POP_UP, StreamingResponse, useStreamedReveal } from '../../../../shared/view/beui';
 
 import ChatMessageImages from './ChatMessageImages';
 import ChatMessageFiles from './ChatMessageFiles';
@@ -26,6 +28,8 @@ type DiffLine = {
 
 type MessageComponentProps = {
   message: ChatMessage;
+  /** Rows stamped after this epoch play the beUI pop-up on mount; history renders statically. */
+  animateFrom?: number;
   prevMessage: ChatMessage | null;
   createDiff: (oldStr: string, newStr: string) => DiffLine[];
   onFileOpen?: (filePath: string, diffInfo?: unknown) => void;
@@ -45,8 +49,28 @@ type InteractiveOption = {
 
 const COPY_HIDDEN_TOOL_NAMES = new Set(['Bash', 'Edit', 'Write', 'ApplyPatch']);
 
-const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider }: MessageComponentProps) => {
+/** Live assistant turn: the beUI streaming-response reveal over the growing buffer. */
+function StreamingAssistantText({ content }: { content: string }) {
+  const cursor = useStreamedReveal(content);
+  return (
+    <StreamingResponse status="streaming" announce={false}>
+      <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
+        {content.slice(0, cursor)}
+      </Markdown>
+    </StreamingResponse>
+  );
+}
+
+const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
+  const reduceMotion = useReducedMotion() ?? false;
+  // Evaluated once per mount: a row that pops in must not replay on re-render.
+  const animateInRef = useRef<boolean | null>(null);
+  if (animateInRef.current === null) {
+    const stamp = message.timestamp ? new Date(message.timestamp).getTime() : 0;
+    animateInRef.current = Boolean(animateFrom && stamp > animateFrom && !reduceMotion);
+  }
+  const animateIn = animateInRef.current;
   const isGrouped = prevMessage && prevMessage.type === message.type &&
     ((prevMessage.type === 'assistant') ||
       (prevMessage.type === 'user') ||
@@ -84,10 +108,14 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
   }
 
   return (
-    <div
+    <motion.div
       ref={messageRef}
       data-message-timestamp={message.timestamp || undefined}
-      className={`chat-message ${message.type} ${isGrouped ? 'grouped' : ''} ${message.type === 'user' ? 'flex justify-end px-3 sm:px-0' : 'px-3 sm:px-0'}`}
+      initial={animateIn ? { opacity: 0, transform: 'translateY(8px) scale(0.95)' } : false}
+      animate={animateIn ? { opacity: 1, transform: 'translateY(0px) scale(1)' } : undefined}
+      transition={MESSAGE_POP_UP}
+      style={{ transformOrigin: message.type === 'user' ? '100% 100%' : '0% 100%' }}
+      className={`chat-message group ${message.type} ${isGrouped ? 'grouped' : ''} ${message.type === 'user' ? 'flex justify-end px-3 sm:px-0' : 'px-3 sm:px-0'}`}
     >
       {message.type === 'user' ? (
         /* User turn on the right: claude.ai-style attachment cards above the bubble */
@@ -116,13 +144,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                   {shouldShowUserCopyControl && (
                     <MessageCopyControl content={userCopyContent} messageType="user" />
                   )}
-                  <span>{formattedTime}</span>
+                  <span className="opacity-0 transition-opacity duration-200 group-hover:opacity-100">{formattedTime}</span>
                 </div>
               </div>
             ) : (
-              /* Attachment-only turn: no text bubble, but the timestamp still shows */
+              /* Attachment-only turn: no text bubble, but the timestamp still shows on hover */
               <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
-                <span>{formattedTime}</span>
+                <span className="opacity-0 transition-opacity duration-200 group-hover:opacity-100">{formattedTime}</span>
               </div>
             )}
           </div>
@@ -354,9 +382,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
 
                   // Normal rendering for non-JSON content
                   return message.type === 'assistant' ? (
-                    <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
-                      {content}
-                    </Markdown>
+                    message.isStreaming ? (
+                      <StreamingAssistantText content={content} />
+                    ) : (
+                      <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
+                        {content}
+                      </Markdown>
+                    )
                   ) : (
                     <div className="whitespace-pre-wrap">
                       {content}
@@ -374,13 +406,17 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                 {shouldShowAssistantCopyControl && (
                   <MessageSpeakControl content={assistantCopyContent} />
                 )}
-                {!isGrouped && <span>{formattedTime}</span>}
+                {!isGrouped && (
+                  <span className="ml-auto opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                    {formattedTime}
+                  </span>
+                )}
               </div>
             )}
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 });
 

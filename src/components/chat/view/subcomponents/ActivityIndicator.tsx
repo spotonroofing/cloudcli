@@ -1,30 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Shimmer } from '../../../../shared/view/ui';
+import {
+  BrailleLoader,
+  TEXT_SHIMMER_CLASS_NAME,
+  TEXT_SHIMMER_KEYFRAMES,
+  textShimmerStyle,
+} from '../../../../shared/view/beui';
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
 
 type ActivityIndicatorProps = {
   activity: SessionActivity | null;
 };
 
-const ACTION_KEYS = [
-  'claudeStatus.actions.thinking',
-  'claudeStatus.actions.processing',
-  'claudeStatus.actions.analyzing',
-  'claudeStatus.actions.working',
-  'claudeStatus.actions.computing',
-  'claudeStatus.actions.reasoning',
-];
-const DEFAULT_ACTION_WORDS = ['Thinking', 'Processing', 'Analyzing', 'Working', 'Computing', 'Reasoning'];
 const EXIT_ANIMATION_MS = 220;
+const SHIMMER_DURATION_S = 1.8;
 
 /**
  * Inline response-in-progress indicator, rendered in the message flow where
- * the reply will appear: a shimmering activity label plus the elapsed time.
- * Rendered only while the viewed session has an entry in the processing map;
- * it fades out the moment that entry is removed. Interrupting lives on the
- * composer's send/stop button.
+ * the reply will appear: the horizontal beUI ASCII Braille loader sitting
+ * left of a shimmering "thinking" label (server status text overrides the
+ * word), plus the elapsed time. Rendered only while the viewed session has
+ * an entry in the processing map; it fades out the moment that entry is
+ * removed. Interrupting lives on the composer's send/stop button.
  */
 export default function ActivityIndicator({ activity }: ActivityIndicatorProps) {
   const { t } = useTranslation('chat');
@@ -61,9 +59,10 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
 
   if (!renderedActivity) return null;
 
-  const actionWords = ACTION_KEYS.map((key, i) => t(key, { defaultValue: DEFAULT_ACTION_WORDS[i] }));
-  const label = (renderedActivity.statusText || actionWords[Math.floor(elapsedSeconds / 4) % actionWords.length])
-    .replace(/\.+$/, '');
+  const label = (
+    renderedActivity.statusText
+    || t('claudeStatus.actions.thinking', { defaultValue: 'Thinking' })
+  ).replace(/\.+$/, '');
 
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
@@ -73,8 +72,16 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
 
   return (
     <div className={isExiting ? 'chat-activity-exit' : 'chat-activity-enter'}>
-      <div className="flex items-center gap-2 text-sm" role="status">
-        <Shimmer className="font-medium">{`${label}…`}</Shimmer>
+      <style>{TEXT_SHIMMER_KEYFRAMES}</style>
+      <div className="flex items-center gap-2 text-sm" role="status" data-testid="activity-indicator">
+        <BrailleLoader className="shrink-0 text-muted-foreground" label={label} />
+        <span
+          aria-hidden="true"
+          className={`font-medium ${TEXT_SHIMMER_CLASS_NAME}`}
+          style={textShimmerStyle(SHIMMER_DURATION_S)}
+        >
+          {`${label}…`}
+        </span>
         <span className="text-xs tabular-nums text-muted-foreground/60">{elapsedLabel}</span>
       </div>
     </div>

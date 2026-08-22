@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import type { RefObject } from 'react';
 
 import type { ChatMessage } from '../../types/types';
@@ -8,6 +8,7 @@ import type { Project, ProjectSession, LLMProvider } from '../../../../types/app
 import { getIntrinsicMessageKey } from '../../utils/messageKeys';
 import { groupConsecutiveTools, isToolGroupItem } from '../../utils/toolGrouping';
 import { Button } from '../../../../shared/view/ui';
+import { MessageScroller } from '../../../../shared/view/beui';
 
 import ActivityIndicator from './ActivityIndicator';
 import MessageComponent from './MessageComponent';
@@ -92,6 +93,16 @@ function ChatMessagesPane({
     [visibleMessages, showThinking],
   );
 
+  // Live-edge epoch for enter animations (beUI Message pattern): only rows
+  // that arrive after this pane last switched sessions pop up; loaded history
+  // renders statically, so a session open never replays a cascade.
+  const sessionKey = selectedSession?.id ?? null;
+  const animateEpochRef = useRef<{ key: string | null; at: number }>({ key: sessionKey, at: Date.now() });
+  if (animateEpochRef.current.key !== sessionKey) {
+    animateEpochRef.current = { key: sessionKey, at: Date.now() };
+  }
+  const animateFrom = animateEpochRef.current.at;
+
   // Stable, deterministic keys for the messages rendered this pass.
   //
   // `normalizedToChatMessages` rebuilds fresh ChatMessage objects on every store
@@ -128,11 +139,13 @@ function ChatMessagesPane({
   );
 
   return (
-    <div
-      ref={scrollContainerRef}
-      onWheel={onWheel}
-      onTouchMove={onTouchMove}
-      className="chat-messages-pane relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-3 pt-3 sm:pb-4 sm:pt-4"
+    <MessageScroller
+      className="relative min-h-0 flex-1"
+      viewportRef={scrollContainerRef as unknown as RefObject<HTMLElement>}
+      viewportClassName="chat-messages-pane overflow-x-hidden pb-3 pt-3 sm:pb-4 sm:pt-4"
+      viewportProps={{ onWheel, onTouchMove }}
+      busy={isProcessing}
+      label={t('session.transcriptLabel', { defaultValue: 'Conversation' })}
     >
       {chatMessages.length > 0 && (
         <div className="pointer-events-none sticky right-4 top-3 z-10 mb-2 flex justify-end sm:px-4">
@@ -223,6 +236,7 @@ function ChatMessagesPane({
                   <ToolGroupContainer
                     key={`tool-group-${getMessageKey(item.messages[0])}`}
                     group={item}
+                    animateFrom={animateFrom}
                     prevMessage={groupPrevMessage}
                     createDiff={createDiff}
                     getMessageKey={getMessageKey}
@@ -244,6 +258,7 @@ function ChatMessagesPane({
                 <MessageComponent
                   key={getMessageKey(item)}
                   message={item}
+                  animateFrom={animateFrom}
                   prevMessage={messagePrevMessage}
                   createDiff={createDiff}
                   onFileOpen={onFileOpen}
@@ -273,7 +288,7 @@ function ChatMessagesPane({
         </>
       )}
       </div>
-    </div>
+    </MessageScroller>
   );
 }
 

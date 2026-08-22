@@ -463,6 +463,23 @@ const addSessionWorkerColumns = (db: Database): void => {
 };
 
 /**
+ * Adds `booted`: 1 when the session's first message was an auto-sent boot
+ * prompt (/planner or /worker New Session), so the client hides exactly those
+ * prologues and never a typed first turn. Backfilled from origin on first run:
+ * before this column, every planner/direct session was prologue-filtered, so
+ * existing rows keep that behavior.
+ */
+const addSessionBootedColumn = (db: Database): void => {
+  const sessionsTableInfo = getTableInfo(db, 'sessions');
+  const columnNames = sessionsTableInfo.map((column) => column.name);
+
+  if (!columnNames.includes('booted')) {
+    addColumnToTableIfNotExists(db, 'sessions', columnNames, 'booted', 'INTEGER DEFAULT 0');
+    db.exec("UPDATE sessions SET booted = 1 WHERE origin IN ('planner', 'direct')");
+  }
+};
+
+/**
  * Adds `planner_memory_name`: the per-project planner identity injected into
  * every session as PLANNER_PROJECT. NULL means "use the project path basename".
  */
@@ -532,6 +549,7 @@ export const runMigrations = (db: Database) => {
     addSessionEffortColumn(db);
     addSessionAssignedProjectColumn(db);
     addSessionWorkerColumns(db);
+    addSessionBootedColumn(db);
     addProjectPlannerMemoryColumn(db);
     ensureProjectsForSessionPaths(db);
 

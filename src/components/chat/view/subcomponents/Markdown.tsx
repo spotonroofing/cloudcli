@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Check, Copy, FileCode2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -96,11 +97,17 @@ const CodeBlock = ({ node: _node, className, children, forceBlock, ...props }: C
     return <MermaidDiagram code={raw} />;
   }
 
+  // beUI code-block chrome (beui.dev/components/agents/code-block): a rounded
+  // muted panel with a slim header — file icon, language, copy — over a
+  // border-separated code viewport. Tokenizing stays on the app's existing
+  // highlighter; radius is the app token (rounded-lg), not the donor's 2xl.
   return (
-    <div className="group my-3 overflow-hidden rounded-lg border border-border bg-muted/50 shadow-sm dark:bg-zinc-900">
-      {/* Label row shares the block's background — no divider, ChatGPT-style */}
-      <div className="flex items-center justify-between px-4 pt-2">
-        <span className="select-none text-xs text-muted-foreground">{languageLabel}</span>
+    <div className="group my-3 w-full overflow-hidden rounded-lg bg-muted/80 text-sm dark:bg-zinc-900">
+      <div className="flex h-10 items-center gap-2.5 px-3">
+        <FileCode2 aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/70" />
+        <span className="select-none text-[10px] font-medium uppercase tracking-wide text-muted-foreground/55">
+          {languageLabel}
+        </span>
         <button
           type="button"
           onClick={() =>
@@ -111,60 +118,41 @@ const CodeBlock = ({ node: _node, className, children, forceBlock, ...props }: C
               }
             })
           }
-          className={`rounded-md p-1 transition-opacity focus-visible:opacity-100 ${copied
-            ? 'text-green-600 opacity-100 dark:text-green-500'
-            : 'text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100'
+          className={`ml-auto grid size-7 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${copied
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : 'text-muted-foreground opacity-0 hover:bg-background/70 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100'
             }`}
           title={copied ? t('codeBlock.copied') : t('codeBlock.copyCode')}
           aria-label={copied ? t('codeBlock.copied') : t('codeBlock.copyCode')}
         >
-          {copied ? (
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-          ) : (
-            <svg
-              className="h-4 w-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-            </svg>
-          )}
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
         </button>
       </div>
 
-      <SyntaxHighlighter
-        language={language}
-        style={isDarkMode ? oneDark : oneLight}
-        customStyle={{
-          margin: 0,
-          borderRadius: 0,
-          fontSize: '0.8125rem',
-          lineHeight: 1.6,
-          padding: '0.5rem 1rem 1rem',
-          // The container owns the background so the label row and code read as one panel.
-          background: 'transparent',
-        }}
-        codeTagProps={{
-          style: {
-            fontFamily:
-              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      <div className="overflow-auto border-t border-foreground/[0.06] py-2" style={{ maxHeight: 280 }}>
+        <SyntaxHighlighter
+          language={language}
+          style={isDarkMode ? oneDark : oneLight}
+          customStyle={{
+            margin: 0,
+            borderRadius: 0,
+            fontSize: '0.75rem',
+            lineHeight: '1.25rem',
+            padding: '0 1rem 0.5rem',
+            // The container owns the background so the header and code read as one panel.
             background: 'transparent',
-          },
-        }}
-      >
-        {raw}
-      </SyntaxHighlighter>
+          }}
+          codeTagProps={{
+            style: {
+              fontFamily:
+                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+              background: 'transparent',
+            },
+          }}
+        >
+          {raw}
+        </SyntaxHighlighter>
+      </div>
     </div>
   );
 };
@@ -193,7 +181,9 @@ const markdownComponents = {
     <ul className="mb-2 list-outside list-disc space-y-1 pl-5 marker:text-current last:mb-0">{children}</ul>
   ),
   ol: ({ children }: { children?: React.ReactNode }) => (
-    <ol className="mb-2 list-outside list-decimal space-y-1 pl-5 marker:text-current last:mb-0">{children}</ol>
+    // pl-6, not pl-5: two-digit markers overflow a 1.25rem gutter and the
+    // chat row's `contain: paint` clips them to their last digit.
+    <ol className="mb-2 list-outside list-decimal space-y-1 pl-6 marker:text-current last:mb-0">{children}</ol>
   ),
   li: ({ children }: { children?: React.ReactNode }) => <li className="[&>div:last-child]:mb-0 [&>div]:mb-1">{children}</li>,
   table: ({ children }: { children?: React.ReactNode }) => (

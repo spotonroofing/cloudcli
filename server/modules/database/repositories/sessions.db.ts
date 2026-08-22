@@ -24,6 +24,8 @@ type SessionRow = {
   base_commit: string | null;
   /** Dispatch chain slug the run belongs to; NULL for direct/free-standing runs. */
   chain_slug: string | null;
+  /** 1 when the session's first message was an auto-sent boot prompt. */
+  booted: number;
   jsonl_path: string | null;
   custom_name: string | null;
   /** Model this session runs with; NULL until the app records one for it. */
@@ -44,7 +46,7 @@ type RecentSessionsPage = {
 // list/feed reader prefers the app-owned attach-to-project choice without each
 // call site repeating the COALESCE. Writes always name real columns explicitly.
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, booted, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
 
 // WHERE-clause form of the same preference (SQLite cannot reference SELECT
 // aliases in WHERE).
@@ -452,6 +454,16 @@ export const sessionsDb = {
        SET custom_name = ?
        WHERE session_id = ?`
     ).run(customName, sessionId);
+  },
+
+  /** Marks a session as boot-started (its first message was an auto-sent boot prompt). */
+  markSessionBooted(sessionId: string): void {
+    const db = getConnection();
+    db.prepare(
+      `UPDATE sessions
+       SET booted = 1
+       WHERE session_id = ?`
+    ).run(sessionId);
   },
 
   getSessionById(sessionId: string): SessionRow | null {
