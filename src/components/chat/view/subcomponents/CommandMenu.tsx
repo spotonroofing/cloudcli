@@ -104,7 +104,7 @@ const getMenuPosition = (position: { top: number; left: number; bottom?: number 
       right: '16px',
       width: 'auto',
       maxWidth: 'calc(100vw - 32px)',
-      maxHeight: `min(54vh, calc(100vh - ${anchorBottom}px - ${MENU_EDGE_GAP}px))`,
+      maxHeight: `min(54vh, calc(100dvh - ${anchorBottom}px - ${MENU_EDGE_GAP}px))`,
     };
   }
   const anchorBottom = Math.min(Math.max(MENU_EDGE_GAP, position.bottom ?? 90), maxAnchorBottom);
@@ -119,7 +119,7 @@ const getMenuPosition = (position: { top: number; left: number; bottom?: number 
     left: `${clampedLeft}px`,
     width: 'min(440px, calc(100vw - 32px))',
     maxWidth: 'calc(100vw - 32px)',
-    maxHeight: `min(${MENU_MAX_HEIGHT}px, calc(100vh - ${anchorBottom}px - ${MENU_EDGE_GAP}px))`,
+    maxHeight: `min(${MENU_MAX_HEIGHT}px, calc(100dvh - ${anchorBottom}px - ${MENU_EDGE_GAP}px))`,
   };
 };
 

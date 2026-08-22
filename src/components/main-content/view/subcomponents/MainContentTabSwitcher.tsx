@@ -127,7 +127,7 @@ export default function MainContentTabSwitcher({
                   ariaLabel={displayLabel}
                   tabIndex={isActive ? 0 : -1}
                   onKeyDown={handleTabKeyDown}
-                  className="h-8 max-w-44 touch-manipulation gap-1.5 px-2.5 py-[5px]"
+                  className="touch-hit relative h-8 max-w-44 touch-manipulation gap-1.5 px-2.5 py-[5px]"
                 >
                   {tab.kind === 'builtin' ? (
                     <tab.icon className="h-3.5 w-3.5 shrink-0" strokeWidth={isActive ? 2.2 : 1.8} />

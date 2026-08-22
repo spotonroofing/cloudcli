@@ -1,6 +1,8 @@
 import { memo } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { CHECKBOX_CLASS, TOGGLE_ROW_CLASS } from '../constants';
+
+import { BeuiSwitch } from '../../../shared/view/beui';
+import { TOGGLE_ROW_CLASS } from '../constants';
 
 type QuickSettingsToggleRowProps = {
   label: string;
@@ -16,18 +18,17 @@ function QuickSettingsToggleRow({
   onCheckedChange,
 }: QuickSettingsToggleRowProps) {
   return (
-    <label className={TOGGLE_ROW_CLASS}>
+    <div className={TOGGLE_ROW_CLASS} onClick={() => onCheckedChange(!checked)}>
       <span className="flex items-center gap-2 text-sm text-foreground">
         <Icon className="h-4 w-4 text-muted-foreground" />
         {label}
       </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onCheckedChange(event.target.checked)}
-        className={CHECKBOX_CLASS}
-      />
-    </label>
+      {/* The row itself toggles too; stop the switch's own click from
+          bubbling into a second (reverting) toggle. */}
+      <span onClick={(event) => event.stopPropagation()}>
+        <BeuiSwitch checked={checked} onCheckedChange={onCheckedChange} ariaLabel={label} />
+      </span>
+    </div>
   );
 }
 

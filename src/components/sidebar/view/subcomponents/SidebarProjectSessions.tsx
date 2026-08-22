@@ -100,24 +100,13 @@ export default function SidebarProjectSessions({
           transition={{ duration: 0.18, ease: EASE_OUT }}
           className="overflow-hidden"
         >
-          <div className="space-y-0.5 md:pl-5">
-      <div className="px-3 pb-1 pt-1 md:hidden">
-        <button
-          className="flex h-8 w-full items-center justify-center gap-2 rounded-md bg-primary text-xs font-medium text-primary-foreground transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"
-          onClick={() => {
-            onProjectSelect(project);
-            onNewSession(project);
-          }}
-        >
-          <Plus className="h-3 w-3" />
-          {t('sessions.newSession')}
-        </button>
-      </div>
-
+          <div className="space-y-0.5 pl-5">
+      {/* One new-session control on both form factors; mobile gets a taller
+          touch target. handleNewSession selects the project itself. */}
       <Button
         variant="default"
         size="sm"
-        className="hidden h-8 w-full justify-start gap-2 bg-primary text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 md:flex"
+        className="h-11 w-full justify-start gap-2 bg-primary text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 md:h-8"
         onClick={() => onNewSession(project)}
       >
         <Plus className="h-3 w-3" />
@@ -159,7 +148,7 @@ export default function SidebarProjectSessions({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-full justify-center text-xs text-muted-foreground hover:text-foreground"
+              className="h-11 w-full justify-center text-xs text-muted-foreground hover:text-foreground md:h-8"
               onClick={() => onLoadMoreSessions(project.projectId)}
               disabled={isLoadingMoreSessions}
             >

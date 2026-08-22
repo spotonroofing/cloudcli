@@ -1,23 +1,19 @@
+import { Menu } from 'lucide-react';
+
 import type { MobileMenuButtonProps } from '../../types/types';
 import { useMobileMenuHandlers } from '../../hooks/useMobileMenuHandlers';
 
-export default function MobileMenuButton({ onMenuClick, compact = false }: MobileMenuButtonProps) {
+export default function MobileMenuButton({ onMenuClick }: MobileMenuButtonProps) {
   const { handleMobileMenuClick, handleMobileMenuTouchEnd } = useMobileMenuHandlers(onMenuClick);
-
-  const buttonClasses = compact
-    ? 'p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent/60 pwa-menu-button'
-    : 'p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent/60 touch-manipulation active:scale-95 pwa-menu-button flex-shrink-0';
 
   return (
     <button
       onClick={handleMobileMenuClick}
       onTouchEnd={handleMobileMenuTouchEnd}
-      className={buttonClasses}
+      className="touch-hit pwa-menu-button relative flex h-8 w-8 flex-shrink-0 touch-manipulation items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground active:scale-95"
       aria-label="Open menu"
     >
-      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
+      <Menu className="h-4 w-4" />
     </button>
   );
 }

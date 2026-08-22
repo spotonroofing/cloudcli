@@ -96,7 +96,8 @@ export const PromptInputTextarea = React.forwardRef<
     rows={1}
     data-slot="prompt-input-textarea"
     className={cn(
-      'chat-input-placeholder block max-h-[40vh] w-full resize-none overflow-y-auto bg-transparent px-4 py-2 text-sm leading-6 text-foreground placeholder-muted-foreground/50 focus:outline-none sm:max-h-[300px]',
+      // text-base below md keeps iOS Safari from zooming the viewport on focus.
+      'chat-input-placeholder block max-h-[40vh] w-full resize-none overflow-y-auto bg-transparent px-4 py-2 text-base leading-6 text-foreground placeholder-muted-foreground/50 focus:outline-none sm:max-h-[300px] md:text-sm',
       className
     )}
     {...props}
@@ -154,7 +155,7 @@ export const PromptInputButton = React.forwardRef<HTMLButtonElement, PromptInput
         type="button"
         variant="ghost"
         size="icon"
-        className={cn('h-8 w-8 [&_svg]:size-4', className)}
+        className={cn('touch-hit relative h-8 w-8 [&_svg]:size-4', className)}
         {...props}
       >
         {children}

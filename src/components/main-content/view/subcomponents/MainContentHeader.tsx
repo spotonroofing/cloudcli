@@ -7,23 +7,24 @@ import type { MainContentHeaderProps } from '../../types/types';
 
 import MobileMenuButton from './MobileMenuButton';
 import MainContentTabSwitcher from './MainContentTabSwitcher';
-import MainContentTitle from './MainContentTitle';
 
+/**
+ * Mobile-only top bar: hamburger + the view-mode tab rail, on the standard
+ * pane-header chrome. Session/project titles live in the pane header bar
+ * below (same as desktop); the old chat-title block is gone on both form
+ * factors.
+ */
 export default function MainContentHeader({
   activeTab,
   setActiveTab,
-  selectedProject,
-  selectedSession,
   shouldShowTasksTab,
   shouldShowBrowserTab,
-  isMobile,
   onMenuClick,
 }: MainContentHeaderProps) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
-  const hasOverflow = canScrollLeft || canScrollRight;
 
   const updateScrollState = useCallback(() => {
     const el = scrollRef.current;
@@ -81,64 +82,55 @@ export default function MainContentHeader({
   };
 
   return (
-    <header className="pwa-header-safe flex-shrink-0 border-b border-border/60 bg-background/95 px-3 py-1.5 backdrop-blur-sm sm:px-4 sm:py-2">
-      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-        <div className="flex min-w-0 items-center gap-2 sm:max-w-[min(34%,24rem)] sm:flex-[1_1_18rem]">
-          {isMobile && <MobileMenuButton onMenuClick={onMenuClick} />}
-          <MainContentTitle
+    <header className="pwa-header-safe flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+      <MobileMenuButton onMenuClick={onMenuClick} />
+
+      <div className="relative min-w-0 flex-1">
+        {canScrollLeft && (
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-background via-background/90 to-transparent" />
+        )}
+        <div
+          ref={scrollRef}
+          onScroll={updateScrollState}
+          className="scrollbar-hide max-w-full scroll-smooth overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]"
+        >
+          <MainContentTabSwitcher
             activeTab={activeTab}
-            selectedProject={selectedProject}
-            selectedSession={selectedSession}
+            setActiveTab={setActiveTab}
             shouldShowTasksTab={shouldShowTasksTab}
+            shouldShowBrowserTab={shouldShowBrowserTab}
           />
         </div>
+        {canScrollRight && (
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-background via-background/90 to-transparent" />
+        )}
 
-        <div className="-mx-3 min-w-0 sm:mx-0 sm:flex-1">
-          <div className="relative ml-auto w-fit max-w-full">
-            {canScrollLeft && (
-              <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-background via-background/90 to-transparent" />
+        {canScrollLeft && (
+          <button
+            type="button"
+            onClick={() => scrollTabs(-1)}
+            aria-label={t('navigation.scrollTabsLeft', { defaultValue: 'Scroll tabs left' })}
+            className={cn(
+              'absolute left-1 top-1/2 z-20 hidden h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md border border-border/70 bg-background/95 text-muted-foreground shadow-sm outline-none sm:flex',
+              'hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60',
             )}
-            <div
-              ref={scrollRef}
-              onScroll={updateScrollState}
-              className={cn(
-                'scrollbar-hide max-w-full scroll-smooth overflow-x-auto overscroll-x-contain px-3 [-webkit-overflow-scrolling:touch]',
-                hasOverflow ? 'sm:px-9' : 'sm:pl-3 sm:pr-0',
-              )}
-            >
-              <MainContentTabSwitcher
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                shouldShowTasksTab={shouldShowTasksTab}
-                shouldShowBrowserTab={shouldShowBrowserTab}
-              />
-            </div>
-            {canScrollRight && (
-              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-background via-background/90 to-transparent" />
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        )}
+        {canScrollRight && (
+          <button
+            type="button"
+            onClick={() => scrollTabs(1)}
+            aria-label={t('navigation.scrollTabsRight', { defaultValue: 'Scroll tabs right' })}
+            className={cn(
+              'absolute right-1 top-1/2 z-20 hidden h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md border border-border/70 bg-background/95 text-muted-foreground shadow-sm outline-none sm:flex',
+              'hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60',
             )}
-
-            {canScrollLeft && (
-              <button
-                type="button"
-                onClick={() => scrollTabs(-1)}
-                aria-label={t('navigation.scrollTabsLeft', { defaultValue: 'Scroll tabs left' })}
-                className="absolute left-1 top-1/2 z-20 hidden h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md border border-border/70 bg-background/95 text-muted-foreground shadow-sm outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 sm:flex"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            )}
-            {canScrollRight && (
-              <button
-                type="button"
-                onClick={() => scrollTabs(1)}
-                aria-label={t('navigation.scrollTabsRight', { defaultValue: 'Scroll tabs right' })}
-                className="absolute right-1 top-1/2 z-20 hidden h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md border border-border/70 bg-background/95 text-muted-foreground shadow-sm outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60 sm:flex"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </header>
   );

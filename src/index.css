@@ -715,7 +715,19 @@
     .touch\:opacity-100 {
       opacity: 1 !important;
     }
-    
+
+    /* Expands a small control's tap area to the 44px minimum without changing
+       its rendered size. Requires position:relative (Tailwind `relative`). */
+    .touch-hit::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+
     /* Completely disable hover states on touch devices */
     * {
       -webkit-tap-highlight-color: transparent !important;

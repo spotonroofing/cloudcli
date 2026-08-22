@@ -19,9 +19,6 @@ export const SETTING_ROW_CLASS =
 
 export const TOGGLE_ROW_CLASS = `${SETTING_ROW_CLASS} cursor-pointer`;
 
-export const CHECKBOX_CLASS =
-  'h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-ring focus:ring-2 bg-gray-100 dark:bg-gray-800 checked:bg-primary';
-
 export const TOOL_DISPLAY_TOGGLES: PreferenceToggleItem[] = [
   {
     key: 'showRawParameters',

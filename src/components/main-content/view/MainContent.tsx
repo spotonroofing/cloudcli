@@ -231,11 +231,8 @@ function MainContent({
         <MainContentHeader
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          selectedProject={selectedProject}
-          selectedSession={selectedSession}
           shouldShowTasksTab={shouldShowTasksTab}
           shouldShowBrowserTab={shouldShowBrowserTab}
-          isMobile={isMobile}
           onMenuClick={onMenuClick}
         />
       )}

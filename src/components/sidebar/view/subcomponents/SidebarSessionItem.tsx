@@ -216,68 +216,62 @@ export default function SidebarSessionItem({
       )}
 
       <div className="md:hidden">
+        {/* Mobile session row: the desktop beUI row anatomy (borderless
+            min-h rounded row, provider tile, marquee label, count badge, age)
+            with touch adaptations — taller row, an always-visible options
+            button with a 44px hit area opening the bottom sheet. */}
         <div
+          role="button"
+          tabIndex={0}
+          title={sessionView.sessionName}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              selectMobileSession();
+            }
+          }}
           className={cn(
-            'p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative',
-            isSelected ? 'bg-primary/5 border-primary/20' : '',
-            !isSelected && isProcessing ? 'border-border/60 bg-muted/20' : 'border-border/30',
+            'relative flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-[13px] font-normal leading-4 outline-none',
+            'text-muted-foreground transition-colors active:bg-muted',
+            isSelected && 'bg-muted text-foreground',
           )}
           onClick={selectMobileSession}
         >
           {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
-          <div className="flex items-center gap-2">
-            <div
-              className={cn(
-                'w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0',
-                isSelected ? 'bg-primary/10' : 'bg-muted/50',
-              )}
-            >
-              <LLMProviderLogo provider={session.__provider} className="h-3 w-3" />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <div
-                  className="min-w-0 flex-1 truncate text-[13px] font-normal leading-4 text-foreground"
-                  title={sessionView.sessionName}
-                >
-                  {sessionView.sessionName}
-                </div>
-                {isProcessing ? (
-                  <span className="ml-auto flex-shrink-0">
-                    <Tooltip content={t('tooltips.processingSessionIndicator', 'Processing session')} position="top">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      </span>
-                    </Tooltip>
-                  </span>
-                ) : compactSessionAge && (
-                  <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground">{compactSessionAge}</span>
-                )}
-              </div>
-              <div className="mt-0.5 flex items-center">
-                {sessionView.messageCount > 0 && (
-                  <Badge variant="secondary" className="px-1 py-0 text-xs">
-                    {sessionView.messageCount}
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              aria-label={`Session options for ${sessionView.sessionName}`}
-              aria-haspopup="dialog"
-              aria-expanded={isMobileOptionsOpen}
-              className="ml-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted active:scale-95"
-              onClick={(event) => {
-                event.stopPropagation();
-                setMobileOptionsOpen(true);
-              }}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
+          <div
+            className={cn(
+              'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md',
+              isSelected ? 'bg-primary/10' : 'bg-muted/50',
+            )}
+          >
+            <LLMProviderLogo provider={session.__provider} className="h-3 w-3" />
           </div>
+          <MarqueeLabel active={false}>{sessionView.sessionName}</MarqueeLabel>
+          {sessionView.messageCount > 0 && (
+            <Badge variant="secondary" className="flex-shrink-0 px-1 py-0 text-[10px]">
+              {sessionView.messageCount}
+            </Badge>
+          )}
+          {isProcessing ? (
+            <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+            </span>
+          ) : compactSessionAge && (
+            <span className="flex-shrink-0 text-[11px] tabular-nums text-muted-foreground">{compactSessionAge}</span>
+          )}
+          <button
+            type="button"
+            aria-label={`Session options for ${sessionView.sessionName}`}
+            aria-haspopup="dialog"
+            aria-expanded={isMobileOptionsOpen}
+            className="touch-hit relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors active:bg-muted"
+            onClick={(event) => {
+              event.stopPropagation();
+              setMobileOptionsOpen(true);
+            }}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
         </div>
 
         <Dialog open={isMobileOptionsOpen} onOpenChange={setMobileOptionsOpen}>
@@ -358,14 +352,26 @@ export default function SidebarSessionItem({
 
                 <button
                   type="button"
+                  onClick={() => {
+                    setMobileOptionsOpen(false);
+                    onMoveSession(session.id, sessionView.sessionName);
+                  }}
+                  className="flex min-h-12 w-full items-center gap-3 rounded-lg border border-border bg-muted/35 px-4 py-3 text-left text-foreground transition-colors active:bg-muted"
+                >
+                  <FolderInput className="h-5 w-5 flex-shrink-0" />
+                  <span className="text-sm font-medium">Move to project</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleCopyAction}
                   disabled={isCopyPending}
                   className={cn(
                     'flex min-h-12 w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
                     copyState === 'copied'
-                      ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300'
+                      ? 'border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                       : copyState === 'error'
-                        ? 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300'
+                        ? 'border-destructive/30 bg-destructive/10 text-destructive'
                         : 'border-border bg-muted/35 text-foreground active:bg-muted',
                   )}
                 >
@@ -389,7 +395,7 @@ export default function SidebarSessionItem({
                       setMobileOptionsOpen(false);
                       requestDeleteSession();
                     }}
-                    className="flex min-h-12 w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-red-600 transition-colors active:bg-red-500/10 dark:text-red-400"
+                    className="flex min-h-12 w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-destructive transition-colors active:bg-destructive/10"
                   >
                     <Trash2 className="h-5 w-5 flex-shrink-0" />
                     <span className="text-sm font-medium">Archive or delete session</span>

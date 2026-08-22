@@ -1,9 +1,10 @@
-import { type ReactNode } from 'react';
-import { Activity, Archive, Folder, MessageSquare, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { useRef, type ReactNode } from 'react';
+import { Activity, Archive, Folder, MessageSquare, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { ScrollArea } from '../../../../shared/view/ui';
 import { Loader } from '../../../../shared/view/beui/Loader';
+import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import type { Project } from '../../../../types/app';
 import type { ConversationSearchResults, SearchProgress } from '../../hooks/useSidebarController';
 import type { ArchivedProjectListItem, ArchivedSessionListItem, RecentConversationListItem, SidebarSearchMode } from '../../types/types';
@@ -191,11 +192,18 @@ export default function SidebarContent({
   // button always targets the current scoped project.
   const scopedProject = projectListProps.selectedProject;
 
+  // Mobile refreshes by pulling the list down (the refresh button is
+  // desktop-only); the indicator row above the list grows with the pull.
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const pullToRefresh = usePullToRefresh({
+    scrollRef: scrollViewportRef,
+    onRefresh,
+    isRefreshing,
+    enabled: isMobile,
+  });
+
   return (
-    <div
-      className="flex h-full flex-col bg-background/80 backdrop-blur-sm md:w-72 md:select-none"
-      style={{}}
-    >
+    <div className="flex h-full flex-col bg-background/80 backdrop-blur-sm md:w-72 md:select-none">
       <SidebarHeader
         isPWA={isPWA}
         isMobile={isMobile}
@@ -219,7 +227,28 @@ export default function SidebarContent({
         t={t}
       />
 
-      <ScrollArea className="flex-1 overflow-y-auto overscroll-contain md:px-1.5 md:py-2">
+      {isMobile && (
+        <div
+          aria-hidden={pullToRefresh.indicatorHeight === 0}
+          className={`flex flex-shrink-0 items-end justify-center overflow-hidden ${
+            pullToRefresh.pulling ? '' : 'transition-[height] duration-200 ease-out'
+          }`}
+          style={{ height: `${pullToRefresh.indicatorHeight}px` }}
+          data-slot="pull-to-refresh"
+          data-armed={pullToRefresh.armed || pullToRefresh.holding ? 'true' : undefined}
+        >
+          <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${pullToRefresh.holding ? 'animate-spin' : ''}`}
+              style={pullToRefresh.holding ? undefined : {
+                transform: `rotate(${pullToRefresh.pullProgress * 270}deg)`,
+                opacity: 0.35 + pullToRefresh.pullProgress * 0.65,
+              }}
+            />
+          </span>
+        </div>
+      )}
+      <ScrollArea ref={scrollViewportRef} className="flex-1 overflow-y-auto overscroll-contain px-1.5 py-2">
         {showConversationSearch ? (
           isSearching && !conversationResults ? (
             <div className="px-4 py-12 text-center md:py-8">

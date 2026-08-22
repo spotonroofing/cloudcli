@@ -108,7 +108,7 @@ export default function SidebarRecentConversations({
           <span className="text-[10px] tabular-nums text-muted-foreground/70">{total}</span>
           <button
             type="button"
-            className="flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            className="touch-hit relative flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
             title={t('recent.newChat', 'New chat')}
             aria-label={t('recent.newChat', 'New chat')}
             onClick={onNewStandaloneChat}
@@ -176,7 +176,7 @@ export default function SidebarRecentConversations({
 
               <button
                 type="button"
-                className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground md:hidden md:group-hover:flex"
+                className="touch-hit relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground md:hidden md:group-hover:flex"
                 title={t('moveSession.title', 'Move chat to project')}
                 aria-label={t('moveSession.title', 'Move chat to project')}
                 onClick={(event) => {
@@ -197,7 +197,7 @@ export default function SidebarRecentConversations({
         <Button
           variant="ghost"
           size="sm"
-          className="mt-1 h-8 w-full text-xs text-muted-foreground"
+          className="mt-1 h-11 w-full text-xs text-muted-foreground md:h-8"
           onClick={onLoadMore}
           disabled={isLoadingMore}
         >
