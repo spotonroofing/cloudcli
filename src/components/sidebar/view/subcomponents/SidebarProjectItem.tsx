@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Check, ChevronDown, ChevronRight, Edit3, Folder, FolderOpen, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Edit3, Folder, FolderOpen, Rows2, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import {
@@ -37,6 +37,10 @@ type SidebarProjectItemProps = {
   mcpServerStatus: MCPServerStatus;
   /** Live runs inside this project; the row shimmers while nonzero and collapsed. */
   runningSessionCount: number;
+  /** True when the project is open as a multi-project workspace row. */
+  isInWorkspace: boolean;
+  /** Opens the project as a workspace row, or closes its row when already open. */
+  onToggleWorkspaceProject?: (project: Project) => void;
   onEditingNameChange: (name: string) => void;
   onEditingPlannerNameChange: (name: string) => void;
   onToggleProject: (projectName: string) => void;
@@ -119,6 +123,8 @@ export default function SidebarProjectItem({
   onLoadMoreSessions,
   activeSessions,
   attentionSessionIds,
+  isInWorkspace,
+  onToggleWorkspaceProject,
   onNewSession,
   onEditingSessionNameChange,
   onStartEditingSession,
@@ -415,6 +421,24 @@ export default function SidebarProjectItem({
                 <span className="text-[10px] tabular-nums text-muted-foreground/70">
                   {sessionCountDisplay}
                 </span>
+                {onToggleWorkspaceProject && !isSelected && (
+                  <div
+                    className={cn(
+                      'touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded transition-all duration-200 hover:bg-accent',
+                      isInWorkspace
+                        ? 'text-primary opacity-100'
+                        : 'opacity-0 group-hover/project:opacity-100',
+                    )}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleWorkspaceProject(project);
+                    }}
+                    title={isInWorkspace ? 'Remove from workspace' : 'Open as workspace row'}
+                    data-workspace-toggle={project.projectId}
+                  >
+                    <Rows2 className="h-3 w-3" />
+                  </div>
+                )}
                 <div
                   className="touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded opacity-0 transition-all duration-200 hover:bg-accent group-hover/project:opacity-100"
                   onClick={(event) => {

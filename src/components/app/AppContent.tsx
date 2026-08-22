@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 
 import Sidebar from '../sidebar/view/Sidebar';
 import type { RunningRunInfo } from '../sidebar/types/types';
-import MainContent from '../main-content/view/MainContent';
 import CommandPalette from '../command-palette/CommandPalette';
+import type { Project } from '../../types/app';
 import { QuickSettingsPanel } from '../quick-settings-panel';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
@@ -15,6 +15,9 @@ import { useProjectsState } from '../../hooks/useProjectsState';
 import { useQueuedMessageAutoSend } from '../../hooks/useQueuedMessageAutoSend';
 import { api } from '../../utils/api';
 import { isNotificationSoundEnabled } from '../../utils/notificationSound';
+
+import WorkspaceView from './workspace/WorkspaceView';
+import { useWorkspace } from './workspace/useWorkspace';
 
 type RunningSessionApiItem = {
   sessionId?: unknown;
@@ -78,6 +81,7 @@ function AppContentInner() {
   const [runningRuns, setRunningRuns] = useState<RunningRunInfo[]>([]);
 
   const {
+    projects,
     scopedProjectNotFound,
     selectedProject,
     selectedSession,
@@ -104,6 +108,41 @@ function AppContentInner() {
     isMobile,
     activeSessions: processingSessions,
   });
+
+  // Multi-project workspace (phase 7): which projects are open as stacked
+  // rows. With a single open project the surface renders exactly as before.
+  const workspace = useWorkspace({
+    selectedProjectId: selectedProject?.projectId ?? null,
+    projects,
+  });
+
+  const handleToggleWorkspaceProject = useCallback(
+    (project: Project) => {
+      if (workspace.order.includes(project.projectId)) {
+        workspace.closeProject(project.projectId);
+        return;
+      }
+      workspace.openProject(project.projectId);
+    },
+    [workspace],
+  );
+
+  // Closing the primary (URL-driven) row hands the selection to the next open
+  // project so the workspace never renders without its primary.
+  const handleCloseWorkspaceRow = useCallback(
+    (projectId: string) => {
+      workspace.closeProject(projectId);
+      if (projectId !== selectedProject?.projectId) {
+        return;
+      }
+      const nextId = workspace.order.find((id) => id !== projectId);
+      const nextProject = nextId ? projects.find((project) => project.projectId === nextId) : undefined;
+      if (nextProject) {
+        handleProjectSelect(nextProject);
+      }
+    },
+    [workspace, selectedProject?.projectId, projects, handleProjectSelect],
+  );
 
   // Queued messages for sessions that finish while another session (or none)
   // is being viewed are sent from here; the viewed session's composer handles
@@ -281,7 +320,12 @@ function AppContentInner() {
     <div className="fixed inset-0 flex bg-background" style={{ bottom: 'var(--keyboard-height, 0px)' }}>
       {!isMobile ? (
         <div className="h-full flex-shrink-0 border-r border-border/50">
-          <Sidebar {...sidebarSharedProps} runningRuns={runningRuns} />
+          <Sidebar
+            {...sidebarSharedProps}
+            runningRuns={runningRuns}
+            workspaceProjectIds={workspace.order}
+            onToggleWorkspaceProject={handleToggleWorkspaceProject}
+          />
         </div>
       ) : (
         <div
@@ -313,7 +357,11 @@ function AppContentInner() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <MainContent
+        <WorkspaceView
+          projects={projects}
+          workspace={workspace}
+          onCloseRow={handleCloseWorkspaceRow}
+          onNewProjectSession={handleNewSession}
           selectedProject={selectedProject}
           selectedSession={selectedSession}
           activeTab={activeTab}

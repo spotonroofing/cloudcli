@@ -68,6 +68,10 @@ export type SidebarProps = {
   attentionSessionIds: ReadonlySet<string>;
   /** Live runs enriched with origin/project (5s poll of the run registry). */
   runningRuns: RunningRunInfo[];
+  /** Projects open as multi-project workspace rows (desktop only). */
+  workspaceProjectIds?: string[];
+  /** Opens a project as a workspace row, or closes its row when already open. */
+  onToggleWorkspaceProject?: (project: Project) => void;
   onProjectSelect: (project: Project) => void;
   onSessionSelect: (session: ProjectSession) => void;
   onNewSession: (project: Project) => void;

@@ -35,6 +35,10 @@ export type SidebarProjectListProps = {
   attentionSessionIds: ReadonlySet<string>;
   /** Live-run count per projectId; drives the project-row activity shimmer. */
   runningByProject: ReadonlyMap<string, number>;
+  /** Projects open as multi-project workspace rows (desktop only). */
+  workspaceProjectIds?: string[];
+  /** Opens a project as a workspace row, or closes its row when already open. */
+  onToggleWorkspaceProject?: (project: Project) => void;
   /** Bounce-dot destination: the selected session's row, when it is in this list. */
   selectedSessionId: string | null;
   forceExpanded?: boolean;
@@ -86,6 +90,8 @@ export default function SidebarProjectList({
   activeSessions,
   attentionSessionIds,
   runningByProject,
+  workspaceProjectIds,
+  onToggleWorkspaceProject,
   selectedSessionId,
   forceExpanded = false,
   onEditingNameChange,
@@ -168,6 +174,8 @@ export default function SidebarProjectList({
               activeSessions={activeSessions}
               attentionSessionIds={attentionSessionIds}
               runningSessionCount={runningByProject.get(project.projectId) ?? 0}
+              isInWorkspace={Boolean(workspaceProjectIds?.includes(project.projectId))}
+              onToggleWorkspaceProject={onToggleWorkspaceProject}
               onNewSession={onNewSession}
               onEditingSessionNameChange={onEditingSessionNameChange}
               onStartEditingSession={onStartEditingSession}
