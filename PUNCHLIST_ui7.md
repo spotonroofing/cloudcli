@@ -34,10 +34,10 @@ Every phase's done check passes against dev (4748) in a real browser at desktop 
 
 Goal: every indicator reflects the session actually shown. Files: `src/components/chat/hooks/useChatRealtimeHandlers.ts`, the context ring/popover components, the worker pane switcher, boot-prologue logic. Dependencies: none. Parallelism: items are independent; fine to fan out.
 
-- [ ] Context ring is per-pane: a `token_budget` event applies only to the ChatInterface whose viewed session it belongs to. Today the handler (status case, `useChatRealtimeHandlers.ts` ~line 318) calls setTokenBudget with no session filter, so every mounted pane repaints on any session's usage. Ensure the server stamps sessionId on these events if it does not already.
-- [ ] Context popover denominator renders human-scale: "70k of 1M", not "1,000K".
-- [ ] A fresh worker session shows no boot prologue: the /worker boot prompt and its tool calls get the same hidden treatment the planner boot has, and no false "scroll up to view N messages" banner appears (the count must come from the session actually open, not stale store state).
-- [ ] Worker run-switcher dropdown has a fixed sane min-width independent of the current run's label length.
+- [x] Context ring is per-pane: a `token_budget` event applies only to the ChatInterface whose viewed session it belongs to. Today the handler (status case, `useChatRealtimeHandlers.ts` ~line 318) calls setTokenBudget with no session filter, so every mounted pane repaints on any session's usage. Ensure the server stamps sessionId on these events if it does not already.
+- [x] Context popover denominator renders human-scale: "70k of 1M", not "1,000K".
+- [x] A fresh worker session shows no boot prologue: the /worker boot prompt and its tool calls get the same hidden treatment the planner boot has, and no false "scroll up to view N messages" banner appears (the count must come from the session actually open, not stale store state).
+- [x] Worker run-switcher dropdown has a fixed sane min-width independent of the current run's label length.
 
 Done check: on dev, with a planner chat and a worker session open side by side, drive a turn in one pane; the other pane's ring does not change (DOM state, not pixels). A brand-new worker session's transcript contains no boot text and no scroll banner. Popover text asserted via snapshot. Substantial phase: verify against these criteria with a fresh-context subagent before reporting. Commit.
 

@@ -417,6 +417,42 @@ export function useChatSessionState({
     if (viewHiddenCount > 0) setViewHiddenCount(0);
   }
 
+  // A boot-origin session whose loaded tail window holds no user turn is
+  // still inside its boot prologue: the boot prompt sits above the window, so
+  // the prologue filter (which needs the transcript start) is bypassed and
+  // boot rows plus a "scroll up" banner would show. Load the full transcript
+  // once so the filter applies and the banner reflects real content.
+  const bootPrologueFullLoadRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hideBootPrologue || !hasMoreMessages || !activeSessionId) return;
+    if (bootPrologueFullLoadRef.current === activeSessionId) return;
+    const windowHasUserTurn = sessionStore.getMessages(activeSessionId)
+      .some((message) => message.kind === 'text' && message.role === 'user');
+    if (windowHasUserTurn) return;
+    bootPrologueFullLoadRef.current = activeSessionId;
+    void sessionStore.fetchFromServer(activeSessionId, {
+      limit: null,
+      offset: 0,
+      canRequest: () => (
+        isActiveRef.current
+        && activeSessionIdRef.current === activeSessionId
+      ),
+    }).then((slot) => {
+      // fetchFromServer resolves with a slot in status 'error' on failure —
+      // a failed fetch must not clear a truthful banner.
+      if (!slot || slot.status === 'error') {
+        bootPrologueFullLoadRef.current = null;
+        return;
+      }
+      if (activeSessionIdRef.current !== activeSessionId) return;
+      setHasMoreMessages(false);
+      setTotalMessages(slot.total);
+      messagesOffsetRef.current = slot.offset;
+    }).catch(() => {
+      bootPrologueFullLoadRef.current = null;
+    });
+  }, [hideBootPrologue, hasMoreMessages, activeSessionId, storeMessages, sessionStore]);
+
   const chatMessages = useMemo(() => {
     const all = normalizedToChatMessages(storeMessages);
     // The boot prologue only hides when the loaded window includes the
@@ -760,6 +796,9 @@ export function useChatSessionState({
         && activeSessionIdRef.current === selectedSessionId
       ),
     }).then(slot => {
+      // A response that lands after the view moved on must not stamp its
+      // counts onto the newly selected session's pane.
+      if (activeSessionIdRef.current !== selectedSessionId) return;
       if (slot) {
         setHasMoreMessages(slot.hasMore);
         setTotalMessages(slot.total);
@@ -770,6 +809,7 @@ export function useChatSessionState({
       }
       setIsLoadingSessionMessages(false);
     }).catch(() => {
+      if (activeSessionIdRef.current !== selectedSessionId) return;
       setIsLoadingSessionMessages(false);
     });
   }, [

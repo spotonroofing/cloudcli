@@ -316,6 +316,10 @@ export function useChatRealtimeHandlers({
 
         case 'status': {
           if (msg.text === 'token_budget' && msg.tokenBudget) {
+            // A budget belongs to one session; only the pane viewing that
+            // session repaints its ring. Providers stamp sessionId on these
+            // events, so a mismatch is another pane's usage.
+            if (sid !== activeViewSessionId) break;
             const incoming = msg.tokenBudget as Record<string, unknown>;
             setTokenBudget((previous) => {
               // Mid-stream budgets carry fresh counters but only the env-guess

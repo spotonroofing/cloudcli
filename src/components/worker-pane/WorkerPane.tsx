@@ -195,6 +195,7 @@ export default function WorkerPane({
             size="sm"
             className="min-w-0"
             triggerClassName="h-6 max-w-full gap-1 px-1.5 text-[11px] font-normal text-muted-foreground hover:text-foreground [&>span]:truncate [&_svg]:h-3 [&_svg]:w-3"
+            menuClassName="w-72"
             items={runs.map((run) => ({
               key: run.sessionId,
               label: runLabel(run),

@@ -24,10 +24,14 @@ const readUsageNumber = (value: unknown) => {
 const RING_RADIUS = 7;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-/** "98.3k" under 100k, "200k" above, plain numbers under 1000. */
+/** "98.3k" under 100k, "200k" up to 1M, "1M"/"1.5M" above, plain numbers under 1000. */
 const formatTokensShort = (tokens: number) => {
   if (tokens < 1000) {
     return String(tokens);
+  }
+  if (tokens >= 1000000) {
+    const millions = tokens / 1000000;
+    return `${millions >= 10 ? Math.round(millions) : Math.round(millions * 10) / 10}M`;
   }
   const thousands = tokens / 1000;
   return `${thousands >= 100 ? Math.round(thousands) : Math.round(thousands * 10) / 10}k`;
