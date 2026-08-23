@@ -45,7 +45,9 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
-      outDir: 'dist',
+      // dist/ belongs to the live instance and is written only by promote.sh
+      // (ui9 A1 build isolation); every vite build lands in dist-dev.
+      outDir: 'dist-dev',
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {

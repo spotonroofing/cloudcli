@@ -15,7 +15,7 @@ function getBootstrapApplicationRoot(importMetaUrl: string) {
     serverRoot = parent;
   }
   const parent = path.dirname(serverRoot);
-  return path.basename(parent) === 'dist-server' ? path.dirname(parent) : parent;
+  return path.basename(parent).startsWith('dist-server') ? path.dirname(parent) : parent;
 }
 
 // Resolve the repo/app root via the nearest /server folder so this file keeps finding the

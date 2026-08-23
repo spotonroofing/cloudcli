@@ -1,10 +1,11 @@
 #!/bin/zsh
 # promote.sh — dev-verified promote with drain and auto-rollback (spec B6).
 #
-# Flow: full build → server test suite → boot the dev instance on the fresh
-# build and health-check it → drain live's in-flight dispatched turns (wait
-# for the commit gate; past the wait budget it becomes a decision-needed
-# notification and the promote aborts) → snapshot nothing yet → restart live
+# Flow: full build (dev-scoped: dist-dev + dist-server-dev) → server test
+# suite → boot the dev instance on the fresh build and health-check it →
+# drain live's in-flight dispatched turns (wait for the commit gate; past the
+# wait budget it becomes a decision-needed notification and the promote
+# aborts) → copy artifacts into live's dist/ + dist-server/ → restart live
 # via launchd → post-promote health check → on success advance the last-good
 # artifact snapshot and the mini-last-good git tag; on failure restore the
 # last-good artifacts, restart live back to health, and fire decision-needed.
@@ -75,6 +76,13 @@ except Exception:
   sleep 30; WAITED=$((WAITED + 30))
 done
 log "live is drained"
+
+# Build isolation (ui9 A1): npm run build emits dev-scoped artifacts
+# (dist-dev, dist-server-dev). Live serves only dist/ and dist-server/, and
+# this copy is the single place they are ever written.
+log "copying verified artifacts into live's serving location"
+rsync -a --delete "$REPO/dist-dev/" "$REPO/dist/" || fail "artifact copy (frontend) failed"
+rsync -a --delete "$REPO/dist-server-dev/" "$REPO/dist-server/" || fail "artifact copy (server) failed"
 
 log "restarting live on the new build"
 launchctl kickstart -k "gui/$UID_NUM/com.spoton.cloudcli-live"

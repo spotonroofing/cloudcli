@@ -7,6 +7,9 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Build outputs
+dist-dev/
+dist-server-dev/
+dist-server-dev.old/
 dist/
 dist-server/
 dist-server.next/

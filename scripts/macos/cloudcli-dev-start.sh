@@ -24,4 +24,7 @@ fi
 [[ -f "$DEV_DIR/.claude.json" ]] || cp "$HOME/.claude.json" "$DEV_DIR/.claude.json" 2>/dev/null || true
 
 cd "${CLOUDCLI_REPO:?CLOUDCLI_REPO must point at the repo root}"
-exec node dist-server/server/index.js
+# Build isolation (ui9 A1): dev runs its own artifacts. dist/ and dist-server/
+# belong to live and are written only by promote.sh.
+export CLOUDCLI_FRONTEND_DIST="$PWD/dist-dev"
+exec node dist-server-dev/server/index.js

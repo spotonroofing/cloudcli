@@ -7,11 +7,13 @@
 import fs from 'node:fs';
 
 const NEXT = 'dist-server.next';
-const LIVE = 'dist-server';
-const OLD = 'dist-server.old';
 const ENTRY = 'server/index.js';
 
 const mode = process.argv[2] ?? 'promote';
+// Target directory: dist-server-dev for the dev-scoped build (ui9 A1 build
+// isolation), dist-server for npm-package installs (the `preserver` recover).
+const LIVE = process.argv[3] ?? 'dist-server';
+const OLD = `${LIVE}.old`;
 
 if (mode === 'recover') {
   // Ran before every server start: if a promotion was interrupted between the

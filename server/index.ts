@@ -58,6 +58,11 @@ const __dirname = getModuleDirectory(import.meta.url);
 // The server source runs from /server, while the compiled output runs from /dist-server/server.
 // Resolving the app root once keeps every repo-level lookup below aligned across both layouts.
 const APP_ROOT = findApplicationRoot(__dirname);
+// Frontend artifact directory. The dev instance overrides this (dist-dev) so a
+// dev build can never change what live serves from APP_ROOT/dist.
+const FRONTEND_DIST = process.env.CLOUDCLI_FRONTEND_DIST
+    ? path.resolve(process.env.CLOUDCLI_FRONTEND_DIST)
+    : path.join(APP_ROOT, 'dist');
 const installMode = fs.existsSync(path.join(APP_ROOT, '.git')) ? 'git' : 'npm';
 // Version of the code that is actually running, captured once at process
 // startup. This intentionally does NOT re-read package.json per request: after
@@ -213,7 +218,7 @@ app.use(express.static(path.join(APP_ROOT, 'public')));
 
 // Static files served after API routes
 // Add cache control: HTML files should not be cached, but assets can be cached
-app.use(express.static(path.join(APP_ROOT, 'dist'), {
+app.use(express.static(FRONTEND_DIST, {
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.html')) {
             // Prevent HTML caching to avoid service worker issues after builds
@@ -243,7 +248,7 @@ app.get('*', (req, res) => {
 
     // Only serve index.html for HTML routes, not for static assets
     // Static assets should already be handled by express.static middleware above
-    const indexPath = path.join(APP_ROOT, 'dist', 'index.html');
+    const indexPath = path.join(FRONTEND_DIST, 'index.html');
 
     // Check if dist/index.html exists (production build available)
     if (fs.existsSync(indexPath)) {
@@ -350,7 +355,7 @@ async function startServer() {
         configureWebPush();
 
         // Check if running in production mode (dist folder exists)
-        const distIndexPath = path.join(APP_ROOT, 'dist', 'index.html');
+        const distIndexPath = path.join(FRONTEND_DIST, 'index.html');
         const isProduction = fs.existsSync(distIndexPath);
 
         // Log Claude implementation mode

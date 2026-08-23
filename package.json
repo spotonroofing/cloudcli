@@ -45,7 +45,7 @@
     "build:client": "vite build",
     "prebuild:server": "node -e \"require('node:fs').rmSync('dist-server.next', { recursive: true, force: true })\"",
     "build:server": "tsc -p server/tsconfig.json && tsc-alias -p server/tsconfig.json",
-    "postbuild:server": "node scripts/promote-dist-server.mjs",
+    "postbuild:server": "node scripts/promote-dist-server.mjs promote dist-server-dev",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json",
     "test": "tsx --tsconfig server/tsconfig.json --test \"server/**/*.test.ts\" \"server/**/*.test.js\"",

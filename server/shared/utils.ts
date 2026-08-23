@@ -1201,13 +1201,14 @@ export function findServerRoot(startDirectory: string): string {
 }
 
 /**
- * Resolves the application root from a source or `dist-server/server` path so
- * package-level resources work identically before and after compilation.
+ * Resolves the application root from a source or compiled `server` path
+ * (under dist-server, dist-server-dev, or dist-server.next) so package-level
+ * resources work identically before and after compilation.
  */
 export function findApplicationRoot(startDirectory: string): string {
   const serverRoot = findServerRoot(startDirectory);
   const parentDirectory = path.dirname(serverRoot);
-  return path.basename(parentDirectory) === 'dist-server'
+  return path.basename(parentDirectory).startsWith('dist-server')
     ? path.dirname(parentDirectory)
     : parentDirectory;
 }

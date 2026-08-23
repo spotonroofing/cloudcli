@@ -33,10 +33,10 @@ Chain ui9a: its done checks pass on dev and the chain stops (the planner promote
 
 Goal: a dev build can never again change what live serves, because ui8's dev builds silently replaced live's frontend mid-round. Files: build scripts, both launchd plist templates, promote.sh, .gitignore. Dependencies: none.
 
-- [ ] Dev and live get separate build outputs: the dev instance builds into and serves its own artifact directory; the live instance serves only artifacts that promote.sh put in place. A dev rebuild leaves live's served files byte-identical.
-- [ ] promote.sh performs the artifact copy into live's serving location as an explicit step (build, test, dev verify, drain, copy artifacts, restart, health, last-good snapshot); rollback still restores last-good.
-- [ ] A crash-restart of live (launchd KeepAlive) comes back on live's own artifacts, not whatever the working tree holds.
-- [ ] MIGRATION.md or CLAUDE.md gets a one-line note on the two-artifact layout so later rounds do not regress it.
+- [x] Dev and live get separate build outputs: the dev instance builds into and serves its own artifact directory; the live instance serves only artifacts that promote.sh put in place. A dev rebuild leaves live's served files byte-identical.
+- [x] promote.sh performs the artifact copy into live's serving location as an explicit step (build, test, dev verify, drain, copy artifacts, restart, health, last-good snapshot); rollback still restores last-good.
+- [x] A crash-restart of live (launchd KeepAlive) comes back on live's own artifacts, not whatever the working tree holds.
+- [x] MIGRATION.md or CLAUDE.md gets a one-line note on the two-artifact layout so later rounds do not regress it.
 
 Done check: hash live's served index bundle, run a dev build with a trivial visible change, restart dev, re-hash live's bundle — identical — while dev serves the change; kill live's process and confirm launchd brings it back serving the same hash. Fresh-context subagent verification. Commit.
 
