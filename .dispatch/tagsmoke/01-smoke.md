@@ -1,0 +1,1 @@
+This is a dispatch tagging smoke test. Append the single line "tag smoke 2026-08-23" to DISPATCH_OOP_SMOKE.txt in the repo root, commit with message "test(dispatch): tag smoke 2026-08-23", and push. Do nothing else: no other files, no cleanup, no verification beyond the commit itself.
