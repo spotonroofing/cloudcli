@@ -42,6 +42,8 @@ type WorkerPaneProps = {
   onShowSettings?: () => void;
   /** Desktop split only: hides the pane. Omitted on the mobile tab. */
   onClose?: () => void;
+  /** Overrides the close button's label; workspace rows close the whole row here. */
+  closeLabel?: string;
 };
 
 /**
@@ -62,6 +64,7 @@ export default function WorkerPane({
   processingSessions,
   onShowSettings,
   onClose,
+  closeLabel,
 }: WorkerPaneProps) {
   const { subscribe, isConnected } = useWebSocket();
   const { preferences } = useUiPreferences();
@@ -294,15 +297,17 @@ export default function WorkerPane({
           </Button>
         </Tooltip>
         {onClose && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-            onClick={onClose}
-            aria-label="Hide worker pane"
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
+          <Tooltip content={closeLabel ?? 'Hide worker pane'} position="bottom">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+              onClick={onClose}
+              aria-label={closeLabel ?? 'Hide worker pane'}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </Tooltip>
         )}
       </div>
 

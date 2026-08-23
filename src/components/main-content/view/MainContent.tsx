@@ -1,5 +1,5 @@
 import { Compass, Hammer, X } from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
 import WorkerPane from '../../worker-pane/WorkerPane';
@@ -59,6 +59,8 @@ function MainContent({
   newSessionTrigger,
   onProjectSelect,
   onProjectsRefresh,
+  plannerSplit,
+  onPlannerSplitChange,
 }: MainContentProps) {
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
@@ -103,6 +105,32 @@ function MainContent({
   const workerPaneAvailable = Boolean(
     selectedProject && selectedProject.projectId !== STANDALONE_PROJECT_ID,
   );
+  // Two-pane divider (ui8 phase 5): the planner/worker split drags with the
+  // workspace's mechanics and shares its persisted fraction — 50/50 default,
+  // no fixed worker width.
+  const split = plannerSplit ?? 0.5;
+  const plannerPaneRef = useRef<HTMLDivElement>(null);
+  const workerPaneRef = useRef<HTMLDivElement>(null);
+  const splitDragRef = useRef(false);
+  const handleSplitPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    splitDragRef.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handleSplitPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!splitDragRef.current || !onPlannerSplitChange) {
+      return;
+    }
+    const planner = plannerPaneRef.current?.getBoundingClientRect();
+    const worker = workerPaneRef.current?.getBoundingClientRect();
+    if (!planner || !worker || planner.width + worker.width <= 0) {
+      return;
+    }
+    onPlannerSplitChange((event.clientX - planner.left) / (planner.width + worker.width));
+  };
+  const handleSplitPointerEnd = () => {
+    splitDragRef.current = false;
+  };
   // The Planner header mirrors the worker pane's header bar; the title is the
   // open session's stored name.
   const sessionTitle = (selectedSession?.summary || selectedSession?.title || '').trim();
@@ -225,6 +253,10 @@ function MainContent({
     return <MainContentStateView mode="empty" isMobile={isMobile} onMenuClick={onMenuClick} />;
   }
 
+  // Both panes visible: the draggable divider splits them by weight.
+  const splitActive =
+    !isMobile && workerPaneAvailable && workerPaneOpen && plannerPaneOpen && !editorExpanded;
+
   return (
     <div className="flex h-full flex-col">
       {isMobile && (
@@ -249,7 +281,11 @@ function MainContent({
             <span className="rotate-90 whitespace-nowrap text-[10px] font-medium tracking-wide">Planner</span>
           </button>
         )}
-        <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded || (!isMobile && workerPaneAvailable && !plannerPaneOpen) ? 'hidden' : ''} flex-1`}>
+        <div
+          ref={plannerPaneRef}
+          className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded || (!isMobile && workerPaneAvailable && !plannerPaneOpen) ? 'hidden' : ''} flex-1`}
+          style={splitActive ? { flex: `${split} 1 0%` } : undefined}
+        >
           <div className={`h-full ${activeTab === 'chat' ? 'flex flex-col' : 'hidden'}`}>
             {workerPaneAvailable && (
               <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
@@ -382,11 +418,26 @@ function MainContent({
           )}
         </div>
 
+        {splitActive && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            data-two-pane-divider
+            onPointerDown={handleSplitPointerDown}
+            onPointerMove={handleSplitPointerMove}
+            onPointerUp={handleSplitPointerEnd}
+            onPointerCancel={handleSplitPointerEnd}
+            className="w-1 flex-shrink-0 cursor-col-resize touch-none bg-border/60 transition-colors hover:bg-primary active:bg-primary"
+          />
+        )}
+
         {!isMobile && workerPaneAvailable && workerPaneOpen && (
           <div
-            className={`min-w-[380px] border-l border-border/60 ${
-              plannerPaneOpen ? 'w-[44%] flex-shrink-0' : 'flex-1'
+            ref={workerPaneRef}
+            className={`min-w-[380px] ${
+              splitActive ? '' : `border-l border-border/60 ${plannerPaneOpen ? 'w-[44%] flex-shrink-0' : 'flex-1'}`
             }`}
+            style={splitActive ? { flex: `${1 - split} 1 0%` } : undefined}
           >
             <WorkerPane
               selectedProject={selectedProject}

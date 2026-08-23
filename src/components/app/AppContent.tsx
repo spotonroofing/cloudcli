@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import Sidebar from '../sidebar/view/Sidebar';
 import type { RunningRunInfo } from '../sidebar/types/types';
 import CommandPalette from '../command-palette/CommandPalette';
-import type { Project } from '../../types/app';
 import { QuickSettingsPanel } from '../quick-settings-panel';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
@@ -115,17 +114,6 @@ function AppContentInner() {
     selectedProjectId: selectedProject?.projectId ?? null,
     projects,
   });
-
-  const handleToggleWorkspaceProject = useCallback(
-    (project: Project) => {
-      if (workspace.order.includes(project.projectId)) {
-        workspace.closeProject(project.projectId);
-        return;
-      }
-      workspace.openProject(project.projectId);
-    },
-    [workspace],
-  );
 
   // Closing the primary (URL-driven) row hands the selection to the next open
   // project so the workspace never renders without its primary.
@@ -324,7 +312,7 @@ function AppContentInner() {
             {...sidebarSharedProps}
             runningRuns={runningRuns}
             workspaceProjectIds={workspace.order}
-            onToggleWorkspaceProject={handleToggleWorkspaceProject}
+            onCloseWorkspaceProject={(project) => handleCloseWorkspaceRow(project.projectId)}
           />
         </div>
       ) : (

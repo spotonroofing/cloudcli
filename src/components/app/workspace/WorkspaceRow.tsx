@@ -1,4 +1,4 @@
-import { Columns2, Compass, Folder, GripVertical, Hammer, Plus, Rows2, X } from 'lucide-react';
+import { Columns2, Compass, Folder, GripVertical, Hammer, Plus, Rows2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 
@@ -287,15 +287,6 @@ export default function WorkspaceRow({
               {mode === 'rows' ? <Columns2 className="h-3.5 w-3.5" /> : <Rows2 className="h-3.5 w-3.5" />}
             </Button>
           </Tooltip>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-            onClick={onCloseRow}
-            aria-label={`Close ${project.displayName} workspace row`}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
         </div>
         <div className="min-h-0 flex-1">
           <ErrorBoundary showDetails>
@@ -363,6 +354,8 @@ export default function WorkspaceRow({
       />
 
       <div className="min-h-0 min-w-[280px] flex-1 overflow-hidden" data-workspace-pane="worker">
+        {/* The row's close lives at its top-right corner (the worker header's
+            trailing slot), not in the planner header (ui8 phase 5). */}
         <WorkerPane
           selectedProject={project}
           ws={ws}
@@ -373,6 +366,8 @@ export default function WorkspaceRow({
           onSessionIdle={onSessionIdle}
           processingSessions={processingSessions}
           onShowSettings={onShowSettings}
+          onClose={onCloseRow}
+          closeLabel={`Close ${project.displayName} row`}
         />
       </div>
     </div>

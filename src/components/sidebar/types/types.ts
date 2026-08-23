@@ -70,8 +70,8 @@ export type SidebarProps = {
   runningRuns: RunningRunInfo[];
   /** Projects open as multi-project workspace rows (desktop only). */
   workspaceProjectIds?: string[];
-  /** Opens a project as a workspace row, or closes its row when already open. */
-  onToggleWorkspaceProject?: (project: Project) => void;
+  /** Closes a project's workspace row (sidebar hover-close). */
+  onCloseWorkspaceProject?: (project: Project) => void;
   onProjectSelect: (project: Project) => void;
   onSessionSelect: (session: ProjectSession) => void;
   onNewSession: (project: Project) => void;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronRight, Edit3, Folder, FolderOpen, Rows2, Trash2 } from 'lucide-react';
+import { ChevronRight, Edit3, Folder, FolderOpen, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import {
@@ -13,6 +13,7 @@ import { cn } from '../../../../lib/utils';
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { SessionActivityMap } from '../../../../hooks/useSessionProtection';
 import type { SessionWithProvider } from '../../types/types';
+import { PROJECT_DRAG_TYPE } from '../../../app/workspace/useWorkspace';
 
 import ProjectEditDialog from './ProjectEditDialog';
 import SidebarProjectSessions from './SidebarProjectSessions';
@@ -38,8 +39,8 @@ type SidebarProjectItemProps = {
   runningSessionCount: number;
   /** True when the project is open as a multi-project workspace row. */
   isInWorkspace: boolean;
-  /** Opens the project as a workspace row, or closes its row when already open. */
-  onToggleWorkspaceProject?: (project: Project) => void;
+  /** Closes the project's workspace row (hover-revealed X on rows that have one). */
+  onCloseWorkspaceProject?: (project: Project) => void;
   onEditingNameChange: (name: string) => void;
   onEditingPlannerNameChange: (name: string) => void;
   onEditingPathChange: (path: string) => void;
@@ -141,7 +142,7 @@ export default function SidebarProjectItem({
   activeSessions,
   attentionSessionIds,
   isInWorkspace,
-  onToggleWorkspaceProject,
+  onCloseWorkspaceProject,
   onNewSession,
   onEditingSessionNameChange,
   onStartEditingSession,
@@ -252,6 +253,11 @@ export default function SidebarProjectItem({
           role="button"
           tabIndex={0}
           title={project.fullPath}
+          draggable
+          onDragStart={(event) => {
+            event.dataTransfer.setData(PROJECT_DRAG_TYPE, project.projectId);
+            event.dataTransfer.effectAllowed = 'move';
+          }}
           onClick={selectAndToggleProject}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
@@ -280,22 +286,17 @@ export default function SidebarProjectItem({
           </span>
 
           <div className="flex flex-shrink-0 items-center gap-1">
-            {onToggleWorkspaceProject && !isSelected && (
+            {onCloseWorkspaceProject && isInWorkspace && (
               <div
-                className={cn(
-                  'touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded transition-all duration-200 hover:bg-accent',
-                  isInWorkspace
-                    ? 'text-primary opacity-100'
-                    : 'opacity-0 group-hover/project:opacity-100',
-                )}
+                className="touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded opacity-0 transition-all duration-200 hover:bg-accent group-hover/project:opacity-100"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onToggleWorkspaceProject(project);
+                  onCloseWorkspaceProject(project);
                 }}
-                title={isInWorkspace ? 'Remove from workspace' : 'Open as workspace row'}
-                data-workspace-toggle={project.projectId}
+                title="Close workspace row"
+                data-workspace-close={project.projectId}
               >
-                <Rows2 className="h-3 w-3" />
+                <X className="h-3 w-3" />
               </div>
             )}
             <div

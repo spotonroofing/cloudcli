@@ -5,6 +5,9 @@ import { STANDALONE_PROJECT_ID } from '../../../types/app';
 
 export type WorkspaceMode = 'rows' | 'columns';
 
+/** dataTransfer MIME type for dragging a sidebar project row into the view. */
+export const PROJECT_DRAG_TYPE = 'application/x-cloudcli-project';
+
 export type WorkspaceState = {
   /** Ordered project ids of every open workspace row (the primary included). */
   order: string[];
@@ -15,7 +18,8 @@ export type WorkspaceState = {
   columnSplits: Record<string, number>;
   /** Per-project flex weight along the stacking axis (row height / group width). */
   weights: Record<string, number>;
-  openProject: (projectId: string) => void;
+  /** Drop-to-combine: opens (or moves) a project at `index` and sets the layout mode. */
+  openProjectAt: (projectId: string, index: number, mode: WorkspaceMode) => void;
   closeProject: (projectId: string) => void;
   /** Moves a project so it sits before boundary `index` in the current order. */
   moveProject: (projectId: string, boundaryIndex: number) => void;
@@ -26,8 +30,8 @@ export type WorkspaceState = {
 };
 
 const STORAGE_KEY = 'workspace-layout-v1';
-/** Planner fraction of a row; 0.56 mirrors the single-project 44% worker split. */
-const DEFAULT_SPLIT = 0.56;
+/** Planner fraction of a row; 50/50 by default (ui8 phase 5), shared with the single-project two-pane view. */
+const DEFAULT_SPLIT = 0.5;
 const MIN_SPLIT = 0.25;
 const MAX_SPLIT = 0.75;
 
@@ -135,8 +139,14 @@ export function useWorkspace({
     }
   }, [order, mode, split, columnSplits, weights]);
 
-  const openProject = useCallback((projectId: string) => {
-    setOrder((previous) => (previous.includes(projectId) ? previous : [...previous, projectId]));
+  const openProjectAt = useCallback((projectId: string, index: number, nextMode: WorkspaceMode) => {
+    setMode(nextMode);
+    setOrder((previous) => {
+      const without = previous.filter((id) => id !== projectId);
+      const target = Math.min(Math.max(index, 0), without.length);
+      without.splice(target, 0, projectId);
+      return without;
+    });
   }, []);
 
   const closeProject = useCallback((projectId: string) => {
@@ -181,7 +191,7 @@ export function useWorkspace({
     split,
     columnSplits,
     weights,
-    openProject,
+    openProjectAt,
     closeProject,
     moveProject,
     toggleMode,

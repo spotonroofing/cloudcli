@@ -37,8 +37,8 @@ export type SidebarProjectListProps = {
   runningByProject: ReadonlyMap<string, number>;
   /** Projects open as multi-project workspace rows (desktop only). */
   workspaceProjectIds?: string[];
-  /** Opens a project as a workspace row, or closes its row when already open. */
-  onToggleWorkspaceProject?: (project: Project) => void;
+  /** Closes a project's workspace row (sidebar hover-close). */
+  onCloseWorkspaceProject?: (project: Project) => void;
   /** Bounce-dot destination: the selected session's row, when it is in this list. */
   selectedSessionId: string | null;
   forceExpanded?: boolean;
@@ -92,7 +92,7 @@ export default function SidebarProjectList({
   attentionSessionIds,
   runningByProject,
   workspaceProjectIds,
-  onToggleWorkspaceProject,
+  onCloseWorkspaceProject,
   selectedSessionId,
   forceExpanded = false,
   onEditingNameChange,
@@ -184,7 +184,7 @@ export default function SidebarProjectList({
                 && workspaceProjectIds.length >= 2
                 && workspaceProjectIds.includes(project.projectId),
               )}
-              onToggleWorkspaceProject={onToggleWorkspaceProject}
+              onCloseWorkspaceProject={onCloseWorkspaceProject}
               onNewSession={onNewSession}
               onEditingSessionNameChange={onEditingSessionNameChange}
               onStartEditingSession={onStartEditingSession}

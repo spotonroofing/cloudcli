@@ -5,9 +5,10 @@ import MainContent from '../../main-content/view/MainContent';
 import type { MainContentProps } from '../../main-content/types/types';
 import type { Project } from '../../../types/app';
 import { cn } from '../../../lib/utils';
+import { STANDALONE_PROJECT_ID } from '../../../types/app';
 
 import WorkspaceRow, { type WorkspaceGripHandlers } from './WorkspaceRow';
-import type { WorkspaceState } from './useWorkspace';
+import { PROJECT_DRAG_TYPE, type WorkspaceState } from './useWorkspace';
 
 type WorkspaceViewProps = MainContentProps & {
   projects: Project[];
@@ -25,6 +26,9 @@ type DragState = {
   /** Snap-guide position in px, relative to the workspace container. */
   guideOffset: number;
 };
+
+/** Edge drop zone while a sidebar project row is dragged over the view. */
+type DropZone = 'left' | 'right' | 'bottom';
 
 const MIN_UNIT_PX = 160;
 
@@ -62,7 +66,9 @@ export default function WorkspaceView({
   } = mainContentProps;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [dropZone, setDropZone] = useState<DropZone | null>(null);
   const resizeRef = useRef<{
     idA: string;
     idB: string;
@@ -178,6 +184,109 @@ export default function WorkspaceView({
     resizeRef.current = null;
   };
 
+  // Drag-to-combine (phase 5): a sidebar project row dragged over the view
+  // offers edge drop zones — left/right edge opens the project as a column,
+  // bottom edge as a stacked row — each marked by a zone wash and the same
+  // 2px snap guide the grip drag uses.
+  // (Archived deep links keep the single-project surface, so no zones there.)
+  const canCombine =
+    !isMobile
+    && selectedProject?.projectId !== STANDALONE_PROJECT_ID
+    && projects.some((project) => project.projectId === selectedProject?.projectId);
+
+  const zoneFromPointer = (clientX: number, clientY: number): DropZone | null => {
+    const rect = surfaceRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) {
+      return null;
+    }
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    if (x < rect.width * 0.2) {
+      return 'left';
+    }
+    if (x > rect.width * 0.8) {
+      return 'right';
+    }
+    return y > rect.height * 0.75 ? 'bottom' : null;
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!canCombine || !event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) {
+      return;
+    }
+    event.preventDefault();
+    const zone = zoneFromPointer(event.clientX, event.clientY);
+    event.dataTransfer.dropEffect = zone ? 'move' : 'none';
+    setDropZone(zone);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget as Node)) {
+      return;
+    }
+    setDropZone(null);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    setDropZone(null);
+    if (!canCombine) {
+      return;
+    }
+    const projectId = event.dataTransfer.getData(PROJECT_DRAG_TYPE);
+    if (!projectId || !projects.some((project) => project.projectId === projectId)) {
+      return;
+    }
+    // Dropping the sole open project onto its own view changes nothing visible;
+    // don't let it silently flip the persisted layout mode.
+    if (workspace.order.length <= 1 && projectId === selectedProject?.projectId) {
+      return;
+    }
+    event.preventDefault();
+    const zone = zoneFromPointer(event.clientX, event.clientY);
+    if (!zone) {
+      return;
+    }
+    if (zone === 'left') {
+      workspace.openProjectAt(projectId, 0, 'columns');
+    } else {
+      workspace.openProjectAt(projectId, workspace.order.length, zone === 'right' ? 'columns' : 'rows');
+    }
+  };
+
+  const dropOverlay = dropZone && (
+    <>
+      <div
+        data-workspace-drop-zone={dropZone}
+        className="pointer-events-none absolute z-30 bg-primary/[0.07]"
+        style={
+          dropZone === 'left'
+            ? { top: 0, bottom: 0, left: 0, width: '20%' }
+            : dropZone === 'right'
+              ? { top: 0, bottom: 0, right: 0, width: '20%' }
+              : { left: 0, right: 0, bottom: 0, height: '25%' }
+        }
+      />
+      <div
+        data-workspace-drop-guide
+        className="pointer-events-none absolute z-30 rounded-sm bg-primary shadow-[0_0_8px_2px] shadow-primary/40"
+        style={
+          dropZone === 'left'
+            ? { top: 4, bottom: 4, left: 4, width: 2 }
+            : dropZone === 'right'
+              ? { top: 4, bottom: 4, right: 4, width: 2 }
+              : { left: 4, right: 4, bottom: 4, height: 2 }
+        }
+      />
+    </>
+  );
+
+  const surfaceProps = {
+    ref: surfaceRef,
+    onDragOver: handleDragOver,
+    onDragLeave: handleDragLeave,
+    onDrop: handleDrop,
+  };
+
   // The workspace activates only on desktop, with two or more resolvable open
   // projects, while the URL-driven selection is one of them (standalone chats
   // and archived deep links keep the single-project surface).
@@ -199,12 +308,22 @@ export default function WorkspaceView({
   })();
 
   if (!multiProjects) {
-    return <MainContent {...mainContentProps} />;
+    return (
+      <div {...surfaceProps} className="relative h-full min-h-0 min-w-0">
+        <MainContent
+          {...mainContentProps}
+          plannerSplit={workspace.split}
+          onPlannerSplitChange={workspace.setSplit}
+        />
+        {dropOverlay}
+      </div>
+    );
   }
 
   const primaryId = selectedProject?.projectId ?? null;
 
   return (
+    <div {...surfaceProps} className="relative h-full min-h-0 min-w-0">
     <div
       ref={containerRef}
       data-workspace-layout={workspace.mode}
@@ -283,6 +402,8 @@ export default function WorkspaceView({
           }
         />
       )}
+    </div>
+    {dropOverlay}
     </div>
   );
 }
