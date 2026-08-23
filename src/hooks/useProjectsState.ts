@@ -827,12 +827,14 @@ export function useProjectsState({
         markSessionAttention(upsert.sessionId);
       }
 
-      // Machine-started runs ('direct', 'dispatch', 'external') live in the
-      // worker pane's run switcher, never in project chat lists. A watcher
-      // delta for one must not insert it — and if the session was visible
-      // before being tagged, the delta removes it from any list holding it.
+      // Chat lists hold exactly what the server queries allow: origin NULL or
+      // 'planner'. Machine-started runs ('direct', 'dispatch', 'external' —
+      // or any origin this build doesn't know) live in the worker pane's run
+      // switcher, never in project chat lists. A delta for one must not
+      // insert it — and if the session was visible before being tagged, the
+      // delta removes it from any list holding it.
       const upsertOrigin = upsert.session.origin ?? null;
-      if (upsertOrigin === 'direct' || upsertOrigin === 'dispatch' || upsertOrigin === 'external') {
+      if (upsertOrigin !== null && upsertOrigin !== 'planner') {
         setProjects((previousProjects) => {
           let changed = false;
           const nextProjects = previousProjects.map((project) => {

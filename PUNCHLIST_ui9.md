@@ -44,11 +44,11 @@ Done check: hash live's served index bundle, run a dev build with a trivial visi
 
 Goal: Willem never has to refresh to see a response, send a message, or know the planner is thinking — these break every single turn today. Files: websocket subscription flow client and server, composer send state, sidebar session_upserted handler, tab-state persistence. Dependencies: A1 (so this fix's own build does not bleed). 
 
-- [ ] Root-cause and fix the every-turn delivery failure: Willem sends a prompt, the thinking bubble appears then vanishes, no response streams in, and a refresh instantly shows the completed response. The completed turn is reaching the DB but not the open chat's socket subscription. Fix so live turns stream into the open chat without refresh, and a reconnect (or server restart) resubscribes and backfills whatever landed while disconnected.
-- [ ] Composer send never dead-locks: reproduce the enter/send no-op state (it followed a long-typed draft and a background notification); fix the stuck state and add a recovery path so sending never requires a refresh.
-- [ ] The thinking indicator shows for the whole duration of any in-flight turn in the open chat, through reconnects.
-- [ ] The sidebar's live session_upserted insert applies the same origin filter as the server queries: dispatch/direct/external rows never appear in chat lists mid-session (the tagsmoke row Willem saw was this handler).
-- [ ] Refresh restores the tab Willem was on (Projects, Chats, or Archive) in its prior state; never defaults to Chats.
+- [x] Root-cause and fix the every-turn delivery failure: Willem sends a prompt, the thinking bubble appears then vanishes, no response streams in, and a refresh instantly shows the completed response. The completed turn is reaching the DB but not the open chat's socket subscription. Fix so live turns stream into the open chat without refresh, and a reconnect (or server restart) resubscribes and backfills whatever landed while disconnected.
+- [x] Composer send never dead-locks: reproduce the enter/send no-op state (it followed a long-typed draft and a background notification); fix the stuck state and add a recovery path so sending never requires a refresh.
+- [x] The thinking indicator shows for the whole duration of any in-flight turn in the open chat, through reconnects.
+- [x] The sidebar's live session_upserted insert applies the same origin filter as the server queries: dispatch/direct/external rows never appear in chat lists mid-session (the tagsmoke row Willem saw was this handler).
+- [x] Refresh restores the tab Willem was on (Projects, Chats, or Archive) in its prior state; never defaults to Chats.
 
 Done check: on dev, drive a planner-origin turn end to end over a real socket — response streams into the open chat with no reload (assert on DOM mutation while the network stays open); bounce the dev server mid-turn and confirm resubscribe + backfill; the composer sends after the draft/notification repro; a dispatched test session triggers zero sidebar list inserts; tab restore round-trips. Fresh-context subagent verification. Commit.
 

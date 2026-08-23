@@ -331,8 +331,12 @@ export function useChatRealtimeHandlers({
               }
               return incoming;
             });
-          } else if (msg.text && sid) {
-            onSessionProcessing?.(sid, {
+          } else if (msg.text && typeof msg.sessionId === 'string' && msg.sessionId) {
+            // Run events always carry their session id (the gateway stamps
+            // it), so never fall back to the viewed session here — a stray
+            // status attributed to the open chat re-arms its spinner and can
+            // wedge the composer in the queue-instead-of-send state.
+            onSessionProcessing?.(msg.sessionId, {
               statusText: msg.text as string,
               canInterrupt: msg.canInterrupt !== false,
             });

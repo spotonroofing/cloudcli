@@ -7,7 +7,6 @@ import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/we
 import type {
   LLMProvider,
   NormalizedMessage,
-  RealtimeClientConnection,
 } from '@/shared/types.js';
 
 type ChatRunStatus = 'running' | 'completed';
@@ -82,6 +81,10 @@ async function broadcastCanonicalSessionUpsert(appSessionId: string): Promise<vo
     session: {
       id: row.session_id,
       summary: row.custom_name || '',
+      // The sidebar's live insert filter keys off origin; omitting it made
+      // direct/dispatch/external runs slip into chat lists as null-origin rows.
+      origin: row.origin ?? null,
+      booted: Boolean(row.booted),
       messageCount: 0,
       lastActivity: row.updated_at ?? row.created_at ?? new Date().toISOString(),
     },
@@ -213,7 +216,6 @@ export const chatRunRegistry = {
     appSessionId: string;
     provider: LLMProvider;
     providerSessionId: string | null;
-    connection: RealtimeClientConnection;
     userId: string | number | null;
   }): ChatRun | null {
     const existing = runs.get(input.appSessionId);
@@ -234,7 +236,6 @@ export const chatRunRegistry = {
     };
 
     run.writer = new ChatSessionWriter({
-      connection: input.connection,
       userId: input.userId,
       provider: input.provider,
       providerSessionId: input.providerSessionId,
@@ -270,23 +271,6 @@ export const chatRunRegistry = {
         startedAt: run.startedAt,
         lastSeq: run.lastSeq,
       }));
-  },
-
-  /**
-   * Re-attaches a run's outbound stream to a (new) websocket connection.
-   *
-   * This is the generic replacement for the Claude-only writer reconnect:
-   * after a page refresh the new socket subscribes and immediately starts
-   * receiving the still-running stream, for every provider.
-   */
-  attachConnection(appSessionId: string, connection: RealtimeClientConnection): boolean {
-    const run = runs.get(appSessionId);
-    if (!run) {
-      return false;
-    }
-
-    run.writer.updateWebSocket(connection);
-    return true;
   },
 
   /**

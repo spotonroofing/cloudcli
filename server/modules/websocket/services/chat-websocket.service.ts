@@ -180,7 +180,6 @@ async function handleChatSend(
     appSessionId: sessionId,
     provider,
     providerSessionId: session.provider_session_id,
-    connection: ws,
     userId,
   });
 
@@ -338,11 +337,10 @@ function handleChatSubscribe(
     const run = chatRunRegistry.getRun(sessionId);
     const isProcessing = chatRunRegistry.isProcessing(sessionId);
 
-    // Future live events for this run should land on the socket that asked —
-    // this is what makes mid-stream page refreshes work for all providers.
-    if (isProcessing) {
-      chatRunRegistry.attachConnection(sessionId, ws);
-    }
+    // Live run events are broadcast to every connected chat client, so a
+    // fresh socket (page refresh, second device) starts receiving the
+    // still-running stream the moment it connects; subscribe only needs to
+    // replay what this socket missed.
 
     // Pending approvals are tracked under the app session id inside the
     // Claude runtime, so they can be looked up directly.

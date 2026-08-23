@@ -94,7 +94,10 @@ export function removeOptimisticUserEchoes(
   const claimedServerIds = new Set<string>();
 
   return realtimeMessages.filter((message) => {
-    if (!message.id.startsWith('local_')) {
+    // Live run frames may arrive without an id; only locally-echoed user rows
+    // (id "local_...") are candidates for removal. A throw here would kill the
+    // websocket listener mid-append and freeze the transcript for the turn.
+    if (typeof message.id !== 'string' || !message.id.startsWith('local_')) {
       return true;
     }
 

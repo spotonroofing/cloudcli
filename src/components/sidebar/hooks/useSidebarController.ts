@@ -25,6 +25,8 @@ import {
   sortProjects,
 } from '../utils/utils';
 
+const SIDEBAR_TAB_STORAGE_KEY = 'sidebar-active-tab';
+
 type SnippetHighlight = {
   start: number;
   end: number;
@@ -159,7 +161,15 @@ export function useSidebarController({
   const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteProjectConfirmation | null>(null);
   const [sessionDeleteConfirmation, setSessionDeleteConfirmation] = useState<SessionDeleteConfirmation | null>(null);
   // Desktop has no Projects/Running tabs (phase 2 chrome strip); mobile keeps all four.
-  const [searchMode, setSearchMode] = useState<SidebarSearchMode>(isMobile ? 'projects' : 'conversations');
+  // The active tab persists per device so a refresh restores where the user
+  // was ('running' is transient live state and is not restored).
+  const [searchMode, setSearchMode] = useState<SidebarSearchMode>(() => {
+    const stored = localStorage.getItem(SIDEBAR_TAB_STORAGE_KEY);
+    if (stored === 'projects' || stored === 'conversations' || stored === 'archived') {
+      return stored;
+    }
+    return isMobile ? 'projects' : 'conversations';
+  });
   const [conversationResults, setConversationResults] = useState<ConversationSearchResults | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchProgress, setSearchProgress] = useState<SearchProgress | null>(null);
@@ -194,6 +204,12 @@ export function useSidebarController({
       setSearchMode('conversations');
     }
   }, [isMobile, searchMode]);
+
+  useEffect(() => {
+    if (searchMode !== 'running') {
+      localStorage.setItem(SIDEBAR_TAB_STORAGE_KEY, searchMode);
+    }
+  }, [searchMode]);
   const activeSessionIds = useMemo(() => new Set(activeSessions.keys()), [activeSessions]);
   const runningSessionsCount = activeSessionIds.size;
 

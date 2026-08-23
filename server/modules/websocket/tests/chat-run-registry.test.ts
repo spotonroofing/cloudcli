@@ -49,11 +49,11 @@ test('live events are remapped to the app session id and sequenced', async () =>
   await withIsolatedDatabase(() => {
     sessionsDb.createAppSession('app-run-1', 'claude', '/workspace/demo');
     const connection = new FakeConnection();
+    connectedClients.add(connection as never);
     const run = chatRunRegistry.startRun({
       appSessionId: 'app-run-1',
       provider: 'claude',
       providerSessionId: null,
-      connection,
       userId: 'user-1',
     });
     assert.ok(run);
@@ -78,7 +78,6 @@ test('session_created is swallowed and persisted as the provider-id mapping', as
       appSessionId: 'app-run-2',
       provider: 'cursor',
       providerSessionId: null,
-      connection,
       userId: null,
     });
     assert.ok(run);
@@ -105,11 +104,11 @@ test('complete marks the run finished and duplicate completes are dropped', asyn
   await withIsolatedDatabase(() => {
     sessionsDb.createAppSession('app-run-3', 'codex', '/workspace/demo');
     const connection = new FakeConnection();
+    connectedClients.add(connection as never);
     const run = chatRunRegistry.startRun({
       appSessionId: 'app-run-3',
       provider: 'codex',
       providerSessionId: null,
-      connection,
       userId: null,
     });
     assert.ok(run);
@@ -133,12 +132,12 @@ test('a finished run\'s safety net cannot complete the session\'s next run', asy
   await withIsolatedDatabase(() => {
     sessionsDb.createAppSession('app-run-9', 'codex', '/workspace/demo');
     const connection = new FakeConnection();
+    connectedClients.add(connection as never);
 
     const firstRun = chatRunRegistry.startRun({
       appSessionId: 'app-run-9',
       provider: 'codex',
       providerSessionId: null,
-      connection,
       userId: null,
     });
     assert.ok(firstRun);
@@ -150,7 +149,6 @@ test('a finished run\'s safety net cannot complete the session\'s next run', asy
       appSessionId: 'app-run-9',
       provider: 'codex',
       providerSessionId: null,
-      connection,
       userId: null,
     });
     assert.ok(secondRun);
@@ -172,12 +170,12 @@ test('listRunningRuns returns only currently running app sessions', async () => 
     sessionsDb.createAppSession('app-run-7', 'claude', '/workspace/demo');
     sessionsDb.createAppSession('app-run-8', 'codex', '/workspace/demo');
     const connection = new FakeConnection();
+    connectedClients.add(connection as never);
 
     const completedRun = chatRunRegistry.startRun({
       appSessionId: 'app-run-7',
       provider: 'claude',
       providerSessionId: null,
-      connection,
       userId: null,
     });
     assert.ok(completedRun);
@@ -186,7 +184,6 @@ test('listRunningRuns returns only currently running app sessions', async () => 
       appSessionId: 'app-run-8',
       provider: 'codex',
       providerSessionId: null,
-      connection,
       userId: null,
     });
     assert.ok(runningRun);
@@ -203,11 +200,11 @@ test('replayEvents returns only events after the requested seq', async () => {
   await withIsolatedDatabase(() => {
     sessionsDb.createAppSession('app-run-4', 'claude', '/workspace/demo');
     const connection = new FakeConnection();
+    connectedClients.add(connection as never);
     const run = chatRunRegistry.startRun({
       appSessionId: 'app-run-4',
       provider: 'claude',
       providerSessionId: null,
-      connection,
       userId: null,
     });
     assert.ok(run);
@@ -222,26 +219,28 @@ test('replayEvents returns only events after the requested seq', async () => {
   });
 });
 
-test('attachConnection reroutes the live stream to a new socket', async () => {
+test('live events broadcast to every connected client, including late joiners', async () => {
   await withIsolatedDatabase(() => {
     sessionsDb.createAppSession('app-run-5', 'opencode', '/workspace/demo');
     const firstConnection = new FakeConnection();
+    connectedClients.add(firstConnection as never);
     const run = chatRunRegistry.startRun({
       appSessionId: 'app-run-5',
       provider: 'opencode',
       providerSessionId: null,
-      connection: firstConnection,
       userId: null,
     });
     assert.ok(run);
 
     run.writer.send({ kind: 'stream_delta', provider: 'opencode', sessionId: 'o', content: 'before' });
 
+    // A second device/tab connecting mid-run must not steal the stream from
+    // the first — both receive everything from the moment they are connected.
     const secondConnection = new FakeConnection();
-    assert.equal(chatRunRegistry.attachConnection('app-run-5', secondConnection), true);
+    connectedClients.add(secondConnection as never);
     run.writer.send({ kind: 'stream_delta', provider: 'opencode', sessionId: 'o', content: 'after' });
 
-    assert.deepEqual(firstConnection.frames.map((frame) => frame.content), ['before']);
+    assert.deepEqual(firstConnection.frames.map((frame) => frame.content), ['before', 'after']);
     assert.deepEqual(secondConnection.frames.map((frame) => frame.content), ['after']);
   });
 });
@@ -250,11 +249,11 @@ test('startRun rejects a second concurrent run for the same session', async () =
   await withIsolatedDatabase(() => {
     sessionsDb.createAppSession('app-run-6', 'opencode', '/workspace/demo');
     const connection = new FakeConnection();
+    connectedClients.add(connection as never);
     const first = chatRunRegistry.startRun({
       appSessionId: 'app-run-6',
       provider: 'opencode',
       providerSessionId: null,
-      connection,
       userId: null,
     });
     assert.ok(first);
@@ -263,7 +262,6 @@ test('startRun rejects a second concurrent run for the same session', async () =
       appSessionId: 'app-run-6',
       provider: 'opencode',
       providerSessionId: null,
-      connection,
       userId: null,
     });
     assert.equal(second, null);
@@ -274,7 +272,6 @@ test('startRun rejects a second concurrent run for the same session', async () =
       appSessionId: 'app-run-6',
       provider: 'opencode',
       providerSessionId: null,
-      connection,
       userId: null,
     });
     assert.ok(third);

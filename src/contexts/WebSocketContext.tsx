@@ -53,6 +53,11 @@ export const useWebSocket = () => {
   return context;
 };
 
+// User-intent frames survive a dead socket by queueing for the next open.
+// Subscription frames are deliberately excluded: the reconnect flow re-sends
+// them with a fresh lastSeq, and replaying a stale one would duplicate rows.
+const QUEUEABLE_TYPES = ['chat.send', 'chat.abort', 'chat.permission-response'];
+
 const buildWebSocketUrl = (token: string | null) => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   if (IS_PLATFORM) return `${protocol}//${window.location.host}/ws`; // Platform mode: Use same domain as the page (goes through proxy)
@@ -74,6 +79,13 @@ const useWebSocketProviderState = (): WebSocketContextType => {
    * re-renders of the provider tree.
    */
   const listenersRef = useRef(new Set<ServerEventListener>());
+  /**
+   * Chat frames sent while the socket was down (a backgrounded tab's socket
+   * dies silently; the browser only notices on the next send). Flushed in
+   * order on the next open so a send never silently disappears — the user
+   * sees their turn start as soon as the connection is back.
+   */
+  const pendingOutboundRef = useRef<Record<string, unknown>[]>([]);
   const [latestMessage, setLatestMessage] = useState<ServerEvent | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -135,6 +147,11 @@ const useWebSocketProviderState = (): WebSocketContextType => {
 
       websocket.onopen = () => {
         setIsConnected(true);
+        const pending = pendingOutboundRef.current;
+        pendingOutboundRef.current = [];
+        for (const message of pending) {
+          websocket.send(JSON.stringify(message));
+        }
         if (hasConnectedRef.current) {
           // This is a reconnect — signal so components can catch up on missed messages
           dispatch({ kind: 'websocket_reconnected', timestamp: Date.now() });
@@ -178,6 +195,13 @@ const useWebSocketProviderState = (): WebSocketContextType => {
     const socket = wsRef.current;
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(message));
+      return;
+    }
+
+    const record = message as Record<string, unknown> | null;
+    if (record && typeof record.type === 'string' && QUEUEABLE_TYPES.includes(record.type)) {
+      pendingOutboundRef.current.push(record);
+      console.warn(`WebSocket not connected; queued ${record.type} for reconnect`);
     } else {
       console.warn('WebSocket not connected');
     }

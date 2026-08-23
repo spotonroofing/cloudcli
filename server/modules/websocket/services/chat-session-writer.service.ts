@@ -1,13 +1,11 @@
-import { WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
+import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import type {
   LLMProvider,
   NormalizedMessage,
-  RealtimeClientConnection,
 } from '@/shared/types.js';
 import { createCompleteMessage, readObjectRecord } from '@/shared/utils.js';
 
 type ChatSessionWriterOptions = {
-  connection: RealtimeClientConnection;
   userId: string | number | null;
   provider: LLMProvider;
   /** Provider-native id when resuming an existing session, otherwise null. */
@@ -30,10 +28,9 @@ type ChatSessionWriterOptions = {
 /**
  * Gateway writer handed to provider runtimes instead of a raw websocket writer.
  *
- * It exposes the exact same surface as `WebSocketWriter` (`send`,
- * `setSessionId`, `getSessionId`, `updateWebSocket`, `userId`,
- * `isWebSocketWriter`) so the provider runtime adapters need zero changes —
- * but everything that flows through
+ * It exposes the same surface as `WebSocketWriter` (`send`, `setSessionId`,
+ * `getSessionId`, `userId`, `isWebSocketWriter`) so the provider runtime
+ * adapters need zero changes — but everything that flows through
  * it is translated from the provider's world into the app's protocol:
  *
  * - `session_created` events are swallowed and turned into a provider-id
@@ -42,9 +39,12 @@ type ChatSessionWriterOptions = {
  *   per-run `seq` assigned before being forwarded.
  * - `setSessionId(...)` calls (used by runtimes to label captured ids) are
  *   intercepted and recorded as the provider-id mapping as well.
+ * - outbound events are broadcast to every connected chat client, not just
+ *   the socket that sent `chat.send` — any open device or tab viewing the
+ *   session streams the turn live, and no subscriber can "steal" the stream
+ *   from another.
  */
 export class ChatSessionWriter {
-  ws: RealtimeClientConnection;
   userId: string | number | null;
   /**
    * Some runtimes feature-detect their writer with this flag; keep it so the
@@ -63,7 +63,6 @@ export class ChatSessionWriter {
 
   constructor(options: ChatSessionWriterOptions) {
     this.options = options;
-    this.ws = options.connection;
     this.userId = options.userId;
     this.providerSessionId = options.providerSessionId;
   }
@@ -116,10 +115,6 @@ export class ChatSessionWriter {
     }
   }
 
-  updateWebSocket(newConnection: RealtimeClientConnection): void {
-    this.ws = newConnection;
-  }
-
   setSessionId(sessionId: string): void {
     this.captureProviderSessionId(sessionId);
   }
@@ -138,8 +133,11 @@ export class ChatSessionWriter {
   }
 
   private forward(message: NormalizedMessage): void {
-    if (this.ws.readyState === WS_OPEN_STATE) {
-      this.ws.send(JSON.stringify(message));
-    }
+    const payload = JSON.stringify(message);
+    connectedClients.forEach((client) => {
+      if (client.readyState === WS_OPEN_STATE) {
+        client.send(payload);
+      }
+    });
   }
 }

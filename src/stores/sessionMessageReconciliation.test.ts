@@ -68,3 +68,18 @@ test('keeps the existing optimistic text reconciliation behavior', () => {
 
   assert.deepEqual(removeOptimisticUserEchoes([persisted], [local]), []);
 });
+
+test('keeps live frames that arrive without an id instead of throwing', () => {
+  const idlessLiveFrame = {
+    sessionId: 'session-1',
+    timestamp: '2026-07-28T20:30:21.000Z',
+    provider: 'claude',
+    kind: 'thinking',
+    content: 'reasoning...',
+  } as never;
+  const persisted = createUserMessage('claude_text', '2026-07-28T20:30:20.000Z', {
+    content: 'hello',
+  });
+
+  assert.deepEqual(removeOptimisticUserEchoes([persisted], [idlessLiveFrame]), [idlessLiveFrame]);
+});
