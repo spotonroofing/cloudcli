@@ -1,8 +1,12 @@
-import { Compass, Hammer, Settings, AlertTriangle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Compass, Hammer, Settings, AlertTriangle, AtSign } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { NumberTicker } from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
+import { authenticatedFetch } from '../../../../utils/api';
+
+import AccountsPanel from './AccountsPanel';
 
 type SidebarFooterProps = {
   restartRequired: boolean;
@@ -61,6 +65,30 @@ export default function SidebarFooter({
 }: SidebarFooterProps) {
   const showCounterBar = plannerRunningCount > 0 || workerRunningCount > 0;
 
+  // Account switcher (ui8 phase 6): the row above Settings shows the active
+  // Claude account and opens the accounts panel.
+  const [accountsOpen, setAccountsOpen] = useState(false);
+  const [activeAccountEmail, setActiveAccountEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await authenticatedFetch('/api/accounts/status');
+        const body = await response.json();
+        const email = body?.data?.active?.email;
+        if (!cancelled && typeof email === 'string') {
+          setActiveAccountEmail(email);
+        }
+      } catch {
+        // cswap unavailable; the row falls back to a generic label.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="flex-shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)' }}>
       {/* Restart-required banner: the running server version differs from the
@@ -105,9 +133,22 @@ export default function SidebarFooter({
         </>
       )}
 
-      {/* Settings pinned to the bottom, one treatment on every form factor */}
+      {/* Accounts + Settings pinned to the bottom, one treatment on every
+          form factor. The accounts row shows the active Claude account and
+          opens the cswap panel (ui8 phase 6). */}
       <div className="nav-divider" />
-      <div className="px-2 py-1.5">
+      <div className="space-y-0.5 px-2 py-1.5">
+        <button
+          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+          onClick={() => setAccountsOpen(true)}
+          title={activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
+          data-slot="account-switcher-trigger"
+        >
+          <AtSign className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="min-w-0 truncate text-sm" data-slot="account-switcher-active">
+            {activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
+          </span>
+        </button>
         <button
           className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
           onClick={onShowSettings}
@@ -116,6 +157,13 @@ export default function SidebarFooter({
           <span className="text-sm">{t('actions.settings')}</span>
         </button>
       </div>
+
+      <AccountsPanel
+        open={accountsOpen}
+        onOpenChange={setAccountsOpen}
+        onActiveChange={setActiveAccountEmail}
+        t={t}
+      />
     </div>
   );
 }
