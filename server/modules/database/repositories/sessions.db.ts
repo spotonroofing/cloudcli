@@ -657,8 +657,9 @@ export const sessionsDb = {
     return normalizeSessionRows(rows);
   },
 
-  // Project chat lists hide terminal-launched runs ('external'); those belong
-  // to the worker pane's run switcher, not the conversation list.
+  // Project chat lists show only conversations the user started in the UI:
+  // origin NULL or 'planner'. Machine-started runs ('direct', 'dispatch',
+  // 'external') belong to the worker pane's run switcher, not the chat list.
   getSessionsByProjectPathPage(projectPath: string, limit: number, offset: number): SessionRow[] {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPath(projectPath);
@@ -668,7 +669,7 @@ export const sessionsDb = {
          FROM sessions
          WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
            AND isArchived = 0
-           AND (origin IS NULL OR origin <> 'external')
+           AND (origin IS NULL OR origin = 'planner')
          ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
          LIMIT ? OFFSET ?`
       )
@@ -686,7 +687,7 @@ export const sessionsDb = {
          FROM sessions
          WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
            AND isArchived = 0
-           AND (origin IS NULL OR origin <> 'external')`
+           AND (origin IS NULL OR origin = 'planner')`
       )
       .get(normalizedProjectPath) as { count: number } | undefined;
 

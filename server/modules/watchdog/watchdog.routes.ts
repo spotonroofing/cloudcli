@@ -1,7 +1,7 @@
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 
-import { apiKeysDb } from '@/modules/database/index.js';
+import { apiKeysDb, sessionsDb } from '@/modules/database/index.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
 import { watchdogService } from './watchdog.service.js';
@@ -84,6 +84,32 @@ export function createWatchdogRouter(): express.Router {
         });
       }
       res.json(createApiSuccessResponse({ slug: req.params.slug, event }));
+    }),
+  );
+
+  // The dispatch runner announces each phase's session id before launching
+  // the phase, so the row exists tagged origin 'dispatch' (with its chain
+  // slug) before transcript discovery can index it untagged. The upsert path
+  // in setSessionOrigin creates the row when discovery has not seen it yet.
+  router.post(
+    '/chains/:slug/sessions',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
+      const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
+      if (!sessionId || !projectPath) {
+        throw new AppError('sessionId and projectPath are required.', {
+          code: 'WATCHDOG_CHAIN_SESSION_FIELDS_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const slug = String(req.params.slug);
+      const provider = typeof body.provider === 'string' && body.provider.trim() ? body.provider.trim() : 'claude';
+      const baseCommit = typeof body.baseCommit === 'string' && body.baseCommit.trim() ? body.baseCommit.trim() : null;
+      const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : null;
+      sessionsDb.setSessionOrigin(sessionId, 'dispatch', baseCommit, slug, model, { provider, projectPath });
+      res.status(201).json(createApiSuccessResponse({ slug, sessionId }));
     }),
   );
 

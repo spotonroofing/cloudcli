@@ -17,7 +17,7 @@
 set -u
 
 SERVER_URL="${DISPATCH_SERVER_URL:-http://127.0.0.1:4747}"
-DB_PATH="$HOME/.cloudcli/auth.db"
+DB_PATH="${DISPATCH_DB_PATH:-$HOME/.cloudcli/auth.db}"
 
 [[ $# -ge 3 ]] || { print -u2 "usage: dispatch-chain-runner <repo> <slug> <phase-file ...>"; exit 64; }
 REPO="$1"; SLUG="$2"; shift 2
@@ -117,6 +117,17 @@ for PHASE_FILE in "${PHASE_FILES[@]}"; do
   journal "phase $PHASE_NUM/$TOTAL" "start" "$PHASE_NAME"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body phase-start $PHASE_NUM '')" 3
 
+  # Pre-tag the phase session: the id is chosen here and announced to the
+  # server before claude starts, so the row exists tagged origin=dispatch
+  # (with the chain slug) before transcript discovery can index it untagged.
+  SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+  api_post "/api/watchdog/chains/$SLUG/sessions" "$(python3 - "$SESSION_ID" "$REPO" "$BASE_COMMIT" "$MODEL" <<'PYEOF'
+import json, sys
+sid, repo, base, model = sys.argv[1:5]
+print(json.dumps({'sessionId': sid, 'projectPath': repo, 'baseCommit': base, 'model': model}))
+PYEOF
+)" 3
+
   # The phase itself: a fresh headless session in the repo. The two
   # CLAUDE_CODE_ lines are load-bearing (runner doctrine): the first forces
   # subagents synchronous so a turn cannot end while work runs, the second
@@ -130,6 +141,7 @@ for PHASE_FILE in "${PHASE_FILES[@]}"; do
   CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 \
   CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
     "$CLAUDE_BIN" -p --model "$MODEL" --effort "$EFFORT" "${FALLBACK_ARGS[@]}" \
+    --session-id "$SESSION_ID" \
     --dangerously-skip-permissions \
     < "$PHASE_FILE" > "$JOURNAL_DIR/phase$PHASE_NUM.log" 2>&1
   RC=$?

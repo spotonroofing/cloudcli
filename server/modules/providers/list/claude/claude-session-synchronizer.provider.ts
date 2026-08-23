@@ -51,14 +51,17 @@ export class ClaudeSessionSynchronizer implements IProviderSessionSynchronizer {
   }
 
   /**
-   * Discovery-time origin for a row that discovery itself creates: transcripts
-   * the app's SDK runtime wrote ('sdk-ts') are app sessions and stay untagged;
-   * everything else (interactive terminal 'cli', headless 'sdk-cli', or no
-   * marker at all) was launched outside the app and is 'external'. Rows the
-   * app created keep their origin regardless (see sessionsDb.createSession).
+   * Discovery-time origin for a row that discovery itself creates: always
+   * 'external'. The transcript `entrypoint` marker stopped distinguishing app
+   * runs on 2026-08-22 (Claude CLI 2.1.235 stamps headless `claude -p` runs
+   * 'sdk-ts', same as the app's SDK runtime), so a row discovery has to create
+   * was not started through the app: app sessions pre-create their DB row and
+   * discovery only updates it (see sessionsDb.createSession, which keeps the
+   * app-owned origin on existing rows). Dispatch chains pre-tag their rows via
+   * the watchdog API before the phase starts, so they keep origin 'dispatch'.
    */
-  private discoveredOrigin(parsed: ParsedSession): string | null {
-    return parsed.entrypoint === 'sdk-ts' ? null : 'external';
+  private discoveredOrigin(_parsed: ParsedSession): string | null {
+    return 'external';
   }
 
   /**

@@ -827,6 +827,35 @@ export function useProjectsState({
         markSessionAttention(upsert.sessionId);
       }
 
+      // Machine-started runs ('direct', 'dispatch', 'external') live in the
+      // worker pane's run switcher, never in project chat lists. A watcher
+      // delta for one must not insert it — and if the session was visible
+      // before being tagged, the delta removes it from any list holding it.
+      const upsertOrigin = upsert.session.origin ?? null;
+      if (upsertOrigin === 'direct' || upsertOrigin === 'dispatch' || upsertOrigin === 'external') {
+        setProjects((previousProjects) => {
+          let changed = false;
+          const nextProjects = previousProjects.map((project) => {
+            const sessions = getProjectSessions(project);
+            const filtered = sessions.filter((session) => session.id !== upsert.sessionId);
+            if (filtered.length === sessions.length) {
+              return project;
+            }
+            changed = true;
+            return {
+              ...project,
+              sessions: filtered,
+              sessionMeta: {
+                ...project.sessionMeta,
+                total: Math.max(0, Number(project.sessionMeta?.total ?? sessions.length) - 1),
+              },
+            };
+          });
+          return changed ? nextProjects : previousProjects;
+        });
+        return;
+      }
+
       setProjects((previousProjects) => {
         const targetProjectId = upsert.project?.projectId;
         const existingProject = previousProjects.find((project) =>
