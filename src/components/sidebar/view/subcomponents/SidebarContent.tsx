@@ -210,8 +210,6 @@ export default function SidebarContent({
         isLoading={isLoading}
         projectsCount={projects.length}
         runningSessionsCount={runningSessionsCount}
-        plannerRunningCount={plannerRunningCount}
-        workerRunningCount={workerRunningCount}
         archivedSessionsCount={archivedSessionsCount}
         isArchivedSessionsLoading={isArchivedSessionsLoading}
         searchFilter={searchFilter}
@@ -729,6 +727,8 @@ export default function SidebarContent({
         <SidebarFooter
           restartRequired={restartRequired}
           onShowSettings={onShowSettings}
+          plannerRunningCount={plannerRunningCount}
+          workerRunningCount={workerRunningCount}
           t={t}
         />
       )}

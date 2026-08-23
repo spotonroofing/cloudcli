@@ -338,70 +338,34 @@
                 max-height 200ms ease-in-out;
   }
   
-  .scrollbar-thin {
+  /* App-wide scrollbars (ui8 phase 3): thin, trackless. One treatment for
+     every scroll surface in both themes; `.scrollbar-thin` stays as a no-op
+     alias so existing call sites keep working. */
+  * {
     scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground)) transparent;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
   }
-  
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
   }
-  
-  .scrollbar-thin::-webkit-scrollbar-track {
+
+  ::-webkit-scrollbar-track {
     background: transparent;
   }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground));
-    border-radius: 3px;
+
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.35);
+    border-radius: 2px;
   }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--muted-foreground) / 0.8);
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.55);
   }
-  
-  /* Dark mode scrollbar styles */
-  .dark .scrollbar-thin {
-    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
-  }
-  
-  .dark .scrollbar-thin::-webkit-scrollbar-track {
-    background: rgba(38, 38, 38, 0.3);
-  }
-  
-  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgba(156, 163, 175, 0.5);
-    border-radius: 3px;
-  }
-  
-  .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(156, 163, 175, 0.7);
-  }
-  
-  /* Global scrollbar styles for main content areas */
-  .dark::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  
-  .dark::-webkit-scrollbar-track {
-    background: rgba(38, 38, 38, 0.5);
-  }
-  
-  .dark::-webkit-scrollbar-thumb {
-    background-color: rgba(107, 114, 128, 0.5);
-    border-radius: 4px;
-  }
-  
-  .dark::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(107, 114, 128, 0.7);
-  }
-  
-  /* Firefox scrollbar styles */
-  .dark {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(115, 115, 115, 0.5) rgba(38, 38, 38, 0.5);
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
   
   /* Ensure checkbox styling is preserved */
@@ -849,6 +813,29 @@
   .animate-spin {
     animation: spin 1s linear infinite;
   }
+
+  /* Sidebar activity-counter breathing (ui8 phase 3): a slow opacity/filter
+     swell while the counter's live-run count is nonzero. */
+  @keyframes counter-breathe {
+    0%, 100% {
+      opacity: 1;
+      filter: brightness(1);
+    }
+    50% {
+      opacity: 0.5;
+      filter: brightness(1.06);
+    }
+  }
+
+  .animate-counter-breathe {
+    animation: counter-breathe 2.6s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-counter-breathe {
+      animation: none;
+    }
+  }
   
   /* Force hardware acceleration for smoother animation on mobile */
   .loading-spinner {
@@ -860,49 +847,16 @@
     -webkit-backface-visibility: hidden;
   }
   
-  /* Improved textarea styling */
+  /* Improved textarea styling; scrollbars come from the global treatment */
   .chat-input-placeholder {
     display: block !important;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
   }
 
   /* Ensure container fits textarea tightly */
   .chat-input-placeholder:not(:focus) {
     height: auto;
   }
-  
-  .chat-input-placeholder::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  .chat-input-placeholder::-webkit-scrollbar-track {
-    background: transparent;
-    margin: 8px 0;
-  }
-  
-  .chat-input-placeholder::-webkit-scrollbar-thumb {
-    background-color: rgba(156, 163, 175, 0.3);
-    border-radius: 3px;
-    transition: background-color 0.2s;
-  }
-  
-  .chat-input-placeholder::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(156, 163, 175, 0.5);
-  }
-  
-  .dark .chat-input-placeholder {
-    scrollbar-color: rgba(107, 114, 128, 0.3) transparent;
-  }
-  
-  .dark .chat-input-placeholder::-webkit-scrollbar-thumb {
-    background-color: rgba(107, 114, 128, 0.3);
-  }
-  
-  .dark .chat-input-placeholder::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(107, 114, 128, 0.5);
-  }
-  
+
   /* Enhanced box shadow when textarea expands */
   .chat-input-expanded {
     box-shadow: 0 -5px 15px -3px rgba(0, 0, 0, 0.1), 0 -4px 6px -2px rgba(0, 0, 0, 0.05);

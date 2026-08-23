@@ -146,6 +146,8 @@ export function useSidebarController({
   const [showNewProject, setShowNewProject] = useState(false);
   const [editingName, setEditingName] = useState('');
   const [editingPlannerName, setEditingPlannerName] = useState('');
+  const [editingPath, setEditingPath] = useState('');
+  const [editingProjectError, setEditingProjectError] = useState<string | null>(null);
   const [initialSessionsLoaded, setInitialSessionsLoaded] = useState<Set<string>>(new Set());
   const [currentTime, setCurrentTime] = useState(new Date());
   const [projectSortOrder, setProjectSortOrder] = useState<ProjectSortOrder>('name');
@@ -836,34 +838,51 @@ export function useSidebarController({
     setEditingPlannerName(
       project.plannerMemoryName ?? (project.fullPath.split('/').filter(Boolean).pop() || project.fullPath),
     );
+    setEditingPath(project.fullPath);
+    setEditingProjectError(null);
   }, []);
 
   const cancelEditing = useCallback(() => {
     setEditingProject(null);
     setEditingName('');
     setEditingPlannerName('');
+    setEditingPath('');
+    setEditingProjectError(null);
   }, []);
 
   const saveProjectName = useCallback(
     // `projectId` is the DB primary key; the rename API resolves the path
     // through the `projects` table before writing the new display name.
+    // On failure the dialog stays open with the server's reason (an invalid
+    // path is a legitimate, recoverable outcome) instead of silently
+    // discarding the edit.
     async (projectId: string) => {
       try {
-        const response = await api.renameProject(projectId, editingName, editingPlannerName);
+        const response = await api.renameProject(projectId, editingName, editingPlannerName, editingPath);
         if (response.ok) {
+          setEditingProject(null);
+          setEditingName('');
+          setEditingPlannerName('');
+          setEditingPath('');
+          setEditingProjectError(null);
           await paletteOps.refreshProjects();
         } else {
-          console.error('Failed to rename project');
+          // AppError middleware shape: { error: { message, details } }; a few
+          // legacy routes send { error: string }.
+          const payload = await response.json().catch(() => null) as
+            { error?: string | { message?: string; details?: unknown } } | null;
+          const errorValue = payload?.error;
+          const message = typeof errorValue === 'string'
+            ? errorValue
+            : (typeof errorValue?.details === 'string' ? errorValue.details : errorValue?.message);
+          setEditingProjectError(message || 'Failed to save project');
         }
       } catch (error) {
         console.error('Error renaming project:', error);
-      } finally {
-        setEditingProject(null);
-        setEditingName('');
-        setEditingPlannerName('');
+        setEditingProjectError('Failed to save project');
       }
     },
-    [editingName, editingPlannerName, paletteOps],
+    [editingName, editingPlannerName, editingPath, paletteOps],
   );
 
   const showDeleteSessionConfirmation = useCallback(
@@ -1178,6 +1197,9 @@ export function useSidebarController({
     setEditingName,
     editingPlannerName,
     setEditingPlannerName,
+    editingPath,
+    setEditingPath,
+    editingProjectError,
     setEditingSession,
     setEditingSessionName,
     searchMode,

@@ -224,6 +224,7 @@ export default function SidebarSessionItem({
           role="button"
           tabIndex={0}
           title={sessionView.sessionName}
+          data-bounce-key={session.id}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
@@ -232,20 +233,12 @@ export default function SidebarSessionItem({
           }}
           className={cn(
             'relative flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-[13px] font-normal leading-4 outline-none',
-            'text-muted-foreground transition-colors active:bg-muted',
-            isSelected && 'bg-muted text-foreground',
+            'text-muted-foreground transition-colors active:text-foreground',
+            isSelected && 'text-foreground',
           )}
           onClick={selectMobileSession}
         >
           {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
-          <div
-            className={cn(
-              'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md',
-              isSelected ? 'bg-primary/10' : 'bg-muted/50',
-            )}
-          >
-            <LLMProviderLogo provider={session.__provider} className="h-3 w-3" />
-          </div>
           <MarqueeLabel active={false}>{sessionView.sessionName}</MarqueeLabel>
           {sessionView.messageCount > 0 && (
             <Badge variant="secondary" className="flex-shrink-0 px-1 py-0 text-[10px]">
@@ -427,11 +420,13 @@ export default function SidebarSessionItem({
           title={sessionView.sessionName}
           onMouseEnter={() => setRowHovered(true)}
           onMouseLeave={() => setRowHovered(false)}
+          // Selection carries no filled background — the bounce dot is the one
+          // honest indicator of the open chat; hover is a quiet ink shift.
           className={cn(
             'relative flex min-h-9 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 pr-11 text-left text-[13px] font-normal leading-4 outline-none',
-            'text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-            'focus-visible:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-            isSelected && 'bg-muted text-foreground',
+            'text-muted-foreground transition-colors hover:text-foreground',
+            'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+            isSelected && 'text-foreground',
           )}
           // Left-click keeps in-app navigation; Ctrl/Cmd/middle-click and the
           // native right-click menu use the href to open a new tab/window.
@@ -442,14 +437,6 @@ export default function SidebarSessionItem({
           }}
         >
           {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
-          <div
-            className={cn(
-              'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md',
-              isSelected ? 'bg-primary/10' : 'bg-muted/50',
-            )}
-          >
-            <LLMProviderLogo provider={session.__provider} className="h-3 w-3" />
-          </div>
           <MarqueeLabel active={rowHovered}>{sessionView.sessionName}</MarqueeLabel>
           {sessionView.messageCount > 0 && (
             <Badge variant="secondary" className="flex-shrink-0 px-1 py-0 text-[10px]">

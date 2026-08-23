@@ -1,13 +1,14 @@
 import { ChevronRight, FolderInput, MessageSquare, Plus } from 'lucide-react';
+import { useRef } from 'react';
 import type { MouseEvent } from 'react';
 import type { TFunction } from 'i18next';
 
 import { Button } from '../../../../shared/view/ui';
+import { BounceIndicator } from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 import type { ProjectSession } from '../../../../types/app';
 import type { RecentConversationListItem } from '../../types/types';
 import { formatCompactAge } from '../../utils/utils';
-import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
 
 type SidebarRecentConversationsProps = {
   conversations: RecentConversationListItem[];
@@ -35,7 +36,6 @@ function RecentConversationSkeleton() {
     <div className="space-y-1 px-1" aria-label="Loading recent conversations">
       {Array.from({ length: 8 }).map((_, index) => (
         <div key={index} className="flex items-center gap-2 rounded-lg px-2 py-2.5">
-          <div className="h-7 w-7 animate-pulse rounded-md bg-muted" />
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="h-3 animate-pulse rounded bg-muted" style={{ width: `${72 - index * 3}%` }} />
             <div className="h-2.5 w-1/2 animate-pulse rounded bg-muted/70" />
@@ -62,6 +62,8 @@ export default function SidebarRecentConversations({
   onNewStandaloneChat,
   t,
 }: SidebarRecentConversationsProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+
   if (isLoading && conversations.length === 0) {
     return <RecentConversationSkeleton />;
   }
@@ -118,7 +120,13 @@ export default function SidebarRecentConversations({
         </span>
       </div>
 
-      <div className="space-y-0.5">
+      <div ref={listRef} className="relative space-y-1">
+        {/* Same law as the project list: the bounce dot is the one honest
+            indicator of the open chat. */}
+        <BounceIndicator
+          activeKey={selectedSession ? String(selectedSession.id) : null}
+          containerRef={listRef}
+        />
         {conversations.map((conversation) => {
           const isSelected = String(selectedSession?.id ?? '') === conversation.sessionId;
           const age = formatCompactAge(conversation.lastActivity, currentTime);
@@ -141,20 +149,12 @@ export default function SidebarRecentConversations({
               href={`/session/${conversation.sessionId}`}
               onClick={handleClick}
               data-testid="recent-conversation-row"
+              data-bounce-key={conversation.sessionId}
               className={cn(
-                'group flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors',
-                isSelected
-                  ? 'bg-primary/10 text-foreground'
-                  : 'text-foreground hover:bg-accent/60',
+                'group relative flex min-w-0 items-center gap-2 rounded-lg py-2 pl-4 pr-3 text-left transition-colors',
+                isSelected ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <span className={cn(
-                'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md',
-                isSelected ? 'bg-primary/10' : 'bg-muted/60',
-              )}>
-                <LLMProviderLogo provider={conversation.provider} className="h-3.5 w-3.5" />
-              </span>
-
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-normal leading-4">
                   {conversation.sessionTitle}

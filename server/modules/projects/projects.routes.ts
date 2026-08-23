@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { createProject, updateProjectDisplayName, updateProjectPlannerMemoryName } from '@/modules/projects/services/project-management.service.js';
+import { createProject, updateProjectDisplayName, updateProjectPath, updateProjectPlannerMemoryName } from '@/modules/projects/services/project-management.service.js';
 import { startCloneProject } from '@/modules/projects/services/project-clone.service.js';
 import { getProjectTaskMaster } from '@/modules/projects/services/projects-has-taskmaster.service.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
@@ -227,19 +227,19 @@ router.get(
   }),
 );
 
-router.put('/:projectId/rename', (req, res) => {
-  try {
-    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : '';
-    const { displayName, plannerMemoryName } = req.body as { displayName?: unknown; plannerMemoryName?: unknown };
-    updateProjectDisplayName(projectId, displayName);
-    if (plannerMemoryName !== undefined) {
-      updateProjectPlannerMemoryName(projectId, plannerMemoryName);
-    }
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to rename project' });
+router.put('/:projectId/rename', asyncHandler(async (req, res) => {
+  const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : '';
+  const { displayName, plannerMemoryName, path } = req.body as { displayName?: unknown; plannerMemoryName?: unknown; path?: unknown };
+  // Path first: it validates and can reject, so nothing else is half-applied.
+  if (path !== undefined) {
+    await updateProjectPath(projectId, path);
   }
-});
+  updateProjectDisplayName(projectId, displayName);
+  if (plannerMemoryName !== undefined) {
+    updateProjectPlannerMemoryName(projectId, plannerMemoryName);
+  }
+  res.json({ success: true });
+}));
 
 router.post(
   '/:projectId/toggle-star',

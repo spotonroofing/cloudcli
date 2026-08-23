@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 
+import { cn } from '../../../lib/utils';
+
 import { EASE_OUT } from './ease';
 
 // beUI overflow-aware row label (beui.dev/components/agents/ai-sidebar),
@@ -10,7 +12,7 @@ import { EASE_OUT } from './ease';
 
 const ROW_REVEAL = { duration: 0.16, ease: EASE_OUT } as const;
 
-export function MarqueeLabel({ active, children }: { active: boolean; children: string }) {
+export function MarqueeLabel({ active, children, className }: { active: boolean; children: string; className?: string }) {
   const reduce = useReducedMotion() ?? false;
   const viewportRef = useRef<HTMLSpanElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
@@ -33,7 +35,7 @@ export function MarqueeLabel({ active, children }: { active: boolean; children: 
   const running = active && distance > 0 && !reduce;
 
   return (
-    <span ref={viewportRef} className="block min-w-0 flex-1 overflow-hidden">
+    <span ref={viewportRef} className={cn('block min-w-0 flex-1 overflow-hidden', className)}>
       <motion.span
         className="flex w-max items-center gap-6 whitespace-nowrap"
         animate={{ x: running ? [0, -distance] : 0 }}

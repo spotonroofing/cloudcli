@@ -1,12 +1,7 @@
 import { Compass, Hammer, Settings, PanelLeftOpen, AlertTriangle } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import {
-  NumberTicker,
-  TEXT_SHIMMER_CLASS_NAME,
-  TEXT_SHIMMER_KEYFRAMES,
-  textShimmerStyle,
-} from '../../../../shared/view/beui';
+import { NumberTicker } from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 
 type SidebarCollapsedProps = {
@@ -20,7 +15,10 @@ type SidebarCollapsedProps = {
   t: TFunction;
 };
 
-/** Rail-sized planner/worker counter: icon over rolling count, shimmering while nonzero. */
+/**
+ * Rail slice of the bottom activity bar (ui8 phase 3): icon left, rolling
+ * number right, rectangular on the app radius, breathing while nonzero.
+ */
 function RailCounter({
   kind,
   count,
@@ -38,23 +36,18 @@ function RailCounter({
       data-slot={`${kind}-rail-counter`}
       data-count={count}
       className={cn(
-        'flex w-8 flex-col items-center gap-0.5 rounded-lg py-1.5 transition-colors duration-500',
+        'flex w-9 items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-1.5 py-1 text-[10px] font-medium',
         active
           ? kind === 'planner'
-            ? 'bg-primary/10 text-primary'
-            : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-          : 'text-muted-foreground/70',
+            ? 'animate-counter-breathe text-primary'
+            : 'animate-counter-breathe text-emerald-700 dark:text-emerald-300'
+          : 'text-muted-foreground',
       )}
       title={`${label}: ${count}`}
       aria-label={`${label}: ${count}`}
     >
-      <Icon className="h-3.5 w-3.5" />
-      <span
-        className={cn('text-[10px] font-medium leading-none', active && TEXT_SHIMMER_CLASS_NAME)}
-        style={active ? textShimmerStyle(2.5) : undefined}
-      >
-        <NumberTicker value={count} className="tabular-nums" />
-      </span>
+      <Icon className="h-3 w-3 flex-shrink-0" />
+      <NumberTicker value={count} className="tabular-nums leading-none" />
     </div>
   );
 }
@@ -67,6 +60,8 @@ export default function SidebarCollapsed({
   workerRunningCount,
   t,
 }: SidebarCollapsedProps) {
+  const showCounters = plannerRunningCount > 0 || workerRunningCount > 0;
+
   return (
     <div className="flex h-full w-12 flex-col items-center gap-1 bg-background/80 py-3 backdrop-blur-sm">
       {/* Expand button with brand logo */}
@@ -78,22 +73,6 @@ export default function SidebarCollapsed({
       >
         <PanelLeftOpen className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
       </button>
-
-      <div className="nav-divider my-1 w-6" />
-
-      {/* Planner/worker live-run counters — the rail's slice of the expanded
-          header's activity counters, same shimmer-while-nonzero treatment. */}
-      <style>{TEXT_SHIMMER_KEYFRAMES}</style>
-      <RailCounter
-        kind="planner"
-        count={plannerRunningCount}
-        label={t('running.plannerCounter', 'Planner')}
-      />
-      <RailCounter
-        kind="worker"
-        count={workerRunningCount}
-        label={t('running.workerCounter', 'Worker')}
-      />
 
       {/* Restart-required indicator */}
       {restartRequired && (
@@ -107,10 +86,31 @@ export default function SidebarCollapsed({
         </div>
       )}
 
+      {/* Planner/worker live-run counters — the rail's slice of the expanded
+          footer's activity bar, pinned to the rail bottom above Settings and
+          hidden entirely while nothing runs. */}
+      {showCounters && (
+        <div className="mt-auto flex flex-col items-center gap-1" data-slot="rail-activity-counters">
+          <RailCounter
+            kind="planner"
+            count={plannerRunningCount}
+            label={t('running.plannerCounter', 'Planner')}
+          />
+          <RailCounter
+            kind="worker"
+            count={workerRunningCount}
+            label={t('running.workerCounter', 'Worker')}
+          />
+        </div>
+      )}
+
       {/* Settings — pinned to the rail bottom, matching the expanded footer */}
       <button
         onClick={onShowSettings}
-        className="group mt-auto flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"
+        className={cn(
+          'group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80',
+          !showCounters && 'mt-auto',
+        )}
         aria-label={t('actions.settings')}
         title={t('actions.settings')}
       >

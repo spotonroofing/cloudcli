@@ -151,6 +151,16 @@ export const projectsDb = {
         `).run(randomUUID(), normalizedProjectPath, customProjectName);
     },
 
+    updateProjectPathById(projectId: string, projectPath: string): void {
+        const db = getConnection();
+        const normalizedProjectPath = normalizeProjectPath(projectPath);
+        db.prepare(`
+            UPDATE projects
+            SET project_path = ?
+            WHERE project_id = ?
+        `).run(normalizedProjectPath, projectId);
+    },
+
     updateCustomProjectNameById(projectId: string, customProjectName: string | null): void {
         const db = getConnection();
         db.prepare(`

@@ -417,6 +417,27 @@ export const sessionsDb = {
   },
 
   /**
+   * Re-points every session from one project path to another (ui8 phase 3:
+   * the project edit dialog can change a project's path; its sessions follow
+   * so they stay attached to the project row).
+   */
+  repointProjectPath(previousPath: string, nextPath: string): void {
+    const db = getConnection();
+    const normalizedPrevious = normalizeProjectPath(previousPath);
+    const normalizedNext = normalizeProjectPath(nextPath);
+    db.prepare(
+      `UPDATE sessions
+       SET project_path = ?
+       WHERE project_path = ?`
+    ).run(normalizedNext, normalizedPrevious);
+    db.prepare(
+      `UPDATE sessions
+       SET assigned_project_path = ?
+       WHERE assigned_project_path = ?`
+    ).run(normalizedNext, normalizedPrevious);
+  },
+
+  /**
    * Records the model one session runs with.
    *
    * Called both when the user picks a model for the session and on every send,

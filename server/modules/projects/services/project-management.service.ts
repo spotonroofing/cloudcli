@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { projectsDb } from '@/modules/database/index.js';
+import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import type {
   CreateProjectPathResult,
   ProjectRepositoryRow,
@@ -150,4 +150,57 @@ export function updateProjectDisplayName(projectId: string, newDisplayName: unkn
 export function updateProjectPlannerMemoryName(projectId: string, newPlannerMemoryName: unknown): void {
   const trimmed = typeof newPlannerMemoryName === 'string' ? newPlannerMemoryName.trim() : '';
   projectsDb.updatePlannerMemoryNameById(projectId, trimmed.length > 0 ? trimmed : null);
+}
+
+/**
+ * Re-points a project at a different directory (ui8 phase 3: the project edit
+ * dialog keeps the path editable). The path is validated like project
+ * creation; the project's sessions are re-pointed with it so they stay
+ * attached to the row. A no-op when the path is unchanged.
+ */
+export async function updateProjectPath(projectId: string, newPath: unknown): Promise<void> {
+  const requestedPath = typeof newPath === 'string' ? newPath.trim() : '';
+  if (!requestedPath) {
+    throw new AppError('path is required', {
+      code: 'PROJECT_PATH_REQUIRED',
+      statusCode: 400,
+    });
+  }
+
+  const projectRow = projectsDb.getProjectById(projectId);
+  if (!projectRow) {
+    throw new AppError('Project not found', {
+      code: 'PROJECT_NOT_FOUND',
+      statusCode: 404,
+    });
+  }
+
+  const normalizedPath = normalizeProjectPath(requestedPath);
+  if (normalizedPath === projectRow.project_path) {
+    return;
+  }
+
+  const pathValidation = await validateWorkspacePath(normalizedPath);
+  if (!pathValidation.valid || !pathValidation.resolvedPath) {
+    throw new AppError('Invalid project path', {
+      code: 'INVALID_PROJECT_PATH',
+      statusCode: 400,
+      details: pathValidation.error ?? 'Path validation failed',
+    });
+  }
+
+  const resolvedPath = normalizeProjectPath(pathValidation.resolvedPath);
+  if (resolvedPath === projectRow.project_path) {
+    return;
+  }
+
+  if (projectsDb.getProjectPath(resolvedPath)) {
+    throw new AppError('Another project already uses this path', {
+      code: 'PROJECT_ALREADY_EXISTS',
+      statusCode: 409,
+    });
+  }
+
+  projectsDb.updateProjectPathById(projectId, resolvedPath);
+  sessionsDb.repointProjectPath(projectRow.project_path, resolvedPath);
 }

@@ -21,6 +21,8 @@ export type SidebarProjectListProps = {
   editingProject: string | null;
   editingName: string;
   editingPlannerName: string;
+  editingPath: string;
+  editingProjectError: string | null;
   initialSessionsLoaded: Set<string>;
   currentTime: Date;
   editingSession: string | null;
@@ -42,6 +44,7 @@ export type SidebarProjectListProps = {
   forceExpanded?: boolean;
   onEditingNameChange: (value: string) => void;
   onEditingPlannerNameChange: (value: string) => void;
+  onEditingPathChange: (value: string) => void;
   onToggleProject: (projectName: string) => void;
   onProjectSelect: (project: Project) => void;
   onStartEditingProject: (project: Project) => void;
@@ -75,6 +78,8 @@ export default function SidebarProjectList({
   editingProject,
   editingName,
   editingPlannerName,
+  editingPath,
+  editingProjectError,
   initialSessionsLoaded,
   currentTime,
   editingSession,
@@ -92,6 +97,7 @@ export default function SidebarProjectList({
   forceExpanded = false,
   onEditingNameChange,
   onEditingPlannerNameChange,
+  onEditingPathChange,
   onToggleProject,
   onProjectSelect,
   onStartEditingProject,
@@ -148,6 +154,8 @@ export default function SidebarProjectList({
               editingProject={editingProject}
               editingName={editingName}
               editingPlannerName={editingPlannerName}
+              editingPath={editingPath}
+              editingProjectError={editingProjectError}
               sessions={getProjectSessions(project)}
               initialSessionsLoaded={initialSessionsLoaded.has(project.projectId)}
               isLoadingMoreSessions={loadingMoreProjects.has(project.projectId)}
@@ -156,6 +164,7 @@ export default function SidebarProjectList({
               editingSessionName={editingSessionName}
               onEditingNameChange={onEditingNameChange}
               onEditingPlannerNameChange={onEditingPlannerNameChange}
+              onEditingPathChange={onEditingPathChange}
               onToggleProject={onToggleProject}
               onProjectSelect={onProjectSelect}
               onStartEditingProject={onStartEditingProject}
@@ -168,7 +177,13 @@ export default function SidebarProjectList({
               activeSessions={activeSessions}
               attentionSessionIds={attentionSessionIds}
               runningSessionCount={runningByProject.get(project.projectId) ?? 0}
-              isInWorkspace={Boolean(workspaceProjectIds?.includes(project.projectId))}
+              // The workspace only renders with 2+ rows; a persisted lone
+              // entry must not read as "open in workspace" in the sidebar.
+              isInWorkspace={Boolean(
+                workspaceProjectIds
+                && workspaceProjectIds.length >= 2
+                && workspaceProjectIds.includes(project.projectId),
+              )}
               onToggleWorkspaceProject={onToggleWorkspaceProject}
               onNewSession={onNewSession}
               onEditingSessionNameChange={onEditingSessionNameChange}

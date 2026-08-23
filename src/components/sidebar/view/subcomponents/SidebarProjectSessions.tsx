@@ -100,13 +100,13 @@ export default function SidebarProjectSessions({
           transition={{ duration: 0.18, ease: EASE_OUT }}
           className="overflow-hidden"
         >
-          <div className="space-y-0.5 pl-5">
+          <div className="space-y-1 py-1.5 pl-5">
       {/* One new-session control on both form factors; mobile gets a taller
           touch target. handleNewSession selects the project itself. */}
       <Button
         variant="default"
         size="sm"
-        className="h-11 w-full justify-start gap-2 bg-primary text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 md:h-8"
+        className="mb-1.5 h-11 w-full justify-start gap-2 bg-primary text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 md:h-8"
         onClick={() => onNewSession(project)}
       >
         <Plus className="h-3 w-3" />

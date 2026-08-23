@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
 
@@ -53,7 +53,16 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
   const measure = useCallback((key: string): number | null => {
     const container = containerRef.current;
     if (!container) return null;
-    const row = container.querySelector<HTMLElement>(`[data-bounce-key="${CSS.escape(key)}"]`);
+    // A key can be stamped on both the mobile and desktop variant of a row
+    // (one is display:none per breakpoint); measure the visible one.
+    const rows = container.querySelectorAll<HTMLElement>(`[data-bounce-key="${CSS.escape(key)}"]`);
+    let row: HTMLElement | null = null;
+    for (const candidate of rows) {
+      if (candidate.getBoundingClientRect().height > 0) {
+        row = candidate;
+        break;
+      }
+    }
     if (!row) return null;
     const containerRect = container.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
@@ -65,7 +74,15 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
     const key = activeKeyRef.current;
     if (!key) return;
     const destinationY = measure(key);
-    if (destinationY === null) return;
+    if (destinationY === null) {
+      // Destination row left the layout (collapsed group, filtered list):
+      // hide rather than hover stale; the next resize with the row back
+      // re-seats the dot.
+      animationRef.current?.stop();
+      opacity.set(0);
+      hasPositionRef.current = false;
+      return;
+    }
     animationRef.current?.stop();
     x.set(0);
     y.set(destinationY);
@@ -127,13 +144,30 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
   }, [activeKey, measure, opacity, reduce, x, y]);
 
   // Rows above the destination expand, collapse, and reflow constantly; a
-  // container resize re-seats the dot without replaying the arc.
-  useLayoutEffect(() => {
+  // container resize re-seats the dot without replaying the arc. Row mount and
+  // unmount (collapsing a project, filtering the list) don't always change the
+  // container's size — a collapse wrapper animates to height 0 before the row
+  // leaves the DOM — so DOM mutations re-seat (or hide) the dot too. This is a
+  // passive useEffect, not a layout effect: the dot is a child of the host
+  // container, so its layout effects run before the container's ref attaches
+  // and would observe nothing. The snapIndicator call seats the dot on mount
+  // for the same reason (the layout effect above ran against a null ref).
+  useEffect(() => {
     const container = containerRef.current;
-    if (!container || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(snapIndicator);
-    observer.observe(container);
-    return () => observer.disconnect();
+    if (!container) return;
+    snapIndicator();
+    const observers: Array<{ disconnect: () => void }> = [];
+    if (typeof ResizeObserver !== 'undefined') {
+      const resizeObserver = new ResizeObserver(snapIndicator);
+      resizeObserver.observe(container);
+      observers.push(resizeObserver);
+    }
+    if (typeof MutationObserver !== 'undefined') {
+      const mutationObserver = new MutationObserver(snapIndicator);
+      mutationObserver.observe(container, { childList: true, subtree: true });
+      observers.push(mutationObserver);
+    }
+    return () => observers.forEach((observer) => observer.disconnect());
   }, [containerRef, snapIndicator]);
 
   useLayoutEffect(() => () => {
