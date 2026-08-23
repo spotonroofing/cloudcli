@@ -125,6 +125,10 @@
       "label": "Darkmode",
       "description": "Zwischen hellem und dunklem Design wechseln"
     },
+    "theme": {
+      "label": "Farbschema",
+      "description": "Farbschema für die gesamte App"
+    },
     "projectSorting": {
       "label": "Projektsortierung",
       "description": "Wie Projekte in der Seitenleiste angeordnet werden",

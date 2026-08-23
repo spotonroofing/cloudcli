@@ -151,6 +151,10 @@
       "label": "Modo oscuro",
       "description": "Alterna entre el tema claro y el oscuro"
     },
+    "theme": {
+      "label": "Tema",
+      "description": "Tema de color para toda la aplicación"
+    },
     "projectSorting": {
       "label": "Orden de proyectos",
       "description": "Cómo se ordenan los proyectos en la barra lateral",

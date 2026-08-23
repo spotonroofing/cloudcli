@@ -74,7 +74,7 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
         {/* Current tool indicator (while running) */}
         {currentTool && !isComplete && (
           <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-purple-500 dark:bg-purple-400" />
+            <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-primary" />
             <span className="text-muted-foreground/60">Currently:</span>
             <span className="font-medium text-foreground">{currentTool.toolName}</span>
             {getCompactToolDisplay(currentTool.toolName, currentTool.toolInput) && (

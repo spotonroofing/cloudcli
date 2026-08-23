@@ -111,8 +111,8 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
   }, [operations.renamingItem]);
 
   const renderFileIcon = useCallback((filename: string) => {
-    const { icon: Icon, color } = getFileIconData(filename);
-    return <Icon className={cn(ICON_SIZE_CLASS, color)} />;
+    const { icon: Icon } = getFileIconData(filename);
+    return <Icon className={cn(ICON_SIZE_CLASS, 'text-muted-foreground')} />;
   }, []);
 
   // Centralized click behavior keeps file actions identical across all presentation modes.
@@ -173,7 +173,7 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
       {upload.isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center border-2 border-dashed border-blue-500 bg-blue-500/10">
           <div className="flex items-center gap-3 rounded-lg bg-background/95 px-6 py-4 shadow-lg">
-            <Upload className="h-6 w-6 text-blue-500" />
+            <Upload className="h-6 w-6 text-primary" />
             <span className="text-sm font-medium">
               {upload.dropTarget
                 ? t('fileTree.dropToUploadTo', 'Drop files to upload to "{{folder}}"', {
@@ -213,7 +213,7 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
             style={{ paddingLeft: `${(operations.newItemParent.split('/').length - 1) * 16 + 4}px` }}
           >
             {operations.newItemType === 'directory' ? (
-              <Folder className={cn(ICON_SIZE_CLASS, 'text-blue-500')} />
+              <Folder className={cn(ICON_SIZE_CLASS, 'text-muted-foreground')} />
             ) : (
               <span className="ml-[18px]">{renderFileIcon(operations.newItemName)}</span>
             )}
@@ -282,8 +282,8 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
           <div className="mx-4 max-w-sm rounded-lg border border-border bg-background p-4 shadow-lg">
             <div className="mb-4 flex items-center gap-3">
-              <div className="rounded-full bg-red-100 p-2 dark:bg-red-900/30">
-                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              <div className="rounded-full bg-muted p-2">
+                <AlertTriangle className="h-5 w-5 text-foreground" />
               </div>
               <div>
                 <h3 className="font-medium text-foreground">

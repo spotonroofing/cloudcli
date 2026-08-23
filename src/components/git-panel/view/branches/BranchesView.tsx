@@ -59,12 +59,12 @@ function BranchRow({ name, isCurrent, isRemote, aheadCount, behindCount, isMobil
             {name}
           </span>
           {isCurrent && (
-            <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
+            <span className="shrink-0 rounded-md bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
               current
             </span>
           )}
           {isRemote && !isCurrent && (
-            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+            <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
               remote
             </span>
           )}
@@ -117,7 +117,7 @@ function SectionHeader({ label, count }: { label: string; count: number }) {
   return (
     <div className="sticky top-0 z-10 flex items-center justify-between bg-background/95 px-4 py-2 backdrop-blur-sm">
       <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
-      <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{count}</span>
+      <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{count}</span>
     </div>
   );
 }

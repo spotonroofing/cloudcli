@@ -43,7 +43,7 @@ export default function GitViewTabs({ activeView, isHidden, changeCount, onChang
                 <Icon className="h-4 w-4" />
                 <span>{label}</span>
                 {id === 'changes' && changeCount > 0 && (
-                  <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
+                  <span className="rounded-md bg-primary/15 px-1.5 py-0.5 text-xs font-semibold text-primary">
                     {changeCount}
                   </span>
                 )}

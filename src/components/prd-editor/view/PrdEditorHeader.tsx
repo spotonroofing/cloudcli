@@ -50,7 +50,7 @@ function HeaderIconButton({ title, onClick, icon, active = false }: HeaderIconBu
       className={cn(
         'p-2 rounded-md min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center transition-colors',
         active
-          ? 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/50'
+          ? 'text-primary bg-accent'
           : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800',
       )}
     >
@@ -84,8 +84,8 @@ export default function PrdEditorHeader({
   return (
     <div className="flex min-w-0 flex-shrink-0 items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700">
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-purple-600">
-          <FileText className="h-4 w-4 text-white" />
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-muted">
+          <FileText className="h-4 w-4 text-foreground" />
         </div>
 
         <div className="min-w-0 flex-1">
@@ -108,7 +108,7 @@ export default function PrdEditorHeader({
 
               <button
                 onClick={() => fileNameInputRef.current?.focus()}
-                className="p-1 text-gray-400 transition-colors hover:text-purple-600 dark:hover:text-purple-400"
+                className="p-1 text-gray-400 transition-colors hover:text-foreground"
                 title="Focus filename input"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -123,7 +123,7 @@ export default function PrdEditorHeader({
             </div>
 
             <div className="flex flex-shrink-0 items-center gap-2">
-              <span className="whitespace-nowrap rounded bg-purple-100 px-2 py-1 text-xs text-purple-600 dark:bg-purple-900 dark:text-purple-300">
+              <span className="whitespace-nowrap rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
                 PRD
               </span>
               {isNewFile && (

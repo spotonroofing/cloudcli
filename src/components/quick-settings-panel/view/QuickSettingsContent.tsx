@@ -1,8 +1,17 @@
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Palette, Sun } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { DarkModeToggle } from '../../../shared/view/ui';
 import LanguageSelector from '../../../shared/view/ui/LanguageSelector';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../shared/view/beui/BeuiSelect';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { COLOR_THEMES } from '../../../shared/themes';
 import {
   INPUT_SETTING_TOGGLES,
   SETTING_ROW_CLASS,
@@ -29,6 +38,7 @@ export default function QuickSettingsContent({
   onPreferenceChange,
 }: QuickSettingsContentProps) {
   const { t } = useTranslation('settings');
+  const { colorTheme, setColorTheme } = useTheme();
   const inputSettingToggles = preferences.voiceEnabled
     ? INPUT_SETTING_TOGGLES
     : INPUT_SETTING_TOGGLES.filter(({ key }) => key !== 'voiceEnabled');
@@ -58,6 +68,24 @@ export default function QuickSettingsContent({
             {t('quickSettings.darkMode')}
           </span>
           <DarkModeToggle />
+        </div>
+        <div className={SETTING_ROW_CLASS}>
+          <span className="flex items-center gap-2 text-sm text-foreground">
+            <Palette className="h-4 w-4 text-muted-foreground" />
+            {t('appearanceSettings.theme.label')}
+          </span>
+          <Select value={colorTheme} onValueChange={setColorTheme} className="w-36">
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {COLOR_THEMES.map((theme) => (
+                <SelectItem key={theme.id} value={theme.id}>
+                  {theme.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <LanguageSelector compact />
       </QuickSettingsSection>

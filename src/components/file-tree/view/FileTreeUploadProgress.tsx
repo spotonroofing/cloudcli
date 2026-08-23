@@ -76,10 +76,10 @@ export default function FileTreeUploadProgress({ upload }: FileTreeUploadProgres
           <div className="mt-1 truncate text-[11px] text-muted-foreground">{detail}</div>
         </div>
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background/80">
+      <div className="mt-2 h-1.5 overflow-hidden rounded-sm bg-background/80">
         <div
           className={cn(
-            'h-full rounded-full transition-[width] duration-200',
+            'h-full rounded-sm transition-[width] duration-200',
             isError ? 'bg-red-500' : isComplete ? 'bg-emerald-500' : 'bg-primary',
           )}
           style={{ width: `${isError ? Math.max(progress, 8) : progress}%` }}

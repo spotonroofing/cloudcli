@@ -278,7 +278,7 @@ export default function ModelLibraryPanel({
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground">Your models</p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">Editable and stored in auth.db</p>
               </div>
-              <Badge variant="secondary" className="rounded-full text-[10px]">{customModels.length}</Badge>
+              <Badge variant="secondary" className="rounded-md text-[10px]">{customModels.length}</Badge>
             </div>
 
             {customModels.length === 0 ? (
@@ -297,7 +297,7 @@ export default function ModelLibraryPanel({
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="truncate text-sm font-semibold text-foreground">{option.label}</p>
-                            <Badge className="rounded-full px-2 py-0 text-[9px]">Custom</Badge>
+                            <Badge className="rounded-md px-2 py-0 text-[9px]">Custom</Badge>
                           </div>
                           <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{option.value}</p>
                         </div>
@@ -353,7 +353,7 @@ export default function ModelLibraryPanel({
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground">Built-in models</p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">Maintained by CloudCLI and read-only</p>
               </div>
-              <Badge variant="secondary" className="rounded-full text-[10px]">{predefinedModels.length}</Badge>
+              <Badge variant="secondary" className="rounded-md text-[10px]">{predefinedModels.length}</Badge>
             </div>
             <div className="overflow-hidden rounded-2xl border border-border/70 bg-background/70">
               {predefinedModels.map((option) => (

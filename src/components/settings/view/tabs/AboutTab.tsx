@@ -49,7 +49,7 @@ export default function AboutTab() {
               href={releasesUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               v{currentVersion}
             </a>

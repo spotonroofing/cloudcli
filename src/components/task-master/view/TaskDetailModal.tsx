@@ -155,7 +155,7 @@ export default function TaskDetailModal({
       >
         <div className="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700 md:p-6">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <StatusIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            <StatusIcon className="h-6 w-6 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <button
                 onClick={() => copyTextToClipboard(String(task.id))}
@@ -185,7 +185,7 @@ export default function TaskDetailModal({
                 <button
                   onClick={handleSaveChanges}
                   disabled={isSaving}
-                  className="rounded-md p-2 text-green-600 hover:bg-green-50 disabled:opacity-50 dark:hover:bg-green-950"
+                  className="rounded-md p-2 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50"
                   title="Save"
                 >
                   <Save className={cn('w-5 h-5', isSaving && 'animate-spin')} />

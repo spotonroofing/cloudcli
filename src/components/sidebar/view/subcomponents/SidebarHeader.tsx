@@ -97,7 +97,7 @@ export default function SidebarHeader({
                 >
                   <span className="truncate">{t('search.modeRunning', 'Running')}</span>
                   {runningSessionsCount > 0 && (
-                    <span className="flex h-3.5 min-w-3.5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500 px-0.5 text-[8px] font-semibold leading-none text-white">
+                    <span className="flex h-3.5 min-w-3.5 flex-shrink-0 items-center justify-center rounded-sm bg-emerald-500 px-0.5 text-[8px] font-semibold leading-none text-white">
                       {runningBadgeText}
                     </span>
                   )}

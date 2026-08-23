@@ -662,7 +662,7 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
       )}
 
       {justInstalled && saveStatus === 'success' && !isAddDialogOpen && (
-        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+        <div className="inline-flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
           <CheckCircle2 className="h-4 w-4" />
           Skills saved successfully.
         </div>
@@ -700,7 +700,7 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
         {groupedSkills.map((group) => (
           <section key={group.scope} className="min-w-0 space-y-3">
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className={cn('rounded-full px-2.5 py-1 text-xs', SCOPE_BADGE_CLASSES[group.scope])}>
+              <Badge variant="outline" className={cn('rounded-md px-2.5 py-1 text-xs', SCOPE_BADGE_CLASSES[group.scope])}>
                 {SCOPE_LABELS[group.scope]}
               </Badge>
               <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -725,12 +725,12 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     {skill.pluginName && (
-                      <Badge variant="outline" className="rounded-full bg-background/70">
+                      <Badge variant="outline" className="rounded-md bg-background/70">
                         Plugin: {skill.pluginName}
                       </Badge>
                     )}
                     {skill.projectDisplayName && (
-                      <Badge variant="outline" className="rounded-full bg-background/70">
+                      <Badge variant="outline" className="rounded-md bg-background/70">
                         Project: {skill.projectDisplayName}
                       </Badge>
                     )}

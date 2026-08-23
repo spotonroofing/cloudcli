@@ -275,7 +275,7 @@ export default function SidebarSessionItem({
             className="bottom-0 left-0 top-auto max-w-none translate-x-0 translate-y-0 rounded-b-none rounded-t-lg border-x-0 border-b-0 px-4 pb-safe-area-inset-bottom pt-3"
           >
             <DialogTitle>Session options</DialogTitle>
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted-foreground/30" aria-hidden="true" />
+            <div className="mx-auto mb-4 h-1 w-10 rounded-sm bg-muted-foreground/30" aria-hidden="true" />
 
             <div className="mb-4 flex items-center gap-3 px-1">
               <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-muted">

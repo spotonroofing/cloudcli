@@ -162,7 +162,7 @@ export default function TaskBoardToolbar({
             <>
               <button
                 onClick={onOpenHelp}
-                className="rounded-lg border border-gray-300 p-2 text-gray-600 hover:bg-gray-100 hover:text-blue-600 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-blue-400"
+                className="rounded-lg border border-gray-300 p-2 text-gray-600 hover:bg-gray-100 hover:text-foreground dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-foreground"
                 title={t('buttons.help')}
               >
                 <HelpCircle className="h-4 w-4" />
@@ -178,7 +178,7 @@ export default function TaskBoardToolbar({
                     >
                       <FileText className="h-4 w-4" />
                       <span className="hidden sm:inline">{t('buttons.prds')}</span>
-                      <span className="min-w-5 rounded-full bg-purple-500 px-1.5 py-0.5 text-center text-xs">
+                      <span className="min-w-5 rounded-md bg-primary text-primary-foreground px-1.5 py-0.5 text-center text-xs">
                         {existingPrds.length}
                       </span>
                       <ChevronDown className={cn('w-3 h-3 transition-transform hidden sm:block', isPrdDropdownOpen && 'rotate-180')} />
@@ -192,7 +192,7 @@ export default function TaskBoardToolbar({
                               onCreatePrd();
                               setIsPrdDropdownOpen(false);
                             }}
-                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm font-medium text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-900/30"
+                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                           >
                             <Plus className="h-4 w-4" />
                             {t('buttons.createNewPRD')}

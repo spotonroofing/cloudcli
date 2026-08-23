@@ -27,7 +27,7 @@ export default function SidebarProjectsState({
         <h3 className="mb-2 text-base font-medium text-foreground md:mb-1">{t('projects.loadingProjects')}</h3>
         {loadingProgress && loadingProgress.total > 0 ? (
           <div className="space-y-2">
-            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-2 w-full overflow-hidden rounded-sm bg-muted">
               <div
                 className="h-full bg-primary transition-all duration-300 ease-out"
                 style={{ width: `${(loadingProgress.current / loadingProgress.total) * 100}%` }}

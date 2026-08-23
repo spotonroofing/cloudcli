@@ -20,7 +20,7 @@ import { EASE_OUT } from '../beui/ease';
 // `status` opts into the donor's animated state-icon treatment.
 
 const badgeVariants = cva(
-  'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
   {
     variants: {
       variant: {
@@ -171,7 +171,7 @@ function Badge({
       layout
       transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
       className={cn(
-        'relative inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap rounded-full border font-medium tabular-nums',
+        'relative inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap rounded-md border font-medium tabular-nums',
         'transition-colors duration-300',
         STATUS_CLASS[status],
         SIZE_CLASS[size],
@@ -182,7 +182,7 @@ function Badge({
       {shouldPulse && !reduce ? (
         <motion.span
           aria-hidden
-          className="absolute inset-0 rounded-full bg-current opacity-10"
+          className="absolute inset-0 rounded-md bg-current opacity-10"
           animate={{ scale: [0.94, 1.08, 0.94], opacity: [0.08, 0.16, 0.08] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
         />

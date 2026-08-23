@@ -125,6 +125,10 @@
       "label": "Mode sombre",
       "description": "Basculer entre les thèmes clair et sombre"
     },
+    "theme": {
+      "label": "Thème",
+      "description": "Thème de couleur pour toute l’application"
+    },
     "projectSorting": {
       "label": "Tri des projets",
       "description": "Ordre d'affichage des projets dans la barre latérale",

@@ -202,7 +202,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
                   key={i}
                   type="button"
                   onClick={() => setCurrentStep(i)}
-                  className={`h-[3px] rounded-full transition-all duration-300 ${
+                  className={`h-[3px] rounded-sm transition-all duration-300 ${
                     i === currentStep
                       ? 'w-5 bg-primary'
                       : i < currentStep

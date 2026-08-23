@@ -191,9 +191,9 @@ function TaskCard({ task, onClick = null, showParent = false, className = '' }: 
         <div className="ml-3">
           <div className="mb-1 flex items-center gap-2">
             <span className="text-xs text-gray-500 dark:text-gray-400">Progress:</span>
-            <div className="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700" title={`${progress.completed} of ${progress.total} subtasks completed`}>
+            <div className="h-1.5 flex-1 rounded-sm bg-gray-200 dark:bg-gray-700" title={`${progress.completed} of ${progress.total} subtasks completed`}>
               <div
-                className={cn('h-full rounded-full transition-all duration-300', task.status === 'done' ? 'bg-green-500' : 'bg-blue-500')}
+                className={cn('h-full rounded-sm transition-all duration-300', task.status === 'done' ? 'bg-green-500' : 'bg-blue-500')}
                 style={{ width: `${progress.percentage}%` }}
               />
             </div>

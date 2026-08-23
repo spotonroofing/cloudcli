@@ -373,7 +373,7 @@ function ModelsContent({
                   <span className="flex items-center justify-between gap-2">
                     <span className="break-words text-sm font-semibold text-foreground">{option.label || prettifyModelId(option.value)}</span>
                     <span className="flex shrink-0 items-center gap-2">
-                      {option.isCustom && <Badge className="rounded-full px-2 py-0 text-[9px]">Custom</Badge>}
+                      {option.isCustom && <Badge className="rounded-md px-2 py-0 text-[9px]">Custom</Badge>}
                       {isCurrent ? (
                         <BadgeCheck className="h-4 w-4 shrink-0 text-primary" />
                       ) : isChanging ? (
@@ -520,7 +520,7 @@ function StatusContent({ data }: { data: StatusCommandData }) {
             <p className="text-xs text-muted-foreground">Process {data.pid ? `#${data.pid}` : 'status'} is responding.</p>
           </div>
         </div>
-        <Badge className="rounded-full bg-emerald-500 text-white hover:bg-emerald-500">Healthy</Badge>
+        <Badge className="rounded-md bg-emerald-500 text-white hover:bg-emerald-500">Healthy</Badge>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

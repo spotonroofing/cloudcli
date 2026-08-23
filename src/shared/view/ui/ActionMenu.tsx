@@ -219,7 +219,7 @@ export default function ActionMenu({
               {item.loading ? (
                 <Loader2 className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin" />
               ) : (
-                Icon && <Icon className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                Icon && <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-popover-foreground" />
               )}
               <span className="min-w-0 flex-1">
                 <span className="block font-medium leading-5">{item.label}</span>

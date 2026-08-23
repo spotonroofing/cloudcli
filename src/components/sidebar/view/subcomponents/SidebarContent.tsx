@@ -345,9 +345,9 @@ export default function SidebarContent({
                           {searchProgress.scannedProjects}/{searchProgress.totalProjects}
                         </p>
                       </div>
-                      <div className="h-0.5 overflow-hidden rounded-full bg-muted">
+                      <div className="h-0.5 overflow-hidden rounded-sm bg-muted">
                         <div
-                          className="h-full rounded-full bg-primary/60 transition-all duration-300"
+                          className="h-full rounded-sm bg-primary/60 transition-all duration-300"
                           style={{
                             width: `${searchProgress.totalProjects > 0
                               ? Math.round((searchProgress.scannedProjects / searchProgress.totalProjects) * 100)
@@ -455,7 +455,7 @@ export default function SidebarContent({
                     {t('running.title', 'Running now')}
                   </span>
                 </div>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">
+                <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">
                   {runningSessionsCount}
                 </span>
               </div>
@@ -525,7 +525,7 @@ export default function SidebarContent({
                   </div>
                 </div>
                 <span
-                  className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground"
+                  className="rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground"
                   title={visibleArchivedItemsCount !== archivedSessionsCount
                     ? `${visibleArchivedItemsCount} of ${archivedSessionsCount}`
                     : undefined}
@@ -695,7 +695,7 @@ export default function SidebarContent({
                         </button>
                         <div className="flex flex-shrink-0 items-center gap-0.5">
                           <button
-                            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-emerald-500/10 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:hover:text-emerald-300"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             onClick={() => onRestoreArchivedSession(session.sessionId)}
                             title={t('archived.restore', 'Restore session')}
                             aria-label={`${t('archived.restore', 'Restore session')}: ${session.sessionTitle}`}

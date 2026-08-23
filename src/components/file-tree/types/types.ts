@@ -25,7 +25,6 @@ export interface FileTreeImageSelection {
 
 export interface FileIconData {
   icon: LucideIcon;
-  color: string;
 }
 
 export type FileIconMap = Record<string, FileIconData>;

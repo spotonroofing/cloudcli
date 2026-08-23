@@ -125,6 +125,10 @@
       "label": "ダークモード",
       "description": "ライトテーマとダークテーマを切り替えます"
     },
+    "theme": {
+      "label": "テーマ",
+      "description": "アプリ全体のカラーテーマ"
+    },
     "projectSorting": {
       "label": "プロジェクトの並び順",
       "description": "サイドバーでのプロジェクトの並び順を設定します",

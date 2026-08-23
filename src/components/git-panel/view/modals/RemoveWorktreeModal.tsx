@@ -54,8 +54,8 @@ export default function RemoveWorktreeModal({
       >
         <div className="p-6">
           <div className="mb-4 flex items-center">
-            <div className="mr-3 rounded-full bg-red-100 p-2 dark:bg-red-900/30">
-              <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+            <div className="mr-3 rounded-full bg-muted p-2">
+              <Trash2 className="h-4 w-4 text-foreground" />
             </div>
             <h3 id="remove-worktree-title" className="text-lg font-semibold text-foreground">
               Remove Worktree

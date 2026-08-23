@@ -160,20 +160,8 @@ export default function SidebarModals({
             <div className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
               <div className="p-6">
                 <div className="flex items-start gap-4">
-                  <div
-                    className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${
-                      confirmingProjectAction === 'delete'
-                        ? 'bg-red-100 dark:bg-red-900/30'
-                        : 'bg-amber-100 dark:bg-amber-900/30'
-                    }`}
-                  >
-                    <AlertTriangle
-                      className={`h-6 w-6 ${
-                        confirmingProjectAction === 'delete'
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-amber-600 dark:text-amber-400'
-                      }`}
-                    />
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-muted">
+                    <AlertTriangle className="h-6 w-6 text-foreground" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="mb-2 text-lg font-semibold text-foreground">
@@ -270,8 +258,8 @@ export default function SidebarModals({
             <div className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
               <div className="p-6">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-                    <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-muted">
+                    <AlertTriangle className="h-6 w-6 text-foreground" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="mb-2 text-lg font-semibold text-foreground">

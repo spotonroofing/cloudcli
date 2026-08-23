@@ -166,7 +166,7 @@ export function ToolApproval({
             </div>
             <span
               className={cn(
-                'shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors',
+                'shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors',
                 getStatusBadgeClass(status),
               )}
             >

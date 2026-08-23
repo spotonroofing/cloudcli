@@ -15,8 +15,8 @@ export default function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProp
       <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800">
         <div className="flex items-center justify-between border-b border-gray-200 p-6 dark:border-gray-700">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/50">
-              <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create AI-Generated Task</h3>
           </div>
@@ -31,8 +31,8 @@ export default function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProp
         <div className="space-y-6 p-6">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/50">
-                <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
                 <h4 className="mb-2 font-semibold text-blue-900 dark:text-blue-100">Pro tip: ask Claude Code directly</h4>

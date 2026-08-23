@@ -53,8 +53,8 @@ export default function TaskHelpModal({ isOpen, onClose, onCreatePrd }: TaskHelp
       <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center justify-between border-b border-gray-200 p-6 dark:border-gray-700">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/50">
-              <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+              <FileText className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{t('helpGuide.title')}</h2>

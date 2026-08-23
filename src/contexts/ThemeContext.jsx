@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+import { DEFAULT_COLOR_THEME, isColorTheme } from '../shared/themes';
+
 const ThemeContext = createContext();
 
 export const useTheme = () => {
@@ -27,38 +29,42 @@ export const ThemeProvider = ({ children }) => {
     return false;
   });
 
-  // Update document class and localStorage when theme changes
+  // Named color theme (ui8 phase 4): a full token set selected in
+  // Settings → Appearance, applied via data-theme on <html>.
+  const [colorTheme, setColorTheme] = useState(() => {
+    const saved = localStorage.getItem('color-theme');
+    return isColorTheme(saved) ? saved : DEFAULT_COLOR_THEME;
+  });
+
+  // Update document class/attribute and localStorage when theme changes
   useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-theme', colorTheme);
+    localStorage.setItem('color-theme', colorTheme);
+
     if (isDarkMode) {
-      document.documentElement.classList.add('dark');
+      root.classList.add('dark');
       localStorage.setItem('theme', 'dark');
-      
-      // Update iOS status bar style and theme color for dark mode
-      const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-      if (statusBarMeta) {
-        statusBarMeta.setAttribute('content', 'black-translucent');
-      }
-      
-      const themeColorMeta = document.querySelector('meta[name="theme-color"]');
-      if (themeColorMeta) {
-        themeColorMeta.setAttribute('content', '#141414'); // Dark background color (hsl(0 0% 8%))
-      }
     } else {
-      document.documentElement.classList.remove('dark');
+      root.classList.remove('dark');
       localStorage.setItem('theme', 'light');
-      
-      // Update iOS status bar style and theme color for light mode
-      const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-      if (statusBarMeta) {
-        statusBarMeta.setAttribute('content', 'default');
-      }
-      
-      const themeColorMeta = document.querySelector('meta[name="theme-color"]');
-      if (themeColorMeta) {
-        themeColorMeta.setAttribute('content', '#f6f4ef'); // Light background color (warm cream)
+    }
+
+    // iOS status bar style follows light/dark
+    const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (statusBarMeta) {
+      statusBarMeta.setAttribute('content', isDarkMode ? 'black-translucent' : 'default');
+    }
+
+    // The browser theme color is whatever background the active theme resolves to
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+      const background = getComputedStyle(root).getPropertyValue('--background').trim();
+      if (background) {
+        themeColorMeta.setAttribute('content', `hsl(${background})`);
       }
     }
-  }, [isDarkMode]);
+  }, [isDarkMode, colorTheme]);
 
   // Listen for system theme changes
   useEffect(() => {
@@ -84,6 +90,8 @@ export const ThemeProvider = ({ children }) => {
   const value = {
     isDarkMode,
     toggleDarkMode,
+    colorTheme,
+    setColorTheme,
   };
 
   return (

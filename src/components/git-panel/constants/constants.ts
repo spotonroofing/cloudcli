@@ -59,23 +59,23 @@ export const CONFIRMATION_BUTTON_CLASSES: Record<ConfirmActionType, string> = {
 };
 
 export const CONFIRMATION_ICON_CONTAINER_CLASSES: Record<ConfirmActionType, string> = {
-  discard: 'bg-red-100 dark:bg-red-900/30',
-  delete: 'bg-red-100 dark:bg-red-900/30',
-  commit: 'bg-yellow-100 dark:bg-yellow-900/30',
-  pull: 'bg-yellow-100 dark:bg-yellow-900/30',
-  push: 'bg-yellow-100 dark:bg-yellow-900/30',
-  publish: 'bg-yellow-100 dark:bg-yellow-900/30',
-  revertLocalCommit: 'bg-yellow-100 dark:bg-yellow-900/30',
-  deleteBranch: 'bg-red-100 dark:bg-red-900/30',
+  discard: 'bg-muted',
+  delete: 'bg-muted',
+  commit: 'bg-muted',
+  pull: 'bg-muted',
+  push: 'bg-muted',
+  publish: 'bg-muted',
+  revertLocalCommit: 'bg-muted',
+  deleteBranch: 'bg-muted',
 };
 
 export const CONFIRMATION_ICON_CLASSES: Record<ConfirmActionType, string> = {
-  discard: 'text-red-600 dark:text-red-400',
-  delete: 'text-red-600 dark:text-red-400',
-  commit: 'text-yellow-600 dark:text-yellow-400',
-  pull: 'text-yellow-600 dark:text-yellow-400',
-  push: 'text-yellow-600 dark:text-yellow-400',
-  publish: 'text-yellow-600 dark:text-yellow-400',
-  revertLocalCommit: 'text-yellow-600 dark:text-yellow-400',
-  deleteBranch: 'text-red-600 dark:text-red-400',
+  discard: 'text-foreground',
+  delete: 'text-foreground',
+  commit: 'text-foreground',
+  pull: 'text-foreground',
+  push: 'text-foreground',
+  publish: 'text-foreground',
+  revertLocalCommit: 'text-foreground',
+  deleteBranch: 'text-foreground',
 };

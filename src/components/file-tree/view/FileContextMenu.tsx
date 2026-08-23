@@ -431,7 +431,7 @@ export default function FileContextMenu({
                           transition={reduceMotion ? { duration: 0 } : SPRING_LAYOUT}
                         />
                       )}
-                      {action.icon && <action.icon className="h-4 w-4 flex-shrink-0" />}
+                      {action.icon && <action.icon className="h-4 w-4 flex-shrink-0 text-foreground" />}
                       <span className="flex-1">{action.label}</span>
                       {action.shortcut && <span className="font-mono text-xs text-muted-foreground">{action.shortcut}</span>}
                     </button>

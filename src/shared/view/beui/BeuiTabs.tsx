@@ -91,7 +91,7 @@ export function Tabs({
 }
 
 const listClasses: Record<Variant, string> = {
-  pill: 'inline-flex items-center gap-1 rounded-full bg-card p-1',
+  pill: 'inline-flex items-center gap-1 rounded-lg bg-card p-1',
   underline: 'inline-flex items-center gap-1 border-b border-border',
   segment: 'inline-flex items-center gap-0 rounded-lg bg-card p-0.5',
 };
@@ -169,7 +169,7 @@ export function TabsTrigger({
     );
   }
 
-  const radius = variant === 'pill' ? 'rounded-full' : 'rounded-md';
+  const radius = variant === 'pill' ? 'rounded-md' : 'rounded-md';
 
   return (
     <div className="relative">
@@ -177,7 +177,7 @@ export function TabsTrigger({
         <motion.span
           layoutId={layoutId}
           layout="position"
-          style={{ borderRadius: variant === 'pill' ? 9999 : 6 }}
+          style={{ borderRadius: variant === 'pill' ? 6 : 6 }}
           className={cn(
             'absolute inset-0 bg-primary',
             radius,

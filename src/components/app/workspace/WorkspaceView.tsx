@@ -275,7 +275,7 @@ export default function WorkspaceView({
       {drag && (
         <div
           data-workspace-snap-guide
-          className="pointer-events-none absolute z-30 rounded-full bg-primary shadow-[0_0_8px_2px] shadow-primary/40"
+          className="pointer-events-none absolute z-30 rounded-sm bg-primary shadow-[0_0_8px_2px] shadow-primary/40"
           style={
             horizontal
               ? { top: 4, bottom: 4, left: drag.guideOffset - 1, width: 2 }

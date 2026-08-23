@@ -21,8 +21,8 @@ export default function GenerateTasksModal({
       <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800">
         <div className="flex items-center justify-between border-b border-gray-200 p-6 dark:border-gray-700">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/50">
-              <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Generate Tasks from PRD

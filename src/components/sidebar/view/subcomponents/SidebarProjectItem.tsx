@@ -230,7 +230,7 @@ export default function SidebarProjectItem({
                 }}
                 aria-label={t('tooltips.deleteProject')}
               >
-                <Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
               <motion.span
                 className="flex h-4 w-4 items-center justify-center"
@@ -316,7 +316,7 @@ export default function SidebarProjectItem({
               }}
               title={t('tooltips.deleteProject')}
             >
-              <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
+              <Trash2 className="h-3 w-3" />
             </div>
             <motion.span
               className="flex h-4 w-4 items-center justify-center"

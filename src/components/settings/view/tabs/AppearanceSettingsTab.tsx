@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+
 import { DarkModeToggle } from '../../../../shared/view/ui';
 import {
   Select,
@@ -10,6 +11,8 @@ import {
 import type { CodeEditorSettingsState, ProjectSortOrder } from '../../types/types';
 import LanguageSelector from '../../../../shared/view/ui/LanguageSelector';
 import { useUiPreferences } from '../../../../hooks/useUiPreferences';
+import { useTheme } from '../../../../contexts/ThemeContext';
+import { COLOR_THEMES } from '../../../../shared/themes';
 import SettingsCard from '../SettingsCard';
 import SettingsRow from '../SettingsRow';
 import SettingsSection from '../SettingsSection';
@@ -36,11 +39,33 @@ export default function AppearanceSettingsTab({
 }: AppearanceSettingsTabProps) {
   const { t } = useTranslation('settings');
   const { preferences, setPreference } = useUiPreferences();
+  const { colorTheme, setColorTheme } = useTheme();
 
   return (
     <div className="space-y-8">
-      <SettingsSection title={t('appearanceSettings.darkMode.label')}>
-        <SettingsCard>
+      <SettingsSection title={t('appearanceSettings.theme.label')}>
+        <SettingsCard divided>
+          <SettingsRow
+            label={t('appearanceSettings.theme.label')}
+            description={t('appearanceSettings.theme.description')}
+          >
+            <Select
+              value={colorTheme}
+              onValueChange={setColorTheme}
+              className="w-full sm:w-44"
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {COLOR_THEMES.map((theme) => (
+                  <SelectItem key={theme.id} value={theme.id}>
+                    {theme.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsRow>
           <SettingsRow
             label={t('appearanceSettings.darkMode.label')}
             description={t('appearanceSettings.darkMode.description')}

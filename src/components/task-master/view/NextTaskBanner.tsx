@@ -81,7 +81,7 @@ export default function NextTaskBanner({ onShowAllTasks = null, onStartTask = nu
         <div className={cn('bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4', className)}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
-              <List className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <List className="h-4 w-4 text-muted-foreground" />
               <p className="text-sm font-medium text-gray-900 dark:text-white">TaskMaster AI is not configured</p>
             </div>
 
@@ -128,8 +128,8 @@ export default function NextTaskBanner({ onShowAllTasks = null, onStartTask = nu
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex items-center gap-2">
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/50">
-                  <Target className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted">
+                  <Target className="h-3 w-3 text-muted-foreground" />
                 </div>
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Task {nextTask.id}</span>
                 <PriorityIndicator priority={nextTask.priority} />
@@ -186,7 +186,7 @@ export default function NextTaskBanner({ onShowAllTasks = null, onStartTask = nu
       <div className={cn('bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg p-3 mb-4', className)}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-gray-900 dark:text-white">
               {completedTasks === tasks.length ? 'All tasks complete' : 'No pending tasks'}
             </span>

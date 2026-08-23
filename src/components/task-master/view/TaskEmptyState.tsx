@@ -26,7 +26,7 @@ export default function TaskEmptyState({
     return (
       <div className={cn('text-center py-12', className)}>
         <div className="mx-auto max-w-md">
-          <div className="mb-4 text-blue-600 dark:text-blue-400">
+          <div className="mb-4 text-muted-foreground">
             <Settings className="mx-auto mb-4 h-12 w-12" />
           </div>
 
@@ -61,8 +61,8 @@ export default function TaskEmptyState({
       <div className="mx-auto max-w-4xl">
         <div className="mb-6 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 text-left dark:border-blue-800 dark:from-blue-950/50 dark:to-indigo-950/50">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/50">
-              <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+              <FileText className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{t('gettingStarted.title')}</h2>

@@ -156,6 +156,10 @@
       "label": "Dark Mode",
       "description": "Toggle between light and dark themes"
     },
+    "theme": {
+      "label": "Theme",
+      "description": "Color theme for the whole app"
+    },
     "projectSorting": {
       "label": "Project Sorting",
       "description": "How projects are ordered in the sidebar",
