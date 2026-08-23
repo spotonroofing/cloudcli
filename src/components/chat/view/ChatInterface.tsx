@@ -175,7 +175,9 @@ function ChatInterface({
     renderInputWithMentions,
     selectFile,
     attachedFiles,
-    setAttachedFiles,
+    removeAttachedFile,
+    draftAttachments,
+    removeDraftAttachment,
     uploadingFiles,
     fileErrors,
     getRootProps,
@@ -500,11 +502,9 @@ function ChatInterface({
           onEditQueuedDraft={editQueuedDraft}
           onDeleteQueuedDraft={deleteQueuedDraft}
           attachedFiles={attachedFiles}
-          onRemoveAttachment={(index) =>
-            setAttachedFiles((previous) =>
-              previous.filter((_, currentIndex) => currentIndex !== index),
-            )
-          }
+          onRemoveAttachment={removeAttachedFile}
+          draftAttachments={draftAttachments}
+          onRemoveDraftAttachment={removeDraftAttachment}
           uploadingFiles={uploadingFiles}
           fileErrors={fileErrors}
           showFileDropdown={showFileDropdown}

@@ -7,6 +7,7 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
 import { modelDisplayLabel } from '../../utils/modelLabels';
+import { formatCompactAge } from '../sidebar/utils/utils';
 import { ActionMenu, Badge, Button, Tooltip } from '../../shared/view/ui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
@@ -234,6 +235,9 @@ export default function WorkerPane({
               description: [run.origin, run.state, run.model && modelDisplayLabel(run.model)]
                 .filter(Boolean)
                 .join(' · '),
+              // Same compact relative-date treatment as the sidebar rows; the
+              // menu is transient, so render time is current enough.
+              trailing: run.lastActivity ? formatCompactAge(run.lastActivity, new Date()) : undefined,
               onSelect: () => handleSelectRun(run),
             }))}
           />

@@ -175,6 +175,21 @@ CREATE TABLE IF NOT EXISTS provider_models (
 );
 `;
 
+/**
+ * Server-persisted composer drafts, one row per composer surface. `draft_key`
+ * is a session id for open chats or `project:<projectId>` for the new-chat
+ * composer, so no FK — keys outlive and predate session rows. `updated_at` is
+ * written as an ISO string by the drafts route.
+ */
+export const COMPOSER_DRAFTS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS composer_drafts (
+    draft_key TEXT PRIMARY KEY,
+    content TEXT NOT NULL DEFAULT '',
+    attachments_json TEXT,
+    updated_at TEXT NOT NULL
+);
+`;
+
 export const INIT_SCHEMA_SQL = `
 -- Initialize authentication database
 PRAGMA foreign_keys = ON;
@@ -222,4 +237,6 @@ ${APP_CONFIG_TABLE_SCHEMA_SQL}
 ${PROVIDER_MODELS_TABLE_SCHEMA_SQL}
 CREATE INDEX IF NOT EXISTS idx_provider_models_provider_order
 ON provider_models(provider, sort_order, id);
+
+${COMPOSER_DRAFTS_TABLE_SCHEMA_SQL}
 `;

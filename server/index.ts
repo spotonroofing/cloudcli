@@ -51,6 +51,7 @@ import { browserUseService } from './modules/browser-use/browser-use.service.js'
 import { initializeDatabase, sessionsDb } from './modules/database/index.js';
 import { configureWebPush } from './modules/notifications/index.js';
 import { createWatchdogRouter, watchdogService } from './modules/watchdog/index.js';
+import { createDraftsRouter } from './modules/drafts/index.js';
 
 const __dirname = getModuleDirectory(import.meta.url);
 // The server source runs from /server, while the compiled output runs from /dist-server/server.
@@ -197,6 +198,9 @@ app.use('/api/agent', agentRoutes);
 
 // Watchdog API Routes (uses API key authentication; spec B3/B4)
 app.use('/api/watchdog', createWatchdogRouter());
+
+// Composer draft persistence (protected)
+app.use('/api/drafts', authenticateToken, createDraftsRouter());
 
 app.use('/api/voice', authenticateToken, voiceRoutes);
 

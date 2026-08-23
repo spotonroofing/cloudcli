@@ -154,22 +154,26 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
               <ChatMessageFiles files={message.files} />
             )}
             {userCopyContent.trim().length > 0 || (!message.images?.length && !message.files?.length) ? (
-              <div className="group max-w-full rounded-lg bg-secondary px-3 py-2 text-secondary-foreground sm:px-4">
-                <div dir="auto" className="break-words font-serif text-sm">
-                  <Markdown
-                    breaks
-                    className="prose prose-sm max-w-none font-serif dark:prose-invert [&_a]:underline"
-                  >
-                    {message.content}
-                  </Markdown>
+              /* Meta (copy + timestamp) sits below the bubble, outside it; the
+                 hover fades key off the row-level `group` on the message root */
+              <>
+                <div className="max-w-full rounded-lg bg-secondary px-3 py-2 text-secondary-foreground sm:px-4">
+                  <div dir="auto" className="break-words font-serif text-sm">
+                    <Markdown
+                      breaks
+                      className="prose prose-sm max-w-none font-serif dark:prose-invert [&_a]:underline"
+                    >
+                      {message.content}
+                    </Markdown>
+                  </div>
                 </div>
-                <div className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                <div className="-mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
                   {shouldShowUserCopyControl && (
                     <MessageCopyControl content={userCopyContent} messageType="user" />
                   )}
                   <span className="opacity-0 transition-opacity duration-200 group-hover:opacity-100">{formattedTime}</span>
                 </div>
-              </div>
+              </>
             ) : (
               /* Attachment-only turn: no text bubble, but the timestamp still shows on hover */
               <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">

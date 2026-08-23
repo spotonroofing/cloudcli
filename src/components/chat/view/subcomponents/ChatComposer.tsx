@@ -16,7 +16,7 @@ import type { SVGProps } from 'react';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
 import type { QueuedDraft } from '../../hooks/useChatComposerState';
-import type { PendingPermissionRequest } from '../../types/types';
+import type { ChatAttachment, PendingPermissionRequest } from '../../types/types';
 import type { ProviderModelOption } from '../../../../types/app';
 import {
   PromptInput,
@@ -107,6 +107,9 @@ interface ChatComposerProps {
   onDeleteQueuedDraft: () => void;
   attachedFiles: File[];
   onRemoveAttachment: (index: number) => void;
+  /** Draft attachments already uploaded to the asset store (restored or attach-time uploads). */
+  draftAttachments: ChatAttachment[];
+  onRemoveDraftAttachment: (index: number) => void;
   uploadingFiles: Map<string, number>;
   fileErrors: Map<string, string>;
   showFileDropdown: boolean;
@@ -165,6 +168,8 @@ export default function ChatComposer({
   onDeleteQueuedDraft,
   attachedFiles,
   onRemoveAttachment,
+  draftAttachments,
+  onRemoveDraftAttachment,
   uploadingFiles,
   fileErrors,
   showFileDropdown,
@@ -256,7 +261,8 @@ export default function ChatComposer({
   );
 
   const hasQueuedDraft = Boolean(queuedDraft);
-  const canQueueDraft = isLoading && Boolean(input.trim() || attachedFiles.length > 0);
+  const hasAttachments = attachedFiles.length > 0 || draftAttachments.length > 0;
+  const canQueueDraft = isLoading && Boolean(input.trim() || hasAttachments);
   const submitAriaLabel = canQueueDraft
     ? hasQueuedDraft
       ? t('input.queue.update', { defaultValue: 'Update queued message' })
@@ -352,10 +358,17 @@ export default function ChatComposer({
             </div>
           )}
 
-          {attachedFiles.length > 0 && (
+          {hasAttachments && (
             <PromptInputHeader>
               <div className="rounded-lg bg-muted/40 p-2">
                 <div className="flex flex-wrap gap-2">
+                  {draftAttachments.map((attachment, index) => (
+                    <ComposerAttachment
+                      key={attachment.path || `${attachment.name}-${index}`}
+                      descriptor={attachment}
+                      onRemove={() => onRemoveDraftAttachment(index)}
+                    />
+                  ))}
                   {attachedFiles.map((file, index) => (
                     <ComposerAttachment
                       key={`${file.name}-${file.lastModified}-${index}`}
@@ -484,7 +497,7 @@ export default function ChatComposer({
                     ? false
                     : isTranscribing
                       ? true
-                      : !input.trim() && attachedFiles.length === 0
+                      : !input.trim() && !hasAttachments
               }
               aria-label={submitAriaLabel}
               title={submitAriaLabel}

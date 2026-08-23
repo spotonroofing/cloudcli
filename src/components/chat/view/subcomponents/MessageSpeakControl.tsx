@@ -16,7 +16,14 @@ const MessageSpeakControl = ({ content }: { content: string }) => {
     state === 'playing' ? t('voice.stopSpeaking') : state === 'loading' ? t('voice.loading') : t('voice.speak');
 
   return (
-    <span className="relative inline-flex">
+    // Hover-gated with the copy button beside it, except mid-playback where
+    // the stop control must stay reachable; always visible on touch via the
+    // global (hover:none)(pointer:coarse) override.
+    <span className={`relative inline-flex ${
+      state === 'playing' || state === 'loading'
+        ? ''
+        : 'opacity-0 transition-opacity duration-200 group-hover:opacity-100'
+    }`}>
       {error && (
         <span className="absolute bottom-full left-1/2 z-10 mb-1 max-w-[240px] -translate-x-1/2 whitespace-normal rounded bg-red-600 px-2 py-1 text-center text-xs text-white shadow-lg">
           {error}

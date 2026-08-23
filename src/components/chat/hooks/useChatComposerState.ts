@@ -12,8 +12,17 @@ import type {
 import { useDropzone } from 'react-dropzone';
 
 import { authenticatedFetch } from '../../../utils/api';
+import { useWebSocket } from '../../../contexts/WebSocketContext';
 import type { MarkSessionProcessing, SessionActivityMap } from '../../../hooks/useSessionProtection';
 import { grantClaudeToolPermission } from '../utils/chatPermissions';
+import {
+  draftClientId,
+  emptyComposerDraft,
+  fetchComposerDraft,
+  sameDraftAttachments,
+  saveComposerDraft,
+  type ComposerDraft,
+} from '../utils/composerDrafts';
 import {
   clearQueuedMessage,
   readQueuedMessage,
@@ -286,15 +295,12 @@ export function useChatComposerState({
   bootState,
   setBootState,
 }: UseChatComposerStateArgs) {
-  const [input, setInput] = useState(() => {
-    if (typeof window !== 'undefined' && selectedProject) {
-      // Draft inputs are keyed by the DB projectId so per-project drafts
-      // survive display-name changes.
-      return safeLocalStorage.getItem(`draft_input_${selectedProject.projectId}`) || '';
-    }
-    return '';
-  });
+  // Drafts are server-persisted per session (ui8 phase 2); the load effect
+  // below fills the input, so the composer mounts empty.
+  const [input, setInput] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  /** Draft attachments already uploaded to the asset store, restorable anywhere. */
+  const [draftAttachments, setDraftAttachments] = useState<ChatAttachment[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState<Map<string, number>>(new Map());
   const [fileErrors, setFileErrors] = useState<Map<string, string>>(new Map());
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
@@ -320,6 +326,40 @@ export function useChatComposerState({
   const processingSessionsRef = useRef<SessionActivityMap | undefined>(processingSessions);
   sessionKeyRef.current = sessionKey;
   processingSessionsRef.current = processingSessions;
+
+  const { subscribe } = useWebSocket();
+  // One draft per composer surface: the session when one is open, otherwise
+  // the project's new-chat composer. Keyed by projectId so drafts survive
+  // display-name changes.
+  const draftKey = sessionKey ?? (selectedProjectId ? `project:${selectedProjectId}` : null);
+  const draftKeyRef = useRef(draftKey);
+  draftKeyRef.current = draftKey;
+  // Last-synced draft per key (server truth as this tab knows it). The save
+  // effect only PUTs when the live value diverges from this.
+  const draftCacheRef = useRef(new Map<string, ComposerDraft>());
+  // Synchronous mirrors: handleSubmit and the background-upload completions
+  // read these instead of state so a session switch mid-commit can never mix
+  // one chat's attachments into another.
+  const draftAttachmentsRef = useRef<ChatAttachment[]>([]);
+  const attachedFilesRef = useRef<File[]>([]);
+  // In-flight attach-time uploads; send awaits these instead of re-uploading.
+  const pendingUploadsRef = useRef(new Map<File, Promise<ChatAttachment | null>>());
+
+  const setAttachedFilesSync = useCallback((next: File[]) => {
+    attachedFilesRef.current = next;
+    setAttachedFiles(next);
+  }, []);
+
+  const setDraftAttachmentsSync = useCallback((next: ChatAttachment[]) => {
+    draftAttachmentsRef.current = next;
+    setDraftAttachments(next);
+  }, []);
+
+  const applyDraftToComposer = useCallback((draft: ComposerDraft) => {
+    setInput(draft.content);
+    inputValueRef.current = draft.content;
+    setDraftAttachmentsSync(draft.attachments);
+  }, [setDraftAttachmentsSync]);
 
   const [queuedDraft, setQueuedDraft] = useState<QueuedDraft | null>(() => {
     if (typeof window === 'undefined' || !sessionKey) {
@@ -721,6 +761,55 @@ export function useChatComposerState({
     lastAutosizedInputRef.current = target.value;
   }, []);
 
+  // Drafts persist attachments as uploaded descriptors, so files upload the
+  // moment they are attached; each File chip swaps to its durable descriptor
+  // on success and the descriptor rides the draft to the server.
+  const beginBackgroundUpload = useCallback((files: File[]) => {
+    files.forEach((file) => {
+      const promise = uploadAttachmentFiles([file])
+        .then((descriptors) => {
+          pendingUploadsRef.current.delete(file);
+          const descriptor = (descriptors[0] ?? null) as ChatAttachment | null;
+          // Only swap while the file is still attached — a send or removal
+          // that raced the upload keeps the composer clear.
+          if (descriptor && attachedFilesRef.current.includes(file)) {
+            setAttachedFilesSync(attachedFilesRef.current.filter((candidate) => candidate !== file));
+            setDraftAttachmentsSync([...draftAttachmentsRef.current, descriptor]);
+          }
+          return descriptor;
+        })
+        .catch((error: unknown) => {
+          pendingUploadsRef.current.delete(file);
+          const message = error instanceof Error ? error.message : 'Upload failed';
+          setFileErrors((previous) => {
+            const next = new Map(previous);
+            next.set(file.name, message);
+            return next;
+          });
+          return null;
+        });
+      pendingUploadsRef.current.set(file, promise);
+    });
+  }, [setAttachedFilesSync, setDraftAttachmentsSync]);
+
+  // Send-time resolution: await any in-flight attach-time upload; a file whose
+  // background upload failed (or never ran) uploads here so a failure still
+  // surfaces as a send error instead of silently dropping the file.
+  const resolveAttachmentUploads = useCallback(async (files: File[]): Promise<unknown[]> => {
+    const results: unknown[] = [];
+    for (const file of files) {
+      const pending = pendingUploadsRef.current.get(file);
+      const fromPending = pending ? await pending : null;
+      if (fromPending) {
+        results.push(fromPending);
+        continue;
+      }
+      const [descriptor] = await uploadAttachmentFiles([file]);
+      results.push(descriptor);
+    }
+    return results;
+  }, []);
+
   const handleAttachmentFiles = useCallback((files: File[]) => {
     const validFiles = files.filter((file) => {
       try {
@@ -747,9 +836,18 @@ export function useChatComposerState({
     });
 
     if (validFiles.length > 0) {
-      setAttachedFiles((previous) => [...previous, ...validFiles].slice(0, MAX_ATTACHMENT_COUNT));
+      const room = Math.max(
+        0,
+        MAX_ATTACHMENT_COUNT - attachedFilesRef.current.length - draftAttachmentsRef.current.length,
+      );
+      const accepted = validFiles.slice(0, room);
+      if (accepted.length === 0) {
+        return;
+      }
+      setAttachedFilesSync([...attachedFilesRef.current, ...accepted]);
+      beginBackgroundUpload(accepted);
     }
-  }, []);
+  }, [beginBackgroundUpload, setAttachedFilesSync]);
 
   // Monotonic naming for pasted-text attachments: the upload progress and
   // error maps key by file name, so every pasted file needs a distinct one.
@@ -854,12 +952,16 @@ export function useChatComposerState({
     ) => {
       event.preventDefault();
       const currentInput = queuedSubmission?.content ?? inputValueRef.current;
-      const currentAttachments = queuedSubmission?.attachments ?? attachedFiles;
+      const currentAttachments = queuedSubmission?.attachments ?? attachedFilesRef.current;
+      // Already-uploaded draft attachments (attach-time uploads); a queued
+      // submission carries its own descriptors instead.
+      const currentDraftDescriptors = queuedSubmission ? [] : draftAttachmentsRef.current;
       const previouslyUploadedAttachments = queuedSubmission?.uploadedAttachments ?? [];
       if (
         (
           !currentInput.trim()
           && currentAttachments.length === 0
+          && currentDraftDescriptors.length === 0
           && previouslyUploadedAttachments.length === 0
         )
         || !selectedProject
@@ -889,7 +991,10 @@ export function useChatComposerState({
         const queuedSessionKey = sessionKey;
         let uploadedAttachments: unknown[] = [];
         try {
-          uploadedAttachments = await uploadAttachmentFiles(currentAttachments);
+          uploadedAttachments = [
+            ...currentDraftDescriptors,
+            ...(await resolveAttachmentUploads(currentAttachments)),
+          ];
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';
           console.error('Queued file upload failed:', error);
@@ -944,7 +1049,8 @@ export function useChatComposerState({
         setQueuedDraft(durableDraft);
         setInput('');
         inputValueRef.current = '';
-        setAttachedFiles([]);
+        setAttachedFilesSync([]);
+        setDraftAttachmentsSync([]);
         setUploadingFiles(new Map());
         setFileErrors(new Map());
         resetCommandMenuState();
@@ -952,8 +1058,12 @@ export function useChatComposerState({
         if (textareaRef.current) {
           textareaRef.current.style.height = 'auto';
         }
-        // selectedProject is guaranteed by the guard at the top of handleSubmit.
-        safeLocalStorage.removeItem(`draft_input_${selectedProject.projectId}`);
+        // The message now lives in the queue; delete the server draft right
+        // away so other devices clear too.
+        if (draftKeyRef.current) {
+          draftCacheRef.current.set(draftKeyRef.current, emptyComposerDraft);
+          saveComposerDraft(draftKeyRef.current, '', []);
+        }
         return;
       }
 
@@ -980,7 +1090,8 @@ export function useChatComposerState({
           executeCommand(matchedCommand, isHelpAlias ? '/help' : commandInput);
           setInput('');
           inputValueRef.current = '';
-          setAttachedFiles([]);
+          setAttachedFilesSync([]);
+          setDraftAttachmentsSync([]);
           setUploadingFiles(new Map());
           setFileErrors(new Map());
           resetCommandMenuState();
@@ -995,9 +1106,12 @@ export function useChatComposerState({
       const messageContent = currentInput;
 
       let uploadedAttachments = previouslyUploadedAttachments;
-      if (uploadedAttachments.length === 0 && currentAttachments.length > 0) {
+      if (!queuedSubmission && (currentAttachments.length > 0 || currentDraftDescriptors.length > 0)) {
         try {
-          uploadedAttachments = await uploadAttachmentFiles(currentAttachments);
+          uploadedAttachments = [
+            ...currentDraftDescriptors,
+            ...(await resolveAttachmentUploads(currentAttachments)),
+          ];
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';
           console.error('File upload failed:', error);
@@ -1122,7 +1236,8 @@ export function useChatComposerState({
       setInput('');
       inputValueRef.current = '';
       resetCommandMenuState();
-      setAttachedFiles([]);
+      setAttachedFilesSync([]);
+      setDraftAttachmentsSync([]);
       setUploadingFiles(new Map());
       setFileErrors(new Map());
       setIsTextareaExpanded(false);
@@ -1131,11 +1246,15 @@ export function useChatComposerState({
         textareaRef.current.style.height = 'auto';
       }
 
-      safeLocalStorage.removeItem(`draft_input_${selectedProject.projectId}`);
+      // The message is sent; delete the server draft right away so other
+      // devices clear too (the debounced save would lag half a second).
+      if (draftKeyRef.current) {
+        draftCacheRef.current.set(draftKeyRef.current, emptyComposerDraft);
+        saveComposerDraft(draftKeyRef.current, '', []);
+      }
     },
     [
       selectedSession,
-      attachedFiles,
       buildSendOptions,
       currentSessionId,
       executeCommand,
@@ -1144,10 +1263,13 @@ export function useChatComposerState({
       onSessionEstablished,
       provider,
       resetCommandMenuState,
+      resolveAttachmentUploads,
       scrollToBottom,
       selectedProject,
       sendMessage,
       sessionKey,
+      setAttachedFilesSync,
+      setDraftAttachmentsSync,
       addMessage,
       setIsUserScrolledUp,
       slashCommands,
@@ -1197,11 +1319,11 @@ export function useChatComposerState({
       setQueuedDraft(null);
       setInput(queuedDraft.content);
       inputValueRef.current = queuedDraft.content;
-      setAttachedFiles(queuedDraft.attachments);
+      setAttachedFilesSync(queuedDraft.attachments);
       handleSubmitRef.current?.(createFakeSubmitEvent(), queuedDraft);
     }, delay);
     return () => clearTimeout(timer);
-  }, [isLoading, queuedDraft, sessionKey, setInput]);
+  }, [isLoading, queuedDraft, sessionKey, setInput, setAttachedFilesSync]);
 
   const editQueuedDraft = useCallback(() => {
     if (!queuedDraft) {
@@ -1210,9 +1332,9 @@ export function useChatComposerState({
     setQueuedDraft(null);
     setInput(queuedDraft.content);
     inputValueRef.current = queuedDraft.content;
-    setAttachedFiles(queuedDraft.attachments);
+    setAttachedFilesSync(queuedDraft.attachments);
     textareaRef.current?.focus();
-  }, [queuedDraft]);
+  }, [queuedDraft, setAttachedFilesSync]);
 
   const deleteQueuedDraft = useCallback(() => {
     setQueuedDraft(null);
@@ -1233,28 +1355,81 @@ export function useChatComposerState({
     inputValueRef.current = input;
   }, [input]);
 
+  // Switching composer surfaces (session or project) swaps in that surface's
+  // draft: the in-memory cache applies instantly, then the server copy (the
+  // cross-device truth) replaces it unless the user typed meanwhile. Declared
+  // BEFORE the save effect so on the swap commit the synchronous refs already
+  // describe the new surface when the save effect runs.
   useEffect(() => {
-    if (!selectedProjectId) {
+    const key = draftKey;
+    if (!key) {
+      applyDraftToComposer(emptyComposerDraft);
       return;
     }
-    const savedInput = safeLocalStorage.getItem(`draft_input_${selectedProjectId}`) || '';
-    setInput((previous) => {
-      const next = previous === savedInput ? previous : savedInput;
-      inputValueRef.current = next;
-      return next;
+    const cached = draftCacheRef.current.get(key) ?? emptyComposerDraft;
+    applyDraftToComposer(cached);
+    let cancelled = false;
+    void fetchComposerDraft(key).then((draft) => {
+      if (cancelled || draftKeyRef.current !== key) {
+        return;
+      }
+      const server = draft ?? emptyComposerDraft;
+      draftCacheRef.current.set(key, server);
+      if (inputValueRef.current === cached.content) {
+        applyDraftToComposer(server);
+      }
     });
-  }, [selectedProjectId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [draftKey, applyDraftToComposer]);
 
+  // Debounced server persistence: PUT whenever the live composer diverges
+  // from the last-synced draft (an empty draft deletes the row). Reads the
+  // synchronous refs, so the one commit where draftKey changed but the
+  // swapped-in state has not rendered yet can never write one chat's text
+  // under another chat's key.
   useEffect(() => {
-    if (!selectedProjectId) {
+    const key = draftKey;
+    if (!key) {
       return;
     }
-    if (input !== '') {
-      safeLocalStorage.setItem(`draft_input_${selectedProjectId}`, input);
-    } else {
-      safeLocalStorage.removeItem(`draft_input_${selectedProjectId}`);
+    const cached = draftCacheRef.current.get(key) ?? emptyComposerDraft;
+    const content = inputValueRef.current;
+    const attachments = draftAttachmentsRef.current;
+    if (cached.content === content && sameDraftAttachments(cached.attachments, attachments)) {
+      return;
     }
-  }, [input, selectedProjectId]);
+    const timer = setTimeout(() => {
+      draftCacheRef.current.set(key, { content, attachments });
+      saveComposerDraft(key, content, attachments);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [input, draftAttachments, draftKey]);
+
+  // Cross-device sync: another client's draft_updated lands in the cache, and
+  // in the live composer when it is showing that draft and has no unsaved
+  // local edits (a dirty composer wins through its own imminent save).
+  useEffect(() => {
+    return subscribe((event) => {
+      if (event?.kind !== 'draft_updated') {
+        return;
+      }
+      const key = typeof event.draftKey === 'string' ? event.draftKey : null;
+      if (!key || event.clientId === draftClientId) {
+        return;
+      }
+      const previous = draftCacheRef.current.get(key) ?? emptyComposerDraft;
+      const next: ComposerDraft = {
+        content: typeof event.content === 'string' ? event.content : '',
+        attachments: Array.isArray(event.attachments) ? (event.attachments as ChatAttachment[]) : [],
+      };
+      draftCacheRef.current.set(key, next);
+      if (draftKeyRef.current === key && inputValueRef.current === previous.content) {
+        applyDraftToComposer(next);
+      }
+    });
+  }, [subscribe, applyDraftToComposer]);
 
   // Persist the queued draft under its session's key. Must be defined BEFORE
   // the swap effect below: on a session switch there is one commit where
@@ -1459,6 +1634,14 @@ export function useChatComposerState({
     [sendMessage, setPendingPermissionRequests],
   );
 
+  const removeAttachedFile = useCallback((index: number) => {
+    setAttachedFilesSync(attachedFilesRef.current.filter((_, currentIndex) => currentIndex !== index));
+  }, [setAttachedFilesSync]);
+
+  const removeDraftAttachment = useCallback((index: number) => {
+    setDraftAttachmentsSync(draftAttachmentsRef.current.filter((_, currentIndex) => currentIndex !== index));
+  }, [setDraftAttachmentsSync]);
+
   const [isInputFocused, setIsInputFocused] = useState(false);
 
   const handleInputFocusChange = useCallback(
@@ -1490,7 +1673,9 @@ export function useChatComposerState({
     renderInputWithMentions,
     selectFile,
     attachedFiles,
-    setAttachedFiles,
+    removeAttachedFile,
+    draftAttachments,
+    removeDraftAttachment,
     uploadingFiles,
     fileErrors,
     getRootProps,

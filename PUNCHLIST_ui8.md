@@ -47,10 +47,10 @@ Done check: on dev, project chat lists contain zero sessions with origin dispatc
 
 Goal: nothing typed is ever lost, and message furniture gets out of the way. Files: composer state, a small drafts server route + table, message components, worker switcher menu. Dependencies: none. Parallelism: drafts and chrome are independent.
 
-- [ ] Per-session composer drafts: text and attachments save as you type (debounced) to the server, restore when the session opens anywhere, and sync live across devices — start a draft on desktop, pick it up on the phone. Switching between planner chats never carries one chat's draft into another.
-- [ ] Message copy button appears only on hover with the same fade as the timestamp; on touch, visible per the mobile laws.
-- [ ] For user messages, the copy button and timestamp live below the bubble, outside it, not inside.
-- [ ] Worker run-switcher rows get dates and a richer row layout (label, origin/state, model, relative date) consistent with the new sidebar rows.
+- [x] Per-session composer drafts: text and attachments save as you type (debounced) to the server, restore when the session opens anywhere, and sync live across devices — start a draft on desktop, pick it up on the phone. Switching between planner chats never carries one chat's draft into another. (composer_drafts table + /api/drafts GET/PUT broadcasting draft_updated; drafts key per session — `project:<id>` for the new-chat box — saved on a 500ms debounce, restored on open, applied live cross-device unless the local composer has unsaved edits; attachments upload at attach time and persist as descriptors, replacing the old per-project localStorage draft.)
+- [x] Message copy button appears only on hover with the same fade as the timestamp; on touch, visible per the mobile laws. (MessageCopyControl and MessageSpeakControl wrappers carry the timestamp's opacity fade — speak stays visible mid-playback; tool-row copy buttons were already gated; phone viewport shows them per the mobile override.)
+- [x] For user messages, the copy button and timestamp live below the bubble, outside it, not inside. (Meta row is a sibling below the bubble, right-aligned; fades key off the row-level group.)
+- [x] Worker run-switcher rows get dates and a richer row layout (label, origin/state, model, relative date) consistent with the new sidebar rows. (ActionMenu grew an optional `trailing` meta slot; run rows show label, origin · state · model, and the sidebar's compact relative age from lastActivity.)
 
 Done check: type in chat A, switch to chat B and back — A's draft intact, B untouched (DOM assert); reload restores the draft; a second browser context sees the draft within seconds; copy buttons absent from the static DOM until hover; user-message meta renders outside the bubble; switcher rows show dates. Fresh-context subagent verification. Commit.
 

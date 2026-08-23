@@ -71,7 +71,9 @@ const MessageCopyControl = ({
   const copyTitle = copied ? t('copyMessage.copied') : t('copyMessage.copy');
 
   return (
-    <div className="relative flex items-center">
+    // Hover-gated like the timestamp (message furniture stays out of the way);
+    // the global (hover:none)(pointer:coarse) override keeps it visible on touch.
+    <div className="relative flex items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
       <button
         type="button"
         onClick={handleCopyClick}

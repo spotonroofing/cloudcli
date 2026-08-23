@@ -13,6 +13,8 @@ export type ActionMenuItem = {
   key: string;
   label: string;
   description?: string;
+  /** Right-aligned metadata on the label line (e.g. a relative date). */
+  trailing?: React.ReactNode;
   icon?: LucideIcon;
   onSelect: () => void;
   disabled?: boolean;
@@ -227,6 +229,11 @@ export default function ActionMenu({
                   </span>
                 )}
               </span>
+              {item.trailing && (
+                <span className="flex-shrink-0 text-[10px] leading-5 tabular-nums text-muted-foreground">
+                  {item.trailing}
+                </span>
+              )}
             </button>
           </React.Fragment>
         );
