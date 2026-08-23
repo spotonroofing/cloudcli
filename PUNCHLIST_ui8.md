@@ -106,9 +106,9 @@ Done check: on dev, the panel lists the real accounts with usage matching `cswap
 
 Goal: round proven whole, both form factors. Dependencies: all prior. Parallelism: sweep fans out per screen.
 
-- [ ] Every change in phases 1-6 verified at the phone viewport, one-to-one with desktop, tap-first.
-- [ ] Full test suite green, build clean, dev restarted healthy.
-- [ ] Whole-app sweep on dev re-running each prior phase's done check at desktop and phone viewport; fix regressions.
-- [ ] Stop after dev verification; no promote — Willem eyeballs dev at :8443 and calls it.
+- [x] Every change in phases 1-6 verified at the phone viewport, one-to-one with desktop, tap-first. (390x844 pass: drawer lists all 12 projects with the bounce dot on the open chat, copy/timestamp chrome visible without hover, meta outside the bubble, drafts restore cross-viewport, quick-settings theme selector applies and persists, accounts panel fits with all actions visible and touch-hit 44px areas, zero pills. Touch-only CSS (pointer:coarse) verified statically per the known emulation limit.)
+- [x] Full test suite green, build clean, dev restarted healthy. (277 server + 50 client tests, 0 fail; npm run build clean; launchctl kickstart then /health ok on 4748.)
+- [x] Whole-app sweep on dev re-running each prior phase's done check at desktop and phone viewport; fix regressions. (No regressions found. P1 origins/projects/labels, P2 draft round-trip + second-context sync + chrome, P3 dot through collapse/reopen + zero filled rows + thin scrollbars + counter bar hidden at zero, P4 Copper/Graphite token swaps + persistence + zero non-circle rounded-full + data-only colored glyphs, P5 divider drag persisted + all three drop zones + sidebar hover-close, P6 panel values cross-checked against cswap list --json + switch and disable/enable round-trips reflected in cswap status with the Keychain mirror re-run. Fresh-context subagent independently re-verified all 13 sampled criteria: 13/13 pass.)
+- [x] Stop after dev verification; no promote — Willem eyeballs dev at :8443 and calls it. (No promote run; live untouched.)
 
 Done check: the sweep passes, tests and health in the log. Fresh-context subagent verification. Commit and push.
