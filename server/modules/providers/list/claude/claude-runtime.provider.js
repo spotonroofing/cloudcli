@@ -36,6 +36,7 @@ import {
   notifyRunStopped,
   notifyUserIfEnabled
 } from '@/modules/notifications/index.js';
+import { onQueuedMessageChanged } from '@/shared/queued-message-signal.js';
 import { createCompleteMessage, createNormalizedMessage, getClaudeJsonPath } from '@/shared/utils.js';
 
 const activeSessions = new Map();
@@ -673,8 +674,10 @@ function isMainThreadMessageWith(sdkMessage, messageType, blockType) {
 }
 
 // How long a turn stays open after its `result` while a pushed steer that the
-// CLI did not fold mid-turn is expected to start as the follow-up turn.
-const STEER_FOLLOW_UP_GRACE_MS = 10 * 1000;
+// CLI did not fold mid-turn is expected to start as the follow-up turn. The
+// timer is cleared by that turn's first event, which waits on the API's first
+// token, so it has to outlast a cold cache on a large context.
+const STEER_FOLLOW_UP_GRACE_MS = 60 * 1000;
 
 /**
  * Loads MCP server configurations from ~/.claude.json
@@ -804,6 +807,9 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
   let queryInstance = null;
 
   const reportTurnComplete = () => {
+    if (turnCompleteSent) {
+      return;
+    }
     turnCompleteSent = true;
     ws.send(createCompleteMessage({ provider: 'claude', sessionId: capturedSessionId || sessionId || null, exitCode: 0 }));
     notifyRunStopped({
@@ -829,10 +835,14 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
   // keep end-of-turn delivery.
   let pendingSteer = null;
   let steerFollowUpTimer = null;
+  let armingSteer = false;
+  // Main-thread tool calls currently executing: a message queued while one
+  // runs is pushed at once so it folds at that tool's result.
+  let toolsInFlight = 0;
 
   const armQueuedSteer = async () => {
     const key = sessionKey();
-    if (!sessionId || !key || pendingSteer || abortedSessionIds.has(key) || supersededInstances.has(queryInstance)) {
+    if (!sessionId || !key || pendingSteer || armingSteer || abortedSessionIds.has(key) || supersededInstances.has(queryInstance)) {
       return;
     }
     const queued = context.queuedMessages.get(sessionId);
@@ -843,17 +853,62 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
     if (!content || content.startsWith('/') || queued.options?.edit) {
       return;
     }
-    const attachments = normalizeAttachmentDescriptors(queued.attachments);
-    const [steer] = await buildPromptMessages(
-      queued.content,
-      attachments.filter(isImageAttachmentDescriptor),
-      attachments.filter((descriptor) => !isImageAttachmentDescriptor(descriptor)),
-      options.cwd,
-    );
-    if (pushPromptMessage(steer)) {
-      pendingSteer = { message: steer, updatedAt: queued.updatedAt, sawBoundary: false };
+    armingSteer = true;
+    try {
+      const attachments = normalizeAttachmentDescriptors(queued.attachments);
+      const [built] = await buildPromptMessages(
+        queued.content,
+        attachments.filter(isImageAttachmentDescriptor),
+        attachments.filter((descriptor) => !isImageAttachmentDescriptor(descriptor)),
+        options.cwd,
+      );
+      // The uuid is what cancel_async_message addresses while the CLI still
+      // holds the message queued.
+      const steer = { ...built, uuid: createRequestId() };
+      if (pendingSteer || !pushPromptMessage(steer)) {
+        return;
+      }
+      pendingSteer = {
+        message: steer,
+        updatedAt: queued.updatedAt,
+        fingerprint: `${queued.content}\u0000${JSON.stringify(queued.attachments)}`,
+        sawBoundary: false,
+      };
+    } finally {
+      armingSteer = false;
     }
   };
+
+  // A client wrote or removed this session's queued row. Pushed but not yet
+  // folded: retract it (the CLI reports whether it was still queued) so an
+  // edit is not delivered twice and a delete is not delivered at all; then,
+  // while a tool is running, push whatever is queued now.
+  const handleQueuedRowChanged = () => {
+    void (async () => {
+      if (pendingSteer) {
+        const queued = sessionId ? context.queuedMessages.get(sessionId) : null;
+        if (queued && `${queued.content}\u0000${JSON.stringify(queued.attachments)}` === pendingSteer.fingerprint) {
+          pendingSteer.updatedAt = queued.updatedAt;
+          return;
+        }
+        let cancelled = false;
+        try {
+          cancelled = await queryInstance.cancelAsyncMessage(pendingSteer.message.uuid);
+        } catch {
+          cancelled = false;
+        }
+        if (!cancelled || !pendingSteer) {
+          // Already folded (or settled meanwhile): the bubble shows what Claude got.
+          return;
+        }
+        pendingSteer = null;
+      }
+      if (toolsInFlight > 0) {
+        await armQueuedSteer();
+      }
+    })();
+  };
+  const stopQueuedRowListener = sessionId ? onQueuedMessageChanged(sessionId, handleQueuedRowChanged) : () => {};
 
   // The CLI has folded the pushed steer in (or is about to run it as the
   // follow-up turn): claim the row and land the bubble.
@@ -1086,10 +1141,14 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
         ws.send(msg);
       }
 
-      if (isMainThreadMessageWith(message, 'user', 'tool_result') && pendingSteer) {
-        pendingSteer.sawBoundary = true;
+      if (isMainThreadMessageWith(message, 'user', 'tool_result')) {
+        toolsInFlight = Math.max(0, toolsInFlight - 1);
+        if (pendingSteer) {
+          pendingSteer.sawBoundary = true;
+        }
       }
       if (isMainThreadMessageWith(message, 'assistant', 'tool_use')) {
+        toolsInFlight += 1;
         await armQueuedSteer();
       }
 
@@ -1153,12 +1212,17 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
         backgroundWorkPending = true;
       }
 
-      if (message.type === 'result' && pendingSteer) {
+      if (message.type === 'result') {
+        toolsInFlight = 0;
+      }
+      const steerAbortPending = sessionKey() ? abortedSessionIds.has(sessionKey()) : false;
+      if (message.type === 'result' && pendingSteer && !steerAbortPending && !supersededInstances.has(queryInstance)) {
         // The steer was pushed but no post-boundary reply followed: the CLI
         // will run it as the follow-up turn (it drains its queue even on
         // stdin close). Land the bubble now and keep the turn open for that
         // turn's `result`; the grace timer only catches a CLI that never
-        // starts it.
+        // starts it. An aborted or superseded run drops the steer instead:
+        // the row stays queued for the client's end-of-turn flush.
         settleQueuedSteer();
         steerFollowUpTimer = setTimeout(() => {
           steerFollowUpTimer = null;
@@ -1286,6 +1350,7 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
       clearTimeout(steerFollowUpTimer);
       steerFollowUpTimer = null;
     }
+    stopQueuedRowListener();
     releasePromptStream();
   }
 }

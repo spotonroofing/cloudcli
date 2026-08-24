@@ -4,6 +4,7 @@ import type { Request, Response } from 'express';
 import { queuedMessagesDb } from '@/modules/database/index.js';
 import { broadcastQueuedMessageUpdated, parseQueuedMessageRow } from '@/modules/queued-messages/queued-messages.shared.js';
 import { filterAttachmentsToUploadStore } from '@/modules/websocket/index.js';
+import { emitQueuedMessageChanged } from '@/shared/queued-message-signal.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
 /**
@@ -64,6 +65,7 @@ export function createQueuedMessagesRouter(): express.Router {
         { content: body.content, options, attachments, updatedAt },
         clientId,
       );
+      emitQueuedMessageChanged(sessionId);
       res.json(createApiSuccessResponse({ sessionId, updatedAt }));
     }),
   );
@@ -77,6 +79,7 @@ export function createQueuedMessagesRouter(): express.Router {
       const claimed = queuedMessagesDb.remove(sessionId);
       if (claimed) {
         broadcastQueuedMessageUpdated(sessionId, null, clientId);
+        emitQueuedMessageChanged(sessionId);
       }
       res.json(createApiSuccessResponse({ sessionId, claimed }));
     }),
