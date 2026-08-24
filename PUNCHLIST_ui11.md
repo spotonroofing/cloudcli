@@ -128,3 +128,13 @@ Goal: the worker pane is live and legible: no status badge, real-time transcript
 
 Done check: on dev, a stub chain with a manifest and a test punch list (stub claude per lesson chain-runner-fully-stubbable-via-env): the badge is absent from the header DOM in running and finished states; the pane shows the stub's output live without reload; all phases list at once, the active drawer open, others collapsed and toggleable; appending a unit updates the header count live; check/working/idle icons appear in the right rows as check-offs land. Holds at a phone viewport. Fresh-context subagent verification. Commit.
 
+## Phase 11 — Everything loads live, and loading looks deliberate (appended 2026-08-24)
+
+Goal: nothing in Command Center needs a refresh to be current, and whatever is still loading says so with one app-wide skeleton treatment instead of blank or stale space. Files: the worker pane's context ring and message loading (src/components/app/workspace, src/components/chat/view/ChatInterface.tsx, the session store and src/contexts/WebSocketContext.tsx, the sessions watcher and token-usage services under server/modules/providers), the shared UI primitives, DESIGN.md. Dependencies: phase 10 (its live-transcript fix lands first; this phase covers what it leaves).
+
+- [ ] The worker pane's context window indicator updates in real time as the run consumes context, with no refresh; the same holds for the planner pane's ring.
+- [ ] Messages load reliably without a refresh: on opening a session, switching sessions, a new tab, or a reconnect, the pane shows the latest messages and lands scrolled to the bottom (following live output) without Willem scrolling; find and fix the cases that currently need a refresh or a manual scroll (reproduce against the running chain or a stub chain), and add a regression check.
+- [ ] One app-wide loading treatment: a shared skeleton element (decided: skeletons in place, not a full-screen blur) used everywhere content is still arriving: transcript, sidebar project and chat lists, worker run switcher, phase navigator, settings, on first load, refresh, new tab, and session switch. Skeletons give way to content, never to a blank; no surface shows stale content from a previous session while the new one loads. Add the element to DESIGN.md.
+
+Done check: on dev with a stub chain producing output on an interval: the context ring value changes in the DOM without reload; opening the worker session in a fresh agent-browser profile lands scrolled to the bottom with the newest message present; the skeleton element renders during load on transcript, sidebar, and worker switcher (DOM check with throttled network), then disappears; holds at a phone viewport. Fresh-context subagent verification. Commit.
+
