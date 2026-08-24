@@ -126,11 +126,11 @@ Done check: DOM asserts on row anatomy parity, hover morph, one shared menu comp
 
 Goal: the prompt bar goes two-row Claude-desktop style and the small wrongs get righted. Dependencies: B2.
 
-- [ ] Prompt bar: input row keeps only plus (left, spaced) and model selector + send (right); a slim row below carries handoff + slash left and the context ring (slightly smaller) right; no permission-mode control; stacked-text behavior with long drafts thought through.
-- [ ] Model selector loses its background fill and floats; the send button stays the only blocky element.
-- [ ] Pasted-text chip redone Claude.ai-style: square, "PASTED" label bottom-left, first-sentences preview, click opens a scrollable viewer; replaces the "Pasted text.txt" file chip while still delivering as a file attachment.
-- [ ] Usage ring hover: hover background contrast fixed so the ring's unused track never disappears.
-- [ ] Baseline alignment: context popover values ("335k/1M (33%)") and the character counter sit on one baseline, vertically centered with their rows (NumberTicker baseline suspect).
+- [x] Prompt bar: input row keeps only plus (left, spaced) and model selector + send (right); a slim row below carries handoff + slash left and the context ring (slightly smaller) right; no permission-mode control; stacked-text behavior with long drafts thought through.
+- [x] Model selector loses its background fill and floats; the send button stays the only blocky element.
+- [x] Pasted-text chip redone Claude.ai-style: square, "PASTED" label bottom-left, first-sentences preview, click opens a scrollable viewer; replaces the "Pasted text.txt" file chip while still delivering as a file attachment.
+- [x] Usage ring hover: hover background contrast fixed so the ring's unused track never disappears.
+- [x] Baseline alignment: context popover values ("335k/1M (33%)") and the character counter sit on one baseline, vertically centered with their rows (NumberTicker baseline suspect).
 
 Done check: DOM asserts on the two-row bar structure and control placement, paste over the threshold produces the new chip and the viewer opens with full text, computed styles show the hover contrast fix, and the baseline offsets measure zero. Aesthetics for Willem's eyeball. Fresh-context subagent verification. Commit.
 

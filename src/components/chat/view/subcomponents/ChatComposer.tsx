@@ -23,7 +23,6 @@ import {
   PromptInputHeader,
   PromptInputBody,
   PromptInputTextarea,
-  PromptInputFooter,
   PromptInputTools,
   PromptInputButton,
   PromptInputSubmit,
@@ -414,96 +413,56 @@ export default function ChatComposer({
 
           <input {...getInputProps()} />
 
-          <PromptInputBody>
-            <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
-              <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words px-4 py-2 text-base leading-6 text-transparent md:text-sm">
-                {renderInputWithMentions(input)}
-              </div>
-            </div>
-
-            <PromptInputTextarea
-              ref={textareaRef}
-              dir="auto"
-              value={input}
-              onChange={onInputChange}
-              onClick={onTextareaClick}
-              onKeyDown={onTextareaKeyDown}
-              onPaste={onTextareaPaste}
-              onScroll={(event) => onTextareaScrollSync(event.target as HTMLTextAreaElement)}
-              onFocus={() => onInputFocusChange?.(true)}
-              onBlur={() => onInputFocusChange?.(false)}
-              onInput={onTextareaInput}
-              placeholder={isBootLocked ? t('input.bootLocked', { defaultValue: 'Starting session...' }) : placeholder}
-              disabled={isBootLocked}
-            />
-        </PromptInputBody>
-
-        <PromptInputFooter>
-          <PromptInputTools className="min-w-0">
+          {/* Input row (Claude-desktop style): plus flanks the text left, model
+              selector + send flank it right; items-end pins the controls to the
+              last text line so a long draft stacks above them. */}
+          <div data-slot="composer-input-row" className="flex items-end gap-1 px-2 pt-1">
             <PromptInputButton
               tooltip={{ content: t('input.attachFiles') }}
               onClick={openAttachmentPicker}
               aria-label={t('input.attachFiles')}
+              className="mb-0.5 ml-0.5"
             >
               <PlusIcon />
             </PromptInputButton>
 
-            {onVoiceTranscript && voiceAvailable && (
-              <VoiceInputButton state={voiceState} onToggle={voiceToggle} errorMsg={voiceError} />
-            )}
+            <PromptInputBody className="min-w-0 flex-1">
+              <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+                <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words px-2 py-2 text-base leading-6 text-transparent md:text-sm">
+                  {renderInputWithMentions(input)}
+                </div>
+              </div>
 
-            <PromptInputButton
-              tooltip={{ content: t('input.showAllCommands') }}
-              onClick={onToggleCommandMenu}
-              className="relative"
-            >
-              <CommandSlashIcon />
-            </PromptInputButton>
+              <PromptInputTextarea
+                ref={textareaRef}
+                dir="auto"
+                value={input}
+                onChange={onInputChange}
+                onClick={onTextareaClick}
+                onKeyDown={onTextareaKeyDown}
+                onPaste={onTextareaPaste}
+                onScroll={(event) => onTextareaScrollSync(event.target as HTMLTextAreaElement)}
+                onFocus={() => onInputFocusChange?.(true)}
+                onBlur={() => onInputFocusChange?.(false)}
+                onInput={onTextareaInput}
+                placeholder={isBootLocked ? t('input.bootLocked', { defaultValue: 'Starting session...' }) : placeholder}
+                disabled={isBootLocked}
+                className="px-2"
+              />
+            </PromptInputBody>
 
-            {handoffAvailable && (
-              <PromptInputButton
-                tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
-                onClick={onHandoff}
-                aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
-              >
-                <FileTextIcon />
-              </PromptInputButton>
-            )}
+            <div className="mb-0.5 flex shrink-0 items-center gap-1.5">
+              <ComposerModelMenu
+                effort={effort}
+                effortOptions={availableEffortOptions}
+                onSelectEffort={onSelectEffort}
+                model={model}
+                modelOptions={availableModelOptions}
+                onSelectModel={onSelectModel}
+                modelsLoading={modelsLoading}
+              />
 
-            <TokenUsageSummary usage={tokenBudget} />
-
-            {hasInput && (
-              <PromptInputButton
-                tooltip={{ content: t('input.clearInput', { defaultValue: 'Clear input' }) }}
-                onClick={onClearInput}
-              >
-                <XIcon />
-              </PromptInputButton>
-            )}
-
-          </PromptInputTools>
-
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {input.length > 0 && (
-              <span
-                data-slot="char-counter"
-                title={t('input.characterCount', { defaultValue: 'Characters' })}
-                className="text-[10px] font-medium tabular-nums text-muted-foreground"
-              >
-                <NumberTicker value={input.length} locale duration={0.35} stagger={0} startOnView={false} />
-              </span>
-            )}
-            <ComposerModelMenu
-              effort={effort}
-              effortOptions={availableEffortOptions}
-              onSelectEffort={onSelectEffort}
-              model={model}
-              modelOptions={availableModelOptions}
-              onSelectModel={onSelectModel}
-              modelsLoading={modelsLoading}
-            />
-
-            <PromptInputSubmit
+              <PromptInputSubmit
               onClick={
                 canQueueDraft
                   ? (e: MouseEvent<HTMLButtonElement>) => {
@@ -531,14 +490,69 @@ export default function ChatComposer({
               aria-label={submitAriaLabel}
               title={submitAriaLabel}
             >
-              {isTranscribing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : canQueueDraft ? (
-                <ArrowUpIcon className="h-4 w-4" />
-              ) : undefined}
-            </PromptInputSubmit>
+                {isTranscribing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : canQueueDraft ? (
+                  <ArrowUpIcon className="h-4 w-4" />
+                ) : undefined}
+              </PromptInputSubmit>
+            </div>
           </div>
-        </PromptInputFooter>
+
+          {/* Slim secondary row: handoff + slash (+ voice/clear) left, the
+              character counter and a smaller context ring right. */}
+          <div
+            data-slot="composer-secondary-row"
+            className="flex items-center justify-between gap-2 px-2 py-1"
+          >
+            <PromptInputTools className="ml-0.5 min-w-0">
+              {handoffAvailable && (
+                <PromptInputButton
+                  tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
+                  onClick={onHandoff}
+                  aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
+                  className="h-7 w-7"
+                >
+                  <FileTextIcon />
+                </PromptInputButton>
+              )}
+
+              <PromptInputButton
+                tooltip={{ content: t('input.showAllCommands') }}
+                onClick={onToggleCommandMenu}
+                className="relative h-7 w-7"
+              >
+                <CommandSlashIcon />
+              </PromptInputButton>
+
+              {onVoiceTranscript && voiceAvailable && (
+                <VoiceInputButton state={voiceState} onToggle={voiceToggle} errorMsg={voiceError} className="h-7 w-7" />
+              )}
+
+              {hasInput && (
+                <PromptInputButton
+                  tooltip={{ content: t('input.clearInput', { defaultValue: 'Clear input' }) }}
+                  onClick={onClearInput}
+                  className="h-7 w-7"
+                >
+                  <XIcon />
+                </PromptInputButton>
+              )}
+            </PromptInputTools>
+
+            <div className="flex shrink-0 items-center gap-1.5">
+              {input.length > 0 && (
+                <span
+                  data-slot="char-counter"
+                  title={t('input.characterCount', { defaultValue: 'Characters' })}
+                  className="text-[10px] font-medium tabular-nums text-muted-foreground"
+                >
+                  <NumberTicker value={input.length} locale duration={0.35} stagger={0} startOnView={false} />
+                </span>
+              )}
+              <TokenUsageSummary usage={tokenBudget} />
+            </div>
+          </div>
       </PromptInput>
       </div>}
     </div>

@@ -35,6 +35,15 @@ export interface NumberTickerProps {
 const DIGIT_HEIGHT_EM = 1.1;
 const DIGITS = Array.from({ length: 10 }, (_, n) => n);
 
+// Non-digit glyphs (k, M, %, separators, prefix/suffix) get the same 1.1em box
+// as the rolling digit columns, with a matching line-height so every glyph
+// shares one baseline. Without this the plain spans inherit the surrounding
+// line-height and sit a pixel or two off the digits.
+const GLYPH_BOX_STYLE = {
+  height: `${DIGIT_HEIGHT_EM}em`,
+  lineHeight: `${DIGIT_HEIGHT_EM}em`,
+} as const;
+
 export function NumberTicker({
   value,
   pad,
@@ -94,12 +103,12 @@ export function NumberTicker({
     >
       <span className="sr-only">{readableText}</span>
       <span aria-hidden="true" className="inline-flex items-center">
-        {prefix ? <span>{prefix}</span> : null}
+        {prefix ? <span className="inline-block" style={GLYPH_BOX_STYLE}>{prefix}</span> : null}
         {glyphs.map(({ char, id }, i) => {
           const isDigit = /\d/.test(char);
           if (!isDigit) {
             return (
-              <span key={id} className="inline-block">
+              <span key={id} className="inline-block" style={GLYPH_BOX_STYLE}>
                 {char}
               </span>
             );
@@ -116,7 +125,7 @@ export function NumberTicker({
             />
           );
         })}
-        {suffix ? <span>{suffix}</span> : null}
+        {suffix ? <span className="inline-block" style={GLYPH_BOX_STYLE}>{suffix}</span> : null}
       </span>
     </span>
   );

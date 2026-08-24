@@ -111,21 +111,24 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
           updateAnchor();
           setIsOpen((current) => !current);
         }}
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="touch-hit relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         title={`${percentUsed}% of context used (${usedTokens.toLocaleString()} tokens)`}
         aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         data-context-percent={percentUsed}
       >
-        <svg viewBox="0 0 18 18" className="h-[18px] w-[18px] -rotate-90" aria-hidden="true">
+        <svg viewBox="0 0 18 18" className="h-4 w-4 -rotate-90" aria-hidden="true">
+          {/* Unused track: muted-foreground ink, not the border token — the
+              hover bg-accent fill is the same value as border, which made the
+              track vanish under hover. */}
           <circle
             cx="9"
             cy="9"
             r={RING_RADIUS}
             fill="none"
             strokeWidth="2"
-            className="stroke-border"
+            className="stroke-muted-foreground/30"
           />
           <circle
             cx="9"
