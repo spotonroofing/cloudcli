@@ -6,6 +6,7 @@ import readline from 'node:readline';
 import type { IProviderSessions } from '@/shared/interfaces.js';
 import type { AnyRecord, FetchHistoryOptions, FetchHistoryResult, NormalizedMessage } from '@/shared/types.js';
 import { parseFilesInputTag } from '@/shared/image-attachments.js';
+import { commandDisplayText, extractTaggedContent, parseCommandMessage } from '@/shared/command-message.js';
 import { createNormalizedMessage, generateMessageId, readObjectRecord, sliceTailPage } from '@/shared/utils.js';
 import { sessionsDb } from '@/modules/database/index.js';
 
@@ -232,65 +233,6 @@ function isInternalContent(content: string): boolean {
 }
 
 /**
- * Claude wraps local slash-command metadata in lightweight XML-like tags inside
- * a plain string payload. We intentionally parse only the small tag surface we
- * care about instead of introducing a generic XML parser for untrusted history.
- */
-function extractTaggedContent(content: string, tagName: string): string | null {
-  const escapedTagName = tagName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = new RegExp(`<${escapedTagName}>([\\s\\S]*?)<\\/${escapedTagName}>`).exec(content);
-  return match ? match[1] : null;
-}
-
-type ClaudeLocalCommandPayload = {
-  commandName: string;
-  commandMessage: string;
-  commandArgs: string;
-};
-
-/**
- * Converts Claude's hidden local command wrapper into structured metadata.
- *
- * The three tags often coexist in one string payload. Returning `null` lets the
- * normal text path continue untouched for unrelated messages.
- */
-function parseLocalCommandPayload(content: string): ClaudeLocalCommandPayload | null {
-  const commandName = extractTaggedContent(content, 'command-name');
-  const commandMessage = extractTaggedContent(content, 'command-message');
-  const commandArgs = extractTaggedContent(content, 'command-args');
-
-  if (commandName === null && commandMessage === null && commandArgs === null) {
-    return null;
-  }
-
-  return {
-    commandName: commandName ?? '',
-    commandMessage: commandMessage ?? '',
-    commandArgs: commandArgs ?? '',
-  };
-}
-
-/**
- * Produces the short user-visible command string that should appear in chat.
- *
- * We prefer the slash-prefixed command name because that most closely matches
- * what the user actually typed, and only fall back to the message body when the
- * command name is unavailable in older transcript variants.
- */
-function buildLocalCommandDisplayText(payload: ClaudeLocalCommandPayload): string {
-  const commandName = payload.commandName.trim();
-  const commandMessage = payload.commandMessage.trim();
-  const commandArgs = payload.commandArgs.trim();
-  const baseCommand = commandName || commandMessage;
-
-  if (!baseCommand) {
-    return '';
-  }
-
-  return commandArgs ? `${baseCommand} ${commandArgs}` : baseCommand;
-}
-
-/**
  * Claude local-command stdout may contain ANSI styling codes because it was
  * captured from the terminal. The web chat should receive readable plain text.
  */
@@ -463,9 +405,9 @@ export class ClaudeSessionsProvider implements IProviderSessions {
          * frontend and emit a plain user-visible command string so the command
          * no longer disappears from history.
          */
-        const localCommandPayload = parseLocalCommandPayload(text);
+        const localCommandPayload = parseCommandMessage(text);
         if (localCommandPayload) {
-          const displayText = buildLocalCommandDisplayText(localCommandPayload);
+          const displayText = commandDisplayText(localCommandPayload);
           if (displayText) {
             messages.push(createNormalizedMessage({
               id: baseId,
@@ -475,9 +417,12 @@ export class ClaudeSessionsProvider implements IProviderSessions {
               kind: 'text',
               role: 'user',
               content: displayText,
-              commandName: localCommandPayload.commandName,
-              commandMessage: localCommandPayload.commandMessage,
-              commandArgs: localCommandPayload.commandArgs,
+              commandName: localCommandPayload.name,
+              commandMessage: localCommandPayload.description,
+              commandArgs: localCommandPayload.args,
+              // Composer-sent commands carry the expanded prompt after the
+              // tags; the compact bubble reveals it behind an expand control.
+              commandBody: localCommandPayload.body || undefined,
               isLocalCommand: true,
             }));
           }

@@ -47,7 +47,7 @@ export type SessionDeleteConfirmation = {
 /** One live run from the server's run registry, joined with origin and owning project. */
 export type RunningRunInfo = {
   sessionId: string;
-  origin: 'planner' | 'direct' | 'dispatch' | 'external' | null;
+  origin: 'planner' | 'direct' | 'dispatch' | 'external' | 'maintenance' | null;
   projectId: string | null;
 };
 

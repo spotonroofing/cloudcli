@@ -88,3 +88,46 @@ test('claude: a queued_command attachment renders as the user turn it became', (
     [],
   );
 });
+
+test('claude: composer-sent commands normalize to a compact command payload with the body', () => {
+  const provider = new ClaudeSessionsProvider();
+
+  const wrapped = [
+    '<command-message>End this planner session - refresh STATE.md</command-message>',
+    '<command-name>/handoff</command-name>',
+    '<command-args></command-args>',
+    '',
+    'Run the planner handoff for this session.',
+  ].join('\n');
+
+  const messages = provider.normalizeMessage(
+    {
+      uuid: 'cmd-1',
+      timestamp: '2026-08-24T10:00:00.000Z',
+      message: { role: 'user', content: wrapped },
+    },
+    SESSION_ID,
+  );
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].kind, 'text');
+  assert.equal(messages[0].role, 'user');
+  assert.equal(messages[0].content, '/handoff');
+  assert.equal(messages[0].commandName, '/handoff');
+  assert.equal(messages[0].commandMessage, 'End this planner session - refresh STATE.md');
+  assert.equal(messages[0].commandBody, 'Run the planner handoff for this session.');
+  assert.equal(messages[0].isLocalCommand, true);
+
+  // CLI-written local command rows (no body) keep their historical shape.
+  const cliMessages = provider.normalizeMessage(
+    {
+      uuid: 'cmd-2',
+      timestamp: '2026-08-24T10:01:00.000Z',
+      message: { role: 'user', content: '<command-message>clear</command-message>\n<command-name>/clear</command-name>' },
+    },
+    SESSION_ID,
+  );
+  assert.equal(cliMessages.length, 1);
+  assert.equal(cliMessages[0].content, '/clear');
+  assert.equal(cliMessages[0].commandBody, undefined);
+});

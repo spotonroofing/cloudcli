@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { appConfigDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
-import { providerRuntimeService, providerTokenUsageService } from '@/modules/providers/index.js';
+import { providerRuntimeService, providerTokenUsageService, sessionsService } from '@/modules/providers/index.js';
 import { sendFleetNotification } from '@/modules/notifications/index.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
 import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/websocket/index.js';
@@ -579,11 +579,24 @@ class WatchdogService {
 
         const item = queue.prompts[0];
         log(`waking planner ${planner.session_id} for ${projectPath}${item.freshBoot ? ' (fresh boot)' : ''}`);
+
+        // Fresh boots run as a registered app session (ui11 phase 3): the row
+        // exists before the run (origin planner, booted), the stream goes out
+        // through the run registry so every client can follow it live, and a
+        // planner_handoff frame tells clients viewing the old session to
+        // switch. A failed boot persists as boot_state 'failed' (Willem
+        // retries from the UI) instead of retrying into more session rows.
+        if (item.freshBoot) {
+          await this.bootFreshPlanner(projectPath, planner.session_id, planner.model, item.prompt);
+          queue.prompts.shift();
+          continue;
+        }
+
         try {
           // Resume by provider-native id, but only when a transcript actually
           // exists on disk; otherwise boot a fresh planner session — the
           // planner is stateless by design and re-grounds from STATE.md.
-          const resumeId = item.freshBoot ? null : (planner.jsonl_path ? planner.provider_session_id : null);
+          const resumeId = planner.jsonl_path ? planner.provider_session_id : null;
           const result = await this.runPlannerTurn(resumeId, planner.model, projectPath, item.prompt);
           if (result.errored && resumeId && /no conversation found/i.test(result.errorMessage ?? '')) {
             log(`planner session ${planner.session_id} is dead; booting a fresh planner`);
@@ -594,8 +607,6 @@ class WatchdogService {
             this.tagFreshPlanner(fresh.announcedSessionId);
           } else if (result.errored) {
             throw new Error(result.errorMessage ?? 'wake run failed');
-          } else if (item.freshBoot) {
-            this.tagFreshPlanner(result.announcedSessionId);
           }
           queue.prompts.shift();
           log(`wake delivered to planner for ${projectPath} (${queue.prompts.length} left)`);
@@ -628,6 +639,7 @@ class WatchdogService {
     model: string | null,
     projectPath: string,
     prompt: string,
+    onAnnounced?: (announcedSessionId: string) => void,
   ): Promise<{ errored: boolean; errorMessage: string | null; announcedSessionId: string | null }> {
     const runner = providerRuntimeService.getRunner('claude');
     let announcedId: string | null = providerSessionId;
@@ -643,6 +655,7 @@ class WatchdogService {
       },
       setSessionId: (id: string) => {
         announcedId = id;
+        onAnnounced?.(id);
       },
       getSessionId: () => announcedId,
       end: () => undefined,
@@ -659,6 +672,89 @@ class WatchdogService {
       writer,
     );
     return { errored: errorMessage !== null, errorMessage, announcedSessionId: announcedId };
+  }
+
+  /**
+   * A planner session's /handoff turn completed cleanly (Handoff button or
+   * typed /handoff): boot the next planner for the project through the same
+   * fresh-boot wake the rotation uses.
+   */
+  plannerHandoffComplete(projectPath: string): void {
+    this.queueWake(projectPath, readPlannerBootPrompt(), { freshBoot: true });
+  }
+
+  /**
+   * Boots a brand-new planner session as a registered app run (ui11 phase 3):
+   * the session row exists before the run (origin planner, booted, placeholder
+   * title), the boot stream broadcasts through the chat run registry, and a
+   * `planner_handoff` frame tells clients viewing the outgoing session to
+   * switch to the new one and hold a loader until its opening message.
+   * Never throws; a failed boot persists as boot_state 'failed'.
+   */
+  private async bootFreshPlanner(
+    projectPath: string,
+    fromSessionId: string,
+    model: string | null,
+    prompt: string,
+  ): Promise<void> {
+    let sessionId: string;
+    try {
+      sessionId = sessionsService.createAppSession('claude', projectPath, prompt, 'planner', true).sessionId;
+      sessionsDb.markSessionBooted(sessionId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`fresh planner boot setup failed for ${projectPath}: ${message}`);
+      return;
+    }
+    const run = chatRunRegistry.startRun({
+      appSessionId: sessionId,
+      provider: 'claude',
+      providerSessionId: null,
+      userId: null,
+    });
+    if (!run) {
+      log(`fresh planner session ${sessionId} already has a run in progress`);
+      return;
+    }
+
+    const handoffEvent = JSON.stringify({
+      kind: 'planner_handoff',
+      projectPath,
+      fromSessionId,
+      toSessionId: sessionId,
+      timestamp: new Date().toISOString(),
+    });
+    connectedClients.forEach((client) => {
+      if (client.readyState === WS_OPEN_STATE) {
+        client.send(handoffEvent);
+      }
+    });
+
+    let runtimeThrew = false;
+    try {
+      await providerRuntimeService.run(
+        'claude',
+        prompt,
+        {
+          sessionId,
+          cwd: projectPath,
+          projectPath,
+          model: model || undefined,
+          permissionMode: 'bypassPermissions',
+          bootPrompt: true,
+        },
+        run.writer,
+      );
+    } catch (error) {
+      runtimeThrew = true;
+      const message = error instanceof Error ? error.message : String(error);
+      log(`fresh planner boot failed for ${projectPath}: ${message}`);
+    } finally {
+      chatRunRegistry.completeRunIfCurrent(run, { exitCode: 1 });
+      const failed = runtimeThrew || run.sawError || run.aborted;
+      sessionsDb.setSessionBootState(sessionId, failed ? 'failed' : 'ready');
+      log(`fresh planner ${sessionId} booted for ${projectPath}${failed ? ' (FAILED)' : ''}`);
+    }
   }
 
   /** A watchdog-booted planner session joins the rotation sweep's target set. */
@@ -805,15 +901,29 @@ class WatchdogService {
     log(`maintenance run starting${classifyOnly ? ' (classify-only)' : ''}`);
 
     const prompt = buildMaintenancePrompt(repo, classifyOnly);
+    // Maintenance runs are their own system kind: labeled in the run switcher,
+    // never in chat lists. Tagged at announce time so the label shows while
+    // the run is live; the upsert context covers a run ending before the
+    // filesystem watcher indexes its transcript.
+    const tagMaintenanceSession = (announcedSessionId: string): void => {
+      try {
+        sessionsDb.setSessionOrigin(
+          announcedSessionId,
+          'maintenance',
+          null,
+          null,
+          null,
+          { provider: 'claude', projectPath: repo },
+        );
+      } catch {
+        // tagging is best-effort
+      }
+    };
     void (async () => {
       try {
-        const result = await this.runPlannerTurn(null, null, repo, prompt);
+        const result = await this.runPlannerTurn(null, null, repo, prompt, tagMaintenanceSession);
         if (result.announcedSessionId) {
-          try {
-            sessionsDb.setSessionOrigin(result.announcedSessionId, 'dispatch');
-          } catch {
-            // tagging is best-effort
-          }
+          tagMaintenanceSession(result.announcedSessionId);
         }
         if (result.errored) {
           log(`maintenance run errored: ${result.errorMessage}`);

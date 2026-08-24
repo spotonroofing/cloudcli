@@ -356,6 +356,31 @@ function ChatInterface({
     }
   }, [isBootingView, hasReadyAssistantText, errorMessageCount, isProcessing, markBootReady, markBootFailed]);
 
+  // Handoff auto-flow (ui11 phase 3): when the server boots the next planner
+  // session after this session's /handoff turn (button, typed, or rotation),
+  // switch this pane to the new session and hold the boot loader until its
+  // opening message arrives (the boot prologue stays hidden per the existing
+  // rule). Only the pane viewing the outgoing session switches.
+  useEffect(() => {
+    if (!subscribe) {
+      return;
+    }
+    return subscribe((event) => {
+      const frame = event as { kind?: string; fromSessionId?: string; toSessionId?: string } | null;
+      if (frame?.kind !== 'planner_handoff' || !frame.toSessionId) {
+        return;
+      }
+      const viewedSessionId = selectedSession?.id ?? currentSessionId;
+      if (!viewedSessionId || frame.fromSessionId !== viewedSessionId) {
+        return;
+      }
+      const toSessionId = frame.toSessionId;
+      bootedSessionsRef.current.add(toSessionId);
+      setBootState((previous) => ({ phase: 'booting', sessionId: toSessionId, attempt: previous.attempt + 1 }));
+      onNavigateToSession?.(toSessionId);
+    });
+  }, [subscribe, selectedSession?.id, currentSessionId, onNavigateToSession]);
+
   // On WebSocket reconnect, request a bounded persisted-tail sync (deferred
   // while Chat is hidden), then re-subscribe — the
   // `chat_subscribed` ack restores or clears the activity indicator, replays

@@ -86,6 +86,7 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
       commandName: msg.commandName,
       commandMessage: msg.commandMessage,
       commandArgs: msg.commandArgs,
+      commandBody: msg.commandBody,
       isLocalCommand: msg.isLocalCommand,
       isLocalCommandStdout: msg.isLocalCommandStdout,
       isCompactSummary: msg.isCompactSummary,

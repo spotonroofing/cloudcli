@@ -1,7 +1,7 @@
-import { memo, useMemo, useRef } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, RotateCcw, Wrench } from 'lucide-react';
+import { ChevronDown, Pencil, RotateCcw, Wrench } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import type {
@@ -13,7 +13,7 @@ import type {
 import { extractExternalLinks, formatUsageLimitText, stripProposedPlanEnvelope } from '../../utils/chatFormatting';
 import type { Project } from '../../../../types/app';
 import { ToolRenderer, ToolErrorDisplay, shouldHideToolResult } from '../../tools';
-import { MESSAGE_POP_UP, StreamingResponse, Thinking, useStreamedReveal } from '../../../../shared/view/beui';
+import { AgentDisclosure, MESSAGE_POP_UP, StreamingResponse, Thinking, useStreamedReveal } from '../../../../shared/view/beui';
 import type { ThinkingRow } from '../../../../shared/view/beui';
 import { Citations } from '../../../../shared/view/beui/Citations';
 
@@ -173,6 +173,53 @@ function AssistantCitations({ content }: { content: string }) {
   return <Citations citations={citations} className="mt-2" />;
 }
 
+/**
+ * Compact command bubble (ui11 phase 3): a slash command renders as its name
+ * and one-line description inside the standard user bubble; the expanded
+ * command text sits behind a spring-rotated chevron and never shows by
+ * default. Identical for live optimistic echoes and reloaded transcripts.
+ */
+function UserCommandBubble({ message }: { message: ChatMessage }) {
+  const { t } = useTranslation('chat');
+  const [expanded, setExpanded] = useState(false);
+  const body = String(message.commandBody || '');
+  const description = String(message.commandMessage || '').trim();
+
+  return (
+    <div
+      data-slot="command-bubble"
+      className="max-w-full rounded-lg bg-secondary px-3 py-2 text-secondary-foreground sm:px-4"
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="whitespace-nowrap font-mono text-sm">{message.content}</span>
+        {description && (
+          <span className="min-w-0 truncate text-xs text-muted-foreground">{description}</span>
+        )}
+        {body.trim() && (
+          <button
+            type="button"
+            onClick={() => setExpanded((previous) => !previous)}
+            aria-expanded={expanded}
+            aria-label={t('commandBubble.toggle', { defaultValue: 'Show command text' })}
+            className="touch-hit relative -mr-1 ml-auto flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+        )}
+      </div>
+      {body.trim() && (
+        <AgentDisclosure open={expanded}>
+          <div className="mt-2 max-h-[280px] overflow-y-auto rounded-lg bg-muted/80 p-2">
+            <pre className="whitespace-pre-wrap break-words font-mono text-xs text-foreground">{body}</pre>
+          </div>
+        </AgentDisclosure>
+      )}
+    </div>
+  );
+}
+
 const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, rerunContent, onRerun, onEditMessage }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   const reduceMotion = useReducedMotion() ?? false;
@@ -210,6 +257,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
   // version group) and a text-only turn — an edited resend carries no files.
   const shouldShowUserEditControl =
     shouldShowUserCopyControl
+    && !message.isLocalCommand
     && Boolean(onEditMessage)
     && typeof message.id === 'string'
     && !message.id.startsWith('local_')
@@ -255,6 +303,9 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
               /* Meta (copy + timestamp) sits below the bubble, outside it; the
                  hover fades key off the row-level `group` on the message root */
               <>
+                {message.isLocalCommand ? (
+                  <UserCommandBubble message={message} />
+                ) : (
                 <div className="max-w-full rounded-lg bg-secondary px-3 py-2 text-secondary-foreground sm:px-4">
                   <div dir="auto" className="break-words font-serif text-sm">
                     <Markdown
@@ -265,6 +316,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                     </Markdown>
                   </div>
                 </div>
+                )}
                 <div className="-mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
                   {shouldShowUserEditControl && (
                     <div className="relative flex items-center transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">

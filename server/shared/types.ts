@@ -258,6 +258,8 @@ export type NormalizedMessage = {
   commandName?: string;
   commandMessage?: string;
   commandArgs?: string;
+  /** Expanded command text (composer-sent commands); shown behind an expand control. */
+  commandBody?: string;
   isLocalCommand?: boolean;
   isLocalCommandStdout?: boolean;
   isCompactSummary?: boolean;

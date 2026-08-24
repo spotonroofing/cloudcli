@@ -30,7 +30,7 @@ type RunningSessionApiItem = {
   projectId?: unknown;
 };
 
-const RUN_ORIGINS = ['planner', 'direct', 'dispatch', 'external'] as const;
+const RUN_ORIGINS = ['planner', 'direct', 'dispatch', 'external', 'maintenance'] as const;
 type RunOrigin = (typeof RUN_ORIGINS)[number];
 
 type RunningSessionsApiPayload = {

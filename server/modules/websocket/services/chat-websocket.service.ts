@@ -24,6 +24,7 @@ import {
   buildSessionTitleFromMessage,
   parseIncomingJsonObject,
 } from '@/shared/utils.js';
+import { commandDisplayText, parseCommandMessage } from '@/shared/command-message.js';
 
 /**
  * Trust boundary for client-supplied image attachments: chat.send options come
@@ -84,6 +85,13 @@ type ProviderRuntimeGateway = {
 type ChatWebSocketDependencies = {
   /** Central dispatcher for every provider SDK/CLI runtime. */
   runtime: ProviderRuntimeGateway;
+  /**
+   * Fired after a planner session's /handoff turn completes cleanly. The
+   * watchdog boots the next planner session for the project through its
+   * rotation fresh-boot path (injected at wiring time to avoid a module
+   * cycle through the websocket barrel).
+   */
+  onPlannerHandoffTurnComplete?: (input: { sessionId: string; projectPath: string }) => void;
 };
 
 /**
@@ -195,6 +203,11 @@ async function handleChatSend(
 
   const clientOptions = (data.options ?? {}) as AnyRecord;
   const command = typeof data.content === 'string' ? data.content : '';
+  // Composer-sent slash commands arrive as a tagged wrapper plus the expanded
+  // body; titles and the handoff hook key off the parsed command, never the
+  // raw expansion.
+  const parsedCommand = parseCommandMessage(command);
+  const commandTitleText = parsedCommand ? commandDisplayText(parsedCommand) : '';
 
   // Boot sessions carry a placeholder title until the first real user-typed
   // message arrives; auto-sent boot prompts flag themselves and never title.
@@ -203,12 +216,13 @@ async function handleChatSend(
     && clientOptions.bootPrompt !== true
     && command.trim()
   ) {
-    const typedTitle = buildSessionTitleFromMessage(command);
+    const titleSource = commandTitleText || command;
+    const typedTitle = buildSessionTitleFromMessage(titleSource);
     sessionsDb.updateSessionCustomName(sessionId, typedTitle);
     scheduleSessionShortLabel({
       sessionId,
       provider,
-      message: command,
+      message: titleSource,
       currentTitle: typedTitle,
     });
   }
@@ -302,6 +316,23 @@ async function handleChatSend(
     if (clientOptions.bootPrompt === true) {
       const failed = runtimeThrew || run.sawError || run.aborted;
       sessionsDb.setSessionBootState(sessionId, failed ? 'failed' : 'ready');
+    }
+
+    // Handoff auto-flow (ui11 phase 3): a planner session's /handoff turn
+    // ending cleanly rolls into a fresh planner boot for the same project.
+    // Aborted or errored handoffs stay visible instead of silently rolling.
+    if (
+      parsedCommand?.name === '/handoff'
+      && session.origin === 'planner'
+      && session.project_path
+      && !runtimeThrew
+      && !run.sawError
+      && !run.aborted
+    ) {
+      dependencies.onPlannerHandoffTurnComplete?.({
+        sessionId,
+        projectPath: session.project_path,
+      });
     }
   }
 }

@@ -69,6 +69,7 @@ export interface NormalizedMessage {
   commandName?: string;
   commandMessage?: string;
   commandArgs?: string;
+  commandBody?: string;
   isLocalCommand?: boolean;
   isLocalCommandStdout?: boolean;
   isCompactSummary?: boolean;

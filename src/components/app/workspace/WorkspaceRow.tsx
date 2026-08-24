@@ -167,7 +167,8 @@ export default function WorkspaceRow({
   const paneIsWorkerSession =
     plannerSession?.origin === 'direct'
     || plannerSession?.origin === 'dispatch'
-    || plannerSession?.origin === 'external';
+    || plannerSession?.origin === 'external'
+    || plannerSession?.origin === 'maintenance';
 
   // Fail-safes, mirroring the single-project pane headers: socket down, or
   // the rendered transcript diverging from the session the header claims.

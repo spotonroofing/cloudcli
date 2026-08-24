@@ -115,6 +115,13 @@ function chatMessageToNormalized(
     kind: 'text',
     role: msg.type === 'user' ? 'user' : 'assistant',
     content: msg.content || '',
+    // Compact command bubbles: the optimistic echo carries the same command
+    // fields the server emits for persisted rows, so both render identically.
+    commandName: msg.commandName,
+    commandMessage: msg.commandMessage,
+    commandArgs: msg.commandArgs,
+    commandBody: msg.commandBody,
+    isLocalCommand: msg.isLocalCommand,
     // Keep attachment references on the local echo so the user bubble shows
     // its files immediately, before the server-backed copy replaces it.
     images: Array.isArray(msg.images) && msg.images.length > 0 ? msg.images : undefined,

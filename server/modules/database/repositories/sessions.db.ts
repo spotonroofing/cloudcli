@@ -331,9 +331,10 @@ export const sessionsDb = {
   },
 
   /**
-   * Active and recent worker sessions (origin direct, dispatch, or external)
-   * for a project, newest first. Feeds the worker pane's run switcher;
-   * terminal-launched runs ('external') surface here rather than as chats.
+   * Active and recent worker sessions (origin direct, dispatch, external, or
+   * maintenance) for a project, newest first. Feeds the worker pane's run
+   * switcher; terminal-launched runs ('external') and Monday maintenance runs
+   * surface here rather than as chats.
    */
   listWorkerSessions(projectPath: string, limit: number): SessionRow[] {
     const db = getConnection();
@@ -343,7 +344,7 @@ export const sessionsDb = {
         `SELECT ${SESSION_ROW_COLUMNS}
          FROM sessions
          WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
-           AND origin IN ('direct', 'dispatch', 'external')
+           AND origin IN ('direct', 'dispatch', 'external', 'maintenance')
            AND isArchived = 0
          ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
          LIMIT ?`

@@ -110,6 +110,12 @@ const wss = createWebSocketServer(server, {
     },
     chat: {
         runtime: providerRuntimeService,
+        // Handoff auto-flow (ui11 phase 3): a clean planner /handoff turn
+        // rolls into the watchdog's fresh-boot planner spawn. Injected here
+        // to avoid a websocket -> watchdog -> websocket module cycle.
+        onPlannerHandoffTurnComplete: ({ projectPath }) => {
+            watchdogService.plannerHandoffComplete(projectPath);
+        },
     },
     shell: {
         resolveProviderSessionId: (sessionId, provider) => {

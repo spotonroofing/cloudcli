@@ -42,6 +42,7 @@ import type {
 import type { Project, ProjectSession, LLMProvider, ProviderModelOption } from '../../../types/app';
 import { STANDALONE_PROJECT_ID } from '../../../types/app';
 import { escapeRegExp } from '../utils/chatFormatting';
+import { buildCommandMessage, commandDisplayText, parseCommandMessage } from '../utils/commandMessage';
 
 import { useFileMentions } from './useFileMentions';
 import type { MessageEditContext } from './useMessageVersions';
@@ -460,7 +461,10 @@ export function useChatComposerState({
     setCommandModalPayload(null);
   }, []);
 
-  const handleCustomCommand = useCallback(async (result: CommandExecutionResult) => {
+  const handleCustomCommand = useCallback(async (
+    result: CommandExecutionResult,
+    commandInfo?: { name: string; description: string; args: string },
+  ) => {
     const { content, hasBashCommands } = result;
 
     if (hasBashCommands) {
@@ -477,7 +481,19 @@ export function useChatComposerState({
       }
     }
 
-    const commandContent = content || '';
+    // Slash commands travel in the tagged command wrapper so the transcript
+    // renders a compact command bubble (name + description, expanded text
+    // behind an expand control) identically live and on reload. The expanded
+    // body itself is unchanged; Claude Code serializes its own local
+    // commands with the same tags.
+    const commandContent = commandInfo?.name
+      ? buildCommandMessage({
+          name: commandInfo.name,
+          description: commandInfo.description,
+          args: commandInfo.args,
+          body: content || '',
+        })
+      : content || '';
     setInput(commandContent);
     inputValueRef.current = commandContent;
 
@@ -544,7 +560,11 @@ export function useChatComposerState({
             inputValueRef.current = '';
           }
         } else if (result.type === 'custom') {
-          await handleCustomCommand(result);
+          await handleCustomCommand(result, {
+            name: command.name,
+            description: command.description ?? '',
+            args: args.join(' '),
+          });
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
@@ -1142,6 +1162,11 @@ export function useChatComposerState({
       }
 
       const messageContent = currentInput;
+      // A command wrapper renders (and titles) as its short display text; the
+      // full wrapped content still goes to Claude unchanged.
+      const parsedCommand = parseCommandMessage(currentInput);
+      const commandView = parsedCommand && parsedCommand.name ? parsedCommand : null;
+      const displayContent = commandView ? commandDisplayText(commandView) : currentInput;
 
       let uploadedAttachments = previouslyUploadedAttachments;
       if (!queuedSubmission && (currentAttachments.length > 0 || currentDraftDescriptors.length > 0)) {
@@ -1163,7 +1188,7 @@ export function useChatComposerState({
       }
 
       const resolvedProjectPath = selectedProject.fullPath || selectedProject.path || '';
-      const sessionSummary = getNotificationSessionSummary(selectedSession, currentInput);
+      const sessionSummary = getNotificationSessionSummary(selectedSession, displayContent);
 
       // The conversation always has a stable backend-allocated session id
       // BEFORE the first websocket send: brand-new chats allocate one here
@@ -1178,7 +1203,7 @@ export function useChatComposerState({
             body: JSON.stringify({
               provider,
               projectPath: resolvedProjectPath,
-              initialMessage: messageContent,
+              initialMessage: displayContent,
               origin: sessionOrigin ?? undefined,
               boot: isBootSubmission || undefined,
             }),
@@ -1255,7 +1280,16 @@ export function useChatComposerState({
       const attachmentRecords = uploadedAttachments as ChatAttachment[];
       const userMessage: ChatMessage = {
         type: 'user',
-        content: currentInput,
+        content: displayContent,
+        ...(commandView
+          ? {
+              commandName: commandView.name,
+              commandMessage: commandView.description,
+              commandArgs: commandView.args,
+              commandBody: commandView.body || undefined,
+              isLocalCommand: true,
+            }
+          : {}),
         images: attachmentRecords.filter(isImageAttachment),
         files: attachmentRecords.filter((attachment) => !isImageAttachment(attachment)),
         timestamp: new Date(),

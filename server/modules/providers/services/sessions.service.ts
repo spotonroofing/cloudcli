@@ -155,7 +155,7 @@ export const sessionsService = {
     provider: LLMProvider;
     startedAt: number;
     lastSeq: number;
-    origin: 'planner' | 'direct' | 'dispatch' | 'external' | null;
+    origin: 'planner' | 'direct' | 'dispatch' | 'external' | 'maintenance' | null;
     projectId: string | null;
   }> {
     // Origin and owning project are joined from the DB so the sidebar can
@@ -167,7 +167,7 @@ export const sessionsService = {
         ? row.project_path
         : null;
       const project = projectPath ? projectsDb.getProjectPath(projectPath) : null;
-      const origin = row?.origin === 'planner' || row?.origin === 'direct' || row?.origin === 'dispatch' || row?.origin === 'external'
+      const origin = row?.origin === 'planner' || row?.origin === 'direct' || row?.origin === 'dispatch' || row?.origin === 'external' || row?.origin === 'maintenance'
         ? row.origin
         : null;
       return {

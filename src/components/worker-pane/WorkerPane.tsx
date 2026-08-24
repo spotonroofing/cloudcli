@@ -17,7 +17,7 @@ import PhaseNavigator, { type ChainSnapshot } from './PhaseNavigator';
 type WorkerRun = {
   sessionId: string;
   provider: string;
-  origin: 'direct' | 'dispatch' | string | null;
+  origin: 'direct' | 'dispatch' | 'maintenance' | string | null;
   /** True when the run's first message was an auto-sent boot prompt. */
   booted?: boolean;
   chainSlug: string | null;
@@ -35,6 +35,10 @@ type WorkerRun = {
  * a provider placeholder.
  */
 const runLabel = (run: WorkerRun, chains: Record<string, ChainSnapshot>): string => {
+  // Monday maintenance runs are a system kind, labeled as such (spec B9).
+  if (run.origin === 'maintenance') {
+    return 'Maintenance: Monday self-check';
+  }
   if (run.chainSlug) {
     if (run.chainPhase) {
       const name = chains[run.chainSlug]?.manifest?.[run.chainPhase - 1]?.name;

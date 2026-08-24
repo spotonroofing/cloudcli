@@ -146,7 +146,8 @@ function MainContent({
   const leftPaneIsWorkerSession =
     selectedSession?.origin === 'direct'
     || selectedSession?.origin === 'dispatch'
-    || selectedSession?.origin === 'external';
+    || selectedSession?.origin === 'external'
+    || selectedSession?.origin === 'maintenance';
 
   // Fail-safes for the pane header: the socket dropping, or the rendered
   // transcript diverging from the session the header claims.
