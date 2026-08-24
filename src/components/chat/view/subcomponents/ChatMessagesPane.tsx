@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react';
 
 import type { ChatMessage } from '../../types/types';
+import type { MessageVersionNav } from '../../utils/messageVersions';
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import { getIntrinsicMessageKey } from '../../utils/messageKeys';
@@ -13,6 +14,7 @@ import { Loader } from '../../../../shared/view/beui/Loader';
 
 import ActivityIndicator from './ActivityIndicator';
 import MessageComponent from './MessageComponent';
+import MessageVersionNavigator from './MessageVersionNavigator';
 import ToolGroupContainer from './ToolGroupContainer';
 import LoadAllMessagesOverlay from './LoadAllMessagesOverlay';
 import ChatExportMenu from './ChatExportMenu';
@@ -55,6 +57,10 @@ interface ChatMessagesPaneProps {
   selectedProject: Project;
   /** Sends a prior user prompt again (the rerun action on assistant turns). */
   onRerun?: (content: string, event: ReactMouseEvent) => void;
+  /** Pencil on user turns: loads the text into the composer for a silent resend. */
+  onEditMessage?: (message: ChatMessage) => void;
+  /** Flips the visible response version of an edited exchange. */
+  onSelectVersion?: (groupId: string, version: number) => void;
 }
 
 function ChatMessagesPane({
@@ -90,6 +96,8 @@ function ChatMessagesPane({
   showThinking,
   selectedProject,
   onRerun,
+  onEditMessage,
+  onSelectVersion,
 }: ChatMessagesPaneProps) {
   const { t } = useTranslation('chat');
   const groupedVisibleMessages = useMemo(
@@ -307,23 +315,30 @@ function ChatMessagesPane({
               if (isToolGroupItem(item)) {
                 const groupPrevMessage = prevMessage;
                 prevMessage = item.messages[item.messages.length - 1] || prevMessage;
+                const groupNav = onSelectVersion
+                  ? (item.messages.find((member) => member.versionNav)?.versionNav as MessageVersionNav | undefined)
+                  : undefined;
 
                 return (
-                  <ToolGroupContainer
-                    key={`tool-group-${getMessageKey(item.messages[0])}`}
-                    group={item}
-                    animateFrom={epochFor(item.messages[0])}
-                    prevMessage={groupPrevMessage}
-                    createDiff={createDiff}
-                    getMessageKey={getMessageKey}
-                    onFileOpen={onFileOpen}
-                    onShowSettings={onShowSettings}
-                    onGrantToolPermission={onGrantToolPermission}
-                    showRawParameters={showRawParameters}
-                    showThinking={showThinking}
-                    selectedProject={selectedProject}
-                    provider={provider}
-                  />
+                  <Fragment key={`tool-group-${getMessageKey(item.messages[0])}`}>
+                    <ToolGroupContainer
+                      group={item}
+                      animateFrom={epochFor(item.messages[0])}
+                      prevMessage={groupPrevMessage}
+                      createDiff={createDiff}
+                      getMessageKey={getMessageKey}
+                      onFileOpen={onFileOpen}
+                      onShowSettings={onShowSettings}
+                      onGrantToolPermission={onGrantToolPermission}
+                      showRawParameters={showRawParameters}
+                      showThinking={showThinking}
+                      selectedProject={selectedProject}
+                      provider={provider}
+                    />
+                    {groupNav && onSelectVersion && (
+                      <MessageVersionNavigator nav={groupNav} onSelect={onSelectVersion} />
+                    )}
+                  </Fragment>
                 );
               }
 
@@ -334,23 +349,36 @@ function ChatMessagesPane({
                 lastUserContent = item.content;
               }
 
+              const messageNav = onSelectVersion
+                ? (item.versionNav as MessageVersionNav | undefined)
+                : undefined;
+
               return (
-                <MessageComponent
-                  key={getMessageKey(item)}
-                  message={item}
-                  animateFrom={epochFor(item)}
-                  prevMessage={messagePrevMessage}
-                  createDiff={createDiff}
-                  onFileOpen={onFileOpen}
-                  onShowSettings={onShowSettings}
-                  onGrantToolPermission={onGrantToolPermission}
-                  showRawParameters={showRawParameters}
-                  showThinking={showThinking}
-                  selectedProject={selectedProject}
-                  provider={provider}
-                  rerunContent={rerunContent ?? undefined}
-                  onRerun={onRerun}
-                />
+                <Fragment key={getMessageKey(item)}>
+                  <MessageComponent
+                    message={item}
+                    animateFrom={epochFor(item)}
+                    prevMessage={messagePrevMessage}
+                    createDiff={createDiff}
+                    onFileOpen={onFileOpen}
+                    onShowSettings={onShowSettings}
+                    onGrantToolPermission={onGrantToolPermission}
+                    showRawParameters={showRawParameters}
+                    showThinking={showThinking}
+                    selectedProject={selectedProject}
+                    provider={provider}
+                    rerunContent={rerunContent ?? undefined}
+                    onRerun={onRerun}
+                    onEditMessage={onEditMessage}
+                  />
+                  {messageNav && onSelectVersion && (
+                    <MessageVersionNavigator
+                      nav={messageNav}
+                      onSelect={onSelectVersion}
+                      align={item.type === 'user' ? 'end' : 'start'}
+                    />
+                  )}
+                </Fragment>
               );
             });
           })()}

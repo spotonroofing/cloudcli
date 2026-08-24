@@ -86,10 +86,10 @@ Done check: on dev, a real turn shows the new loader with counter, status words 
 
 Goal: Willem can stop a response, edit his prompt, silently resend, and flip between response versions, Claude.ai-style. Dependencies: B2.
 
-- [ ] Pencil control next to copy on Willem's messages; clicking loads that message text into the composer.
-- [ ] Sending the edit silently resends: no duplicate user bubble; the prior response (partial or full) is hidden from the frontend; the new response streams in its place.
-- [ ] Version navigator bottom-left of the response — left arrow, count, right arrow — flips between response versions (two or more).
-- [ ] Versions live in CloudCLI's DB per session; the Claude Code transcript stays untouched (a resend is a fresh turn under the hood; hidden, never deleted).
+- [x] Pencil control next to copy on Willem's messages; clicking loads that message text into the composer.
+- [x] Sending the edit silently resends: no duplicate user bubble; the prior response (partial or full) is hidden from the frontend; the new response streams in its place.
+- [x] Version navigator bottom-left of the response — left arrow, count, right arrow — flips between response versions (two or more).
+- [x] Versions live in CloudCLI's DB per session; the Claude Code transcript stays untouched (a resend is a fresh turn under the hood; hidden, never deleted).
 
 Done check: on dev, edit-and-resend a real prompt; DOM shows one user bubble, the navigator flips between both responses, sqlite shows the version rows, and the session transcript file still contains both raw turns. Fresh-context subagent verification. Commit.
 

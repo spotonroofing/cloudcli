@@ -1,7 +1,7 @@
 import { memo, useMemo, useRef } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RotateCcw } from 'lucide-react';
+import { Pencil, RotateCcw } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import type {
@@ -45,6 +45,8 @@ type MessageComponentProps = {
   /** The user prompt that produced this assistant turn; enables the rerun action. */
   rerunContent?: string;
   onRerun?: (content: string, event: ReactMouseEvent) => void;
+  /** Pencil on user turns: loads the text into the composer for a silent resend. */
+  onEditMessage?: (message: ChatMessage) => void;
 };
 
 type InteractiveOption = {
@@ -171,7 +173,7 @@ function AssistantCitations({ content }: { content: string }) {
   return <Citations citations={citations} className="mt-2" />;
 }
 
-const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, rerunContent, onRerun }: MessageComponentProps) => {
+const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, rerunContent, onRerun, onEditMessage }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   const reduceMotion = useReducedMotion() ?? false;
   // Evaluated once per mount: a row that pops in must not replay on re-render.
@@ -204,6 +206,15 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
     message.isToolUse && COPY_HIDDEN_TOOL_NAMES.has(String(message.toolName || ''))
   );
   const shouldShowUserCopyControl = message.type === 'user' && userCopyContent.trim().length > 0;
+  // The pencil needs a settled transcript row (a stable id to anchor the
+  // version group) and a text-only turn — an edited resend carries no files.
+  const shouldShowUserEditControl =
+    shouldShowUserCopyControl
+    && Boolean(onEditMessage)
+    && typeof message.id === 'string'
+    && !message.id.startsWith('local_')
+    && !message.images?.length
+    && !message.files?.length;
   const shouldShowAssistantCopyControl = message.type === 'assistant' &&
     assistantCopyContent.trim().length > 0 &&
     !isCommandOrFileEditToolResponse &&
@@ -255,6 +266,19 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                   </div>
                 </div>
                 <div className="-mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                  {shouldShowUserEditControl && (
+                    <div className="relative flex items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => onEditMessage?.(message)}
+                        title={t('editMessage', { defaultValue: 'Edit message' })}
+                        aria-label={t('editMessage', { defaultValue: 'Edit message' })}
+                        className="inline-flex items-center rounded px-1 py-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                   {shouldShowUserCopyControl && (
                     <MessageCopyControl content={userCopyContent} messageType="user" />
                   )}

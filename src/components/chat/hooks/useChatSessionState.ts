@@ -9,6 +9,7 @@ import { SESSION_MESSAGES_PAGE_SIZE } from '../../../stores/sessionMessagePagina
 import type { ChatMessage } from '../types/types';
 import { createMessageHistoryRefreshCoordinator } from '../utils/messageHistoryRefreshCoordinator';
 import { createCachedDiffCalculator, type DiffCalculator } from '../utils/messageTransforms';
+import { applyMessageVersions, type MessageVersionView } from '../utils/messageVersions';
 
 import { normalizedToChatMessages } from './useChatMessages';
 
@@ -39,6 +40,8 @@ interface UseChatSessionStateArgs {
   hideBootPrologue?: boolean;
   /** True while the New Session boot turn is in flight ('booting' phase). */
   bootTurnActive?: boolean;
+  /** Edit-and-resend version rows + selections; non-selected segments hide. */
+  messageVersions?: MessageVersionView;
 }
 
 interface ScrollRestoreState {
@@ -210,6 +213,7 @@ export function useChatSessionState({
   sessionStore,
   hideBootPrologue = false,
   bootTurnActive = false,
+  messageVersions,
 }: UseChatSessionStateArgs) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
@@ -454,7 +458,12 @@ export function useChatSessionState({
   }, [hideBootPrologue, hasMoreMessages, activeSessionId, storeMessages, sessionStore]);
 
   const chatMessages = useMemo(() => {
-    const all = normalizedToChatMessages(storeMessages);
+    const converted = normalizedToChatMessages(storeMessages);
+    // Edit-and-resend versioning: non-selected version segments hide before
+    // any windowing, so segment boundaries see the whole loaded transcript.
+    const all = messageVersions
+      ? applyMessageVersions(converted, messageVersions)
+      : converted;
     // The boot prologue only hides when the loaded window includes the
     // transcript start; a mid-transcript window has no boot prompt in view.
     const applyBootFilter = hideBootPrologue && !hasMoreMessages;
@@ -469,7 +478,7 @@ export function useChatSessionState({
       ? all.slice(0, -viewHiddenCount)
       : all;
     return applyBootFilter ? stripBootPrologue(windowed, excludeTrailingTurn) : windowed;
-  }, [storeMessages, viewHiddenCount, pendingUserMessage, hideBootPrologue, hasMoreMessages, bootTurnActive, isProcessing]);
+  }, [storeMessages, viewHiddenCount, pendingUserMessage, hideBootPrologue, hasMoreMessages, bootTurnActive, isProcessing, messageVersions]);
 
   /* ---------------------------------------------------------------- */
   /*  addMessage / clearMessages / rewindMessages                     */

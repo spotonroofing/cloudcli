@@ -229,6 +229,29 @@ CREATE TABLE IF NOT EXISTS composer_drafts (
 );
 `;
 
+/**
+ * Edit-and-resend response versioning (ui9 B3). A resend is a fresh provider
+ * turn appended to the Claude transcript — the JSONL is never touched. These
+ * rows only record which turns are alternative versions of the same exchange
+ * so the client can hide the non-selected ones (hidden, never deleted).
+ * `group_id` is the transcript id of the original (version 1) user message;
+ * `user_message_id` is null for resends — the client resolves it against the
+ * transcript by prompt text and time.
+ */
+export const MESSAGE_VERSIONS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS message_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    group_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    user_message_id TEXT,
+    prompt_text TEXT NOT NULL,
+    is_selected INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    UNIQUE(session_id, group_id, version)
+);
+`;
+
 export const INIT_SCHEMA_SQL = `
 -- Initialize authentication database
 PRAGMA foreign_keys = ON;
@@ -282,4 +305,7 @@ ${COMPOSER_DRAFTS_TABLE_SCHEMA_SQL}
 ${WATCHDOG_CHAINS_TABLE_SCHEMA_SQL}
 
 ${WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL}
+
+${MESSAGE_VERSIONS_TABLE_SCHEMA_SQL}
+CREATE INDEX IF NOT EXISTS idx_message_versions_session ON message_versions(session_id);
 `;

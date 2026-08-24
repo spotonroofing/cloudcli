@@ -6,6 +6,8 @@ export { appConfigDb } from '@/modules/database/repositories/app-config.js';
 export { composerDraftsDb } from '@/modules/database/repositories/composer-drafts.db.js';
 export { credentialsDb } from '@/modules/database/repositories/credentials.js';
 export { githubTokensDb } from '@/modules/database/repositories/github-tokens.js';
+// messageVersionsDb: edit-and-resend response versioning (ui9 B3).
+export { messageVersionsDb } from '@/modules/database/repositories/message-versions.db.js';
 export { notificationChannelEndpointsDb } from '@/modules/database/repositories/notification-channel-endpoints.js';
 export { notificationPreferencesDb } from '@/modules/database/repositories/notification-preferences.js';
 // providerModelsDb: used by Providers to persist user-managed custom model rows.

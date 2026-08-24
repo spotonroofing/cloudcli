@@ -4,11 +4,13 @@ import { ArrowDownIcon } from 'lucide-react';
 
 import { useWebSocket } from '../../../contexts/WebSocketContext';
 import PermissionContext from '../../../contexts/PermissionContext';
-import type { ChatInterfaceProps } from '../types/types';
+import type { ChatInterfaceProps, ChatMessage } from '../types/types';
 import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
 import { useChatRealtimeHandlers } from '../hooks/useChatRealtimeHandlers';
 import { useChatComposerState, type BootState } from '../hooks/useChatComposerState';
+import { useMessageVersions } from '../hooks/useMessageVersions';
+import { findEditGroupId } from '../utils/messageVersions';
 import { useSessionStore } from '../../../stores/useSessionStore';
 
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
@@ -99,6 +101,20 @@ function ChatInterface({
     || bootState.phase !== 'idle'
     || (selectedSession ? bootedSessionsRef.current.has(selectedSession.id) : false);
 
+  // Edit-and-resend version state (ui9 B3). Editing needs an established
+  // session with at least one settled turn, so the routed session id is
+  // always concrete by the time a pencil can be clicked.
+  const {
+    view: messageVersionView,
+    groups: messageVersionGroups,
+    registerEditResend,
+    selectVersion,
+    revealLatestVersions,
+  } = useMessageVersions({
+    sessionId: selectedSession?.id ?? null,
+    processingSessions,
+  });
+
   const {
     chatMessages,
     addMessage,
@@ -145,6 +161,7 @@ function ChatInterface({
     sessionStore,
     hideBootPrologue,
     bootTurnActive: bootState.phase === 'booting',
+    messageVersions: messageVersionView,
   });
 
   // Brand-new conversation: the composer allocated a stable session id via
@@ -188,6 +205,9 @@ function ChatInterface({
     queuedDraft,
     editQueuedDraft,
     deleteQueuedDraft,
+    editingMessage,
+    beginMessageEdit,
+    cancelMessageEdit,
     handleVoiceTranscript,
     handleInputChange,
     handleKeyDown,
@@ -236,6 +256,8 @@ function ChatInterface({
     sessionOrigin,
     bootState,
     setBootState,
+    onEditResend: registerEditResend,
+    onPlainSend: revealLatestVersions,
   });
 
   // ------------------------------------------------------------------
@@ -414,6 +436,19 @@ function ChatInterface({
     void handleSubmit(event, { content, attachments: [], preserveComposer: true });
   }, [handleSubmit]);
 
+  // Pencil on a user turn: load its text into the composer and arm the next
+  // send as a silent resend. An already-versioned turn keeps its group.
+  const handleEditMessage = useCallback((message: ChatMessage) => {
+    const messageId = typeof message.id === 'string' ? message.id : '';
+    const content = typeof message.content === 'string' ? message.content : '';
+    if (!messageId || !content.trim()) return;
+    beginMessageEdit({
+      groupId: findEditGroupId(messageVersionGroups, message),
+      anchorUserMessageId: messageId,
+      anchorPromptText: content,
+    });
+  }, [beginMessageEdit, messageVersionGroups]);
+
   const selectedProviderLabel =
     provider === 'cursor'
       ? t('messageTypes.cursor')
@@ -474,6 +509,8 @@ function ChatInterface({
           showThinking={showThinking}
           selectedProject={selectedProject}
           onRerun={handleRerun}
+          onEditMessage={handleEditMessage}
+          onSelectVersion={selectVersion}
         />
 
         <div className="relative flex-shrink-0">
@@ -516,6 +553,8 @@ function ChatInterface({
           queuedDraft={queuedDraft}
           onEditQueuedDraft={editQueuedDraft}
           onDeleteQueuedDraft={deleteQueuedDraft}
+          isEditingMessage={Boolean(editingMessage)}
+          onCancelEditMessage={cancelMessageEdit}
           attachedFiles={attachedFiles}
           onRemoveAttachment={removeAttachedFile}
           draftAttachments={draftAttachments}

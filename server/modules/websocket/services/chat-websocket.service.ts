@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import type { WebSocket } from 'ws';
 
-import { sessionsDb } from '@/modules/database/index.js';
+import { messageVersionsDb, sessionsDb } from '@/modules/database/index.js';
 import { providerModelsService, scheduleSessionShortLabel } from '@/modules/providers/index.js';
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
@@ -229,6 +229,29 @@ async function handleChatSend(
     providerModelsService.setSessionEffort(provider, sessionId, clientOptions.effort);
   }
 
+  // Edit-and-resend (ui9 B3): the send carries which prior exchange it
+  // replaces. Record the version rows before dispatch so they exist even if
+  // the run dies; the transcript itself is never touched.
+  const edit = clientOptions.edit as AnyRecord | undefined;
+  if (
+    edit
+    && typeof edit.groupId === 'string' && edit.groupId.trim()
+    && typeof edit.anchorUserMessageId === 'string' && edit.anchorUserMessageId.trim()
+    && typeof edit.anchorPromptText === 'string'
+  ) {
+    try {
+      messageVersionsDb.recordResend({
+        sessionId,
+        groupId: edit.groupId,
+        anchorUserMessageId: edit.anchorUserMessageId,
+        anchorPromptText: edit.anchorPromptText,
+        promptText: command,
+      });
+    } catch (error) {
+      console.error('[Chat] Failed to record message version', { sessionId, error });
+    }
+  }
+
   const attachmentCandidates = [
     ...normalizeAttachmentDescriptors(clientOptions.images),
     ...normalizeAttachmentDescriptors(clientOptions.files),
@@ -256,6 +279,8 @@ async function handleChatSend(
     cwd: clientOptions.cwd ?? session.project_path ?? undefined,
     projectPath: session.project_path ?? clientOptions.projectPath,
   };
+  // Version bookkeeping is CloudCLI-side only; runtimes never see it.
+  delete runtimeOptions.edit;
 
   let runtimeThrew = false;
   try {

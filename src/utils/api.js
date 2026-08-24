@@ -169,6 +169,14 @@ export const api = {
     const queryString = params.toString();
     return authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/messages${queryString ? `?${queryString}` : ''}`);
   },
+  // Edit-and-resend response versions for one session (ui9 B3).
+  sessionMessageVersions: (sessionId) =>
+    authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/message-versions`),
+  selectSessionMessageVersion: (sessionId, groupId, version) =>
+    authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/message-versions/select`, {
+      method: 'POST',
+      body: JSON.stringify({ groupId, version }),
+    }),
   renameProject: (projectId, displayName, plannerMemoryName, path) =>
     authenticatedFetch(`/api/projects/${projectId}/rename`, {
       method: 'PUT',

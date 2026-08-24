@@ -42,6 +42,7 @@ import { STANDALONE_PROJECT_ID } from '../../../types/app';
 import { escapeRegExp } from '../utils/chatFormatting';
 
 import { useFileMentions } from './useFileMentions';
+import type { MessageEditContext } from './useMessageVersions';
 import { type SlashCommand, useSlashCommands } from './useSlashCommands';
 
 interface UseChatComposerStateArgs {
@@ -87,6 +88,10 @@ interface UseChatComposerStateArgs {
   /** Boot lifecycle owned by ChatInterface (the message-derived transitions live there). */
   bootState: BootState;
   setBootState: Dispatch<SetStateAction<BootState>>;
+  /** Called when a send is an edit-and-resend, so the version state mirrors it. */
+  onEditResend?: (edit: MessageEditContext, content: string) => void;
+  /** Called on every normal send, so version groups flip back to latest. */
+  onPlainSend?: () => void;
 }
 
 interface MentionableFile {
@@ -300,10 +305,16 @@ export function useChatComposerState({
   sessionOrigin,
   bootState,
   setBootState,
+  onEditResend,
+  onPlainSend,
 }: UseChatComposerStateArgs) {
   // Drafts are server-persisted per session (ui8 phase 2); the load effect
   // below fills the input, so the composer mounts empty.
   const [input, setInput] = useState('');
+  // Edit-and-resend (ui9 B3): set while the composer holds a past user
+  // message's text; the next send silently replaces that exchange.
+  const [editingMessage, setEditingMessage] = useState<MessageEditContext | null>(null);
+  const editContextRef = useRef<MessageEditContext | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   /** Draft attachments already uploaded to the asset store, restorable anywhere. */
   const [draftAttachments, setDraftAttachments] = useState<ChatAttachment[]>([]);
@@ -1002,6 +1013,13 @@ export function useChatComposerState({
         }
 
         const queuedOptions = buildSendOptions(currentInput);
+        // An armed edit rides the queued options so the eventual flush (or
+        // app-level auto-send) still records the resend as a version.
+        if (editContextRef.current) {
+          queuedOptions.edit = editContextRef.current;
+          editContextRef.current = null;
+          setEditingMessage(null);
+        }
         const queuedSessionKey = sessionKey;
         let uploadedAttachments: unknown[] = [];
         try {
@@ -1211,6 +1229,23 @@ export function useChatComposerState({
         );
       }
 
+      // Edit-and-resend: armed from the composer, or riding a queued draft's
+      // snapshotted options. Registering the version BEFORE the optimistic
+      // bubble is appended keeps the version's start time ahead of the echo,
+      // so the prior exchange hides and this send renders as its one bubble.
+      const editPayload = (queuedSubmission
+        ? queuedSubmission.options?.edit
+        : editContextRef.current) as MessageEditContext | undefined | null;
+      if (editPayload) {
+        onEditResend?.(editPayload, messageContent);
+        editContextRef.current = null;
+        setEditingMessage(null);
+      } else {
+        // A normal send continues the latest thread: flip any group viewed on
+        // an older version back to latest so this turn never lands hidden.
+        onPlainSend?.();
+      }
+
       const attachmentRecords = uploadedAttachments as ChatAttachment[];
       const userMessage: ChatMessage = {
         type: 'user',
@@ -1244,6 +1279,8 @@ export function useChatComposerState({
           attachments: uploadedAttachments,
           // Auto-sent boot prompts never title the session server-side.
           bootPrompt: isBootSubmission || undefined,
+          // Server-side version bookkeeping; stripped before the runtime.
+          edit: editPayload || undefined,
         },
       });
 
@@ -1294,6 +1331,8 @@ export function useChatComposerState({
       setIsUserScrolledUp,
       slashCommands,
       sessionOrigin,
+      onEditResend,
+      onPlainSend,
     ],
   );
 
@@ -1350,6 +1389,13 @@ export function useChatComposerState({
       return;
     }
     setQueuedDraft(null);
+    // A queued edit-and-resend keeps its armed edit when pulled back for
+    // more typing — otherwise the eventual send would duplicate the bubble.
+    const queuedEdit = queuedDraft.options?.edit as MessageEditContext | undefined;
+    if (queuedEdit) {
+      editContextRef.current = queuedEdit;
+      setEditingMessage(queuedEdit);
+    }
     setInput(queuedDraft.content);
     inputValueRef.current = queuedDraft.content;
     setAttachedFilesSync(queuedDraft.attachments);
@@ -1359,6 +1405,28 @@ export function useChatComposerState({
   const deleteQueuedDraft = useCallback(() => {
     setQueuedDraft(null);
   }, []);
+
+  // Pencil on a user message: load its text into the composer and arm the
+  // next send as a silent resend of that exchange.
+  const beginMessageEdit = useCallback((edit: MessageEditContext) => {
+    editContextRef.current = edit;
+    setEditingMessage(edit);
+    setInput(edit.anchorPromptText);
+    inputValueRef.current = edit.anchorPromptText;
+    resetCommandMenuState();
+    textareaRef.current?.focus();
+  }, [resetCommandMenuState]);
+
+  const cancelMessageEdit = useCallback(() => {
+    editContextRef.current = null;
+    setEditingMessage(null);
+  }, []);
+
+  // An armed edit belongs to one session's transcript; switching drops it.
+  useEffect(() => {
+    editContextRef.current = null;
+    setEditingMessage(null);
+  }, [sessionKey]);
 
   // A voice transcript either fills the input (to edit before sending) or, when the
   // user tapped "stop and send", is submitted straight away. Mirror the value into
@@ -1588,6 +1656,8 @@ export function useChatComposerState({
   const handleClearInput = useCallback(() => {
     setInput('');
     inputValueRef.current = '';
+    editContextRef.current = null;
+    setEditingMessage(null);
     resetCommandMenuState();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -1706,6 +1776,9 @@ export function useChatComposerState({
     queuedDraft,
     editQueuedDraft,
     deleteQueuedDraft,
+    editingMessage,
+    beginMessageEdit,
+    cancelMessageEdit,
     handleVoiceTranscript,
     handleInputChange,
     handleKeyDown,

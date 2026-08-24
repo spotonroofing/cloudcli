@@ -8,6 +8,7 @@ import { providerTokenUsageService } from '@/modules/providers/services/provider
 import { providerSkillsService } from '@/modules/providers/services/skills.service.js';
 import { sessionConversationsSearchService } from '@/modules/providers/services/session-conversations-search.service.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
+import { messageVersionsDb } from '@/modules/database/index.js';
 import { watchdogService } from '@/modules/watchdog/index.js';
 import type {
   CustomProviderModelInput,
@@ -871,6 +872,34 @@ router.get(
       offset,
     });
     res.json(createApiSuccessResponse(result));
+  }),
+);
+
+// Edit-and-resend response versions (ui9 B3): CloudCLI-side bookkeeping over
+// an untouched Claude transcript. Flat rows; the client groups and resolves.
+router.get(
+  '/sessions/:sessionId/message-versions',
+  asyncHandler(async (req: Request, res: Response) => {
+    const sessionId = parseSessionId(req.params.sessionId);
+    const versions = messageVersionsDb.listBySession(sessionId);
+    res.json(createApiSuccessResponse({ versions }));
+  }),
+);
+
+router.post(
+  '/sessions/:sessionId/message-versions/select',
+  asyncHandler(async (req: Request, res: Response) => {
+    const sessionId = parseSessionId(req.params.sessionId);
+    const groupId = typeof req.body?.groupId === 'string' ? req.body.groupId.trim() : '';
+    const version = Number(req.body?.version);
+    if (!groupId || !Number.isInteger(version) || version < 1) {
+      throw new AppError('groupId and a positive integer version are required.', {
+        code: 'INVALID_MESSAGE_VERSION_SELECTION',
+        statusCode: 400,
+      });
+    }
+    messageVersionsDb.selectVersion(sessionId, groupId, version);
+    res.json(createApiSuccessResponse({ ok: true }));
   }),
 );
 
