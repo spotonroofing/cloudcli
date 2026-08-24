@@ -81,9 +81,9 @@ Done check: on dev, DOM checks: the secondary row is outside the enclosure eleme
 
 Goal: the worker pane header loses the finished tag, the phase navigator is open by default, and every phase shows how far along it is. Files: the worker pane header and phase navigator components, server/modules/watchdog (manifest handling, chain events), the dispatch chain runner, the manifest type (ChainManifestEntry). Dependencies: none.
 
-- [ ] Remove the "finished" status tag from the worker pane's top row entirely; state is carried by the phase navigator and run switcher.
-- [ ] The phase navigator defaults open on every run and is collapsible by the user; the collapsed state does not persist across runs.
-- [ ] Each phase row shows a done/total counter on its right: total is the manifest's task count for that phase; done is the count of that phase's items checked off in the run's punch list file. The manifest gains an optional punch list path and a per-phase heading anchor so counts are exact; the watchdog re-reads the file on each chain event and after each commit. Runs without a manifest show no counter.
+- [x] Remove the "finished" status tag from the worker pane's top row entirely; state is carried by the phase navigator and run switcher.
+- [x] The phase navigator defaults open on every run and is collapsible by the user; the collapsed state does not persist across runs.
+- [x] Each phase row shows a done/total counter on its right: total is the manifest's task count for that phase; done is the count of that phase's items checked off in the run's punch list file. The manifest gains an optional punch list path and a per-phase heading anchor so counts are exact; the watchdog re-reads the file on each chain event and after each commit. Runs without a manifest show no counter.
 
 Done check: on dev, a stub chain with a manifest and a test punch list (stub claude per lesson chain-runner-fully-stubbable-via-env): the navigator is open by default and collapses on click; the counter reads 0/3, then 2/3 after a stub commit checks two boxes; the finished tag is absent from the header DOM. Fresh-context subagent verification. Commit.
 

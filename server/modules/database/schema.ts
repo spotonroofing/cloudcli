@@ -208,9 +208,12 @@ CREATE TABLE IF NOT EXISTS watchdog_chains (
     last_event_at INTEGER NOT NULL,
     last_summary_tail TEXT,
     -- Planner-supplied dispatch manifest (ui9 B4): JSON array of
-    -- {name, tasks[], kind: 'phase'|'task'} in run order; NULL for chains
-    -- dispatched without one. Appended units extend the array.
+    -- {name, tasks[], kind: 'phase'|'task', anchor?} in run order; NULL for
+    -- chains dispatched without one. Appended units extend the array.
     manifest TEXT,
+    -- Absolute path to the run's punch list file (ui11 phase 6); per-phase
+    -- done counts are read from its checked-off boxes. NULL when not supplied.
+    punchlist TEXT,
     -- 1 while a phase session is actually running (between phase-start and
     -- phase-end/terminal), so run state never reads from a stale session row.
     phase_active INTEGER NOT NULL DEFAULT 0

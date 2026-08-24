@@ -297,15 +297,11 @@ export default function WorkerPane({
             }))}
           />
         )}
-        {selectedRun && (
+        {/* No finished tag in the header (ui11 phase 6): done state lives in
+            the phase navigator and the run switcher. */}
+        {selectedRun && selectedRun.state !== 'finished' && (
           <Badge
-            status={
-              selectedRun.state === 'running'
-                ? 'loading'
-                : selectedRun.state === 'finished'
-                  ? 'success'
-                  : 'neutral'
-            }
+            status={selectedRun.state === 'running' ? 'loading' : 'neutral'}
             size="sm"
             contentKey={selectedRun.state}
             className="flex-shrink-0"

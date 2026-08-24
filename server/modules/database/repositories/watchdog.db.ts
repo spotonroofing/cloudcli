@@ -13,6 +13,8 @@ export type WatchdogChainRow = {
   manifest: string | null;
   /** 1 while a phase session is running (between phase-start and phase-end). */
   phase_active: number;
+  /** Absolute path to the run's punch list file (ui11 phase 6); NULL when absent. */
+  punchlist: string | null;
 };
 
 export type WatchdogDispatchRunRow = {
@@ -37,8 +39,8 @@ export const watchdogDb = {
   upsertChain(row: WatchdogChainRow): void {
     const db = getConnection();
     db.prepare(`
-      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, manifest, phase_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, manifest, phase_active, punchlist)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(slug) DO UPDATE SET
         project_path = excluded.project_path,
         phases = excluded.phases,
@@ -48,7 +50,8 @@ export const watchdogDb = {
         last_event_at = excluded.last_event_at,
         last_summary_tail = excluded.last_summary_tail,
         manifest = excluded.manifest,
-        phase_active = excluded.phase_active
+        phase_active = excluded.phase_active,
+        punchlist = excluded.punchlist
     `).run(
       row.slug,
       row.project_path,
@@ -60,6 +63,7 @@ export const watchdogDb = {
       row.last_summary_tail,
       row.manifest,
       row.phase_active,
+      row.punchlist,
     );
   },
 

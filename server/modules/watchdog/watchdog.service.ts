@@ -21,6 +21,12 @@ export type ChainManifestEntry = {
   name: string;
   tasks: string[];
   kind: 'phase' | 'task';
+  /**
+   * Heading anchor of this unit's section in the run's punch list file
+   * (ui11 phase 6): a substring of the section's markdown heading, so the
+   * done count is read from exactly that section's checked boxes.
+   */
+  anchor?: string;
 };
 
 type ChainRecord = {
@@ -36,6 +42,8 @@ type ChainRecord = {
   manifest: ChainManifestEntry[] | null;
   /** True between phase-start and phase-end/terminal — a session is live. */
   phaseActive: boolean;
+  /** Absolute path to the run's punch list file; null when not supplied. */
+  punchlist: string | null;
 };
 
 type DispatchRunRecord = {
@@ -78,7 +86,8 @@ type ChainSnapshot = {
   phases: number | null;
   currentPhase: number | null;
   phaseActive: boolean;
-  manifest: ChainManifestEntry[] | null;
+  /** Manifest entries with the punch-list `done` count folded in per unit. */
+  manifest: (ChainManifestEntry & { done: number | null })[] | null;
   startedAt: number;
   lastEventAt: number;
 };
@@ -155,6 +164,7 @@ class WatchdogService {
           lastSummaryTail: row.last_summary_tail,
           manifest: parseManifest(row.manifest),
           phaseActive: Boolean(row.phase_active),
+          punchlist: row.punchlist,
         });
       }
       for (const row of watchdogDb.listDispatchRuns()) {
@@ -191,6 +201,7 @@ class WatchdogService {
         last_summary_tail: chain.lastSummaryTail,
         manifest: chain.manifest ? JSON.stringify(chain.manifest) : null,
         phase_active: chain.phaseActive ? 1 : 0,
+        punchlist: chain.punchlist,
       });
     } catch (error) {
       log(`chain persist failed for ${chain.slug}: ${error instanceof Error ? error.message : String(error)}`);
@@ -222,10 +233,16 @@ class WatchdogService {
     projectPath: string;
     phases?: number | null;
     manifest?: ChainManifestEntry[] | null;
+    punchlist?: string | null;
   }): void {
     // A re-registration (restart-recovery via an event) without a manifest
-    // keeps the one the chain already has.
+    // keeps the one the chain already has; same for the punch list path.
     const existing = this.chains.get(input.slug);
+    const punchlist = input.punchlist
+      ? path.isAbsolute(input.punchlist)
+        ? input.punchlist
+        : path.join(input.projectPath, input.punchlist)
+      : existing?.punchlist ?? null;
     const chain: ChainRecord = {
       slug: input.slug,
       projectPath: input.projectPath,
@@ -237,6 +254,7 @@ class WatchdogService {
       lastSummaryTail: null,
       manifest: input.manifest ?? existing?.manifest ?? null,
       phaseActive: false,
+      punchlist,
     };
     this.chains.set(input.slug, chain);
     this.persistChain(chain);
@@ -263,6 +281,10 @@ class WatchdogService {
   }
 
   private chainSnapshot(chain: ChainRecord): ChainSnapshot {
+    // Per-unit done counts come from the punch list file, re-read here on
+    // every snapshot — so each chain event's broadcast and each worker-runs
+    // fetch (the 20s poll catches mid-phase commits) carries fresh counts.
+    const doneCounts = punchlistDoneCounts(chain.punchlist, chain.manifest);
     return {
       slug: chain.slug,
       projectPath: chain.projectPath,
@@ -270,7 +292,9 @@ class WatchdogService {
       phases: chain.phases,
       currentPhase: chain.currentPhase,
       phaseActive: chain.phaseActive,
-      manifest: chain.manifest,
+      manifest: chain.manifest
+        ? chain.manifest.map((entry, i) => ({ ...entry, done: doneCounts?.[i] ?? null }))
+        : null,
       startedAt: chain.startedAt,
       lastEventAt: chain.lastEventAt,
     };
@@ -1045,7 +1069,7 @@ export function parseManifest(value: unknown): ChainManifestEntry[] | null {
   }
   const entries: ChainManifestEntry[] = [];
   for (const item of raw) {
-    const entry = item as { name?: unknown; tasks?: unknown; kind?: unknown } | null;
+    const entry = item as { name?: unknown; tasks?: unknown; kind?: unknown; anchor?: unknown } | null;
     const name = typeof entry?.name === 'string' ? entry.name.trim() : '';
     if (!name) {
       continue;
@@ -1053,9 +1077,62 @@ export function parseManifest(value: unknown): ChainManifestEntry[] | null {
     const tasks = Array.isArray(entry?.tasks)
       ? entry.tasks.filter((task): task is string => typeof task === 'string' && task.trim() !== '')
       : [];
-    entries.push({ name, tasks, kind: entry?.kind === 'task' ? 'task' : 'phase' });
+    const anchor = typeof entry?.anchor === 'string' && entry.anchor.trim() ? entry.anchor.trim() : undefined;
+    entries.push({ name, tasks, kind: entry?.kind === 'task' ? 'task' : 'phase', ...(anchor ? { anchor } : {}) });
   }
   return entries.length ? entries : null;
+}
+
+/**
+ * Per-unit done counts from the run's punch list file (ui11 phase 6): for each
+ * manifest entry with a heading anchor, count the checked boxes (`- [x]`) in
+ * the punch list section whose markdown heading contains the anchor. Returns
+ * null (whole array or per entry) when the file, entry anchor, or section is
+ * missing — the navigator shows no counter rather than a made-up one.
+ */
+function punchlistDoneCounts(
+  punchlist: string | null,
+  manifest: ChainManifestEntry[] | null,
+): (number | null)[] | null {
+  if (!punchlist || !manifest) {
+    return null;
+  }
+  let lines: string[];
+  try {
+    lines = fs.readFileSync(punchlist, 'utf8').split('\n');
+  } catch {
+    return null;
+  }
+  return manifest.map((entry) => {
+    if (!entry.anchor) {
+      return null;
+    }
+    const anchor = entry.anchor.toLowerCase();
+    let start = -1;
+    let level = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const heading = /^(#{1,6})\s+(.*)$/.exec(lines[i]);
+      if (heading && heading[2].toLowerCase().includes(anchor)) {
+        start = i + 1;
+        level = heading[1].length;
+        break;
+      }
+    }
+    if (start < 0) {
+      return null;
+    }
+    let done = 0;
+    for (let i = start; i < lines.length; i++) {
+      const heading = /^(#{1,6})\s/.exec(lines[i]);
+      if (heading && heading[1].length <= level) {
+        break;
+      }
+      if (/^\s*[-*]\s+\[[xX]\]\s/.test(lines[i])) {
+        done += 1;
+      }
+    }
+    return done;
+  });
 }
 
 function readMemoryFreePercentage(): Promise<number | null> {

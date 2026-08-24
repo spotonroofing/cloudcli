@@ -13,6 +13,10 @@ export type ChainManifestEntry = {
   name: string;
   tasks: string[];
   kind: 'phase' | 'task';
+  /** Punch list heading anchor for this unit; server-side counting detail. */
+  anchor?: string;
+  /** Tasks checked off in the run's punch list; null when uncountable. */
+  done?: number | null;
 };
 
 /** The watchdog's live chain snapshot (worker-runs response / chain_progress). */
@@ -35,6 +39,8 @@ type Unit = {
   tasks: string[];
   kind: 'phase' | 'task';
   status: TodoListItemStatus;
+  /** Punch-list done count; null hides the row counter (no manifest counts). */
+  done: number | null;
 };
 
 function chainUnits(chain: ChainSnapshot): Unit[] {
@@ -55,7 +61,7 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
     } else if (index === current) {
       status = chain.status === 'running' ? 'in-progress' : 'cancelled';
     }
-    return { index, name: entry.name, tasks: entry.tasks, kind: entry.kind, status };
+    return { index, name: entry.name, tasks: entry.tasks, kind: entry.kind, status, done: entry.done ?? null };
   });
 }
 
@@ -100,7 +106,7 @@ export default function PhaseNavigator({
   const units: Unit[] = chain
     ? chainUnits(chain)
     : run
-      ? [{ index: 1, name: run.label, tasks: [], kind: 'phase', status: runStateStatus[run.state] }]
+      ? [{ index: 1, name: run.label, tasks: [], kind: 'phase', status: runStateStatus[run.state], done: null }]
       : [];
 
   const running = chain ? chain.status === 'running' : run?.state === 'running';
@@ -116,8 +122,22 @@ export default function PhaseNavigator({
   const allComplete = units.length > 0 && doneCount === units.length;
 
   const [open, setOpen] = useState(true);
+  // Starts true so mounting on an already-finished run stays open (every run
+  // defaults open); only a live transition into fully-complete collapses.
+  const previousComplete = useRef(true);
+  // Every run defaults open: switching runs resets a user collapse instead of
+  // carrying it over. Seeding previousComplete true keeps the auto-collapse
+  // below from immediately re-collapsing an already-finished run.
+  const runKey = chain?.slug ?? run?.label ?? '';
+  const previousRunKey = useRef(runKey);
+  useEffect(() => {
+    if (previousRunKey.current !== runKey) {
+      previousRunKey.current = runKey;
+      previousComplete.current = true;
+      setOpen(true);
+    }
+  }, [runKey]);
   // Auto-collapse once the chain lands, TodoList-style; reopen if work grows.
-  const previousComplete = useRef(false);
   useEffect(() => {
     if (!previousComplete.current && allComplete) {
       setOpen(false);
@@ -245,6 +265,16 @@ export default function PhaseNavigator({
                     >
                       {unit.name}
                     </span>
+                    {unit.done != null && unit.tasks.length > 0 && (
+                      <span
+                        data-slot="phase-navigator-row-count"
+                        className="flex-shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground"
+                      >
+                        <SwapText value={String(unit.done)}>{unit.done}</SwapText>
+                        <span>/</span>
+                        <span>{unit.tasks.length}</span>
+                      </span>
+                    )}
                   </button>
                   {unit.tasks.length > 0 && (
                     <ul className="pb-0.5 pl-9">

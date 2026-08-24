@@ -39,7 +39,19 @@ export function createWatchdogRouter(): express.Router {
         });
       }
       const phases = Number.isFinite(Number(body.phases)) ? Number(body.phases) : null;
-      watchdogService.registerChain({ slug, projectPath, phases, manifest: parseManifest(body.manifest) });
+      // The manifest is either the bare entries array or, since ui11 phase 6,
+      // an object { punchlist, entries } carrying the run's punch list path
+      // (repo-relative or absolute) for per-phase done counts.
+      let manifestValue: unknown = body.manifest;
+      let punchlist = typeof body.punchlist === 'string' && body.punchlist.trim() ? body.punchlist.trim() : null;
+      if (manifestValue && typeof manifestValue === 'object' && !Array.isArray(manifestValue)) {
+        const wrapped = manifestValue as { entries?: unknown; punchlist?: unknown };
+        if (typeof wrapped.punchlist === 'string' && wrapped.punchlist.trim()) {
+          punchlist = wrapped.punchlist.trim();
+        }
+        manifestValue = wrapped.entries;
+      }
+      watchdogService.registerChain({ slug, projectPath, phases, manifest: parseManifest(manifestValue), punchlist });
       res.status(201).json(createApiSuccessResponse({ slug }));
     }),
   );

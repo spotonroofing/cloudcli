@@ -8,8 +8,12 @@
 # Phase prompt files: explicit paths, or by convention every file matching
 # <repo>/.dispatch/<slug>/*.md in lexical order. A phase manifest the planner
 # wrote at <repo>/.dispatch/<slug>/manifest.json (or DISPATCH_MANIFEST) rides
-# along: JSON array of {name, tasks[]} in phase order; the watchdog stores it
-# and the worker pane's phase navigator renders it. Validation happens here;
+# along: a JSON array of {name, tasks[], anchor?} in phase order, or
+# {punchlist, entries: [...]} where punchlist is the run's punch list file
+# (repo-relative or absolute) and each entry's anchor names its punch list
+# heading so the navigator can count checked-off tasks per phase; the
+# watchdog stores it and the worker pane's phase navigator renders it.
+# Validation happens here;
 # execution is handed to dispatch-chain-runner, spawned fully detached (own
 # session) so a CloudCLI server restart or promote mid-chain never touches a
 # running chain. Each phase runs as a fresh headless `claude -p` session with
