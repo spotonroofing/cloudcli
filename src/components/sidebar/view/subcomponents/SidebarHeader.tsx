@@ -1,7 +1,9 @@
 import { FolderPlus, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
+import { motion } from 'motion/react';
 import type { TFunction } from 'i18next';
 
 import { Button, Input } from '../../../../shared/view/ui';
+import { TABS_INDICATOR_SPRING } from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 import type { SidebarSearchMode } from '../../types/types';
 
@@ -58,10 +60,20 @@ export default function SidebarHeader({
   const runningBadgeText = runningSessionsCount > 99 ? '99+' : String(runningSessionsCount);
 
   const segmentClass = (mode: SidebarSearchMode) => cn(
-    'touch-hit relative flex min-w-0 flex-1 basis-0 items-center justify-center gap-1 rounded-md px-1 py-1.5 text-[11px] font-normal transition-all',
-    searchMode === mode
-      ? 'bg-background shadow-sm text-foreground'
-      : 'text-muted-foreground hover:text-foreground',
+    'touch-hit relative flex min-w-0 flex-1 basis-0 items-center justify-center gap-1 rounded-md px-1 py-1.5 text-[11px] font-normal transition-colors',
+    searchMode === mode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+  );
+
+  // The active-segment plate glides between triggers on the shared tabs
+  // spring (ui9 B5) instead of jumping; labels sit above it.
+  const segmentIndicator = (mode: SidebarSearchMode) => searchMode === mode && (
+    <motion.span
+      layoutId="sidebar-segment-indicator"
+      data-slot="sidebar-segment-indicator"
+      transition={TABS_INDICATOR_SPRING}
+      className="absolute inset-0 rounded-md bg-background shadow-sm"
+      aria-hidden="true"
+    />
   );
 
   return (
@@ -79,14 +91,16 @@ export default function SidebarHeader({
                 aria-pressed={searchMode === 'projects'}
                 className={segmentClass('projects')}
               >
-                <span className="truncate">{t('search.modeProjects', 'Projects')}</span>
+                {segmentIndicator('projects')}
+                <span className="relative truncate">{t('search.modeProjects', 'Projects')}</span>
               </button>
               <button
                 onClick={() => onSearchModeChange('conversations')}
                 aria-pressed={searchMode === 'conversations'}
                 className={segmentClass('conversations')}
               >
-                <span className="truncate">{t('search.modeConversations')}</span>
+                {segmentIndicator('conversations')}
+                <span className="relative truncate">{t('search.modeConversations')}</span>
               </button>
               {/* Running view is a mobile-only control; desktop is chat-scoped */}
               {isMobile && (
@@ -95,9 +109,10 @@ export default function SidebarHeader({
                   aria-pressed={searchMode === 'running'}
                   className={segmentClass('running')}
                 >
-                  <span className="truncate">{t('search.modeRunning', 'Running')}</span>
+                  {segmentIndicator('running')}
+                  <span className="relative truncate">{t('search.modeRunning', 'Running')}</span>
                   {runningSessionsCount > 0 && (
-                    <span className="flex h-3.5 min-w-3.5 flex-shrink-0 items-center justify-center rounded-sm bg-emerald-500 px-0.5 text-[8px] font-semibold leading-none text-white">
+                    <span className="relative flex h-3.5 min-w-3.5 flex-shrink-0 items-center justify-center rounded-sm bg-emerald-500 px-0.5 text-[8px] font-semibold leading-none text-white">
                       {runningBadgeText}
                     </span>
                   )}
@@ -108,7 +123,8 @@ export default function SidebarHeader({
                 aria-pressed={searchMode === 'archived'}
                 className={segmentClass('archived')}
               >
-                <span className="truncate">{t('archived.title', 'Archive')}</span>
+                {segmentIndicator('archived')}
+                <span className="relative truncate">{t('archived.title', 'Archive')}</span>
               </button>
             </div>
           )}

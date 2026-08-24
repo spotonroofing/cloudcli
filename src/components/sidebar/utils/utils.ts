@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 
 import type { LLMProvider, Project, ProjectSession } from '../../../types/app';
-import type { ProjectSortOrder, SettingsProject, SessionViewModel, SessionWithProvider } from '../types/types';
+import type { SettingsProject, SessionViewModel, SessionWithProvider } from '../types/types';
 
 export const formatCompactAge = (
   dateString: string | null | undefined,
@@ -18,20 +18,6 @@ export const formatCompactAge = (
 
   const hours = Math.floor(minutes / 60);
   return hours < 24 ? `${hours}hr` : `${Math.floor(hours / 24)}d`;
-};
-
-export const readProjectSortOrder = (): ProjectSortOrder => {
-  try {
-    const rawSettings = localStorage.getItem('claude-settings');
-    if (!rawSettings) {
-      return 'name';
-    }
-
-    const settings = JSON.parse(rawSettings) as { projectSortOrder?: ProjectSortOrder };
-    return settings.projectSortOrder === 'date' ? 'date' : 'name';
-  } catch {
-    return 'name';
-  }
 };
 
 const LEGACY_STARRED_PROJECTS_STORAGE_KEY = 'starredProjects';
@@ -134,13 +120,15 @@ export const getProjectLastActivity = (project: Project): Date => {
   }, new Date(0));
 };
 
-export const sortProjects = (
-  projects: Project[],
-  projectSortOrder: ProjectSortOrder,
-): Project[] => {
-  const byName = [...projects];
+/**
+ * Project order (ui9 B5): starred first, then most-recently-touched floats to
+ * the top automatically; names only break exact-activity ties. There is no
+ * manual ordering.
+ */
+export const sortProjects = (projects: Project[]): Project[] => {
+  const sorted = [...projects];
 
-  byName.sort((projectA, projectB) => {
+  sorted.sort((projectA, projectB) => {
     // Star order now comes from backend `projects.isStarred`.
     const aStarred = Boolean(projectA.isStarred);
     const bStarred = Boolean(projectB.isStarred);
@@ -153,14 +141,15 @@ export const sortProjects = (
       return 1;
     }
 
-    if (projectSortOrder === 'date') {
-      return getProjectLastActivity(projectB).getTime() - getProjectLastActivity(projectA).getTime();
+    const byActivity = getProjectLastActivity(projectB).getTime() - getProjectLastActivity(projectA).getTime();
+    if (byActivity !== 0) {
+      return byActivity;
     }
 
     return (projectA.displayName || projectA.projectId).localeCompare(projectB.displayName || projectB.projectId);
   });
 
-  return byName;
+  return sorted;
 };
 
 export const filterProjects = (projects: Project[], searchFilter: string): Project[] => {

@@ -8,7 +8,6 @@ import {
 import type {
   CodeEditorSettingsState,
   CursorPermissionsState,
-  ProjectSortOrder,
   SettingsMainTab,
 } from '../types/types';
 
@@ -25,7 +24,6 @@ export const SETTINGS_MAIN_TABS: SettingsMainTabMeta[] = [
   { id: 'about', label: 'About', keywords: 'about version info', icon: Info },
 ];
 
-export const DEFAULT_PROJECT_SORT_ORDER: ProjectSortOrder = 'name';
 export const DEFAULT_SAVE_STATUS = null;
 export const DEFAULT_CODE_EDITOR_SETTINGS: CodeEditorSettingsState = {
   wordWrap: false,

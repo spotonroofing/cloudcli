@@ -9,8 +9,6 @@ import type {
   ArchivedProjectListItem,
   ArchivedSessionListItem,
   DeleteProjectConfirmation,
-  MoveSessionTarget,
-  ProjectSortOrder,
   RecentConversationListItem,
   SidebarSearchMode,
   SessionDeleteConfirmation,
@@ -21,7 +19,6 @@ import {
   filterProjects,
   getAllSessions,
   readLegacyStarredProjectIds,
-  readProjectSortOrder,
   sortProjects,
 } from '../utils/utils';
 
@@ -152,7 +149,6 @@ export function useSidebarController({
   const [editingProjectError, setEditingProjectError] = useState<string | null>(null);
   const [initialSessionsLoaded, setInitialSessionsLoaded] = useState<Set<string>>(new Set());
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [projectSortOrder, setProjectSortOrder] = useState<ProjectSortOrder>('name');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingSession, setEditingSession] = useState<string | null>(null);
   const [editingSessionName, setEditingSessionName] = useState('');
@@ -186,6 +182,7 @@ export function useSidebarController({
   const [optimisticStarByProjectId, setOptimisticStarByProjectId] = useState<Map<string, boolean>>(new Map());
   const [loadingMoreProjects, setLoadingMoreProjects] = useState<Set<string>>(new Set());
   const searchSeqRef = useRef(0);
+  const archivedLoadedRef = useRef(false);
   const recentConversationsSeqRef = useRef(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const starToggleSequenceByProjectRef = useRef<Map<string, number>>(new Map());
@@ -257,38 +254,16 @@ export function useSidebarController({
   }, [projects, isLoading]);
 
   useEffect(() => {
-    const loadSortOrder = () => {
-      setProjectSortOrder(readProjectSortOrder());
-    };
-
-    loadSortOrder();
-
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'claude-settings') {
-        loadSortOrder();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    const interval = setInterval(() => {
-      if (document.hasFocus()) {
-        loadSortOrder();
-      }
-    }, 1000);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
     onRefreshRef.current = onRefresh;
   }, [onRefresh]);
 
   const fetchArchivedSessions = useCallback(async () => {
-    setIsArchivedSessionsLoading(true);
+    // The archive prefetches at mount and refreshes in the background after
+    // that; only the never-loaded state shows a loading treatment, so opening
+    // the Archive tab never flashes a skeleton over data that is already here.
+    if (!archivedLoadedRef.current) {
+      setIsArchivedSessionsLoading(true);
+    }
 
     try {
       const [archivedProjectsResponse, archivedSessionsResponse] = await Promise.all([
@@ -314,6 +289,7 @@ export function useSidebarController({
 
       setArchivedProjects(nextProjects);
       setArchivedSessions(nextStandaloneSessions);
+      archivedLoadedRef.current = true;
     } catch (error) {
       console.error('[Sidebar] Failed to load archived sessions:', error);
     } finally {
@@ -758,9 +734,11 @@ export function useSidebarController({
     });
   }, [optimisticStarByProjectId, projects]);
 
+  // Most-recently-touched project floats to top automatically (ui9 B5);
+  // there is no manual ordering.
   const sortedProjects = useMemo(
-    () => sortProjects(projectsWithResolvedStarState, projectSortOrder),
-    [projectSortOrder, projectsWithResolvedStarState],
+    () => sortProjects(projectsWithResolvedStarState),
+    [projectsWithResolvedStarState],
   );
 
   const runningProjects = useMemo(() => {
@@ -937,6 +915,7 @@ export function useSidebarController({
 
       if (response.ok) {
         onSessionDelete?.(sessionId);
+        reloadRecentConversations();
         await fetchArchivedSessions();
       } else {
         const errorText = await response.text();
@@ -950,7 +929,24 @@ export function useSidebarController({
       console.error('[Sidebar] Error deleting session:', error);
       alert(t('messages.deleteSessionError'));
     }
-  }, [fetchArchivedSessions, onSessionDelete, sessionDeleteConfirmation, t]);
+  }, [fetchArchivedSessions, onSessionDelete, reloadRecentConversations, sessionDeleteConfirmation, t]);
+
+  // Archive is its own direct action (ui9 B5): reversible from the Archive
+  // tab, so it needs no confirmation dialog.
+  const archiveSession = useCallback(async (sessionId: string) => {
+    try {
+      const response = await api.deleteSession(sessionId, false);
+      if (!response.ok) {
+        throw new Error(`Failed to archive session (${response.status})`);
+      }
+      onSessionDelete?.(sessionId);
+      reloadRecentConversations();
+      await fetchArchivedSessions();
+    } catch (error) {
+      console.error('[Sidebar] Error archiving session:', error);
+      alert(t('messages.deleteSessionError'));
+    }
+  }, [fetchArchivedSessions, onSessionDelete, reloadRecentConversations, t]);
 
   const requestProjectDelete = useCallback(
     (project: Project) => {
@@ -1105,6 +1101,7 @@ export function useSidebarController({
       try {
         const response = await api.renameSession(sessionId, trimmed);
         if (response.ok) {
+          reloadRecentConversations();
           await onRefresh();
         } else {
           console.error('[Sidebar] Failed to rename session:', response.status);
@@ -1118,32 +1115,27 @@ export function useSidebarController({
         setEditingSessionName('');
       }
     },
-    [onRefresh, t],
+    [onRefresh, reloadRecentConversations, t],
   );
 
-  // Attach-to-project: which chat the move dialog is open for, and the move
-  // itself. Only the app-owned assignment changes server-side, so a rescan
+  // Attach-to-project (ui9 B5: fired straight from the row menu's anchored
+  // drawer). Only the app-owned assignment changes server-side, so a rescan
   // can never revert the choice.
-  const [moveSessionTarget, setMoveSessionTarget] = useState<MoveSessionTarget | null>(null);
-
   const moveSessionToProject = useCallback(
-    async (projectPath: string | null) => {
-      if (!moveSessionTarget) {
-        return;
-      }
+    async (sessionId: string, projectPath: string | null) => {
       try {
-        const response = await api.assignSessionToProject(moveSessionTarget.sessionId, projectPath);
+        const response = await api.assignSessionToProject(sessionId, projectPath);
         if (!response.ok) {
           throw new Error(`Failed to move chat (${response.status})`);
         }
-        setMoveSessionTarget(null);
+        reloadRecentConversations();
         await refreshProjects();
       } catch (error) {
         console.error('[Sidebar] Error moving chat to project:', error);
         alert(t('messages.moveSessionError', 'Could not move the chat. Please try again.'));
       }
     },
-    [moveSessionTarget, refreshProjects, t],
+    [refreshProjects, reloadRecentConversations, t],
   );
 
   const collapseSidebar = useCallback(() => {
@@ -1162,7 +1154,6 @@ export function useSidebarController({
     editingName,
     initialSessionsLoaded,
     currentTime,
-    projectSortOrder,
     isRefreshing,
     editingSession,
     editingSessionName,
@@ -1184,9 +1175,8 @@ export function useSidebarController({
     isLoadingMoreRecentConversations,
     recentConversationsError,
     reloadRecentConversations,
-    moveSessionTarget,
-    setMoveSessionTarget,
     moveSessionToProject,
+    archiveSession,
     loadMoreRecentConversations,
     toggleProject,
     handleSessionClick,

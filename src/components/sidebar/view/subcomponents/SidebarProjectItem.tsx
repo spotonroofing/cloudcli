@@ -20,6 +20,8 @@ import SidebarProjectSessions from './SidebarProjectSessions';
 
 type SidebarProjectItemProps = {
   project: Project;
+  /** Move-to-project targets for the shared row menu's drawer. */
+  projects: Project[];
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
   isExpanded: boolean;
@@ -51,6 +53,7 @@ type SidebarProjectItemProps = {
   onSaveProjectName: (projectName: string) => void;
   onDeleteProject: (project: Project) => void;
   onSessionSelect: (session: SessionWithProvider, projectName: string) => void;
+  onArchiveSession: (sessionId: string) => void;
   onDeleteSession: (
     projectName: string,
     sessionId: string,
@@ -63,7 +66,7 @@ type SidebarProjectItemProps = {
   onNewSession: (project: Project) => void;
   onEditingSessionNameChange: (value: string) => void;
   onStartEditingSession: (sessionId: string, initialName: string) => void;
-  onMoveSession: (sessionId: string, sessionTitle: string) => void;
+  onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
   onCancelEditingSession: () => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
   t: TFunction;
@@ -93,24 +96,9 @@ export function ProjectIcon({ project, expanded }: { project: Project; expanded:
   );
 }
 
-/**
- * Static sibling of the bounce dot (ui8 phase 3): marks a project row as
- * holding open work while its chat rows can't carry the dot — the project
- * holding the open chat is collapsed, or the project is open as a workspace
- * row. Same size and seat as the bounce dot, slightly quieter ink.
- */
-function ProjectOpenIndicator() {
-  return (
-    <span
-      aria-hidden="true"
-      data-slot="project-open-indicator"
-      className="pointer-events-none absolute left-1 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-primary/70"
-    />
-  );
-}
-
 export default function SidebarProjectItem({
   project,
+  projects,
   selectedProject,
   selectedSession,
   isExpanded,
@@ -137,6 +125,7 @@ export default function SidebarProjectItem({
   onSaveProjectName,
   onDeleteProject,
   onSessionSelect,
+  onArchiveSession,
   onDeleteSession,
   onLoadMoreSessions,
   activeSessions,
@@ -146,7 +135,7 @@ export default function SidebarProjectItem({
   onNewSession,
   onEditingSessionNameChange,
   onStartEditingSession,
-  onMoveSession,
+  onMoveSessionToProject,
   onCancelEditingSession,
   onSaveEditingSession,
   t,
@@ -161,10 +150,11 @@ export default function SidebarProjectItem({
   // sessions runs; expanding hands the shimmer to the running chat rows —
   // every hand-off is the engine's fade, never a hard cutoff.
   const beam = useBeamPresence(runningSessionCount > 0 && !isExpanded);
-  // The row-level open indicator stands in for the bounce dot whenever the
-  // dot's destination row isn't rendered: the open chat's project is
-  // collapsed, or the project is open as a workspace row.
-  const showOpenIndicator = (isSelected && Boolean(selectedSession) && !isExpanded) || isInWorkspace;
+  // A subtle row highlight stands in for the bounce dot whenever the dot's
+  // destination row isn't rendered (ui9 B5 dot rules: never a dot on a
+  // collapsed/closed project row): the open chat's project is collapsed, or
+  // the project is open as a workspace row.
+  const showOpenHighlight = (isSelected && Boolean(selectedSession) && !isExpanded) || isInWorkspace;
 
   const toggleProject = () => onToggleProject(project.projectId);
 
@@ -195,14 +185,15 @@ export default function SidebarProjectItem({
                 toggleProject();
               }
             }}
+            data-open-highlight={showOpenHighlight || undefined}
             className={cn(
               'group/project relative flex min-h-11 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2 text-sm outline-none',
               'text-muted-foreground transition-colors active:text-foreground',
               isSelected && 'text-foreground',
+              showOpenHighlight && 'bg-accent/50 text-foreground',
             )}
           >
             {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
-            {showOpenIndicator && <ProjectOpenIndicator />}
             <ProjectIcon project={project} expanded={isExpanded} />
 
             <span className="flex min-w-0 flex-1 items-center">
@@ -267,15 +258,16 @@ export default function SidebarProjectItem({
           }}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
+          data-open-highlight={showOpenHighlight || undefined}
           className={cn(
             'group/project relative hidden min-h-9 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2 text-sm outline-none md:flex',
             'text-muted-foreground transition-colors hover:text-foreground',
             'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             isSelected && 'text-foreground',
+            showOpenHighlight && 'bg-accent/50 text-foreground',
           )}
         >
           {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
-          {showOpenIndicator && <ProjectOpenIndicator />}
           <ProjectIcon project={project} expanded={isExpanded} />
 
           <span className="flex min-w-0 flex-1 items-center">
@@ -349,6 +341,7 @@ export default function SidebarProjectItem({
 
       <SidebarProjectSessions
         project={project}
+        projects={projects}
         isExpanded={isExpanded}
         sessions={sessions}
         selectedSession={selectedSession}
@@ -362,11 +355,12 @@ export default function SidebarProjectItem({
         editingSessionName={editingSessionName}
         onEditingSessionNameChange={onEditingSessionNameChange}
         onStartEditingSession={onStartEditingSession}
-        onMoveSession={onMoveSession}
+        onMoveSessionToProject={onMoveSessionToProject}
         onCancelEditingSession={onCancelEditingSession}
         onSaveEditingSession={onSaveEditingSession}
         onProjectSelect={onProjectSelect}
         onSessionSelect={onSessionSelect}
+        onArchiveSession={onArchiveSession}
         onDeleteSession={onDeleteSession}
         onLoadMoreSessions={onLoadMoreSessions}
         onNewSession={onNewSession}

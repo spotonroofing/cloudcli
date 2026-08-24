@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 
 export type SettingsMainTab = 'appearance' | 'notifications' | 'about';
-export type ProjectSortOrder = 'name' | 'date';
 export type SaveStatus = 'success' | 'error' | null;
 export type CodexPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
 
@@ -46,7 +45,7 @@ export type CodeEditorSettingsState = {
 };
 
 export type SettingsStoragePayload = {
-  claude: ClaudePermissionsState & { projectSortOrder: ProjectSortOrder; lastUpdated: string };
+  claude: ClaudePermissionsState & { lastUpdated: string };
   cursor: CursorPermissionsState & { lastUpdated: string };
   codex: { permissionMode: CodexPermissionMode; lastUpdated: string };
 };

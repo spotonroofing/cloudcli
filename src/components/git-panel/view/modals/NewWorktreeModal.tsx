@@ -1,5 +1,6 @@
 import { GitFork, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { Dialog, DialogContent, DialogTitle } from '../../../../shared/view/ui';
 
 type NewWorktreeModalProps = {
   isOpen: boolean;
@@ -82,14 +83,14 @@ export default function NewWorktreeModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div
-        className="relative w-full max-w-md overflow-hidden rounded-lg border border-border bg-card shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="new-worktree-title"
-      >
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="max-w-md overflow-hidden bg-card">
+        <DialogTitle>New Worktree</DialogTitle>
         <div className="p-6">
           <h3 id="new-worktree-title" className="mb-1 text-lg font-semibold text-foreground">
             New Worktree
@@ -194,7 +195,7 @@ export default function NewWorktreeModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

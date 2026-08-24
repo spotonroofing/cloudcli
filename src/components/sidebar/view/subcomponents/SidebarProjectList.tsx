@@ -52,6 +52,7 @@ export type SidebarProjectListProps = {
   onSaveProjectName: (projectName: string) => void;
   onDeleteProject: (project: Project) => void;
   onSessionSelect: (session: SessionWithProvider, projectName: string) => void;
+  onArchiveSession: (sessionId: string) => void;
   onDeleteSession: (
     projectName: string,
     sessionId: string,
@@ -61,7 +62,7 @@ export type SidebarProjectListProps = {
   onNewSession: (project: Project) => void;
   onEditingSessionNameChange: (value: string) => void;
   onStartEditingSession: (sessionId: string, initialName: string) => void;
-  onMoveSession: (sessionId: string, sessionTitle: string) => void;
+  onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
   onCancelEditingSession: () => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
   t: TFunction;
@@ -105,11 +106,12 @@ export default function SidebarProjectList({
   onSaveProjectName,
   onDeleteProject,
   onSessionSelect,
+  onArchiveSession,
   onDeleteSession,
   onNewSession,
   onEditingSessionNameChange,
   onStartEditingSession,
-  onMoveSession,
+  onMoveSessionToProject,
   onCancelEditingSession,
   onSaveEditingSession,
   t,
@@ -147,6 +149,7 @@ export default function SidebarProjectList({
             <SidebarProjectItem
               key={project.projectId}
               project={project}
+              projects={projects}
               selectedProject={selectedProject}
               selectedSession={selectedSession}
               isExpanded={forceExpanded || expandedProjects.has(project.projectId)}
@@ -172,6 +175,7 @@ export default function SidebarProjectList({
               onSaveProjectName={onSaveProjectName}
               onDeleteProject={onDeleteProject}
               onSessionSelect={onSessionSelect}
+              onArchiveSession={onArchiveSession}
               onDeleteSession={onDeleteSession}
               onLoadMoreSessions={onLoadMoreSessions}
               activeSessions={activeSessions}
@@ -188,7 +192,7 @@ export default function SidebarProjectList({
               onNewSession={onNewSession}
               onEditingSessionNameChange={onEditingSessionNameChange}
               onStartEditingSession={onStartEditingSession}
-              onMoveSession={onMoveSession}
+              onMoveSessionToProject={onMoveSessionToProject}
               onCancelEditingSession={onCancelEditingSession}
               onSaveEditingSession={onSaveEditingSession}
               t={t}

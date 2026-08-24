@@ -25,12 +25,16 @@ type DragState = {
   boundaryIndex: number;
   /** Snap-guide position in px, relative to the workspace container. */
   guideOffset: number;
+  /** Rows mode only: grip drag held at a side edge converts to columns (ui9 B5). */
+  edge: 'left' | 'right' | null;
 };
 
 /** Edge drop zone while a sidebar project row is dragged over the view. */
 type DropZone = 'left' | 'right' | 'bottom';
 
 const MIN_UNIT_PX = 160;
+/** Width of the rows-mode side strips that arm the convert-to-columns drop. */
+const EDGE_CONVERT_PX = 56;
 
 /**
  * The desktop app surface around MainContent (phase 7): with one open project
@@ -95,6 +99,22 @@ export default function WorkspaceView({
       return;
     }
     const { container, rects } = measured;
+
+    // Rows mode: holding the grip at the container's left or right edge stops
+    // being a reorder and becomes a convert-to-columns drop (ui9 B5).
+    if (!horizontal) {
+      const containerRect = container.getBoundingClientRect();
+      const edge = clientX <= containerRect.left + EDGE_CONVERT_PX
+        ? 'left' as const
+        : clientX >= containerRect.right - EDGE_CONVERT_PX
+          ? 'right' as const
+          : null;
+      if (edge) {
+        setDrag({ projectId, boundaryIndex: 0, guideOffset: 0, edge });
+        return;
+      }
+    }
+
     const pointer = horizontal ? clientX : clientY;
     const start = (rect: DOMRect) => (horizontal ? rect.left : rect.top);
     const end = (rect: DOMRect) => (horizontal ? rect.right : rect.bottom);
@@ -118,7 +138,7 @@ export default function WorkspaceView({
 
     const containerRect = container.getBoundingClientRect();
     const guideOffset = boundaries[boundaryIndex] - (horizontal ? containerRect.left : containerRect.top);
-    setDrag({ projectId, boundaryIndex, guideOffset });
+    setDrag({ projectId, boundaryIndex, guideOffset, edge: null });
   };
 
   const makeGripHandlers = (projectId: string): WorkspaceGripHandlers => ({
@@ -135,7 +155,15 @@ export default function WorkspaceView({
     },
     onPointerUp: () => {
       if (drag?.projectId === projectId) {
-        workspace.moveProject(drag.projectId, drag.boundaryIndex);
+        if (drag.edge) {
+          workspace.openProjectAt(
+            drag.projectId,
+            drag.edge === 'left' ? 0 : workspace.order.length,
+            'columns',
+          );
+        } else {
+          workspace.moveProject(drag.projectId, drag.boundaryIndex);
+        }
       }
       setDrag(null);
     },
@@ -391,7 +419,7 @@ export default function WorkspaceView({
           </div>
         </Fragment>
       ))}
-      {drag && (
+      {drag && !drag.edge && (
         <div
           data-workspace-snap-guide
           className="pointer-events-none absolute z-30 rounded-sm bg-primary shadow-[0_0_8px_2px] shadow-primary/40"
@@ -401,6 +429,28 @@ export default function WorkspaceView({
               : { left: 4, right: 4, top: drag.guideOffset - 1, height: 2 }
           }
         />
+      )}
+      {drag?.edge && (
+        <>
+          <div
+            data-workspace-edge-convert={drag.edge}
+            className="pointer-events-none absolute z-30 bg-primary/[0.07]"
+            style={
+              drag.edge === 'left'
+                ? { top: 0, bottom: 0, left: 0, width: EDGE_CONVERT_PX }
+                : { top: 0, bottom: 0, right: 0, width: EDGE_CONVERT_PX }
+            }
+          />
+          <div
+            data-workspace-snap-guide
+            className="pointer-events-none absolute z-30 rounded-sm bg-primary shadow-[0_0_8px_2px] shadow-primary/40"
+            style={
+              drag.edge === 'left'
+                ? { top: 4, bottom: 4, left: 4, width: 2 }
+                : { top: 4, bottom: 4, right: 4, width: 2 }
+            }
+          />
+        </>
       )}
     </div>
     {dropOverlay}

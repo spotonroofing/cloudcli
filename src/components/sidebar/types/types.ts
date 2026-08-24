@@ -1,7 +1,6 @@
 import type { LoadingProgress, Project, ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionActivityMap } from '../../../hooks/useSessionProtection';
 
-export type ProjectSortOrder = 'name' | 'date';
 export type SidebarSearchMode = 'projects' | 'conversations' | 'running' | 'archived';
 export type ArchivedProjectListItem = Project & { isArchived: true };
 
@@ -28,12 +27,6 @@ export type RecentConversationListItem = Pick<
 > & {
   /** Null for standalone (project-less) chats hosted in the scratch repo. */
   projectDisplayName: string | null;
-};
-
-/** Chat picked for the attach-to-project dialog. */
-export type MoveSessionTarget = {
-  sessionId: string;
-  sessionTitle: string;
 };
 
 export type DeleteProjectConfirmation = {

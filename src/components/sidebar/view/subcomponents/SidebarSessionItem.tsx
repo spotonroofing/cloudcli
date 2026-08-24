@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Edit2, FolderInput, Loader2, MoreHorizontal, Trash2, X } from 'lucide-react';
+import { Archive, Check, Copy, Edit2, FolderInput, Loader2, MoreHorizontal, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { ActionMenu, Badge, Dialog, DialogContent, DialogTitle, Tooltip } from '../../../../shared/view/ui';
-import { BorderBeamOverlay, MarqueeLabel, useBeamPresence } from '../../../../shared/view/beui';
+import { Dialog, DialogContent, DialogTitle, Tooltip } from '../../../../shared/view/ui';
+import { BorderBeamOverlay, useBeamPresence } from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import { api } from '../../../../utils/api';
@@ -12,8 +12,12 @@ import type { SessionWithProvider } from '../../types/types';
 import { createSessionViewModel, formatCompactAge } from '../../utils/utils';
 import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
 
+import ChatRow from './ChatRow';
+
 type SidebarSessionItemProps = {
   project: Project;
+  /** Move-to-project targets for the shared row menu's drawer. */
+  projects: Project[];
   session: SessionWithProvider;
   selectedSession: ProjectSession | null;
   isProcessing: boolean;
@@ -23,11 +27,12 @@ type SidebarSessionItemProps = {
   editingSessionName: string;
   onEditingSessionNameChange: (value: string) => void;
   onStartEditingSession: (sessionId: string, initialName: string) => void;
-  onMoveSession: (sessionId: string, sessionTitle: string) => void;
+  onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
   onCancelEditingSession: () => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
   onProjectSelect: (project: Project) => void;
   onSessionSelect: (session: SessionWithProvider, projectName: string) => void;
+  onArchiveSession: (sessionId: string) => void;
   onDeleteSession: (
     projectName: string,
     sessionId: string,
@@ -47,6 +52,7 @@ const PROVIDER_LABELS: Record<LLMProvider, string> = {
 type CopyState = 'loading' | 'idle' | 'copying' | 'copied' | 'error';
 export default function SidebarSessionItem({
   project,
+  projects,
   session,
   selectedSession,
   isProcessing,
@@ -56,11 +62,12 @@ export default function SidebarSessionItem({
   editingSessionName,
   onEditingSessionNameChange,
   onStartEditingSession,
-  onMoveSession,
+  onMoveSessionToProject,
   onCancelEditingSession,
   onSaveEditingSession,
   onProjectSelect,
   onSessionSelect,
+  onArchiveSession,
   onDeleteSession,
   t,
 }: SidebarSessionItemProps) {
@@ -68,36 +75,24 @@ export default function SidebarSessionItem({
   const isSelected = selectedSession?.id === session.id;
   const isEditing = editingSession === session.id;
   const compactSessionAge = formatCompactAge(sessionView.sessionTime, currentTime);
-  const editingContainerRef = useRef<HTMLDivElement>(null);
   const [isMobileOptionsOpen, setIsMobileOptionsOpen] = useState(false);
   const [copyState, setCopyState] = useState<CopyState>('idle');
   const [providerSessionId, setProviderSessionId] = useState<string | null>(null);
   const providerIdRequestRef = useRef(0);
   const showAttentionIndicator = needsAttention && !isSelected;
   const providerLabel = PROVIDER_LABELS[session.__provider];
-  const [rowHovered, setRowHovered] = useState(false);
   // Activity shimmer: a mid-turn chat row carries the border beam (it replaced
   // the old green pulse dot); appearance and disappearance are engine fades.
   const beam = useBeamPresence(isProcessing);
 
-  // While editing, dismiss only when the user clicks outside the inline rename panel
-  // (matches Escape / cancel-button behaviour). The mobile rename lives inside the
-  // bottom sheet, which owns its own dismissal, so the listener stays off there.
+  // The mobile sheet's rename lives inside the bottom sheet, which owns its
+  // own dismissal; closing the sheet cancels an in-flight rename.
   useEffect(() => {
-    if (!isEditing || isMobileOptionsOpen) {
-      return;
+    if (!isMobileOptionsOpen && isEditing) {
+      onCancelEditingSession();
     }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const container = editingContainerRef.current;
-      if (container && !container.contains(event.target as Node)) {
-        onCancelEditingSession();
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [isEditing, isMobileOptionsOpen, onCancelEditingSession]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobileOptionsOpen]);
 
   // Sessions are owned by a project identified by `projectId` (DB primary key)
   // after the projectName → projectId migration.
@@ -141,20 +136,13 @@ export default function SidebarSessionItem({
     setProviderSessionId(null);
   };
 
-  const setOptionsOpen = (open: boolean) => {
+  const setMobileOptionsOpen = (open: boolean) => {
+    setIsMobileOptionsOpen(open);
     if (open) {
       setProviderSessionId(null);
       void loadProviderSessionId();
     } else {
       resetCopyState();
-    }
-  };
-
-  const setMobileOptionsOpen = (open: boolean) => {
-    setIsMobileOptionsOpen(open);
-    setOptionsOpen(open);
-    if (!open && isEditing) {
-      onCancelEditingSession();
     }
   };
 
@@ -216,10 +204,10 @@ export default function SidebarSessionItem({
       )}
 
       <div className="md:hidden">
-        {/* Mobile session row: the desktop beUI row anatomy (borderless
-            min-h rounded row, provider tile, marquee label, count badge, age)
-            with touch adaptations — taller row, an always-visible options
-            button with a 44px hit area opening the bottom sheet. */}
+        {/* Mobile session row: the unified chat-row anatomy (title over
+            relative time bottom-left) with touch adaptations — taller row and
+            an always-visible options button with a 44px hit area opening the
+            bottom sheet. */}
         <div
           role="button"
           tabIndex={0}
@@ -232,26 +220,25 @@ export default function SidebarSessionItem({
             }
           }}
           className={cn(
-            'relative flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-[13px] font-normal leading-4 outline-none',
+            'relative flex min-h-11 w-full min-w-0 items-center gap-2 rounded-lg py-2 pl-4 pr-3 text-left outline-none',
             'text-muted-foreground transition-colors active:text-foreground',
             isSelected && 'text-foreground',
           )}
           onClick={selectMobileSession}
         >
           {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
-          <MarqueeLabel active={false}>{sessionView.sessionName}</MarqueeLabel>
-          {sessionView.messageCount > 0 && (
-            <Badge variant="secondary" className="flex-shrink-0 px-1 py-0 text-[10px]">
-              {sessionView.messageCount}
-            </Badge>
-          )}
-          {isProcessing ? (
-            <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-normal leading-4">{sessionView.sessionName}</span>
+            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground">
+              {isProcessing ? (
+                <Loader2 className="h-2.5 w-2.5 flex-shrink-0 animate-spin" />
+              ) : compactSessionAge && (
+                <time className="flex-shrink-0 tabular-nums" dateTime={sessionView.sessionTime || undefined}>
+                  {compactSessionAge}
+                </time>
+              )}
             </span>
-          ) : compactSessionAge && (
-            <span className="flex-shrink-0 text-[11px] tabular-nums text-muted-foreground">{compactSessionAge}</span>
-          )}
+          </span>
           <button
             type="button"
             aria-label={`Session options for ${sessionView.sessionName}`}
@@ -343,17 +330,15 @@ export default function SidebarSessionItem({
                   <span className="text-sm font-medium">Rename session</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
+                <MobileMoveToProject
+                  projects={projects}
+                  currentProjectId={project.projectId}
+                  currentProjectName={project.displayName}
+                  onMove={(projectPath) => {
                     setMobileOptionsOpen(false);
-                    onMoveSession(session.id, sessionView.sessionName);
+                    onMoveSessionToProject(session.id, projectPath);
                   }}
-                  className="flex min-h-12 w-full items-center gap-3 rounded-lg border border-border bg-muted/35 px-4 py-3 text-left text-foreground transition-colors active:bg-muted"
-                >
-                  <FolderInput className="h-5 w-5 flex-shrink-0" />
-                  <span className="text-sm font-medium">Move to project</span>
-                </button>
+                />
 
                 <button
                   type="button"
@@ -382,17 +367,30 @@ export default function SidebarSessionItem({
                 </button>
 
                 {!isProcessing && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMobileOptionsOpen(false);
-                      requestDeleteSession();
-                    }}
-                    className="flex min-h-12 w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-destructive transition-colors active:bg-destructive/10"
-                  >
-                    <Trash2 className="h-5 w-5 flex-shrink-0" />
-                    <span className="text-sm font-medium">Archive or delete session</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileOptionsOpen(false);
+                        onArchiveSession(session.id);
+                      }}
+                      className="flex min-h-12 w-full items-center gap-3 rounded-lg border border-border bg-muted/35 px-4 py-3 text-left text-foreground transition-colors active:bg-muted"
+                    >
+                      <Archive className="h-5 w-5 flex-shrink-0" />
+                      <span className="text-sm font-medium">Archive chat</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileOptionsOpen(false);
+                        requestDeleteSession();
+                      }}
+                      className="flex min-h-12 w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-destructive transition-colors active:bg-destructive/10"
+                    >
+                      <Trash2 className="h-5 w-5 flex-shrink-0" />
+                      <span className="text-sm font-medium">Delete chat</span>
+                    </button>
+                  </>
                 )}
               </div>
             )}
@@ -411,161 +409,92 @@ export default function SidebarSessionItem({
       </div>
 
       <div className="hidden md:block">
-        {/* beUI ai-sidebar row anatomy: min-h-9 borderless rounded row, icon
-            tile, overflow-aware marquee label; `data-bounce-key` is the
-            bounce-dot destination when this row is the selected session. */}
-        <a
+        {/* Unified chat-row anatomy (ui9 B5): identical to the Chats tab —
+            title over relative time bottom-left, arrow-to-dots trailing
+            control, one shared menu. */}
+        <ChatRow
           href={`/session/${session.id}`}
-          data-bounce-key={session.id}
+          bounceKey={String(session.id)}
           title={sessionView.sessionName}
-          onMouseEnter={() => setRowHovered(true)}
-          onMouseLeave={() => setRowHovered(false)}
-          // Selection carries no filled background — the bounce dot is the one
-          // honest indicator of the open chat; hover is a quiet ink shift.
-          className={cn(
-            'relative flex min-h-9 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 pr-11 text-left text-[13px] font-normal leading-4 outline-none',
-            'text-muted-foreground transition-colors hover:text-foreground',
-            'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-            isSelected && 'text-foreground',
-          )}
-          // Left-click keeps in-app navigation; Ctrl/Cmd/middle-click and the
-          // native right-click menu use the href to open a new tab/window.
-          onClick={(event) => {
-            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-            event.preventDefault();
-            onSessionSelect(session, project.projectId);
+          timestamp={sessionView.sessionTime || null}
+          age={compactSessionAge}
+          isSelected={isSelected}
+          onSelect={() => onSessionSelect(session, project.projectId)}
+          overlay={beam.mounted ? <BorderBeamOverlay {...beam.beamProps} /> : null}
+          onRename={(name) => onSaveEditingSession(project.projectId, session.id, name, session.__provider)}
+          menu={{
+            sessionId: session.id,
+            sessionTitle: sessionView.sessionName,
+            providerLabel,
+            projects,
+            currentProjectId: project.projectId,
+            currentProjectName: project.displayName,
+            onMoveToProject: (projectPath) => onMoveSessionToProject(session.id, projectPath),
+            onArchive: () => onArchiveSession(session.id),
+            onDelete: requestDeleteSession,
+            isProcessing,
           }}
-        >
-          {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
-          <MarqueeLabel active={rowHovered}>{sessionView.sessionName}</MarqueeLabel>
-          {sessionView.messageCount > 0 && (
-            <Badge variant="secondary" className="flex-shrink-0 px-1 py-0 text-[10px]">
-              {sessionView.messageCount}
-            </Badge>
-          )}
-          {isProcessing ? (
-            <span
-              className={cn(
-                'flex-shrink-0 transition-opacity duration-200',
-                isEditing ? 'opacity-0' : 'group-hover:opacity-0',
-              )}
-            >
-              <Tooltip content={t('tooltips.processingSessionIndicator', 'Processing session')} position="top">
-                <span className="flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                </span>
-              </Tooltip>
-            </span>
-          ) : compactSessionAge && (
-            <span
-              className={cn(
-                'flex-shrink-0 text-[11px] tabular-nums text-muted-foreground transition-opacity duration-200',
-                isEditing ? 'opacity-0' : 'group-hover:opacity-0',
-              )}
-            >
-              {compactSessionAge}
-            </span>
-          )}
-        </a>
-
-        <div
-          ref={editingContainerRef}
-          className="absolute right-2 top-1/2 flex -translate-y-1/2 transform items-center gap-1 opacity-100 transition-all duration-200"
-        >
-            {isEditing ? (
-              <>
-                <input
-                  type="text"
-                  value={editingSessionName}
-                  onChange={(event) => onEditingSessionNameChange(event.target.value)}
-                  onKeyDown={(event) => {
-                    event.stopPropagation();
-                    if (event.key === 'Enter') {
-                      saveEditedSession();
-                    } else if (event.key === 'Escape') {
-                      onCancelEditingSession();
-                    }
-                  }}
-                  onClick={(event) => event.stopPropagation()}
-                  className="w-32 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                  autoFocus
-                />
-                <button
-                  className="flex h-6 w-6 items-center justify-center rounded bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    saveEditedSession();
-                  }}
-                  title={t('tooltips.save')}
-                >
-                  <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
-                </button>
-                <button
-                  className="flex h-6 w-6 items-center justify-center rounded bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onCancelEditingSession();
-                  }}
-                  title={t('tooltips.cancel')}
-                >
-                  <X className="h-3 w-3 text-gray-600 dark:text-gray-400" />
-                </button>
-              </>
-            ) : (
-              <ActionMenu
-                label="Session options"
-                ariaLabel={`Session options for ${sessionView.sessionName}`}
-                icon={MoreHorizontal}
-                iconOnly
-                portal
-                variant="ghost"
-                size="icon"
-                onOpenChange={setOptionsOpen}
-                triggerClassName="h-7 w-7 text-muted-foreground opacity-70 hover:bg-muted hover:opacity-100"
-                menuClassName="w-[260px] rounded-lg p-1.5 shadow-xl"
-                header={(
-                  <div className="mb-1 border-b border-border px-3 py-2">
-                    <p className="truncate text-xs font-medium text-foreground" title={sessionView.sessionName}>
-                      {sessionView.sessionName}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{providerLabel} session</p>
-                  </div>
-                )}
-                items={[
-                  {
-                    key: 'rename',
-                    label: 'Rename session',
-                    icon: Edit2,
-                    onSelect: () => onStartEditingSession(session.id, sessionView.sessionName),
-                  },
-                  {
-                    key: 'move',
-                    label: 'Move to project',
-                    icon: FolderInput,
-                    onSelect: () => onMoveSession(session.id, sessionView.sessionName),
-                  },
-                  {
-                    key: 'copy',
-                    label: copyLabel,
-                    description: copyState === 'error' ? 'Click to try again.' : undefined,
-                    icon: CopyStateIcon,
-                    loading: isCopyPending,
-                    closeOnSelect: false,
-                    onSelect: handleCopyAction,
-                  },
-                  ...(!isProcessing ? [{
-                    key: 'delete',
-                    label: 'Archive or delete session',
-                    icon: Trash2,
-                    isDanger: true,
-                    showDividerBefore: true,
-                    onSelect: requestDeleteSession,
-                  }] : []),
-                ]}
-              />
-            )}
-          </div>
+        />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Mobile counterpart of the desktop move drawer: the same project list,
+ * expanding downward inside the bottom sheet, with "Remove from <project>"
+ * standing in for the standalone option when the chat lives in a project.
+ */
+function MobileMoveToProject({
+  projects,
+  currentProjectId,
+  currentProjectName,
+  onMove,
+}: {
+  projects: Project[];
+  currentProjectId: string | null;
+  currentProjectName: string | null;
+  onMove: (projectPath: string | null) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-muted/35">
+      <button
+        type="button"
+        onClick={() => setExpanded((previous) => !previous)}
+        aria-expanded={expanded}
+        className="flex min-h-12 w-full items-center gap-3 px-4 py-3 text-left text-foreground transition-colors active:bg-muted"
+      >
+        <FolderInput className="h-5 w-5 flex-shrink-0" />
+        <span className="text-sm font-medium">Move to project</span>
+      </button>
+      {expanded && (
+        <div className="max-h-56 space-y-0.5 overflow-y-auto border-t border-border/60 p-1.5">
+          {currentProjectId ? (
+            <button
+              type="button"
+              className="flex min-h-11 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors active:bg-muted"
+              onClick={() => onMove(null)}
+            >
+              <X className="h-4 w-4 flex-shrink-0" />
+              Remove from {currentProjectName ?? 'project'}
+            </button>
+          ) : null}
+          {projects
+            .filter((candidate) => candidate.projectId !== currentProjectId)
+            .map((candidate) => (
+              <button
+                key={candidate.projectId}
+                type="button"
+                className="flex min-h-11 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors active:bg-muted"
+                onClick={() => onMove(candidate.fullPath || candidate.path || '')}
+              >
+                <span className="truncate">{candidate.displayName || candidate.projectId}</span>
+              </button>
+            ))}
+        </div>
+      )}
     </div>
   );
 }

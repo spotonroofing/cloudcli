@@ -13,6 +13,9 @@ import { cn } from '../../../lib/utils';
 
 const DOT_SIZE = 6;
 
+/** Fade used when the dot's destination row leaves or re-enters the layout. */
+const FADE = { duration: 0.15, ease: 'easeOut' } as const;
+
 const BOUNCE_SPRING = {
   type: 'spring',
   stiffness: 280,
@@ -76,31 +79,38 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
     const destinationY = measure(key);
     if (destinationY === null) {
       // Destination row left the layout (collapsed group, filtered list):
-      // hide rather than hover stale; the next resize with the row back
-      // re-seats the dot.
+      // fade out rather than hover stale or vanish in a hard cut; the next
+      // resize with the row back re-seats the dot.
       animationRef.current?.stop();
-      opacity.set(0);
+      animate(opacity, 0, FADE);
       hasPositionRef.current = false;
       return;
     }
     animationRef.current?.stop();
-    x.set(0);
-    y.set(destinationY);
-    opacity.set(1);
+    if (!hasPositionRef.current) {
+      // Reappearing (project re-expanded): seat silently, then fade in.
+      x.set(0);
+      y.set(destinationY);
+      animate(opacity, 1, FADE);
+    } else {
+      x.set(0);
+      y.set(destinationY);
+      opacity.set(1);
+    }
     hasPositionRef.current = true;
   }, [measure, opacity, x, y]);
 
   useLayoutEffect(() => {
     if (!activeKey) {
       animationRef.current?.stop();
-      opacity.set(0);
+      animate(opacity, 0, FADE);
       hasPositionRef.current = false;
       return;
     }
 
     const destinationY = measure(activeKey);
     if (destinationY === null) {
-      opacity.set(0);
+      animate(opacity, 0, FADE);
       hasPositionRef.current = false;
       return;
     }

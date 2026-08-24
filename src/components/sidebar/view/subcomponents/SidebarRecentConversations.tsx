@@ -1,14 +1,21 @@
-import { ChevronRight, FolderInput, MessageSquare, Plus } from 'lucide-react';
+import { MessageSquare, Plus } from 'lucide-react';
 import { useRef } from 'react';
-import type { MouseEvent } from 'react';
 import type { TFunction } from 'i18next';
 
 import { Button } from '../../../../shared/view/ui';
 import { BounceIndicator } from '../../../../shared/view/beui';
-import { cn } from '../../../../lib/utils';
-import type { ProjectSession } from '../../../../types/app';
+import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { RecentConversationListItem } from '../../types/types';
 import { formatCompactAge } from '../../utils/utils';
+
+import ChatRow from './ChatRow';
+
+const PROVIDER_LABELS: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  cursor: 'Cursor',
+  opencode: 'OpenCode',
+};
 
 type SidebarRecentConversationsProps = {
   conversations: RecentConversationListItem[];
@@ -19,6 +26,8 @@ type SidebarRecentConversationsProps = {
   hasError: boolean;
   selectedSession: ProjectSession | null;
   currentTime: Date;
+  /** Move-to-project targets for the shared row menu's drawer. */
+  projects: Project[];
   onConversationSelect: (
     projectId: string | null,
     sessionId: string,
@@ -26,7 +35,15 @@ type SidebarRecentConversationsProps = {
   ) => void;
   onLoadMore: () => void;
   onRetry: () => void;
-  onMoveConversation: (sessionId: string, sessionTitle: string) => void;
+  onRenameConversation: (sessionId: string, name: string) => void;
+  onMoveConversationToProject: (sessionId: string, projectPath: string | null) => void;
+  onArchiveConversation: (sessionId: string) => void;
+  onDeleteConversation: (
+    projectId: string | null,
+    sessionId: string,
+    sessionTitle: string,
+    provider: LLMProvider,
+  ) => void;
   onNewStandaloneChat: () => void;
   t: TFunction;
 };
@@ -55,10 +72,14 @@ export default function SidebarRecentConversations({
   hasError,
   selectedSession,
   currentTime,
+  projects,
   onConversationSelect,
   onLoadMore,
   onRetry,
-  onMoveConversation,
+  onRenameConversation,
+  onMoveConversationToProject,
+  onArchiveConversation,
+  onDeleteConversation,
   onNewStandaloneChat,
   t,
 }: SidebarRecentConversationsProps) {
@@ -130,65 +151,43 @@ export default function SidebarRecentConversations({
         {conversations.map((conversation) => {
           const isSelected = String(selectedSession?.id ?? '') === conversation.sessionId;
           const age = formatCompactAge(conversation.lastActivity, currentTime);
-
-          const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-              return;
-            }
-            event.preventDefault();
-            onConversationSelect(
-              conversation.projectId,
-              conversation.sessionId,
-              conversation.provider,
-            );
-          };
+          const provider = (conversation.provider || 'claude') as LLMProvider;
 
           return (
-            <a
+            <ChatRow
               key={conversation.sessionId}
               href={`/session/${conversation.sessionId}`}
-              onClick={handleClick}
-              data-testid="recent-conversation-row"
-              data-bounce-key={conversation.sessionId}
-              className={cn(
-                'group relative flex min-w-0 items-center gap-2 rounded-lg py-2 pl-4 pr-3 text-left transition-colors',
-                isSelected ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+              bounceKey={conversation.sessionId}
+              dataTestId="recent-conversation-row"
+              title={conversation.sessionTitle}
+              subtitle={conversation.projectDisplayName ?? t('standalone.noProject', 'No project')}
+              subtitleItalic={!conversation.projectDisplayName}
+              timestamp={conversation.lastActivity}
+              age={age}
+              isSelected={isSelected}
+              onSelect={() => onConversationSelect(
+                conversation.projectId,
+                conversation.sessionId,
+                conversation.provider,
               )}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-normal leading-4">
-                  {conversation.sessionTitle}
-                </span>
-                <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground">
-                  <span className={cn('truncate', !conversation.projectDisplayName && 'italic text-muted-foreground/70')}>
-                    {conversation.projectDisplayName ?? t('standalone.noProject', 'No project')}
-                  </span>
-                  {age && (
-                    <>
-                      <span className="flex-shrink-0 text-muted-foreground/40">·</span>
-                      <time className="flex-shrink-0 tabular-nums" dateTime={conversation.lastActivity ?? undefined}>
-                        {age}
-                      </time>
-                    </>
-                  )}
-                </span>
-              </span>
-
-              <button
-                type="button"
-                className="touch-hit relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground md:hidden md:group-hover:flex"
-                title={t('moveSession.title', 'Move chat to project')}
-                aria-label={t('moveSession.title', 'Move chat to project')}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onMoveConversation(conversation.sessionId, conversation.sessionTitle);
-                }}
-              >
-                <FolderInput className="h-3.5 w-3.5" />
-              </button>
-              <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
-            </a>
+              onRename={(name) => onRenameConversation(conversation.sessionId, name)}
+              menu={{
+                sessionId: conversation.sessionId,
+                sessionTitle: conversation.sessionTitle,
+                providerLabel: PROVIDER_LABELS[provider] ?? 'Claude',
+                projects,
+                currentProjectId: conversation.projectId,
+                currentProjectName: conversation.projectDisplayName,
+                onMoveToProject: (projectPath) => onMoveConversationToProject(conversation.sessionId, projectPath),
+                onArchive: () => onArchiveConversation(conversation.sessionId),
+                onDelete: () => onDeleteConversation(
+                  conversation.projectId,
+                  conversation.sessionId,
+                  conversation.sessionTitle,
+                  provider,
+                ),
+              }}
+            />
           );
         })}
       </div>

@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../../shared/view/beui/BeuiSelect';
-import type { CodeEditorSettingsState, ProjectSortOrder } from '../../types/types';
+import type { CodeEditorSettingsState } from '../../types/types';
 import LanguageSelector from '../../../../shared/view/ui/LanguageSelector';
 import { useUiPreferences } from '../../../../hooks/useUiPreferences';
 import { useTheme } from '../../../../contexts/ThemeContext';
@@ -19,8 +19,6 @@ import SettingsSection from '../SettingsSection';
 import SettingsToggle from '../SettingsToggle';
 
 type AppearanceSettingsTabProps = {
-  projectSortOrder: ProjectSortOrder;
-  onProjectSortOrderChange: (value: ProjectSortOrder) => void;
   codeEditorSettings: CodeEditorSettingsState;
   onCodeEditorWordWrapChange: (value: boolean) => void;
   onCodeEditorShowMinimapChange: (value: boolean) => void;
@@ -29,8 +27,6 @@ type AppearanceSettingsTabProps = {
 };
 
 export default function AppearanceSettingsTab({
-  projectSortOrder,
-  onProjectSortOrderChange,
   codeEditorSettings,
   onCodeEditorWordWrapChange,
   onCodeEditorShowMinimapChange,
@@ -111,29 +107,6 @@ export default function AppearanceSettingsTab({
               onChange={(value) => setPreference('sendByCtrlEnter', value)}
               ariaLabel={t('quickSettings.sendByCtrlEnter')}
             />
-          </SettingsRow>
-        </SettingsCard>
-      </SettingsSection>
-
-      <SettingsSection title={t('appearanceSettings.projectSorting.label')}>
-        <SettingsCard>
-          <SettingsRow
-            label={t('appearanceSettings.projectSorting.label')}
-            description={t('appearanceSettings.projectSorting.description')}
-          >
-            <Select
-              value={projectSortOrder}
-              onValueChange={(value) => onProjectSortOrderChange(value as ProjectSortOrder)}
-              className="w-full sm:w-44"
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name">{t('appearanceSettings.projectSorting.alphabetical')}</SelectItem>
-                <SelectItem value="date">{t('appearanceSettings.projectSorting.recentActivity')}</SelectItem>
-              </SelectContent>
-            </Select>
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>

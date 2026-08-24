@@ -12,6 +12,8 @@ import SidebarSessionItem from './SidebarSessionItem';
 
 type SidebarProjectSessionsProps = {
   project: Project;
+  /** Move-to-project targets for the shared row menu's drawer. */
+  projects: Project[];
   isExpanded: boolean;
   sessions: SessionWithProvider[];
   selectedSession: ProjectSession | null;
@@ -25,11 +27,12 @@ type SidebarProjectSessionsProps = {
   editingSessionName: string;
   onEditingSessionNameChange: (value: string) => void;
   onStartEditingSession: (sessionId: string, initialName: string) => void;
-  onMoveSession: (sessionId: string, sessionTitle: string) => void;
+  onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
   onCancelEditingSession: () => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
   onProjectSelect: (project: Project) => void;
   onSessionSelect: (session: SessionWithProvider, projectName: string) => void;
+  onArchiveSession: (sessionId: string) => void;
   onDeleteSession: (
     projectName: string,
     sessionId: string,
@@ -61,6 +64,7 @@ function SessionListSkeleton() {
 
 export default function SidebarProjectSessions({
   project,
+  projects,
   isExpanded,
   sessions,
   selectedSession,
@@ -74,11 +78,12 @@ export default function SidebarProjectSessions({
   editingSessionName,
   onEditingSessionNameChange,
   onStartEditingSession,
-  onMoveSession,
+  onMoveSessionToProject,
   onCancelEditingSession,
   onSaveEditingSession,
   onProjectSelect,
   onSessionSelect,
+  onArchiveSession,
   onDeleteSession,
   onLoadMoreSessions,
   onNewSession,
@@ -125,6 +130,7 @@ export default function SidebarProjectSessions({
             <SidebarSessionItem
               key={session.id}
               project={project}
+              projects={projects}
               session={session}
               selectedSession={selectedSession}
               isProcessing={activeSessions.has(session.id)}
@@ -134,11 +140,12 @@ export default function SidebarProjectSessions({
               editingSessionName={editingSessionName}
               onEditingSessionNameChange={onEditingSessionNameChange}
               onStartEditingSession={onStartEditingSession}
-              onMoveSession={onMoveSession}
+              onMoveSessionToProject={onMoveSessionToProject}
               onCancelEditingSession={onCancelEditingSession}
               onSaveEditingSession={onSaveEditingSession}
               onProjectSelect={onProjectSelect}
               onSessionSelect={onSessionSelect}
+              onArchiveSession={onArchiveSession}
               onDeleteSession={onDeleteSession}
               t={t}
             />

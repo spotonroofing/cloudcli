@@ -1,5 +1,6 @@
 import { RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Dialog, DialogContent, DialogTitle } from '../../../../shared/view/ui';
 import type { RemoveWorktreeOptions, WorktreeInfo } from '../../types/types';
 
 type RemoveWorktreeModalProps = {
@@ -44,14 +45,14 @@ export default function RemoveWorktreeModal({
   const isDirty = worktree.changedFileCount > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div
-        className="relative w-full max-w-md overflow-hidden rounded-lg border border-border bg-card shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="remove-worktree-title"
-      >
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="max-w-md overflow-hidden bg-card">
+        <DialogTitle>Remove Worktree</DialogTitle>
         <div className="p-6">
           <div className="mb-4 flex items-center">
             <div className="mr-3 rounded-full bg-muted p-2">
@@ -125,7 +126,7 @@ export default function RemoveWorktreeModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

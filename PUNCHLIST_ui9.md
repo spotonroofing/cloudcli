@@ -111,14 +111,14 @@ Done check: dispatch a two-phase test chain with a manifest on dev; the navigato
 
 Goal: every chat row, menu, and overlay behaves identically app-wide. Dependencies: B1.
 
-- [ ] Projects-tab chat rows adopt the Chats-tab anatomy exactly: relative time bottom-left under the title, same padding; unified row component.
-- [ ] Trailing control: the arrow (with its hover animation) is the default on all chat rows everywhere; on hover it morphs into three-dots; the menu is one shared component with one animation set: rename, move to project, copy session ID, archive, delete (archive and delete are separate items).
-- [ ] Move-to-project is a downward drawer/dropdown anchored to the trigger, listing projects; for chats already in a project the standalone option becomes "Remove from <project>" with an X icon.
-- [ ] Overlay consistency pass: every modal, popover, and menu app-wide standardizes on the shadcn primitives with deliberate shared animations; beautifului pieces render inside them.
-- [ ] Projects/Chats/Archive segmented control animates (sliding indicator), no instant jump; the Archive tab never flashes a loading state — straight to content or "no archived items."
-- [ ] Project ordering: most-recently-touched project floats to top automatically.
-- [ ] Dot rules: no dot on a collapsed/closed project row — a subtle highlight marks a project holding the open chat instead; the chat dot fades out as its project collapses, never lingering; the dot is present whenever its chat is open, through every navigation path.
-- [ ] Stacked-view grabber: dragging a row to the left or right edge converts to the column layout (currently it only reorders).
+- [x] Projects-tab chat rows adopt the Chats-tab anatomy exactly: relative time bottom-left under the title, same padding; unified row component.
+- [x] Trailing control: the arrow (with its hover animation) is the default on all chat rows everywhere; on hover it morphs into three-dots; the menu is one shared component with one animation set: rename, move to project, copy session ID, archive, delete (archive and delete are separate items).
+- [x] Move-to-project is a downward drawer/dropdown anchored to the trigger, listing projects; for chats already in a project the standalone option becomes "Remove from <project>" with an X icon.
+- [x] Overlay consistency pass: every modal, popover, and menu app-wide standardizes on the shadcn primitives with deliberate shared animations; beautifului pieces render inside them.
+- [x] Projects/Chats/Archive segmented control animates (sliding indicator), no instant jump; the Archive tab never flashes a loading state — straight to content or "no archived items."
+- [x] Project ordering: most-recently-touched project floats to top automatically.
+- [x] Dot rules: no dot on a collapsed/closed project row — a subtle highlight marks a project holding the open chat instead; the chat dot fades out as its project collapses, never lingering; the dot is present whenever its chat is open, through every navigation path.
+- [x] Stacked-view grabber: dragging a row to the left or right edge converts to the column layout (currently it only reorders).
 
 Done check: DOM asserts on row anatomy parity, hover morph, one shared menu component across projects/chats, drawer behavior, sliding tab indicator, archive with zero flash frames (mutation observer), ordering after touching an older project, dot presence/fade through a scripted open-collapse-reopen, and an edge-drop converting layouts. Fresh-context subagent verification. Commit.
 

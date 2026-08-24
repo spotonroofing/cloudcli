@@ -31,8 +31,6 @@ function Settings({ isOpen, onClose, initialTab = 'appearance' }: SettingsProps)
     activeTab,
     setActiveTab,
     saveStatus,
-    projectSortOrder,
-    setProjectSortOrder,
     codeEditorSettings,
     updateCodeEditorSetting,
     notificationPreferences,
@@ -141,8 +139,6 @@ function Settings({ isOpen, onClose, initialTab = 'appearance' }: SettingsProps)
             <div key={activeTab} className="settings-content-enter min-w-0 space-y-6 overflow-x-hidden p-4 pb-safe-area-inset-bottom md:space-y-8 md:p-6">
               {activeTab === 'appearance' && (
                 <AppearanceSettingsTab
-                  projectSortOrder={projectSortOrder}
-                  onProjectSortOrderChange={setProjectSortOrder}
                   codeEditorSettings={codeEditorSettings}
                   onCodeEditorWordWrapChange={(value) => updateCodeEditorSetting('wordWrap', value)}
                   onCodeEditorShowMinimapChange={(value) => updateCodeEditorSetting('showMinimap', value)}

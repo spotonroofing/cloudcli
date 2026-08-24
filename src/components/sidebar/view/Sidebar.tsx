@@ -88,9 +88,8 @@ function Sidebar({
     isLoadingMoreRecentConversations,
     recentConversationsError,
     reloadRecentConversations,
-    moveSessionTarget,
-    setMoveSessionTarget,
     moveSessionToProject,
+    archiveSession,
     loadMoreRecentConversations,
     toggleProject,
     handleSessionClick,
@@ -253,6 +252,9 @@ function Sidebar({
     },
     onDeleteProject: requestProjectDelete,
     onSessionSelect: handleSessionClick,
+    onArchiveSession: (sessionId: string) => {
+      void archiveSession(sessionId);
+    },
     onDeleteSession: showDeleteSessionConfirmation,
     onLoadMoreSessions: loadMoreSessionsForProject,
     onNewSession,
@@ -268,8 +270,8 @@ function Sidebar({
     onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => {
       void updateSessionSummary(projectName, sessionId, summary, provider);
     },
-    onMoveSession: (sessionId: string, sessionTitle: string) => {
-      setMoveSessionTarget({ sessionId, sessionTitle });
+    onMoveSessionToProject: (sessionId: string, projectPath: string | null) => {
+      void moveSessionToProject(sessionId, projectPath);
     },
     t,
   };
@@ -290,11 +292,6 @@ function Sidebar({
         sessionDeleteConfirmation={sessionDeleteConfirmation}
         onCancelDeleteSession={() => setSessionDeleteConfirmation(null)}
         onConfirmDeleteSession={confirmDeleteSession}
-        moveSessionTarget={moveSessionTarget}
-        onCancelMoveSession={() => setMoveSessionTarget(null)}
-        onMoveSessionToProject={(projectPath) => {
-          void moveSessionToProject(projectPath);
-        }}
         t={t}
       />
 
@@ -341,8 +338,17 @@ function Sidebar({
             onRestoreArchivedProject={restoreArchivedProject}
             onLoadMoreRecentConversations={loadMoreRecentConversations}
             onRetryRecentConversations={reloadRecentConversations}
-            onMoveConversation={(sessionId, sessionTitle) => {
-              setMoveSessionTarget({ sessionId, sessionTitle });
+            onRenameConversation={(sessionId, name) => {
+              void updateSessionSummary('', sessionId, name, 'claude');
+            }}
+            onMoveConversationToProject={(sessionId, projectPath) => {
+              void moveSessionToProject(sessionId, projectPath);
+            }}
+            onArchiveConversation={(sessionId) => {
+              void archiveSession(sessionId);
+            }}
+            onDeleteConversation={(projectId, sessionId, sessionTitle, provider) => {
+              showDeleteSessionConfirmation(projectId, sessionId, sessionTitle, provider);
             }}
             onNewStandaloneChat={handleNewStandaloneChat}
             onArchivedSessionClick={openArchivedSession}

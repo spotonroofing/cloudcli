@@ -5,7 +5,7 @@ import type { TFunction } from 'i18next';
 import { ScrollArea } from '../../../../shared/view/ui';
 import { Loader } from '../../../../shared/view/beui/Loader';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
-import type { Project } from '../../../../types/app';
+import type { LLMProvider, Project } from '../../../../types/app';
 import type { ConversationSearchResults, SearchProgress } from '../../hooks/useSidebarController';
 import type { ArchivedProjectListItem, ArchivedSessionListItem, RecentConversationListItem, SidebarSearchMode } from '../../types/types';
 import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
@@ -116,7 +116,15 @@ type SidebarContentProps = {
   onRestoreArchivedProject: (projectId: string) => void;
   onLoadMoreRecentConversations: () => void;
   onRetryRecentConversations: () => void;
-  onMoveConversation: (sessionId: string, sessionTitle: string) => void;
+  onRenameConversation: (sessionId: string, name: string) => void;
+  onMoveConversationToProject: (sessionId: string, projectPath: string | null) => void;
+  onArchiveConversation: (sessionId: string) => void;
+  onDeleteConversation: (
+    projectId: string | null,
+    sessionId: string,
+    sessionTitle: string,
+    provider: LLMProvider,
+  ) => void;
   onNewStandaloneChat: () => void;
   onArchivedSessionClick: (session: ArchivedSessionListItem) => void;
   onRestoreArchivedSession: (sessionId: string) => void;
@@ -163,7 +171,10 @@ export default function SidebarContent({
   onRestoreArchivedProject,
   onLoadMoreRecentConversations,
   onRetryRecentConversations,
-  onMoveConversation,
+  onRenameConversation,
+  onMoveConversationToProject,
+  onArchiveConversation,
+  onDeleteConversation,
   onNewStandaloneChat,
   onArchivedSessionClick,
   onRestoreArchivedSession,
@@ -429,10 +440,14 @@ export default function SidebarContent({
             hasError={recentConversationsError}
             selectedSession={projectListProps.selectedSession}
             currentTime={projectListProps.currentTime}
+            projects={projects}
             onConversationSelect={onConversationResultClick}
             onLoadMore={onLoadMoreRecentConversations}
             onRetry={onRetryRecentConversations}
-            onMoveConversation={onMoveConversation}
+            onRenameConversation={onRenameConversation}
+            onMoveConversationToProject={onMoveConversationToProject}
+            onArchiveConversation={onArchiveConversation}
+            onDeleteConversation={onDeleteConversation}
             onNewStandaloneChat={onNewStandaloneChat}
             t={t}
           />
