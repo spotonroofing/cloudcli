@@ -85,9 +85,10 @@ PYEOF
   mkdir -p "$APPEND_DIR"
   STAMP=$(date +%s)
   i=0
+  # Queue names always end .md — the runner only picks up *.md.
   for f in "${APPEND_FILES[@]}"; do
     i=$((i + 1))
-    cp "$f" "$APPEND_DIR/$STAMP-$i.$KIND.${f:t}"
+    cp "$f" "$APPEND_DIR/$STAMP-$i.$KIND.${f:t:r}.md"
   done
   print -r -- "dispatch: ${#APPEND_FILES[@]} $KIND(s) queued onto chain $SLUG; the runner picks them up after the current phase's commit gate"
   exit 0

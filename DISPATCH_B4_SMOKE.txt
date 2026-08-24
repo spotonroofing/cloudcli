@@ -1,7 +1,0 @@
-b4 smoke phase 1
-b4 smoke phase 2
-b4 smoke appended task
-b4 smoke2 phase 1
-b4 smoke2 phase 2
-b4 smoke3 phase 1
-b4 smoke3 phase 2

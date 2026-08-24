@@ -248,9 +248,9 @@ export default function PhaseNavigator({
                   </button>
                   {unit.tasks.length > 0 && (
                     <ul className="pb-0.5 pl-9">
-                      {unit.tasks.map((task) => (
+                      {unit.tasks.map((task, taskIndex) => (
                         <li
-                          key={task}
+                          key={`${unit.index}-${taskIndex}`}
                           data-slot="phase-navigator-task"
                           className={cn(
                             'flex min-h-5 items-center gap-1.5 text-[11px] leading-4',

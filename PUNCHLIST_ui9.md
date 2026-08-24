@@ -97,13 +97,13 @@ Done check: on dev, edit-and-resend a real prompt; DOM shows one user bubble, th
 
 Goal: Willem watches a dispatched run's phases live in the worker pane — this replaces the finished tag. Dependencies: B1.
 
-- [ ] Dispatch manifest: the dispatch CLI and chain runner accept a phase manifest (slug, ordered phase names, per-phase concise task list) written by the planner at dispatch time; the watchdog stores it and streams per-phase progress (current phase, phases done/remaining, per-phase task states).
-- [ ] Worker pane navigator: the task-rows list-style element (beautifului.dev's task rows, molded to phases) across the top of the worker pane; collapsed shows "phase N of M" with counts; expanded shows each phase and its tasks with live states; breathes while running. Works for a single-prompt run too. Replaces the state tag as the primary status surface.
-- [ ] Switcher naming: dispatched runs are labeled "slug Phase N — name" from the manifest, never the bare slug repeated.
-- [ ] Selecting a past phase in the navigator opens that phase's session in the pane (same behavior as the switcher).
-- [ ] Append while running: the dispatch CLI gains an append command that queues additional work onto an active chain, picked up after the current phase's commit gate. Naming: full compiled units are "phases"; small added iterations are "tasks" and render as lighter rows nested under or after the phase list. The navigator updates live when an append lands.
-- [ ] Run-state truth: the state tag and navigator read "running" while the viewed session's chain phase is actually active — Willem watched a live run wearing a "finished" tag. State comes from the watchdog's live chain registry, never a stale session row.
-- [ ] Populate animation: when a manifest lands (or an append arrives), navigator entries stagger in one by one with a clean enter animation — first, second, third — not an instant dump.
+- [x] Dispatch manifest: the dispatch CLI and chain runner accept a phase manifest (slug, ordered phase names, per-phase concise task list) written by the planner at dispatch time; the watchdog stores it and streams per-phase progress (current phase, phases done/remaining, per-phase task states).
+- [x] Worker pane navigator: the task-rows list-style element (beautifului.dev's task rows, molded to phases) across the top of the worker pane; collapsed shows "phase N of M" with counts; expanded shows each phase and its tasks with live states; breathes while running. Works for a single-prompt run too. Replaces the state tag as the primary status surface.
+- [x] Switcher naming: dispatched runs are labeled "slug Phase N — name" from the manifest, never the bare slug repeated.
+- [x] Selecting a past phase in the navigator opens that phase's session in the pane (same behavior as the switcher).
+- [x] Append while running: the dispatch CLI gains an append command that queues additional work onto an active chain, picked up after the current phase's commit gate. Naming: full compiled units are "phases"; small added iterations are "tasks" and render as lighter rows nested under or after the phase list. The navigator updates live when an append lands.
+- [x] Run-state truth: the state tag and navigator read "running" while the viewed session's chain phase is actually active — Willem watched a live run wearing a "finished" tag. State comes from the watchdog's live chain registry, never a stale session row.
+- [x] Populate animation: when a manifest lands (or an append arrives), navigator entries stagger in one by one with a clean enter animation — first, second, third — not an instant dump.
 
 Done check: dispatch a two-phase test chain with a manifest on dev; the navigator shows live progression phase 1 to 2, counts update, labels carry phase names, and the DB rows carry the manifest linkage. Fresh-context subagent verification. Commit.
 
