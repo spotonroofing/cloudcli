@@ -6,7 +6,14 @@ import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, Pr
 import type { Project } from '../../../../types/app';
 import type { ToolGroupItem } from '../../utils/toolGrouping';
 import { getToolConfig } from '../../tools';
-import { AgentDisclosure, MESSAGE_POP_UP, SPRING_SWAP } from '../../../../shared/view/beui';
+import {
+  AgentDisclosure,
+  MESSAGE_POP_UP,
+  SPRING_SWAP,
+  TEXT_SHIMMER_CLASS_NAME,
+  TEXT_SHIMMER_KEYFRAMES,
+  textShimmerStyle,
+} from '../../../../shared/view/beui';
 
 import MessageComponent from './MessageComponent';
 
@@ -80,6 +87,9 @@ export default function ToolGroupContainer({
   const config = getToolConfig(group.toolName).input;
   const label = config.label || group.toolName;
   const icon = getToolGroupIcon(config.icon, group.toolName);
+  // beautifului Thinking (coding mode) header treatment: the label shimmers
+  // while any tool in the run is still awaiting its result, then settles.
+  const working = group.messages.some((message) => !message.toolResult);
   const stamp = group.timestamp ? new Date(group.timestamp).getTime() : 0;
   const animateIn = Boolean(animateFrom && stamp > animateFrom && !reduce);
 
@@ -120,7 +130,19 @@ export default function ToolGroupContainer({
         >
           {icon}
         </span>
-        <span className="min-w-0 shrink-0 text-xs font-medium text-foreground/90">{label}</span>
+        {working ? (
+          <>
+            <style>{TEXT_SHIMMER_KEYFRAMES}</style>
+            <span
+              className={`min-w-0 shrink-0 text-xs font-medium ${TEXT_SHIMMER_CLASS_NAME}`}
+              style={textShimmerStyle(1.4)}
+            >
+              {label}
+            </span>
+          </>
+        ) : (
+          <span className="min-w-0 shrink-0 text-xs font-medium text-foreground/90">{label}</span>
+        )}
         <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
           x{group.messages.length}
         </span>

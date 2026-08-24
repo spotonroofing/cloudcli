@@ -232,6 +232,12 @@ export type QueuedDraft = {
    * permission settings while another session is being viewed.
    */
   options?: QueuedSendOptions;
+  /**
+   * Leave the composer untouched after sending. Set by sends whose content
+   * never lived in the composer (the rerun action), so an unsent typed draft
+   * survives the submission.
+   */
+  preserveComposer?: boolean;
 };
 
 const restoreQueuedDraft = (sessionKey: string): QueuedDraft | null => {
@@ -1240,6 +1246,12 @@ export function useChatComposerState({
           bootPrompt: isBootSubmission || undefined,
         },
       });
+
+      // A send whose content never lived in the composer (rerun) leaves any
+      // typed-but-unsent draft exactly as it was.
+      if (queuedSubmission?.preserveComposer) {
+        return;
+      }
 
       setInput('');
       inputValueRef.current = '';

@@ -14,6 +14,8 @@ export { NumberTicker } from './NumberTicker';
 export { TodoList } from './TodoList';
 export { ToolApproval } from './ToolApproval';
 export { MessageScroller } from './MessageScroller';
+export { PixelLoader, type PixelLoaderVariant } from './PixelLoader';
+export { Thinking, type ThinkingMode, type ThinkingRow } from './Thinking';
 export { StreamingResponse, useStreamedReveal, CHARACTERS_PER_SECOND } from './StreamingResponse';
 export { SwapText } from './SwapText';
 export { EASE_OUT, EASE_IN_OUT, EASE_OUT_CSS, SPRING_PRESS, SPRING_SWAP, MESSAGE_POP_UP, SPRING_LAYOUT } from './ease';

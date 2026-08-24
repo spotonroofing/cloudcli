@@ -73,12 +73,12 @@ Done check: renderer tests green including the regression cases; restart the dev
 
 Goal: the planner and worker text streams read and move like beautifului.dev, end to end, done carefully. Dependencies: B1.
 
-- [ ] Research beautifului.dev live; vendor and retheme its transcript-relevant components.
-- [ ] Loading state: their loader with the counter and its animation replaces the current thinking indicator; take their three loader animations (dry dots, orbit, and the third) and bind each to a different status word (churning, thinking, working, ...) rotating with activity.
-- [ ] Fake streaming: their streaming-text treatment plays back Claude Code's chunked responses as if streamed, tuned so it never lags real arrival.
-- [ ] Thinking component with all its modes (steps, reasoning, search, coding) mapped to what Claude Code actually emits.
-- [ ] No follow-ups anywhere. Keep and wire: copy button, rerun button, sources button.
-- [ ] Approval card merged with ours: free-text "other" input, radio versus multi-select support, answers never auto-send (pick, then confirm with a forward button), tooltips throughout; all existing decision wiring preserved.
+- [x] Research beautifului.dev live; vendor and retheme its transcript-relevant components.
+- [x] Loading state: their loader with the counter and its animation replaces the current thinking indicator; take their three loader animations (dry dots, orbit, and the third) and bind each to a different status word (churning, thinking, working, ...) rotating with activity.
+- [x] Fake streaming: their streaming-text treatment plays back Claude Code's chunked responses as if streamed, tuned so it never lags real arrival.
+- [x] Thinking component with all its modes (steps, reasoning, search, coding) mapped to what Claude Code actually emits.
+- [x] No follow-ups anywhere. Keep and wire: copy button, rerun button, sources button.
+- [x] Approval card merged with ours: free-text "other" input, radio versus multi-select support, answers never auto-send (pick, then confirm with a forward button), tooltips throughout; all existing decision wiring preserved.
 
 Done check: on dev, a real turn shows the new loader with counter, status words rotate, response plays back streamed, thinking modes render from a real transcript, an approval round-trips through select-then-confirm including the free-text path. Aesthetics for Willem's eyeball. Fresh-context subagent verification. Commit.
 

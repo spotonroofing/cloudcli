@@ -408,6 +408,12 @@ function ChatInterface({
   // (the permission banner is the active status surface then).
   const paneActivity = pendingPermissionRequests.length === 0 ? sessionActivity : null;
 
+  // Rerun action on assistant turns: resend the prompt that produced the turn
+  // through the normal submit path, without touching the composer draft.
+  const handleRerun = useCallback((content: string, event: React.MouseEvent) => {
+    void handleSubmit(event, { content, attachments: [], preserveComposer: true });
+  }, [handleSubmit]);
+
   const selectedProviderLabel =
     provider === 'cursor'
       ? t('messageTypes.cursor')
@@ -467,6 +473,7 @@ function ChatInterface({
           showRawParameters={showRawParameters}
           showThinking={showThinking}
           selectedProject={selectedProject}
+          onRerun={handleRerun}
         />
 
         <div className="relative flex-shrink-0">

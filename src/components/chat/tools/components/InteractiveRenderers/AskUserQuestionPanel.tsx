@@ -4,7 +4,16 @@ import type { PermissionPanelProps } from '../../configs/permissionPanelRegistry
 import type { Question } from '../../../types/types';
 import { RadioDot } from '../../../../../shared/view/beui/BeuiRadio';
 import { SPRING_PRESS } from '../../../../../shared/view/beui/ease';
+import { Tooltip } from '../../../../../shared/view/ui';
 
+/**
+ * The AskUserQuestion decision card, merged with the beautifului.dev Approval
+ * Card: quiet option rows on the card surface, a ring-dot pager with chevrons
+ * in the footer, and a forward (arrow-up) button that advances questions and
+ * sends on the last — answers never auto-send. Free-text "Other", radio vs
+ * multi-select, keyboard control (1–9, 0, Enter, Esc), and the decision
+ * wiring are this app's own, preserved from the previous panel.
+ */
 export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
   request,
   onDecision,
@@ -148,6 +157,33 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
   const isLast = currentStep === total - 1;
   const isFirst = currentStep === 0;
   const hasCurrentSelection = selected.size > 0 || (isOtherOn && (otherTexts.get(currentStep) || '').trim().length > 0);
+  const forwardEnabled = isLast ? (hasCurrentSelection || Object.keys(buildAnswers()).length > 0) : true;
+
+  const optionRowClass = (on: boolean) =>
+    `group flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left transition-colors duration-100 hover:bg-muted/60 ${
+      on ? 'bg-muted/50' : ''
+    }`;
+
+  const kbdClass = (on: boolean) =>
+    `flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-sm font-mono text-[10px] transition-colors duration-150 ${
+      on
+        ? 'bg-primary font-semibold text-primary-foreground'
+        : 'border border-border bg-muted text-muted-foreground'
+    }`;
+
+  const checkSquare = (on: boolean) => (
+    <span
+      className={`ml-auto flex size-4 shrink-0 items-center justify-center rounded-sm transition-colors duration-200 ${
+        on
+          ? 'bg-primary text-primary-foreground'
+          : 'text-transparent shadow-[inset_0_0_0_1.5px_hsl(var(--border))]'
+      }`}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 6L9 17l-5-5" />
+      </svg>
+    </span>
+  );
 
   return (
     <div
@@ -157,120 +193,77 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
       className={`w-full outline-none transition-all duration-500 ease-out ${
         mounted ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'
       }`}
+      data-slot="ask-user-question"
     >
-      <div className="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-lg dark:border-gray-700/50 dark:bg-gray-800/90 dark:shadow-2xl">
-        {/* Accent line */}
-        <div className="absolute left-0 right-0 top-0 h-[2px] bg-primary/60" />
-
-        {/* Header + Question — compact */}
-        <div className="px-4 pb-2 pt-3.5">
-          <div className="mb-1.5 flex items-center gap-2.5">
-            {/* Question icon */}
-            <div className="relative flex-shrink-0">
-              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10">
-                <svg className="h-3.5 w-3.5 text-primary" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827m0 3h.01" />
-                </svg>
-              </div>
-              <div className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-pulse rounded-full bg-cyan-400 dark:bg-cyan-500" />
-            </div>
-
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                Claude needs your input
-              </span>
-              {q.header && (
-                <span className="inline-flex items-center rounded border border-primary/20 bg-primary/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-primary">
-                  {q.header}
+      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-lg">
+        {/* Header + question */}
+        <div key={currentStep} className="px-4 pb-1 pt-3" style={reduce ? undefined : { animation: 'bui-fade-up 350ms cubic-bezier(0.23,1,0.32,1) both' }}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Claude needs your input
                 </span>
+                {q.header && (
+                  <span className="inline-flex items-center rounded-sm border border-primary/20 bg-primary/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-primary">
+                    {q.header}
+                  </span>
+                )}
+              </div>
+              <p className="text-[14px] font-medium leading-snug text-foreground">
+                {q.question}
+              </p>
+              {multi && (
+                <span className="text-[10px] text-muted-foreground">Select all that apply</span>
               )}
             </div>
-
-            {/* Step counter */}
-            {!isSingle && (
-              <span className="flex-shrink-0 text-[10px] tabular-nums text-gray-400 dark:text-gray-500">
-                {currentStep + 1}/{total}
-              </span>
-            )}
+            <Tooltip content={isSingle ? 'Skip (Esc)' : 'Skip all questions (Esc)'}>
+              <button
+                type="button"
+                aria-label={isSingle ? 'Skip' : 'Skip all questions'}
+                onClick={handleSkip}
+                className="relative touch-hit flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-100 hover:bg-muted hover:text-foreground"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </Tooltip>
           </div>
-
-          {/* Progress dots (multi-question) */}
-          {!isSingle && (
-            <div className="mb-2 flex items-center gap-1">
-              {questions.map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setCurrentStep(i)}
-                  className={`h-[3px] rounded-sm transition-all duration-300 ${
-                    i === currentStep
-                      ? 'w-5 bg-primary'
-                      : i < currentStep
-                        ? 'w-2.5 bg-primary/40'
-                        : 'w-2.5 bg-gray-200 dark:bg-gray-700'
-                  }`}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Question text */}
-          <p className="text-[14px] font-medium leading-snug text-gray-900 dark:text-gray-100">
-            {q.question}
-          </p>
-          {multi && (
-            <span className="text-[10px] text-gray-400 dark:text-gray-500">Select all that apply</span>
-          )}
         </div>
 
-        {/* Options — tight spacing */}
-        <div className="scrollbar-thin max-h-48 overflow-y-auto px-4 pb-2" role={multi ? 'group' : 'radiogroup'} aria-label={q.question}>
-          <div className="space-y-1">
+        {/* Options */}
+        <div className="scrollbar-thin max-h-52 overflow-y-auto px-2.5 pb-2" role={multi ? 'group' : 'radiogroup'} aria-label={q.question}>
+          <div className="flex flex-col gap-0.5">
             {q.options.map((opt, optIdx) => {
               const isSelected = selected.has(opt.label);
               return (
                 <motion.button
                   key={opt.label}
                   type="button"
+                  aria-pressed={isSelected}
                   whileTap={multi || reduce ? undefined : { scale: 0.98 }}
                   transition={SPRING_PRESS}
                   onClick={() => toggleOption(currentStep, opt.label, multi)}
-                  className={`group flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all duration-150 ${
-                    isSelected
-                      ? 'border-primary/40 bg-primary/10 ring-1 ring-primary/20'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/60 dark:border-gray-700/60 dark:hover:border-gray-600 dark:hover:bg-gray-700/40'
-                  }`}
+                  className={optionRowClass(isSelected)}
                 >
-                  {/* Keyboard hint */}
-                  <kbd className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded font-mono text-[10px] transition-all duration-150 ${
-                    isSelected
-                      ? 'bg-primary font-semibold text-primary-foreground'
-                      : 'border border-gray-200 bg-gray-100 text-gray-400 group-hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 dark:group-hover:border-gray-600'
-                  }`}>
-                    {optIdx + 1}
-                  </kbd>
+                  <kbd className={kbdClass(isSelected)}>{optIdx + 1}</kbd>
 
                   <div className="min-w-0 flex-1">
                     <div className={`text-[13px] leading-tight transition-colors duration-150 ${
-                      isSelected
-                        ? 'font-medium text-gray-900 dark:text-gray-100'
-                        : 'text-gray-700 dark:text-gray-300'
+                      isSelected ? 'font-medium text-foreground' : 'text-muted-foreground'
                     }`}>
                       {opt.label}
                     </div>
                     {opt.description && (
-                      <div className={`text-[11px] leading-snug transition-colors duration-150 ${
-                        isSelected
-                          ? 'text-primary/70'
-                          : 'text-gray-400 dark:text-gray-500'
-                      }`}>
+                      <div className="text-[11px] leading-snug text-muted-foreground/70">
                         {opt.description}
                       </div>
                     )}
                   </div>
 
                   {/* Selection marker: beUI radio dot glides between rows for
-                      single-select; multi-select keeps the checkmark. */}
+                      single-select; multi-select keeps the check square. */}
                   {!multi ? (
                     <RadioDot
                       selected={isSelected}
@@ -278,11 +271,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
                       className="ml-auto"
                     />
                   ) : (
-                    isSelected && (
-                      <svg className="h-4 w-4 flex-shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
-                    )
+                    checkSquare(isSelected)
                   )}
                 </motion.button>
               );
@@ -291,26 +280,15 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
             {/* "Other" option */}
             <motion.button
               type="button"
+              aria-pressed={isOtherOn}
               whileTap={multi || reduce ? undefined : { scale: 0.98 }}
               transition={SPRING_PRESS}
               onClick={() => toggleOther(currentStep, multi)}
-              className={`group flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all duration-150 ${
-                isOtherOn
-                  ? 'border-primary/40 bg-primary/10 ring-1 ring-primary/20'
-                  : 'border-dashed border-gray-200 hover:border-gray-300 hover:bg-gray-50/60 dark:border-gray-700/60 dark:hover:border-gray-600 dark:hover:bg-gray-700/40'
-              }`}
+              className={optionRowClass(isOtherOn)}
             >
-              <kbd className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded font-mono text-[10px] transition-all duration-150 ${
-                isOtherOn
-                  ? 'bg-primary font-semibold text-primary-foreground'
-                  : 'border border-gray-200 bg-gray-100 text-gray-400 group-hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 dark:group-hover:border-gray-600'
-              }`}>
-                0
-              </kbd>
-              <span className={`text-[13px] leading-tight transition-colors ${
-                isOtherOn
-                  ? 'font-medium text-gray-900 dark:text-gray-100'
-                  : 'text-gray-500 dark:text-gray-400'
+              <kbd className={kbdClass(isOtherOn)}>0</kbd>
+              <span className={`min-w-0 flex-1 text-left text-[13px] leading-tight transition-colors ${
+                isOtherOn ? 'font-medium text-foreground' : 'text-muted-foreground'
               }`}>
                 Other...
               </span>
@@ -321,17 +299,13 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
                   className="ml-auto"
                 />
               ) : (
-                isOtherOn && (
-                  <svg className="ml-auto h-4 w-4 flex-shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                  </svg>
-                )
+                checkSquare(isOtherOn)
               )}
             </motion.button>
 
             {/* Other text input — inline */}
             {isOtherOn && (
-              <div className="pl-[30px] pr-0.5">
+              <div className="pl-[30px] pr-1">
                 <div className="relative">
                   <input
                     ref={otherInputRef}
@@ -348,9 +322,9 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
                       e.stopPropagation();
                     }}
                     placeholder="Type your answer..."
-                    className="w-full rounded-lg border-0 bg-gray-50 px-3 py-1.5 text-[13px] text-gray-900 outline-none ring-1 ring-gray-200 transition-shadow duration-200 placeholder:text-gray-400 focus:ring-2 focus:ring-ring dark:bg-gray-900/60 dark:text-gray-100 dark:ring-gray-700 dark:placeholder:text-gray-600"
+                    className="w-full rounded-md border-0 bg-muted/60 px-3 py-1.5 text-base text-foreground outline-none ring-1 ring-border transition-shadow duration-200 placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-ring md:text-[13px]"
                   />
-                  <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-gray-200 bg-gray-100 px-1 py-0.5 font-mono text-[9px] text-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-600">
+                  <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm border border-border bg-muted px-1 py-0.5 font-mono text-[9px] text-muted-foreground/70">
                     Enter
                   </kbd>
                 </div>
@@ -359,52 +333,77 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
           </div>
         </div>
 
-        {/* Footer — compact */}
-        <div className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/50 px-4 py-2 dark:border-gray-700/50 dark:bg-gray-800/50">
-          <button
-            type="button"
-            onClick={handleSkip}
-            className="text-[11px] text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-          >
-            {isSingle ? 'Skip' : 'Skip all'}
-            <span className="ml-1 text-[9px] text-gray-300 dark:text-gray-600">Esc</span>
-          </button>
-
-          <div className="flex items-center gap-1.5">
-            {!isSingle && !isFirst && (
-              <button
-                type="button"
-                onClick={() => setCurrentStep(s => s - 1)}
-                className="inline-flex items-center gap-0.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-gray-600 transition-all duration-150 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
-              >
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-                Back
-              </button>
+        {/* Footer — ring-dot pager + forward button (beautifului Approval Card) */}
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 bg-muted/30 px-3 py-2">
+          <span className="flex items-center gap-2">
+            {!isSingle && (
+              <>
+                <Tooltip content="Previous question">
+                  <button
+                    type="button"
+                    aria-label="Previous question"
+                    disabled={isFirst}
+                    onClick={() => setCurrentStep(s => Math.max(0, s - 1))}
+                    className="relative touch-hit flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-100 enabled:hover:bg-muted enabled:hover:text-foreground disabled:opacity-35"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+                  </button>
+                </Tooltip>
+                <span className="flex items-center gap-1">
+                  {questions.map((_, i) => (
+                    <Tooltip key={i} content={`Question ${i + 1} of ${total}`}>
+                      <button
+                        type="button"
+                        aria-label={`Go to question ${i + 1}`}
+                        aria-current={i === currentStep ? 'step' : undefined}
+                        onClick={() => setCurrentStep(i)}
+                        className="relative touch-hit rounded-full transition-all duration-300"
+                        style={
+                          i === currentStep
+                            ? { width: 9, height: 9, border: '2.5px solid hsl(var(--foreground))' }
+                            : i < currentStep
+                              ? { width: 7, height: 7, background: 'hsl(var(--muted-foreground))' }
+                              : { width: 7, height: 7, border: '1.5px solid hsl(var(--muted-foreground))' }
+                        }
+                      />
+                    </Tooltip>
+                  ))}
+                </span>
+                <Tooltip content="Next question">
+                  <button
+                    type="button"
+                    aria-label="Next question"
+                    disabled={isLast}
+                    onClick={() => setCurrentStep(s => Math.min(total - 1, s + 1))}
+                    className="relative touch-hit flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-100 enabled:hover:bg-muted enabled:hover:text-foreground disabled:opacity-35"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                  </button>
+                </Tooltip>
+              </>
             )}
+          </span>
 
-            {isLast ? (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!hasCurrentSelection && !Object.keys(buildAnswers()).length}
-                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none"
-              >
-                Submit
-                <span className="ml-0.5 font-mono text-[9px] opacity-70">Enter</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setCurrentStep(s => s + 1)}
-                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 hover:shadow-md"
-              >
-                Next
-                <span className="ml-0.5 font-mono text-[9px] opacity-70">Enter</span>
-              </button>
-            )}
-          </div>
+          <Tooltip content={isLast ? 'Send answers (Enter)' : 'Next question (Enter)'}>
+            <motion.button
+              type="button"
+              aria-label={isLast ? 'Send answers' : 'Next question'}
+              disabled={!forwardEnabled}
+              whileTap={reduce || !forwardEnabled ? undefined : { scale: 0.96 }}
+              transition={SPRING_PRESS}
+              onClick={() => (isLast ? handleSubmit() : setCurrentStep(s => s + 1))}
+              className={`relative touch-hit flex size-7 items-center justify-center rounded-md transition-colors duration-200 ${
+                forwardEnabled
+                  ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
+                  : 'cursor-not-allowed bg-muted text-muted-foreground'
+              }`}
+              data-slot="approval-forward"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
+            </motion.button>
+          </Tooltip>
         </div>
       </div>
     </div>

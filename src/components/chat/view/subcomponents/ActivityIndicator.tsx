@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import {
-  BrailleLoader,
+  PixelLoader,
   TEXT_SHIMMER_CLASS_NAME,
   TEXT_SHIMMER_KEYFRAMES,
-  textShimmerStyle,
 } from '../../../../shared/view/beui';
+import type { PixelLoaderVariant } from '../../../../shared/view/beui';
 import { NumberTicker } from '../../../../shared/view/beui/NumberTicker';
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
 
@@ -15,22 +14,35 @@ type ActivityIndicatorProps = {
 };
 
 const EXIT_ANIMATION_MS = 220;
-const SHIMMER_DURATION_S = 1.8;
+const SHIMMER_DURATION_S = 1.4;
+/** How long each status word (and its bound loader animation) holds before rotating. */
+const ROTATION_HOLD_DS = 65;
+
+/**
+ * Each status word is bound to one of the three beautifului pixel-grid loader
+ * animations; the pair rotates together while the turn stays in flight.
+ */
+const STATUS_ROTATION: Array<{ word: string; variant: PixelLoaderVariant }> = [
+  { word: 'Thinking', variant: 'drive' },
+  { word: 'Working', variant: 'dots' },
+  { word: 'Churning', variant: 'orbit' },
+];
 
 /**
  * Inline response-in-progress indicator, rendered in the message flow where
- * the reply will appear: the horizontal beUI ASCII Braille loader sitting
- * left of a shimmering "thinking" label (server status text overrides the
- * word), plus the elapsed time. Rendered only while the viewed session has
- * an entry in the processing map; it fades out the moment that entry is
- * removed. Interrupting lives on the composer's send/stop button.
+ * the reply will appear: the beautifului.dev Loading State — pixel-grid
+ * loader left of a shimmering status word, plus a live elapsed counter in
+ * mono tabular figures. The word and its loader animation rotate together
+ * with activity; a server status line overrides the word. Rendered only while
+ * the viewed session has an entry in the processing map; it fades out the
+ * moment that entry is removed. Interrupting lives on the composer's
+ * send/stop button.
  */
 export default function ActivityIndicator({ activity }: ActivityIndicatorProps) {
-  const { t } = useTranslation('chat');
   const [renderedActivity, setRenderedActivity] = useState<SessionActivity | null>(activity);
   const [isExiting, setIsExiting] = useState(false);
   const startedAt = renderedActivity?.startedAt ?? null;
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [elapsedDeciseconds, setElapsedDeciseconds] = useState(0);
 
   useEffect(() => {
     if (activity) {
@@ -52,43 +64,42 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
 
   useEffect(() => {
     if (startedAt === null) return;
-    const update = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+    const update = () => setElapsedDeciseconds(Math.max(0, Math.floor((Date.now() - startedAt) / 100)));
     update();
-    const timer = setInterval(update, 1000);
+    const timer = setInterval(update, 100);
     return () => clearInterval(timer);
   }, [startedAt]);
 
   if (!renderedActivity) return null;
 
-  const label = (
-    renderedActivity.statusText
-    || t('claudeStatus.actions.thinking', { defaultValue: 'Thinking' })
-  ).replace(/\.+$/, '');
+  const rotation = STATUS_ROTATION[Math.floor(elapsedDeciseconds / ROTATION_HOLD_DS) % STATUS_ROTATION.length];
+  const label = (renderedActivity.statusText || rotation.word).replace(/\.+$/, '');
 
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = elapsedSeconds % 60;
-  const elapsedLabel = minutes < 1
-    ? t('claudeStatus.elapsed.seconds', { count: seconds, defaultValue: '{{count}}s' })
-    : t('claudeStatus.elapsed.minutesSeconds', { minutes, seconds, defaultValue: '{{minutes}}m {{seconds}}s' });
+  const totalSeconds = elapsedDeciseconds / 10;
+  const elapsedLabel = totalSeconds < 60
+    ? `${totalSeconds.toFixed(1)}s`
+    : `${Math.floor(totalSeconds / 60)}m ${(totalSeconds % 60).toFixed(1)}s`;
 
   return (
     <div className={isExiting ? 'chat-activity-exit' : 'chat-activity-enter'}>
       <style>{TEXT_SHIMMER_KEYFRAMES}</style>
-      <div className="flex items-center gap-2 text-sm" role="status" data-testid="activity-indicator">
-        <BrailleLoader className="shrink-0 text-muted-foreground" label={label} />
+      <div className="flex items-center gap-2.5 text-sm" role="status" data-testid="activity-indicator">
+        <PixelLoader variant={rotation.variant} className="shrink-0" />
+        <span className="sr-only">{label}</span>
         <span
+          key={label}
           aria-hidden="true"
-          className={`font-medium ${TEXT_SHIMMER_CLASS_NAME}`}
-          style={textShimmerStyle(SHIMMER_DURATION_S)}
+          className={`text-[13px] font-medium ${TEXT_SHIMMER_CLASS_NAME}`}
+          style={{ animation: `beui-text-shimmer ${SHIMMER_DURATION_S}s linear infinite, bui-fade-in 350ms ease-out both` }}
         >
-          {`${label}…`}
+          {label}
         </span>
-        <span className="text-xs tabular-nums text-muted-foreground/60">
-          {/* Digits roll (beUI NumberTicker); the m/s unit glyphs render as plain text, so the label reads exactly as before. */}
+        <span className="font-mono text-xs tabular-nums text-muted-foreground/60">
+          {/* Digits roll (beUI NumberTicker); the unit glyphs render as plain text, so the label reads exactly as the static string. */}
           <NumberTicker
-            value={elapsedSeconds}
+            value={elapsedDeciseconds}
             format={() => elapsedLabel}
-            duration={0.35}
+            duration={0.2}
             stagger={0}
             startOnView={false}
           />

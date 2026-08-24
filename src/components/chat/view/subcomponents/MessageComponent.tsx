@@ -1,5 +1,7 @@
 import { memo, useMemo, useRef } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { RotateCcw } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import type {
@@ -11,8 +13,8 @@ import type {
 import { extractExternalLinks, formatUsageLimitText, stripProposedPlanEnvelope } from '../../utils/chatFormatting';
 import type { Project } from '../../../../types/app';
 import { ToolRenderer, ToolErrorDisplay, shouldHideToolResult } from '../../tools';
-import { Reasoning, ReasoningTrigger, ReasoningContent } from '../../../../shared/view/ui';
-import { MESSAGE_POP_UP, StreamingResponse, useStreamedReveal } from '../../../../shared/view/beui';
+import { MESSAGE_POP_UP, StreamingResponse, Thinking, useStreamedReveal } from '../../../../shared/view/beui';
+import type { ThinkingRow } from '../../../../shared/view/beui';
 import { Citations } from '../../../../shared/view/beui/Citations';
 
 import ChatMessageImages from './ChatMessageImages';
@@ -40,6 +42,9 @@ type MessageComponentProps = {
   showThinking?: boolean;
   selectedProject?: Project | null;
   provider: Provider | string;
+  /** The user prompt that produced this assistant turn; enables the rerun action. */
+  rerunContent?: string;
+  onRerun?: (content: string, event: ReactMouseEvent) => void;
 };
 
 type InteractiveOption = {
@@ -50,15 +55,97 @@ type InteractiveOption = {
 
 const COPY_HIDDEN_TOOL_NAMES = new Set(['Bash', 'Edit', 'Write', 'ApplyPatch']);
 
-/** Live assistant turn: the beUI streaming-response reveal over the growing buffer. */
+/**
+ * Live assistant turn: the reveal engine paces the growing buffer while the
+ * beautifului streaming-text treatment blurs each word in and keeps a caret
+ * at the live edge.
+ */
 function StreamingAssistantText({ content }: { content: string }) {
   const cursor = useStreamedReveal(content);
   return (
-    <StreamingResponse status="streaming" announce={false}>
-      <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
+    <StreamingResponse status="streaming" announce={false} contentClassName="bui-stream-caret-host">
+      <Markdown streamWords className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
         {content.slice(0, cursor)}
       </Markdown>
     </StreamingResponse>
+  );
+}
+
+const parseToolInputObject = (toolInput: unknown): Record<string, any> => {
+  if (typeof toolInput !== 'string') return (toolInput as Record<string, any>) || {};
+  try {
+    return JSON.parse(toolInput);
+  } catch {
+    return {};
+  }
+};
+
+const domainOf = (url: string): string | null => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+};
+
+const SEARCH_TRACE_MAX_ROWS = 6;
+
+/**
+ * WebSearch / WebFetch turns render as the beautifului Thinking trace in its
+ * search mode: the query line, then favicon rows for the sources read.
+ */
+function SearchToolThinking({ message }: { message: ChatMessage }) {
+  const input = useMemo(() => parseToolInputObject(message.toolInput), [message.toolInput]);
+  const isFetch = message.toolName === 'WebFetch';
+  const working = !message.toolResult;
+  const failed = Boolean(message.toolResult?.isError);
+  const query = isFetch ? String(input.url || '') : String(input.query || '');
+
+  const { rows, extraCount } = useMemo(() => {
+    if (working || failed) return { rows: [] as ThinkingRow[], extraCount: 0 };
+    if (isFetch) {
+      const url = String(input.url || '');
+      const domain = domainOf(url);
+      if (!domain) return { rows: [] as ThinkingRow[], extraCount: 0 };
+      return {
+        rows: [{ key: url, primary: domain, href: url, faviconUrl: url } satisfies ThinkingRow],
+        extraCount: 0,
+      };
+    }
+    // WebSearch results carry their links as a `Links: [...]` JSON block.
+    const content = String(message.toolResult?.content || '');
+    const linksMatch = /Links:\s*(\[[\s\S]*?\])\s*(?:\n|$)/.exec(content);
+    if (!linksMatch) return { rows: [] as ThinkingRow[], extraCount: 0 };
+    try {
+      const links = JSON.parse(linksMatch[1]) as Array<{ title?: string; url?: string }>;
+      const usable = links.filter((link) => typeof link.url === 'string' && domainOf(link.url));
+      const rows = usable.slice(0, SEARCH_TRACE_MAX_ROWS).map((link) => ({
+        key: link.url as string,
+        primary: link.title || domainOf(link.url as string),
+        secondary: domainOf(link.url as string),
+        href: link.url,
+        faviconUrl: link.url,
+      } satisfies ThinkingRow));
+      return { rows, extraCount: Math.max(0, usable.length - rows.length) };
+    } catch {
+      return { rows: [] as ThinkingRow[], extraCount: 0 };
+    }
+  }, [working, failed, isFetch, input.url, message.toolResult]);
+
+  return (
+    <Thinking
+      mode="search"
+      working={working}
+      activeLabel={isFetch ? 'Reading the page' : 'Searching the web'}
+      doneLabel={failed
+        ? (isFetch ? 'Page fetch failed' : 'Search failed')
+        : (isFetch ? 'Read the page' : 'Searched the web')}
+      query={query}
+      rows={rows}
+      footer={extraCount > 0 ? (
+        <span className="px-1.5 text-[12px] text-muted-foreground/70">+{extraCount} more</span>
+      ) : undefined}
+    />
   );
 }
 
@@ -84,7 +171,7 @@ function AssistantCitations({ content }: { content: string }) {
   return <Citations citations={citations} className="mt-2" />;
 }
 
-const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider }: MessageComponentProps) => {
+const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, rerunContent, onRerun }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   const reduceMotion = useReducedMotion() ?? false;
   // Evaluated once per mount: a row that pops in must not replay on re-render.
@@ -212,7 +299,10 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
 
           <div className="w-full">
 
-            {message.isToolUse ? (
+            {message.isToolUse && (message.toolName === 'WebSearch' || message.toolName === 'WebFetch') ? (
+              /* Web reads render as the beautifului Thinking trace (search mode) */
+              <SearchToolThinking message={message} />
+            ) : message.isToolUse ? (
               <>
                 <div className="flex flex-col">
                   <div className="flex flex-col">
@@ -239,8 +329,9 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                   />
                 )}
 
-                {/* Tool Result Section — Bash renders its output inside the command row above. */}
-                {message.toolResult && message.toolName !== 'Bash' && !shouldHideToolResult(message.toolName || 'UnknownTool', message.toolResult) && (
+                {/* Tool Result Section — Bash renders its output inside the command row
+                    above; a subagent's result already shows in its steps-trace footer. */}
+                {message.toolResult && message.toolName !== 'Bash' && !message.isSubagentContainer && !shouldHideToolResult(message.toolName || 'UnknownTool', message.toolResult) && (
                   message.toolResult.isError ? (
                     // Error results — collapsed red row that expands to the content
                     <div id={`tool-result-${message.toolId}`} className="scroll-mt-4">
@@ -348,30 +439,35 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                 </div>
               </div>
             ) : message.isThinking ? (
-              /* Thinking messages — Reasoning component (ai-elements pattern) */
-              <Reasoning defaultOpen={false}>
-                <ReasoningTrigger />
-                <ReasoningContent>
-                  <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
-                    {message.content}
-                  </Markdown>
-                  <div className="mt-3 flex items-center text-[11px]">
-                    <MessageCopyControl content={String(message.content || '')} messageType="assistant" />
-                  </div>
-                </ReasoningContent>
-              </Reasoning>
+              /* Thinking blocks — beautifului Thinking trace (reasoning mode) */
+              <Thinking
+                mode="reasoning"
+                working={false}
+                activeLabel={t('claudeStatus.actions.thinking', { defaultValue: 'Thinking' })}
+                doneLabel={t('claudeStatus.thought', { defaultValue: 'Thought for a few seconds' })}
+              >
+                <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
+                  {message.content}
+                </Markdown>
+                <div className="mt-2 flex items-center text-[11px]">
+                  <MessageCopyControl content={String(message.content || '')} messageType="assistant" />
+                </div>
+              </Thinking>
             ) : (
               <div dir="auto" className="text-sm text-gray-700 dark:text-gray-300">
-                {/* Reasoning accordion */}
+                {/* Reasoning trace (non-Claude providers) */}
                 {showThinking && message.reasoning && (
-                  <Reasoning className="mb-3" defaultOpen={false}>
-                    <ReasoningTrigger />
-                    <ReasoningContent>
-                      <div className="whitespace-pre-wrap">
-                        {message.reasoning}
-                      </div>
-                    </ReasoningContent>
-                  </Reasoning>
+                  <Thinking
+                    className="mb-3"
+                    mode="reasoning"
+                    working={false}
+                    activeLabel={t('claudeStatus.actions.thinking', { defaultValue: 'Thinking' })}
+                    doneLabel={t('claudeStatus.thought', { defaultValue: 'Thought for a few seconds' })}
+                  >
+                    <div className="whitespace-pre-wrap">
+                      {message.reasoning}
+                    </div>
+                  </Thinking>
                 )}
 
                 {(() => {
@@ -435,6 +531,20 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                 )}
                 {shouldShowAssistantCopyControl && (
                   <MessageSpeakControl content={assistantCopyContent} />
+                )}
+                {shouldShowAssistantCopyControl && !message.isStreaming && onRerun && rerunContent && (
+                  /* Rerun: send the prompt that produced this turn again (beautifului action row) */
+                  <div className="relative flex items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={(event) => onRerun(rerunContent, event)}
+                      title={t('rerunMessage', { defaultValue: 'Rerun' })}
+                      aria-label={t('rerunMessage', { defaultValue: 'Rerun' })}
+                      className="inline-flex items-center rounded px-1 py-0.5 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 )}
                 {!isGrouped && (
                   <span className="ml-auto opacity-0 transition-opacity duration-200 group-hover:opacity-100">

@@ -16,7 +16,15 @@ export function isToolGroupItem(item: MessageListItem): item is ToolGroupItem {
 }
 
 function isGroupableToolMessage(message: ChatMessage): message is ChatMessage & { toolName: string } {
-  return Boolean(message.isToolUse && message.toolName && !message.isSubagentContainer);
+  // Web reads render as their own beautifului Thinking search trace, one per
+  // query — never collapsed into a generic tool group.
+  return Boolean(
+    message.isToolUse
+    && message.toolName
+    && !message.isSubagentContainer
+    && message.toolName !== 'WebSearch'
+    && message.toolName !== 'WebFetch',
+  );
 }
 
 // Messages that render nothing (e.g. reasoning hidden when showThinking is off)

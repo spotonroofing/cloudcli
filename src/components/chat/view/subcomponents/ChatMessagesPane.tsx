@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import type { RefObject } from 'react';
+import type { MouseEvent as ReactMouseEvent, RefObject } from 'react';
 
 import type { ChatMessage } from '../../types/types';
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
@@ -53,6 +53,8 @@ interface ChatMessagesPaneProps {
   showRawParameters?: boolean;
   showThinking?: boolean;
   selectedProject: Project;
+  /** Sends a prior user prompt again (the rerun action on assistant turns). */
+  onRerun?: (content: string, event: ReactMouseEvent) => void;
 }
 
 function ChatMessagesPane({
@@ -87,6 +89,7 @@ function ChatMessagesPane({
   showRawParameters,
   showThinking,
   selectedProject,
+  onRerun,
 }: ChatMessagesPaneProps) {
   const { t } = useTranslation('chat');
   const groupedVisibleMessages = useMemo(
@@ -296,6 +299,9 @@ function ChatMessagesPane({
 
           {(() => {
             let prevMessage: ChatMessage | null = null;
+            // The most recent user prompt seen while walking the transcript in
+            // order — the content an assistant row's rerun action resends.
+            let lastUserContent: string | null = null;
 
             return groupedVisibleMessages.map((item) => {
               if (isToolGroupItem(item)) {
@@ -323,6 +329,10 @@ function ChatMessagesPane({
 
               const messagePrevMessage = prevMessage;
               prevMessage = item;
+              const rerunContent = item.type === 'assistant' ? lastUserContent : null;
+              if (item.type === 'user' && typeof item.content === 'string' && item.content.trim()) {
+                lastUserContent = item.content;
+              }
 
               return (
                 <MessageComponent
@@ -338,6 +348,8 @@ function ChatMessagesPane({
                   showThinking={showThinking}
                   selectedProject={selectedProject}
                   provider={provider}
+                  rerunContent={rerunContent ?? undefined}
+                  onRerun={onRerun}
                 />
               );
             });
