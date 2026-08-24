@@ -52,6 +52,7 @@ import { initializeDatabase, sessionsDb } from './modules/database/index.js';
 import { configureWebPush } from './modules/notifications/index.js';
 import { createWatchdogRouter, watchdogService } from './modules/watchdog/index.js';
 import { createDraftsRouter } from './modules/drafts/index.js';
+import { createQueuedMessagesRouter } from './modules/queued-messages/index.js';
 import { createAccountsRouter } from './modules/accounts/index.js';
 
 const __dirname = getModuleDirectory(import.meta.url);
@@ -207,6 +208,9 @@ app.use('/api/watchdog', createWatchdogRouter());
 
 // Composer draft persistence (protected)
 app.use('/api/drafts', authenticateToken, createDraftsRouter());
+
+// Queued message persistence (protected, ui11 phase 1)
+app.use('/api/queued-messages', authenticateToken, createQueuedMessagesRouter());
 
 // Claude account switcher via cswap (protected)
 app.use('/api/accounts', authenticateToken, createAccountsRouter());

@@ -24,8 +24,10 @@ import {
   type ComposerDraft,
 } from '../utils/composerDrafts';
 import {
+  claimQueuedMessage,
   clearQueuedMessage,
   readQueuedMessage,
+  subscribeQueuedMessages,
   safeLocalStorage,
   writeQueuedMessage,
   type QueuedSendOptions,
@@ -1062,17 +1064,21 @@ export function useChatComposerState({
             processingSessionsRef.current
             && !processingSessionsRef.current.has(queuedSessionKey)
           ) {
-            clearQueuedMessage(queuedSessionKey);
-            sendMessage({
-              type: 'chat.send',
-              sessionId: queuedSessionKey,
-              content: durableDraft.content,
-              options: {
-                ...(durableDraft.options ?? {}),
-                attachments: durableDraft.uploadedAttachments ?? [],
-              },
+            void claimQueuedMessage(queuedSessionKey).then((claimed) => {
+              if (!claimed) {
+                return;
+              }
+              sendMessage({
+                type: 'chat.send',
+                sessionId: queuedSessionKey,
+                content: durableDraft.content,
+                options: {
+                  ...(durableDraft.options ?? {}),
+                  attachments: durableDraft.uploadedAttachments ?? [],
+                },
+              });
+              onSessionProcessing?.(queuedSessionKey, { statusText: null, canInterrupt: true });
             });
-            onSessionProcessing?.(queuedSessionKey, { statusText: null, canInterrupt: true });
           }
           return;
         }
@@ -1367,21 +1373,39 @@ export function useChatComposerState({
     // so the `chat_subscribed` ack can flip `isLoading` if a run is actually
     // still live (the cleanup below cancels the send in that case).
     const delay = wasLoading ? 0 : 750;
+    let cancelled = false;
     const timer = setTimeout(() => {
-      // The saved key is the claim ticket shared with the app-level auto-send
-      // (which handles sessions that finish while not viewed). If it's gone,
-      // the message was already dispatched — don't send it twice.
-      if (sessionKey && !readQueuedMessage(sessionKey)) {
+      // The server row is the claim ticket shared with the app-level auto-send
+      // and with this session's composer on every other device: only the
+      // client whose delete removed it sends, so the message never goes twice.
+      void (sessionKey ? claimQueuedMessage(sessionKey) : Promise.resolve(true)).then((claimed) => {
+        if (cancelled) {
+          // The effect re-ran while the claim was in flight (a run turned out
+          // to be live, or the session changed): put the message back rather
+          // than lose it, and let the next idle moment claim again.
+          if (claimed && sessionKey) {
+            writeQueuedMessage(sessionKey, {
+              content: queuedDraft.content,
+              options: queuedDraft.options,
+              attachments: queuedDraft.uploadedAttachments,
+            });
+          }
+          return;
+        }
         setQueuedDraft(null);
-        return;
-      }
-      setQueuedDraft(null);
-      setInput(queuedDraft.content);
-      inputValueRef.current = queuedDraft.content;
-      setAttachedFilesSync(queuedDraft.attachments);
-      handleSubmitRef.current?.(createFakeSubmitEvent(), queuedDraft);
+        if (!claimed) {
+          return;
+        }
+        setInput(queuedDraft.content);
+        inputValueRef.current = queuedDraft.content;
+        setAttachedFilesSync(queuedDraft.attachments);
+        handleSubmitRef.current?.(createFakeSubmitEvent(), queuedDraft);
+      });
     }, delay);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [isLoading, queuedDraft, sessionKey, setInput, setAttachedFilesSync]);
 
   const editQueuedDraft = useCallback(() => {
@@ -1553,6 +1577,16 @@ export function useChatComposerState({
     }
     setQueuedDraft(restoreQueuedDraft(sessionKey));
   }, [sessionKey]);
+
+  // Another device queued, edited, or cleared this session's message (or the
+  // cache hydrated after mount): mirror it into the card.
+  useEffect(() => subscribeQueuedMessages((changedSessionId) => {
+    if (changedSessionId !== sessionKey) {
+      return;
+    }
+    queuedDraftSessionRef.current = sessionKey;
+    setQueuedDraft(restoreQueuedDraft(sessionKey));
+  }), [sessionKey]);
 
   useEffect(() => {
     if (!textareaRef.current) {

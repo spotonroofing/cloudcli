@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+import { onSettingChange, writeSetting } from '../utils/cloudSettings';
 
 export type VoiceConfig = {
   baseUrl: string;
@@ -48,6 +50,9 @@ export function useVoiceConfig() {
     typeof window === 'undefined' ? { ...DEFAULTS } : readVoiceConfig(),
   );
 
+  // Another tab or device changed the voice config: apply it live.
+  useEffect(() => onSettingChange([STORAGE_KEY], () => setConfig(readVoiceConfig())), []);
+
   const update = (patch: Partial<VoiceConfig>) => {
     setConfig((prev) => {
       const next = { ...prev, ...patch };
@@ -55,7 +60,7 @@ export function useVoiceConfig() {
         const stored: Partial<VoiceConfig> = { ...next };
         if (next.ttsFormat.trim()) stored.ttsFormat = next.ttsFormat.trim();
         else delete stored.ttsFormat;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+        writeSetting(STORAGE_KEY, JSON.stringify(stored));
         window.dispatchEvent(new Event(VOICE_CONFIG_SYNC_EVENT));
       } catch {
         /* ignore persistence errors */

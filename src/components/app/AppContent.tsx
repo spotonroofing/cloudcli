@@ -11,7 +11,10 @@ import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/Palett
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useProjectsState } from '../../hooks/useProjectsState';
+import { useCloudSync } from '../../hooks/useCloudSync';
 import { useQueuedMessageAutoSend } from '../../hooks/useQueuedMessageAutoSend';
+import { writeSetting } from '../../utils/cloudSettings';
+import { useAuth } from '../auth/context/AuthContext';
 import { api } from '../../utils/api';
 import { isNotificationSoundEnabled } from '../../utils/notificationSound';
 
@@ -69,6 +72,7 @@ function AppContentInner() {
   const { t } = useTranslation('common');
   const { isMobile } = useDeviceSettings({ trackPWA: false });
   const { ws, sendMessage, subscribe } = useWebSocket();
+  const { user } = useAuth();
 
   const {
     processingSessions,
@@ -131,6 +135,9 @@ function AppContentInner() {
     },
     [workspace, selectedProject?.projectId, projects, handleProjectSelect],
   );
+
+  // Settings and queued messages follow the user across devices (ui11 phase 1).
+  useCloudSync({ subscribe, userId: user?.id });
 
   // Queued messages for sessions that finish while another session (or none)
   // is being viewed are sent from here; the viewed session's composer handles
@@ -247,7 +254,7 @@ function AppContentInner() {
       }
 
       if (typeof message.provider === 'string' && message.provider.trim()) {
-        localStorage.setItem('selected-provider', message.provider);
+        writeSetting('selected-provider', message.provider);
       }
 
       setActiveTab('chat');

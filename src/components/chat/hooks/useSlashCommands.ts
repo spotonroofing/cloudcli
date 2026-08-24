@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, KeyboardEvent, RefObject, SetStateAction } from 'react';
 
 import { authenticatedFetch } from '../../../utils/api';
+import { writeSetting } from '../../../utils/cloudSettings';
 import { safeLocalStorage } from '../utils/chatStorage';
 import type { LLMProvider, Project } from '../../../types/app';
 
@@ -60,7 +61,7 @@ const readCommandHistory = (projectName: string): Record<string, number> => {
 };
 
 const saveCommandHistory = (projectName: string, history: Record<string, number>) => {
-  safeLocalStorage.setItem(getCommandHistoryKey(projectName), JSON.stringify(history));
+  writeSetting(getCommandHistoryKey(projectName), JSON.stringify(history));
 };
 
 const isPromiseLike = (value: unknown): value is Promise<unknown> =>

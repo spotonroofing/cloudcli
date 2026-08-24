@@ -15,6 +15,7 @@ import type {
   NotificationPreferencesState,
   SettingsMainTab,
 } from '../types/types';
+import { writeSetting } from '../../../utils/cloudSettings';
 
 type ThemeContextValue = {
   isDarkMode: boolean;
@@ -205,21 +206,21 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
 
     try {
       const now = new Date().toISOString();
-      localStorage.setItem('claude-settings', JSON.stringify({
+      writeSetting('claude-settings', JSON.stringify({
         allowedTools: claudePermissions.allowedTools,
         disallowedTools: claudePermissions.disallowedTools,
         skipPermissions: claudePermissions.skipPermissions,
         lastUpdated: now,
       }));
 
-      localStorage.setItem('cursor-tools-settings', JSON.stringify({
+      writeSetting('cursor-tools-settings', JSON.stringify({
         allowedCommands: cursorPermissions.allowedCommands,
         disallowedCommands: cursorPermissions.disallowedCommands,
         skipPermissions: cursorPermissions.skipPermissions,
         lastUpdated: now,
       }));
 
-      localStorage.setItem('codex-settings', JSON.stringify({
+      writeSetting('codex-settings', JSON.stringify({
         permissionMode: codexPermissionMode,
         lastUpdated: now,
       }));
@@ -269,10 +270,10 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
   }, [notificationPreferences.channels.sound]);
 
   useEffect(() => {
-    localStorage.setItem('codeEditorWordWrap', String(codeEditorSettings.wordWrap));
-    localStorage.setItem('codeEditorShowMinimap', String(codeEditorSettings.showMinimap));
-    localStorage.setItem('codeEditorLineNumbers', String(codeEditorSettings.lineNumbers));
-    localStorage.setItem('codeEditorFontSize', codeEditorSettings.fontSize);
+    writeSetting('codeEditorWordWrap', String(codeEditorSettings.wordWrap));
+    writeSetting('codeEditorShowMinimap', String(codeEditorSettings.showMinimap));
+    writeSetting('codeEditorLineNumbers', String(codeEditorSettings.lineNumbers));
+    writeSetting('codeEditorFontSize', codeEditorSettings.fontSize);
     window.dispatchEvent(new Event('codeEditorSettingsChanged'));
   }, [codeEditorSettings]);
 

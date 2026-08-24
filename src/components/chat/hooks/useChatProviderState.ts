@@ -16,6 +16,7 @@ import {
   FALLBACK_PROVIDER_EFFORT_VALUES,
   toProviderEffortOptions,
 } from '../constants/providerEffort';
+import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
 
 const FALLBACK_DEFAULT_MODEL: Record<LLMProvider, string> = {
   claude: 'claude-fable-5',
@@ -162,24 +163,24 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   const setStoredProviderModel = useCallback((targetProvider: LLMProvider, model: string) => {
     if (targetProvider === 'claude') {
       setClaudeModel(model);
-      localStorage.setItem('claude-model', model);
+      writeSetting('claude-model', model);
       return;
     }
 
     if (targetProvider === 'cursor') {
       setCursorModel(model);
-      localStorage.setItem('cursor-model', model);
+      writeSetting('cursor-model', model);
       return;
     }
 
     if (targetProvider === 'codex') {
       setCodexModel(model);
-      localStorage.setItem('codex-model', model);
+      writeSetting('codex-model', model);
       return;
     }
 
     setOpenCodeModel(model);
-    localStorage.setItem('opencode-model', model);
+    writeSetting('opencode-model', model);
   }, []);
 
   const setStoredProviderEffort = useCallback((targetProvider: LLMProvider, effort: string) => {
@@ -188,7 +189,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
         ? previous
         : { ...previous, [targetProvider]: effort }
     ));
-    localStorage.setItem(`${targetProvider}-effort`, effort);
+    writeSetting(`${targetProvider}-effort`, effort);
   }, []);
 
   const loadProviderModels = useCallback(async () => {
@@ -381,7 +382,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
         setClaudeModel(next);
       }
       if (localStorage.getItem('claude-model') !== next) {
-        localStorage.setItem('claude-model', next);
+        writeSetting('claude-model', next);
       }
     }
   }, [providerModelCatalog.claude, claudeModel]);
@@ -394,7 +395,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
         setCursorModel(next);
       }
       if (localStorage.getItem('cursor-model') !== next) {
-        localStorage.setItem('cursor-model', next);
+        writeSetting('cursor-model', next);
       }
     }
   }, [providerModelCatalog.cursor, cursorModel]);
@@ -407,7 +408,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
         setCodexModel(next);
       }
       if (localStorage.getItem('codex-model') !== next) {
-        localStorage.setItem('codex-model', next);
+        writeSetting('codex-model', next);
       }
     }
   }, [providerModelCatalog.codex, codexModel]);
@@ -420,7 +421,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
         setOpenCodeModel(next);
       }
       if (localStorage.getItem('opencode-model') !== next) {
-        localStorage.setItem('opencode-model', next);
+        writeSetting('opencode-model', next);
       }
     }
   }, [providerModelCatalog.opencode, opencodeModel]);
@@ -437,7 +438,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       }
 
       nextEfforts[targetProvider] = nextEffort;
-      localStorage.setItem(`${targetProvider}-effort`, nextEffort);
+      writeSetting(`${targetProvider}-effort`, nextEffort);
       hasUpdates = true;
     }
 
@@ -445,6 +446,25 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       setProviderEfforts((previous) => ({ ...previous, ...nextEfforts }));
     }
   }, [providerEfforts, providerModels, reconcileStoredEffort]);
+
+  // Another tab or device changed a model or effort preference: apply it
+  // live. `selected-provider` is deliberately not applied here; while a
+  // session is open it mirrors that session's provider, so applying a remote
+  // value would fight the session and ping-pong between devices.
+  useEffect(() => onSettingChange(
+    ['claude-model', 'cursor-model', 'codex-model', 'opencode-model', ...PROVIDERS.map((p) => `${p}-effort`)],
+    (key, value) => {
+      if (!value) return;
+      if (key === 'claude-model') setClaudeModel(value);
+      else if (key === 'cursor-model') setCursorModel(value);
+      else if (key === 'codex-model') setCodexModel(value);
+      else if (key === 'opencode-model') setOpenCodeModel(value);
+      else {
+        const target = key.replace(/-effort$/, '') as LLMProvider;
+        setProviderEfforts((previous) => (previous[target] === value ? previous : { ...previous, [target]: value }));
+      }
+    },
+  ), []);
 
   useEffect(() => {
     // Every session starts with the hardwired skip-permissions default; stored
@@ -458,7 +478,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     }
 
     setProvider(selectedSession.__provider);
-    localStorage.setItem('selected-provider', selectedSession.__provider);
+    writeSetting('selected-provider', selectedSession.__provider);
   }, [provider, selectedSession]);
 
   // Permission prompts belong to a session, not to the transient provider

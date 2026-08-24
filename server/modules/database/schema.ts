@@ -241,6 +241,38 @@ CREATE TABLE IF NOT EXISTS composer_drafts (
 `;
 
 /**
+ * Per-user client preferences (ui11 phase 1): one row per localStorage key the
+ * client syncs (theme, models, layout, tool settings ...). `value` is the exact
+ * string the browser would hold in localStorage, so the client's boot cache
+ * and the server never disagree on format. `updated_at` is an ISO string.
+ */
+export const USER_SETTINGS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS user_settings (
+    user_id INTEGER NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, key)
+);
+`;
+
+/**
+ * Server-persisted queued messages (ui11 phase 1), one per session, mirroring
+ * composer_drafts: `session_id` is the app session key (no FK, keys predate
+ * session rows), `options_json` is the send-options snapshot taken at queue
+ * time, `attachments_json` the uploaded-attachment descriptors.
+ */
+export const QUEUED_MESSAGES_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS queued_messages (
+    session_id TEXT PRIMARY KEY,
+    content TEXT NOT NULL DEFAULT '',
+    options_json TEXT,
+    attachments_json TEXT,
+    updated_at TEXT NOT NULL
+);
+`;
+
+/**
  * Edit-and-resend response versioning (ui9 B3). A resend is a fresh provider
  * turn appended to the Claude transcript — the JSONL is never touched. These
  * rows only record which turns are alternative versions of the same exchange

@@ -1,5 +1,7 @@
 import { useEffect, useReducer, useRef } from 'react';
 
+import { writeSetting } from '../utils/cloudSettings';
+
 type UiPreferences = {
   showRawParameters: boolean;
   showThinking: boolean;
@@ -157,7 +159,7 @@ export function useUiPreferences(storageKey = 'uiPreferences') {
       return;
     }
 
-    localStorage.setItem(storageKey, JSON.stringify(state));
+    writeSetting(storageKey, JSON.stringify(state));
 
     window.dispatchEvent(
       new CustomEvent<SyncEventDetail>(SYNC_EVENT, {

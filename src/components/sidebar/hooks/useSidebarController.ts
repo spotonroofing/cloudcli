@@ -21,6 +21,7 @@ import {
   readLegacyStarredProjectIds,
   sortProjects,
 } from '../utils/utils';
+import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
 
 const SIDEBAR_TAB_STORAGE_KEY = 'sidebar-active-tab';
 
@@ -204,9 +205,17 @@ export function useSidebarController({
 
   useEffect(() => {
     if (searchMode !== 'running') {
-      localStorage.setItem(SIDEBAR_TAB_STORAGE_KEY, searchMode);
+      writeSetting(SIDEBAR_TAB_STORAGE_KEY, searchMode);
     }
   }, [searchMode]);
+
+  // Another tab or device switched sidebar tabs: follow it when this device
+  // has that tab (desktop has no Projects tab).
+  useEffect(() => onSettingChange([SIDEBAR_TAB_STORAGE_KEY], (_key, value) => {
+    if (value === 'conversations' || value === 'archived' || (value === 'projects' && isMobile)) {
+      setSearchMode(value);
+    }
+  }), [isMobile]);
   const activeSessionIds = useMemo(() => new Set(activeSessions.keys()), [activeSessions]);
   const runningSessionsCount = activeSessionIds.size;
 

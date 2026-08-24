@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 import { DEFAULT_COLOR_THEME, hexToHsl, isAccentHex, isColorTheme } from '../shared/themes';
+import { onSettingChange, writeSetting } from '../utils/cloudSettings';
 
 // The accent token family: every custom-accent override touches exactly these
 // (light and dark instances both, derived from one picked hex).
@@ -81,22 +82,22 @@ export const ThemeProvider = ({ children }) => {
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-theme', colorTheme);
-    localStorage.setItem('color-theme', colorTheme);
+    writeSetting('color-theme', colorTheme);
 
     if (customAccent) {
       applyCustomAccent(root, customAccent, isDarkMode);
-      localStorage.setItem('custom-accent', customAccent);
+      writeSetting('custom-accent', customAccent);
     } else {
       clearCustomAccent(root);
-      localStorage.removeItem('custom-accent');
+      writeSetting('custom-accent', null);
     }
 
     if (isDarkMode) {
       root.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
+      writeSetting('theme', 'dark');
     } else {
       root.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+      writeSetting('theme', 'light');
     }
 
     // iOS status bar style follows light/dark
@@ -114,6 +115,17 @@ export const ThemeProvider = ({ children }) => {
       }
     }
   }, [isDarkMode, colorTheme, customAccent]);
+
+  // Another tab or device changed the theme: apply it here live.
+  useEffect(() => onSettingChange(['theme', 'color-theme', 'custom-accent'], (key, value) => {
+    if (key === 'theme') {
+      if (value) setIsDarkMode(value === 'dark');
+    } else if (key === 'color-theme') {
+      if (isColorTheme(value)) setColorTheme(value);
+    } else {
+      setCustomAccentState(isAccentHex(value) ? value : null);
+    }
+  }), []);
 
   // Listen for system theme changes
   useEffect(() => {

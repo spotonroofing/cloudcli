@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { clearQueuedMessage, readQueuedMessage } from '../components/chat/utils/chatStorage';
+import { claimQueuedMessage, readQueuedMessage } from '../components/chat/utils/chatStorage';
 
 import type { MarkSessionProcessing, SessionActivityMap } from './useSessionProtection';
 
@@ -24,8 +24,8 @@ interface UseQueuedMessageAutoSendArgs {
  * queue time) under `queued_message_<sessionId>`. When a session's run leaves
  * the processing map — its previous response completed — this hook sends that
  * session's queued message immediately instead of waiting for the user to
- * open the session again. Removing the storage key before sending is the
- * claim that keeps the composer's own flush from double-sending.
+ * open the session again. Claiming the server row before sending is what
+ * keeps the composer's own flush (on any device) from double-sending.
  */
 export function useQueuedMessageAutoSend({
   processingSessions,
@@ -57,14 +57,20 @@ export function useQueuedMessageAutoSend({
         continue;
       }
 
-      clearQueuedMessage(sessionId);
-      sendMessage({
-        type: 'chat.send',
-        sessionId,
-        content: queued.content,
-        options: { ...(queued.options ?? {}), attachments: queued.attachments ?? queued.images ?? [] },
+      // The server row is the claim shared with the viewing composer on every
+      // device: only the client whose delete removed it sends.
+      void claimQueuedMessage(sessionId).then((claimed) => {
+        if (!claimed) {
+          return;
+        }
+        sendMessage({
+          type: 'chat.send',
+          sessionId,
+          content: queued.content,
+          options: { ...(queued.options ?? {}), attachments: queued.attachments ?? queued.images ?? [] },
+        });
+        markSessionProcessing(sessionId, { statusText: null, canInterrupt: true });
       });
-      markSessionProcessing(sessionId, { statusText: null, canInterrupt: true });
     }
   }, [processingSessions, activeSessionId, ws, sendMessage, markSessionProcessing]);
 }

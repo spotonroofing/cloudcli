@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Project } from '../../../types/app';
 import { STANDALONE_PROJECT_ID } from '../../../types/app';
+import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
 
 export type WorkspaceMode = 'rows' | 'columns';
 
@@ -133,11 +134,21 @@ export function useWorkspace({
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ order, mode, split, columnSplits, weights }));
+      writeSetting(STORAGE_KEY, JSON.stringify({ order, mode, split, columnSplits, weights }));
     } catch {
       // localStorage unavailable
     }
   }, [order, mode, split, columnSplits, weights]);
+
+  // Another tab or device changed the layout: apply it live.
+  useEffect(() => onSettingChange([STORAGE_KEY], () => {
+    const next = readPersisted();
+    setOrder(next.order);
+    setMode(next.mode);
+    setSplitState(next.split);
+    setColumnSplits(next.columnSplits);
+    setWeights(next.weights);
+  }), []);
 
   const openProjectAt = useCallback((projectId: string, index: number, nextMode: WorkspaceMode) => {
     setMode(nextMode);

@@ -1,6 +1,7 @@
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult } from '../types/types.js';
+import { writeSetting } from '../../../utils/cloudSettings';
 
-import { CLAUDE_SETTINGS_KEY, getClaudeSettings, safeLocalStorage } from './chatStorage';
+import { CLAUDE_SETTINGS_KEY, getClaudeSettings } from './chatStorage';
 
 export function buildClaudeToolPermissionEntry(toolName?: string, toolInput?: unknown) {
   if (!toolName) return null;
@@ -69,6 +70,6 @@ export function grantClaudeToolPermission(entry: string | null): PermissionGrant
     lastUpdated: new Date().toISOString(),
   };
 
-  safeLocalStorage.setItem(CLAUDE_SETTINGS_KEY, JSON.stringify(updatedSettings));
+  writeSetting(CLAUDE_SETTINGS_KEY, JSON.stringify(updatedSettings));
   return { success: true, alreadyAllowed, updatedSettings };
 }

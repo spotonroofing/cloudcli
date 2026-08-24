@@ -22,6 +22,7 @@ import type { Project } from '../../../types/app';
 import { STANDALONE_PROJECT_ID } from '../../../types/app';
 import { TaskMasterPanel } from '../../task-master';
 import { Badge, Button } from '../../../shared/view/ui';
+import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
@@ -79,7 +80,7 @@ function MainContent({
   const toggleWorkerPane = useCallback((open: boolean) => {
     setWorkerPaneOpen(open);
     try {
-      localStorage.setItem('worker-pane-open', open ? '1' : '0');
+      writeSetting('worker-pane-open', open ? '1' : '0');
     } catch {
       // localStorage unavailable
     }
@@ -96,11 +97,16 @@ function MainContent({
   const togglePlannerPane = useCallback((open: boolean) => {
     setPlannerPaneOpen(open);
     try {
-      localStorage.setItem('planner-pane-open', open ? '1' : '0');
+      writeSetting('planner-pane-open', open ? '1' : '0');
     } catch {
       // localStorage unavailable
     }
   }, []);
+  // Another tab or device toggled a pane: apply it live.
+  useEffect(() => onSettingChange(['worker-pane-open', 'planner-pane-open'], (key, value) => {
+    if (key === 'worker-pane-open') setWorkerPaneOpen(value === '1');
+    else setPlannerPaneOpen(value !== '0');
+  }), []);
   // Standalone chats have no repo of their own to work; no worker surface.
   const workerPaneAvailable = Boolean(
     selectedProject && selectedProject.projectId !== STANDALONE_PROJECT_ID,

@@ -1,3 +1,5 @@
+import { writeSetting } from './cloudSettings';
+
 const NOTIFICATION_SOUND_ENABLED_STORAGE_KEY = 'notificationSoundEnabled';
 const AudioContextConstructor =
   typeof window !== 'undefined'
@@ -19,7 +21,7 @@ export const setNotificationSoundEnabled = (enabled: boolean): void => {
     return;
   }
 
-  localStorage.setItem(NOTIFICATION_SOUND_ENABLED_STORAGE_KEY, String(enabled));
+  writeSetting(NOTIFICATION_SOUND_ENABLED_STORAGE_KEY, String(enabled));
 };
 
 const getAudioContext = (): AudioContext | null => {

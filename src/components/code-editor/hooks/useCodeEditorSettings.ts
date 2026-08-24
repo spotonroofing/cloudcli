@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+
+import { writeSetting } from '../../../utils/cloudSettings';
 import {
   CODE_EDITOR_DEFAULTS,
   CODE_EDITOR_SETTINGS_CHANGED_EVENT,
@@ -35,7 +37,7 @@ export const useCodeEditorSettings = () => {
 
   // Keep legacy behavior where the editor writes wrap settings directly.
   useEffect(() => {
-    localStorage.setItem(CODE_EDITOR_STORAGE_KEYS.wordWrap, String(wordWrap));
+    writeSetting(CODE_EDITOR_STORAGE_KEYS.wordWrap, String(wordWrap));
   }, [wordWrap]);
 
   useEffect(() => {

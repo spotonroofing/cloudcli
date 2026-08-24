@@ -1,3 +1,4 @@
+import { authenticatedFetch } from '../../../utils/api';
 import type { ClaudeSettings } from '../types/types';
 
 export const CLAUDE_SETTINGS_KEY = 'claude-settings';
@@ -63,44 +64,174 @@ export type StoredQueuedMessage = {
   attachments?: unknown[];
 };
 
-export const queuedMessageKey = (sessionId: string) => `queued_message_${sessionId}`;
-
 /**
- * Reads a session's queued message. Understands both the JSON
- * `{ content, options }` format and the legacy raw-text format.
+ * Server-persisted queued messages (ui11 phase 1). The in-memory cache is the
+ * synchronous view every reader uses; it is filled by `hydrateQueuedMessages`
+ * at app load, kept current by `queued_message_updated` broadcasts, and
+ * written through to `/api/queued-messages` on every local change. Network
+ * calls are serialized per session so a write never overtakes its clear.
  */
+
+export const queuedClientId =
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+
+const cache = new Map<string, StoredQueuedMessage>();
+const listeners = new Set<(sessionId: string) => void>();
+const tails = new Map<string, Promise<unknown>>();
+
+const notify = (sessionId: string) => {
+  listeners.forEach((listener) => listener(sessionId));
+};
+
+const enqueue = <T>(sessionId: string, operation: () => Promise<T>): Promise<T> => {
+  const next = (tails.get(sessionId) ?? Promise.resolve()).then(operation, operation);
+  tails.set(sessionId, next);
+  return next;
+};
+
+const normalize = (message: StoredQueuedMessage): StoredQueuedMessage => ({
+  content: message.content,
+  options: message.options,
+  attachments: message.attachments ?? message.images ?? [],
+});
+
+const serialize = (message: StoredQueuedMessage) =>
+  JSON.stringify({ content: message.content, options: message.options ?? null, attachments: message.attachments ?? [] });
+
+const endpoint = (sessionId: string) => `/api/queued-messages/${encodeURIComponent(sessionId)}`;
+
+/** Notified when another device (or hydration) changes a session's queued message. */
+export function subscribeQueuedMessages(listener: (sessionId: string) => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 export function readQueuedMessage(sessionId: string): StoredQueuedMessage | null {
-  const raw = safeLocalStorage.getItem(queuedMessageKey(sessionId));
-  if (!raw) {
+  const message = cache.get(sessionId);
+  if (!message) {
     return null;
   }
-
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === 'object' && typeof (parsed as StoredQueuedMessage).content === 'string') {
-      const { content, options, images, attachments } = parsed as StoredQueuedMessage;
-      const normalizedAttachments = Array.isArray(attachments)
-        ? attachments
-        : Array.isArray(images)
-          ? images
-          : [];
-      return content.trim() || normalizedAttachments.length > 0
-        ? { content, options, attachments: normalizedAttachments }
-        : null;
-    }
-  } catch {
-    // Legacy format: the raw draft text itself.
-  }
-
-  return raw.trim() ? { content: raw } : null;
+  return message.content.trim() || (message.attachments?.length ?? 0) > 0 ? message : null;
 }
 
 export function writeQueuedMessage(sessionId: string, message: StoredQueuedMessage): void {
-  safeLocalStorage.setItem(queuedMessageKey(sessionId), JSON.stringify(message));
+  const normalized = normalize(message);
+  const previous = cache.get(sessionId);
+  if (previous && serialize(previous) === serialize(normalized)) {
+    return;
+  }
+  cache.set(sessionId, normalized);
+  void enqueue(sessionId, () =>
+    authenticatedFetch(endpoint(sessionId), {
+      method: 'PUT',
+      body: JSON.stringify({ ...normalized, clientId: queuedClientId }),
+    }).catch(() => {
+      // Transient network failure; the next hydrate reconciles.
+    }),
+  );
 }
 
 export function clearQueuedMessage(sessionId: string): void {
-  safeLocalStorage.removeItem(queuedMessageKey(sessionId));
+  if (!cache.has(sessionId)) {
+    return;
+  }
+  cache.delete(sessionId);
+  void enqueue(sessionId, () =>
+    authenticatedFetch(endpoint(sessionId), {
+      method: 'DELETE',
+      body: JSON.stringify({ clientId: queuedClientId }),
+    }).catch(() => {
+      // Transient network failure; the next hydrate reconciles.
+    }),
+  );
+}
+
+/**
+ * Removes the session's queued message and resolves true only for the one
+ * client whose delete removed the server row. Every sender (the viewing
+ * composer on any device, the app-level auto-send) claims before sending, so
+ * a message queued on one device and visible on three is sent exactly once.
+ */
+export function claimQueuedMessage(sessionId: string): Promise<boolean> {
+  cache.delete(sessionId);
+  return enqueue(sessionId, async () => {
+    try {
+      const response = await authenticatedFetch(endpoint(sessionId), {
+        method: 'DELETE',
+        body: JSON.stringify({ clientId: queuedClientId }),
+      });
+      if (!response.ok) {
+        return false;
+      }
+      const body = await response.json();
+      return body?.data?.claimed === true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+export function applyRemoteQueuedMessage(sessionId: string, message: StoredQueuedMessage | null): void {
+  if (message && typeof message.content === 'string') {
+    cache.set(sessionId, normalize(message));
+  } else {
+    cache.delete(sessionId);
+  }
+  notify(sessionId);
+}
+
+const LEGACY_KEY_PREFIX = 'queued_message_';
+
+/** Messages queued by the pre-sync build sit in localStorage; move them up once. */
+const migrateLegacyQueuedMessages = (): void => {
+  for (const key of Object.keys(localStorage)) {
+    if (!key.startsWith(LEGACY_KEY_PREFIX)) {
+      continue;
+    }
+    const sessionId = key.slice(LEGACY_KEY_PREFIX.length);
+    const raw = localStorage.getItem(key) ?? '';
+    localStorage.removeItem(key);
+    if (cache.has(sessionId)) {
+      continue;
+    }
+    let message: StoredQueuedMessage | null = null;
+    try {
+      const parsed = JSON.parse(raw) as StoredQueuedMessage;
+      message = parsed && typeof parsed.content === 'string' ? parsed : null;
+    } catch {
+      message = raw.trim() ? { content: raw } : null;
+    }
+    if (message && (message.content.trim() || (message.attachments ?? message.images ?? []).length > 0)) {
+      writeQueuedMessage(sessionId, message);
+    }
+  }
+};
+
+export async function hydrateQueuedMessages(): Promise<void> {
+  let messages: Record<string, StoredQueuedMessage>;
+  try {
+    const response = await authenticatedFetch('/api/queued-messages');
+    if (!response.ok) {
+      return;
+    }
+    const body = await response.json();
+    messages = body?.data?.messages && typeof body.data.messages === 'object' ? body.data.messages : {};
+  } catch {
+    return;
+  }
+  const touched = new Set([...cache.keys(), ...Object.keys(messages)]);
+  cache.clear();
+  for (const [sessionId, message] of Object.entries(messages)) {
+    if (message && typeof message.content === 'string') {
+      cache.set(sessionId, normalize(message));
+    }
+  }
+  migrateLegacyQueuedMessages();
+  touched.forEach(notify);
 }
 
 export function getClaudeSettings(): ClaudeSettings {

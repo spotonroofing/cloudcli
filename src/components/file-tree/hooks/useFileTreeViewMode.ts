@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+
+import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
 import {
   FILE_TREE_DEFAULT_VIEW_MODE,
   FILE_TREE_VIEW_MODES,
@@ -25,11 +27,18 @@ export function useFileTreeViewMode(): UseFileTreeViewModeResult {
     }
   }, []);
 
+  // Another tab or device changed the view mode: apply it live.
+  useEffect(() => onSettingChange([FILE_TREE_VIEW_MODE_STORAGE_KEY], (_key, value) => {
+    if (value && FILE_TREE_VIEW_MODES.includes(value as FileTreeViewMode)) {
+      setViewMode(value as FileTreeViewMode);
+    }
+  }), []);
+
   const changeViewMode = useCallback((mode: FileTreeViewMode) => {
     setViewMode(mode);
 
     try {
-      localStorage.setItem(FILE_TREE_VIEW_MODE_STORAGE_KEY, mode);
+      writeSetting(FILE_TREE_VIEW_MODE_STORAGE_KEY, mode);
     } catch {
       // Keep runtime state even when persistence fails.
     }

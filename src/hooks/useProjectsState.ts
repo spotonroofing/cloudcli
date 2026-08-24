@@ -11,6 +11,7 @@ import type {
   ProjectSession,
 } from '../types/app';
 import { STANDALONE_PROJECT_ID } from '../types/app';
+import { writeSetting } from '../utils/cloudSettings';
 
 import type { SessionActivityMap } from './useSessionProtection';
 
@@ -403,7 +404,7 @@ export function useProjectsState({
 
   useEffect(() => {
     try {
-      localStorage.setItem('activeTab', activeTab);
+      writeSetting('activeTab', activeTab);
     } catch {
       // Silently ignore storage errors
     }

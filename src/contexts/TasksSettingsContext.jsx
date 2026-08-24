@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+
 import { api } from '../utils/api';
+import { onSettingChange, writeSetting } from '../utils/cloudSettings';
 
 const TasksSettingsContext = createContext({
   tasksEnabled: true,
@@ -33,8 +35,13 @@ export const TasksSettingsProvider = ({ children }) => {
 
   // Save to localStorage whenever tasksEnabled changes
   useEffect(() => {
-    localStorage.setItem('tasks-enabled', JSON.stringify(tasksEnabled));
+    writeSetting('tasks-enabled', JSON.stringify(tasksEnabled));
   }, [tasksEnabled]);
+
+  // Another tab or device toggled tasks: apply it live.
+  useEffect(() => onSettingChange(['tasks-enabled'], (_key, value) => {
+    if (value !== null) setTasksEnabled(JSON.parse(value));
+  }), []);
 
   // Check TaskMaster installation status asynchronously on component mount
   useEffect(() => {
