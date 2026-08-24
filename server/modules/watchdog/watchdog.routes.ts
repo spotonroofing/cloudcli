@@ -50,8 +50,8 @@ export function createWatchdogRouter(): express.Router {
     asyncHandler(async (req: Request, res: Response) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const event = typeof body.event === 'string' ? body.event : '';
-      if (!['phase-start', 'phase-end', 'completed', 'stopped', 'failed'].includes(event)) {
-        throw new AppError('event must be phase-start|phase-end|completed|stopped|failed.', {
+      if (!['phase-start', 'phase-end', 'limit', 'completed', 'stopped', 'failed'].includes(event)) {
+        throw new AppError('event must be phase-start|phase-end|limit|completed|stopped|failed.', {
           code: 'WATCHDOG_EVENT_INVALID',
           statusCode: 400,
         });
@@ -61,7 +61,7 @@ export function createWatchdogRouter(): express.Router {
         phase: Number.isFinite(Number(body.phase)) ? Number(body.phase) : undefined,
         summaryTail: typeof body.summaryTail === 'string' ? body.summaryTail : undefined,
       };
-      const eventName = event as 'phase-start' | 'phase-end' | 'completed' | 'stopped' | 'failed';
+      const eventName = event as 'phase-start' | 'phase-end' | 'limit' | 'completed' | 'stopped' | 'failed';
       let known = watchdogService.chainEvent(slug, eventName, detail);
       // Chains run out-of-process and outlive server restarts; a restart
       // empties the in-memory registry. Events carry projectPath so the chain

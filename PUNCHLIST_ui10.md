@@ -26,10 +26,10 @@ Willem's end-of-month burn round on the ui9 build. Four phases: session-limit au
 
 Goal: a session limit never silently kills work again. Files: dispatch-chain-runner, cswap wiring, watchdog. Dependencies: none.
 
-- [ ] The chain runner detects a limit-exit (claude exits 1 with the "hit your session limit" message in output): instead of tripping the commit gate, it switches accounts via cswap to the next enabled account with 5h headroom (order: current, then remaining slots) and retries the phase; if no account has headroom it sleeps until the earliest reset then retries. Journal entries record the limit hit, the switch or wait, and the retry.
-- [ ] After any cswap switch the runner re-runs the keychain mirror step the accounts module uses, so scoped instances pick up the new account (precedent in server/modules/accounts).
-- [ ] Enable cswap auto-switching (`cswap auto`) machine-wide and diagnose why it did not engage on the 2026-08-23 limit death; fix or document the gap in one line.
-- [ ] The watchdog's chain-failed wake message distinguishes "limit hit, auto-recovering" from a real failure.
+- [x] The chain runner detects a limit-exit (claude exits 1 with the "hit your session limit" message in output): instead of tripping the commit gate, it switches accounts via cswap to the next enabled account with 5h headroom (order: current, then remaining slots) and retries the phase; if no account has headroom it sleeps until the earliest reset then retries. Journal entries record the limit hit, the switch or wait, and the retry.
+- [x] After any cswap switch the runner re-runs the keychain mirror step the accounts module uses, so scoped instances pick up the new account (precedent in server/modules/accounts).
+- [x] Enable cswap auto-switching (`cswap auto`) machine-wide and diagnose why it did not engage on the 2026-08-23 limit death; fix or document the gap in one line. Gap: the com.spoton.cswap daemon WAS running, but cswap 0.24.1 treated account #2's unreadable quota ("?", stale stored-backup token) as exhausted and declared "all accounts exhausted" at 22:43 while #2 was actually fresh — fixed by upgrading to 0.25.0 (unknown headroom no longer counts as empty) plus the runner's reactive recovery above; config now pins threshold 99 / model Fable (cswap config has no literal "enabled" key; enablement is the KeepAlive LaunchAgent, verified running).
+- [x] The watchdog's chain-failed wake message distinguishes "limit hit, auto-recovering" from a real failure.
 
 Done check: with a stub claude binary that exits 1 printing the limit message once then succeeds, a test chain on dev retries through the simulated limit and completes with the journal showing hit-switch-retry; `cswap config` shows auto enabled. Fresh-context subagent verification. Commit.
 

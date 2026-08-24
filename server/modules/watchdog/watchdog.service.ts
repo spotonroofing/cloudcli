@@ -288,7 +288,7 @@ class WatchdogService {
 
   chainEvent(
     slug: string,
-    event: 'phase-start' | 'phase-end' | 'completed' | 'stopped' | 'failed',
+    event: 'phase-start' | 'phase-end' | 'limit' | 'completed' | 'stopped' | 'failed',
     detail?: { phase?: number; summaryTail?: string },
   ): boolean {
     const chain = this.chains.get(slug);
@@ -306,6 +306,21 @@ class WatchdogService {
     // phase-end/terminal — never inferred from a session row's age.
     chain.phaseActive = event === 'phase-start';
     log(`chain ${slug}: ${event}`, { phase: chain.currentPhase, status: chain.status });
+
+    // Session-limit auto-recovery (ui10 phase 1): not a failure. The runner
+    // is switching accounts or waiting out the reset, then retrying the
+    // phase; the chain stays running and the wake says so explicitly.
+    if (event === 'limit') {
+      this.persistChain(chain);
+      this.broadcastChainProgress(chain);
+      const tail = chain.lastSummaryTail ? `\n\nRecovery detail:\n${chain.lastSummaryTail}` : '';
+      this.queueWake(
+        chain.projectPath,
+        `Watchdog: dispatched chain "${slug}" hit the session limit${chain.phases ? ` (phase ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''} `
+        + `and is auto-recovering (account switch or reset wait, then retry). This is not a failure; no action needed.${tail}`,
+      );
+      return true;
+    }
 
     if (event === 'completed' || event === 'stopped' || event === 'failed') {
       chain.status = event === 'completed' ? 'completed' : event === 'stopped' ? 'stopped' : 'failed';

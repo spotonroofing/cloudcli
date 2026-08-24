@@ -35,6 +35,11 @@ FALLBACK_MODEL="claude-opus-4-8"
 CLAUDE_BIN=$(command -v claude)
 [[ -n "$CLAUDE_BIN" ]] || { print -u2 "dispatch-chain-runner: claude CLI not on PATH"; exit 69; }
 
+# Session-limit resilience (ui10 phase 1): a limit-exit never trips the commit
+# gate. CSWAP_PATH override mirrors server/modules/accounts.
+CSWAP_BIN="${CSWAP_PATH:-$HOME/.local/bin/cswap}"
+LIMIT_PATTERN='hit your session limit|session limit reached|usage limit reached'
+
 # API key from server config; keep it out of argv (curl reads a header file).
 API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
 [[ -n "$API_KEY" ]] || { print -u2 "dispatch-chain-runner: no active API key in server config"; exit 78; }
@@ -94,6 +99,82 @@ wait_for_chrome_slot() {
   local helper="$HOME/.local/bin/chrome-slot-wait"
   [[ -x "$helper" ]] && "$helper" || true
 }
+
+# ----- session-limit resilience (ui10 phase 1) ------------------------------
+# When claude exits nonzero with the session-limit message in the phase log,
+# the runner switches to the next enabled account with 5h headroom via cswap
+# (order: current, then remaining slots), mirrors the fresh credential into
+# this instance's scoped Keychain, and retries the phase; with no viable
+# account it sleeps until the earliest 5h reset and retries then.
+
+# After a cswap switch the *default* Keychain item holds the new account, but
+# an instance scoped by CLAUDE_CONFIG_DIR reads its own service. Mirror the
+# way server/modules/accounts does: service suffix is sha256(NFC(config
+# dir))[:8], credential travels via `security -i` + hex payload, never argv.
+mirror_keychain() {
+  [[ -n "${CLAUDE_CONFIG_DIR:-}" ]] || return 0
+  local digest creds hex
+  digest=$(python3 -c 'import hashlib,os,unicodedata;print(hashlib.sha256(unicodedata.normalize("NFC",os.environ["CLAUDE_CONFIG_DIR"]).encode()).hexdigest()[:8])') || return 1
+  creds=$(/usr/bin/security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
+  [[ -n "$creds" ]] || return 1
+  hex=$(print -rn -- "$creds" | /usr/bin/xxd -p -u | tr -d '\n')
+  print -r -- "add-generic-password -U -a \"$USER\" -s \"Claude Code-credentials-$digest\" -X $hex" \
+    | /usr/bin/security -i >/dev/null 2>&1 || return 1
+  print -r -- "$creds" > "$CLAUDE_CONFIG_DIR/.credentials.json" \
+    && chmod 600 "$CLAUDE_CONFIG_DIR/.credentials.json"
+}
+
+# Recovery decision from `cswap list --json`: prints "stay", "switch <num>
+# <email>", or "wait <seconds> <until>". Headroom = readable 5h window under
+# 90%. An account whose quota reads unreadable is tried after readable ones —
+# the 2026-08-23 death taught that unreadable is not exhausted. $1=1 forces
+# the wait branch (guard when every account was already tried this phase).
+pick_recovery() {
+  local listing
+  listing=$(env -u CLAUDE_CONFIG_DIR "$CSWAP_BIN" list --json 2>/dev/null)
+  FORCE_WAIT="${1:-}" CSWAP_LISTING="$listing" python3 - <<'PYEOF'
+import datetime, json, os, sys
+try:
+    data = json.loads(os.environ.get('CSWAP_LISTING') or '')
+except Exception:
+    print("wait 1800 unknown-cswap-list-unreadable")
+    sys.exit(0)
+accounts = [a for a in data.get('accounts', []) if not a.get('disabled')]
+current = data.get('activeAccountNumber')
+ordered = sorted(accounts, key=lambda a: (a.get('number') != current, a.get('number') or 0))
+five = lambda a: ((a.get('usage') or {}).get('fiveHour') or {})
+if os.environ.get('FORCE_WAIT') != '1':
+    for a in ordered:
+        pct = five(a).get('pct')
+        if isinstance(pct, (int, float)) and pct < 90:
+            print('stay' if a.get('number') == current else f"switch {a.get('number')} {a.get('email', '')}")
+            sys.exit(0)
+    for a in ordered:
+        if a.get('number') != current and not isinstance(five(a).get('pct'), (int, float)):
+            print(f"switch {a.get('number')} {a.get('email', '')} (quota unreadable, trying anyway)")
+            sys.exit(0)
+resets = []
+for a in accounts:
+    iso = five(a).get('resetsAt')
+    if iso:
+        try:
+            dt = datetime.datetime.fromisoformat(iso.replace('Z', '+00:00'))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            resets.append(dt)
+        except ValueError:
+            pass
+if resets:
+    earliest = min(resets)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    secs = max(60, int((earliest - now).total_seconds()) + 60)
+    print(f"wait {secs} {earliest.isoformat()}")
+else:
+    print("wait 1800 unknown-no-reset-times")
+PYEOF
+}
+
+LIMIT_STREAK=0
 
 CHAIN_BASE=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
 
@@ -174,6 +255,54 @@ PYEOF
   RC=$?
 
   NEW_COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
+
+  # Limit-exit: recover (switch or wait) and retry the phase instead of
+  # tripping the commit gate. The `limit` watchdog event keeps the chain
+  # running and wakes the planner with "auto-recovering", not "FAILED".
+  if [[ $RC -ne 0 ]] && grep -qiE "$LIMIT_PATTERN" "$JOURNAL_DIR/phase$PHASE_NUM.log"; then
+    LIMIT_STREAK=$((LIMIT_STREAK + 1))
+    journal "phase $PHASE_NUM/$TOTAL" "limit" "claude exited $RC on the session limit (attempt $LIMIT_STREAK); auto-recovering"
+    if [[ ! -x "$CSWAP_BIN" ]]; then
+      journal "phase $PHASE_NUM/$TOTAL" "FAILED" "limit hit but cswap missing at $CSWAP_BIN; cannot auto-recover"
+      api_post "/api/watchdog/chains/$SLUG/events" \
+        "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) hit the session limit and auto-recovery is unavailable (cswap missing at $CSWAP_BIN)." | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" 80
+      exit 1
+    fi
+    FORCE_WAIT=""
+    [[ $LIMIT_STREAK -gt 3 ]] && FORCE_WAIT=1
+    RECOVERY=$(pick_recovery "$FORCE_WAIT")
+    case "${RECOVERY%% *}" in
+      switch)
+        TARGET=$(print -r -- "$RECOVERY" | awk '{print $2}')
+        if env -u CLAUDE_CONFIG_DIR "$CSWAP_BIN" switch "$TARGET" --json >/dev/null 2>&1; then
+          journal "phase $PHASE_NUM/$TOTAL" "switch" "switched account: ${RECOVERY#switch }"
+        else
+          journal "phase $PHASE_NUM/$TOTAL" "switch" "cswap switch $TARGET failed; retrying on current account"
+        fi
+        mirror_keychain \
+          && journal "phase $PHASE_NUM/$TOTAL" "mirror" "scoped Keychain + .credentials.json refreshed for ${CLAUDE_CONFIG_DIR:-default profile (no-op)}" \
+          || journal "phase $PHASE_NUM/$TOTAL" "mirror" "keychain mirror failed; scoped instances may lag one account behind"
+        ;;
+      stay)
+        journal "phase $PHASE_NUM/$TOTAL" "switch" "current account already has 5h headroom; retrying without a switch"
+        ;;
+      wait)
+        WAIT_SECS=$(print -r -- "$RECOVERY" | awk '{print $2}')
+        WAIT_UNTIL=$(print -r -- "$RECOVERY" | awk '{print $3}')
+        journal "phase $PHASE_NUM/$TOTAL" "wait" "no account with 5h headroom; sleeping ${WAIT_SECS}s until $WAIT_UNTIL"
+        ;;
+    esac
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body limit $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) hit the session limit; recovery: $RECOVERY." | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" 3
+    if [[ "${RECOVERY%% *}" == "wait" ]]; then
+      sleep "$WAIT_SECS"
+      LIMIT_STREAK=0
+    fi
+    journal "phase $PHASE_NUM/$TOTAL" "retry" "re-running $PHASE_NAME after limit recovery"
+    PHASE_NUM=$((PHASE_NUM - 1))
+    continue
+  fi
+  LIMIT_STREAK=0
 
   if [[ $RC -ne 0 ]]; then
     journal "phase $PHASE_NUM/$TOTAL" "FAILED" "claude exited $RC; stopping chain (phase$PHASE_NUM.log)"
