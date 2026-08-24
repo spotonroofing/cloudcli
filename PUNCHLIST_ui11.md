@@ -158,3 +158,13 @@ Goal: editing a previous message happens inside the transcript, exactly the way 
 
 Done check: on dev, click the pencil on a sent user message: the bubble's DOM becomes an editable element with Cancel and Save below it and the composer's value is unchanged; editing and saving creates a new version of that turn and the assistant responds to the edited text; Cancel restores the original; holds at a phone viewport. Fresh-context subagent verification. Commit.
 
+## Phase 14 — Appended phases are first-class in the navigator (appended 2026-08-24)
+
+Goal: a phase appended onto a running chain looks exactly like a dispatched one in the phase navigator: "Phase N - Title", task rows, counter, icons; never a raw filename like "09-number-baseline" with no tasks. Files: scripts/macos/dispatch (the append branch that announces entries with the filename as name and empty tasks), the watchdog append endpoint and manifest storage (server/modules/watchdog), the phase navigator, this chain's stored manifest. Dependencies: phases 6 and 10 (counter and drawer work).
+
+- [ ] Appended prompt files carry their display metadata in comment headers at the top of the file: `<!-- name: <Title> -->` and `<!-- tasks: <task> | <task> | ... -->`. The dispatch append branch reads them and announces name and tasks (falling back to the filename only when the headers are absent); the watchdog stores them into the chain's manifest exactly like dispatch-time entries; the navigator renders appended phases identically to dispatched ones (title, drawer, task rows with check/working/idle icons, done/total counter). This completes and supersedes phase 10's append-tasks item; check that one off with it if phase 10 has not already done it.
+- [ ] Backfill this run: update the ui11 chain's stored manifest so entries 9 through 14 carry their real titles (Numbers on the line; Worker pane live and navigator drawers; Live loading and skeletons; Counter drawers; Edit in place; Appended phases first-class) and their task lists taken from this file's phase checkboxes, so the navigator shows them correctly for the rest of the run.
+- [ ] Retro-fit the five already-queued append files in `.dispatch/ui11/` (09 through 13) with the comment headers so a resume or re-announce carries them too.
+
+Done check: on dev, the ui11 chain's navigator (or a stub chain exercising an append with headers) shows appended phases as "Phase N - Title" with task rows and counters, no filename slugs anywhere in the navigator DOM; the stored ui11 manifest contains names and tasks for entries 9-14. Fresh-context subagent verification. Commit.
+
