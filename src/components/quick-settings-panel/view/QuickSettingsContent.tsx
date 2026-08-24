@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { DarkModeToggle } from '../../../shared/view/ui';
 import LanguageSelector from '../../../shared/view/ui/LanguageSelector';
+import ThemePaletteDots from '../../../shared/view/ThemePaletteDots';
 import {
   Select,
   SelectContent,
@@ -80,8 +81,11 @@ export default function QuickSettingsContent({
             </SelectTrigger>
             <SelectContent>
               {COLOR_THEMES.map((theme) => (
-                <SelectItem key={theme.id} value={theme.id}>
-                  {theme.label}
+                <SelectItem key={theme.id} value={theme.id} textValue={theme.label}>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{theme.label}</span>
+                    <ThemePaletteDots themeId={theme.id} />
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>

@@ -134,11 +134,17 @@
     --nav-input-focus-ring: 211 22% 64% / 0.25;
   }
 
-  /* Named color themes (ui8 phase 4). The base :root/.dark pair above IS the
-     default "Steel Blue" theme; each block below is a full token set for one
-     additional theme, light ([data-theme]:not(.dark)) and dark
-     ([data-theme].dark) — both selectors sit on <html>. Only color tokens
-     vary; radius, typography, spacing, and safe-area tokens are shared. */
+  /* Named color themes (ui8 phase 4, layered in ui10 phase 3). The base
+     :root/.dark pair above IS the default "Steel Blue" theme; each block below
+     is a full token set for one additional theme, light
+     ([data-theme]:not(.dark)) and dark ([data-theme].dark) — both selectors
+     sit on <html>. Only color tokens vary; radius, typography, spacing, and
+     safe-area tokens are shared. A theme is three independently designed
+     layers — surface ramp (background/card/secondary/border), ink pair
+     (foreground/muted-foreground), accent family (primary/ring/nav glow) —
+     so the surface tint, ink temperature, and accent hue never have to share
+     a hue. Keep any rework layered; a single hue swept across every token is
+     the flat look this replaced. */
 
   /* Graphite — pure neutral grays, charcoal accent. */
   [data-theme='graphite']:not(.dark) {
@@ -197,232 +203,236 @@
     --nav-input-focus-ring: 0 0% 78% / 0.25;
   }
 
-  /* Ink — deep navy accent on cool gray paper. */
+  /* Ink — iron-gall navy on warm manuscript paper: warm surface ramp,
+     cool blue-black ink, deep navy accent. */
   [data-theme='ink']:not(.dark) {
-    --background: 220 18% 96.5%;
-    --foreground: 224 30% 6%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 30% 6%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 30% 6%;
-    --primary: 224 38% 38%;
+    --background: 40 28% 95.5%;
+    --foreground: 228 25% 9%;
+    --card: 42 30% 99%;
+    --card-foreground: 228 25% 9%;
+    --popover: 42 30% 99%;
+    --popover-foreground: 228 25% 9%;
+    --primary: 226 45% 35%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 90%;
-    --secondary-foreground: 224 18% 18%;
-    --muted: 220 14% 90%;
-    --muted-foreground: 222 8% 44%;
-    --accent: 220 14% 90%;
-    --accent-foreground: 224 18% 18%;
-    --border: 220 13% 86%;
-    --input: 220 13% 86%;
-    --ring: 224 38% 38%;
-    --beam-ink: 224 16% 42%;
-    --nav-glass-bg: 220 18% 96.5% / 0.7;
-    --nav-tab-glow: 224 38% 38% / 0.18;
-    --nav-tab-ring: 224 38% 38% / 0.10;
-    --nav-float-ring: 220 13% 86% / 0.5;
-    --nav-divider-color: 220 13% 86% / 0.5;
-    --nav-input-bg: 220 14% 90% / 0.5;
-    --nav-input-focus-ring: 224 38% 38% / 0.22;
+    --secondary: 40 20% 89.5%;
+    --secondary-foreground: 228 15% 18%;
+    --muted: 40 20% 89.5%;
+    --muted-foreground: 232 8% 42%;
+    --accent: 40 20% 89.5%;
+    --accent-foreground: 228 15% 18%;
+    --border: 40 18% 84%;
+    --input: 40 18% 84%;
+    --ring: 226 45% 35%;
+    --beam-ink: 228 12% 42%;
+    --nav-glass-bg: 40 28% 95.5% / 0.7;
+    --nav-tab-glow: 226 45% 35% / 0.18;
+    --nav-tab-ring: 226 45% 35% / 0.10;
+    --nav-float-ring: 40 18% 84% / 0.5;
+    --nav-divider-color: 40 18% 84% / 0.5;
+    --nav-input-bg: 40 20% 89.5% / 0.5;
+    --nav-input-focus-ring: 226 45% 35% / 0.22;
   }
 
   [data-theme='ink'].dark {
-    --background: 224 14% 8%;
-    --foreground: 220 12% 92%;
-    --card: 224 12% 12%;
-    --card-foreground: 220 12% 92%;
-    --popover: 224 12% 12%;
-    --popover-foreground: 220 12% 92%;
-    --primary: 222 32% 70%;
-    --primary-foreground: 224 25% 10%;
-    --secondary: 224 10% 16%;
-    --secondary-foreground: 220 12% 92%;
-    --muted: 224 10% 16%;
-    --muted-foreground: 220 8% 62%;
-    --accent: 224 10% 16%;
-    --accent-foreground: 220 12% 92%;
-    --border: 224 10% 16%;
-    --input: 224 10% 23%;
-    --ring: 222 32% 70%;
-    --beam-ink: 222 24% 78%;
-    --nav-glass-bg: 224 12% 12% / 0.55;
-    --nav-tab-glow: 222 32% 70% / 0.25;
-    --nav-tab-ring: 222 32% 70% / 0.15;
-    --nav-float-ring: 224 10% 16% / 0.3;
-    --nav-divider-color: 224 10% 16% / 0.5;
-    --nav-input-bg: 224 10% 16% / 0.5;
-    --nav-input-focus-ring: 222 32% 70% / 0.25;
+    --background: 228 18% 8%;
+    --foreground: 40 18% 90%;
+    --card: 228 15% 11.5%;
+    --card-foreground: 40 18% 90%;
+    --popover: 228 15% 11.5%;
+    --popover-foreground: 40 18% 90%;
+    --primary: 224 42% 72%;
+    --primary-foreground: 228 25% 10%;
+    --secondary: 228 12% 16%;
+    --secondary-foreground: 40 18% 90%;
+    --muted: 228 12% 16%;
+    --muted-foreground: 226 8% 62%;
+    --accent: 228 12% 16%;
+    --accent-foreground: 40 18% 90%;
+    --border: 228 12% 16%;
+    --input: 228 12% 23%;
+    --ring: 224 42% 72%;
+    --beam-ink: 224 20% 78%;
+    --nav-glass-bg: 228 15% 11.5% / 0.55;
+    --nav-tab-glow: 224 42% 72% / 0.25;
+    --nav-tab-ring: 224 42% 72% / 0.15;
+    --nav-float-ring: 228 12% 16% / 0.3;
+    --nav-divider-color: 228 12% 16% / 0.5;
+    --nav-input-bg: 228 12% 16% / 0.5;
+    --nav-input-focus-ring: 224 42% 72% / 0.25;
   }
 
-  /* Moss — desaturated green accent on cool paper. */
+  /* Moss — moss on river stone: cool stone surface ramp, warm espresso ink,
+     desaturated green accent. */
   [data-theme='moss']:not(.dark) {
-    --background: 120 12% 96%;
-    --foreground: 140 20% 6%;
-    --card: 0 0% 100%;
-    --card-foreground: 140 20% 6%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 140 20% 6%;
-    --primary: 140 22% 36%;
+    --background: 210 12% 95.5%;
+    --foreground: 25 18% 9%;
+    --card: 210 20% 99%;
+    --card-foreground: 25 18% 9%;
+    --popover: 210 20% 99%;
+    --popover-foreground: 25 18% 9%;
+    --primary: 146 30% 33%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 120 10% 90%;
-    --secondary-foreground: 140 12% 18%;
-    --muted: 120 10% 90%;
-    --muted-foreground: 140 6% 42%;
-    --accent: 120 10% 90%;
-    --accent-foreground: 140 12% 18%;
-    --border: 120 9% 86%;
-    --input: 120 9% 86%;
-    --ring: 140 22% 36%;
-    --beam-ink: 140 10% 40%;
-    --nav-glass-bg: 120 12% 96% / 0.7;
-    --nav-tab-glow: 140 22% 36% / 0.18;
-    --nav-tab-ring: 140 22% 36% / 0.10;
-    --nav-float-ring: 120 9% 86% / 0.5;
-    --nav-divider-color: 120 9% 86% / 0.5;
-    --nav-input-bg: 120 10% 90% / 0.5;
-    --nav-input-focus-ring: 140 22% 36% / 0.22;
+    --secondary: 210 10% 89.5%;
+    --secondary-foreground: 25 12% 18%;
+    --muted: 210 10% 89.5%;
+    --muted-foreground: 220 6% 42%;
+    --accent: 210 10% 89.5%;
+    --accent-foreground: 25 12% 18%;
+    --border: 210 9% 85%;
+    --input: 210 9% 85%;
+    --ring: 146 30% 33%;
+    --beam-ink: 210 8% 42%;
+    --nav-glass-bg: 210 12% 95.5% / 0.7;
+    --nav-tab-glow: 146 30% 33% / 0.18;
+    --nav-tab-ring: 146 30% 33% / 0.10;
+    --nav-float-ring: 210 9% 85% / 0.5;
+    --nav-divider-color: 210 9% 85% / 0.5;
+    --nav-input-bg: 210 10% 89.5% / 0.5;
+    --nav-input-focus-ring: 146 30% 33% / 0.22;
   }
 
   [data-theme='moss'].dark {
-    --background: 150 8% 7%;
-    --foreground: 120 8% 92%;
-    --card: 150 7% 11%;
-    --card-foreground: 120 8% 92%;
-    --popover: 150 7% 11%;
-    --popover-foreground: 120 8% 92%;
-    --primary: 140 18% 62%;
-    --primary-foreground: 150 15% 8%;
-    --secondary: 150 6% 16%;
-    --secondary-foreground: 120 8% 92%;
-    --muted: 150 6% 16%;
-    --muted-foreground: 140 5% 58%;
-    --accent: 150 6% 16%;
-    --accent-foreground: 120 8% 92%;
-    --border: 150 6% 16%;
-    --input: 150 6% 22%;
-    --ring: 140 18% 62%;
-    --beam-ink: 140 14% 76%;
-    --nav-glass-bg: 150 7% 11% / 0.55;
-    --nav-tab-glow: 140 18% 62% / 0.25;
-    --nav-tab-ring: 140 18% 62% / 0.15;
-    --nav-float-ring: 150 6% 16% / 0.3;
-    --nav-divider-color: 150 6% 16% / 0.5;
-    --nav-input-bg: 150 6% 16% / 0.5;
-    --nav-input-focus-ring: 140 18% 62% / 0.25;
+    --background: 200 10% 7.5%;
+    --foreground: 40 12% 90%;
+    --card: 200 8% 11.5%;
+    --card-foreground: 40 12% 90%;
+    --popover: 200 8% 11.5%;
+    --popover-foreground: 40 12% 90%;
+    --primary: 146 24% 60%;
+    --primary-foreground: 150 20% 8%;
+    --secondary: 200 7% 15.5%;
+    --secondary-foreground: 40 12% 90%;
+    --muted: 200 7% 15.5%;
+    --muted-foreground: 200 6% 60%;
+    --accent: 200 7% 15.5%;
+    --accent-foreground: 40 12% 90%;
+    --border: 200 7% 15.5%;
+    --input: 200 7% 22%;
+    --ring: 146 24% 60%;
+    --beam-ink: 200 10% 76%;
+    --nav-glass-bg: 200 8% 11.5% / 0.55;
+    --nav-tab-glow: 146 24% 60% / 0.25;
+    --nav-tab-ring: 146 24% 60% / 0.15;
+    --nav-float-ring: 200 7% 15.5% / 0.3;
+    --nav-divider-color: 200 7% 15.5% / 0.5;
+    --nav-input-bg: 200 7% 15.5% / 0.5;
+    --nav-input-focus-ring: 146 24% 60% / 0.25;
   }
 
-  /* Copper — warm terracotta accent on warm paper. */
+  /* Copper — copper on porcelain: cool porcelain surface ramp, warm sepia
+     ink, terracotta accent. */
   [data-theme='copper']:not(.dark) {
-    --background: 32 30% 96%;
-    --foreground: 24 30% 6%;
-    --card: 0 0% 100%;
-    --card-foreground: 24 30% 6%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 24 30% 6%;
-    --primary: 22 42% 42%;
+    --background: 215 16% 95.5%;
+    --foreground: 20 18% 9%;
+    --card: 210 25% 99%;
+    --card-foreground: 20 18% 9%;
+    --popover: 210 25% 99%;
+    --popover-foreground: 20 18% 9%;
+    --primary: 18 55% 42%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 32 20% 90%;
-    --secondary-foreground: 24 16% 18%;
-    --muted: 32 20% 90%;
-    --muted-foreground: 28 8% 42%;
-    --accent: 32 20% 90%;
-    --accent-foreground: 24 16% 18%;
-    --border: 32 18% 85%;
-    --input: 32 18% 85%;
-    --ring: 22 42% 42%;
-    --beam-ink: 22 20% 42%;
-    --nav-glass-bg: 32 30% 96% / 0.7;
-    --nav-tab-glow: 22 42% 42% / 0.18;
-    --nav-tab-ring: 22 42% 42% / 0.10;
-    --nav-float-ring: 32 18% 85% / 0.5;
-    --nav-divider-color: 32 18% 85% / 0.5;
-    --nav-input-bg: 32 20% 90% / 0.5;
-    --nav-input-focus-ring: 22 42% 42% / 0.22;
+    --secondary: 215 13% 90%;
+    --secondary-foreground: 20 12% 18%;
+    --muted: 215 13% 90%;
+    --muted-foreground: 215 7% 43%;
+    --accent: 215 13% 90%;
+    --accent-foreground: 20 12% 18%;
+    --border: 215 12% 85.5%;
+    --input: 215 12% 85.5%;
+    --ring: 18 55% 42%;
+    --beam-ink: 215 9% 42%;
+    --nav-glass-bg: 215 16% 95.5% / 0.7;
+    --nav-tab-glow: 18 55% 42% / 0.18;
+    --nav-tab-ring: 18 55% 42% / 0.10;
+    --nav-float-ring: 215 12% 85.5% / 0.5;
+    --nav-divider-color: 215 12% 85.5% / 0.5;
+    --nav-input-bg: 215 13% 90% / 0.5;
+    --nav-input-focus-ring: 18 55% 42% / 0.22;
   }
 
   [data-theme='copper'].dark {
-    --background: 20 10% 8%;
-    --foreground: 32 12% 92%;
-    --card: 20 8% 12%;
-    --card-foreground: 32 12% 92%;
-    --popover: 20 8% 12%;
-    --popover-foreground: 32 12% 92%;
-    --primary: 24 38% 64%;
+    --background: 215 12% 8%;
+    --foreground: 30 18% 90%;
+    --card: 215 10% 11.5%;
+    --card-foreground: 30 18% 90%;
+    --popover: 215 10% 11.5%;
+    --popover-foreground: 30 18% 90%;
+    --primary: 20 48% 65%;
     --primary-foreground: 20 25% 9%;
-    --secondary: 20 8% 16%;
-    --secondary-foreground: 32 12% 92%;
-    --muted: 20 8% 16%;
-    --muted-foreground: 28 6% 60%;
-    --accent: 20 8% 16%;
-    --accent-foreground: 32 12% 92%;
-    --border: 20 8% 16%;
-    --input: 20 8% 23%;
-    --ring: 24 38% 64%;
-    --beam-ink: 24 24% 76%;
-    --nav-glass-bg: 20 8% 12% / 0.55;
-    --nav-tab-glow: 24 38% 64% / 0.25;
-    --nav-tab-ring: 24 38% 64% / 0.15;
-    --nav-float-ring: 20 8% 16% / 0.3;
-    --nav-divider-color: 20 8% 16% / 0.5;
-    --nav-input-bg: 20 8% 16% / 0.5;
-    --nav-input-focus-ring: 24 38% 64% / 0.25;
+    --secondary: 215 8% 15.5%;
+    --secondary-foreground: 30 18% 90%;
+    --muted: 215 8% 15.5%;
+    --muted-foreground: 215 6% 61%;
+    --accent: 215 8% 15.5%;
+    --accent-foreground: 30 18% 90%;
+    --border: 215 8% 15.5%;
+    --input: 215 8% 22%;
+    --ring: 20 48% 65%;
+    --beam-ink: 215 12% 77%;
+    --nav-glass-bg: 215 10% 11.5% / 0.55;
+    --nav-tab-glow: 20 48% 65% / 0.25;
+    --nav-tab-ring: 20 48% 65% / 0.15;
+    --nav-float-ring: 215 8% 15.5% / 0.3;
+    --nav-divider-color: 215 8% 15.5% / 0.5;
+    --nav-input-bg: 215 8% 15.5% / 0.5;
+    --nav-input-focus-ring: 20 48% 65% / 0.25;
   }
 
-  /* Dune — warm sand monochrome, bronze-taupe accent. */
+  /* Dune — oasis: warm sand surface ramp, deep brown ink, oasis-teal
+     accent. */
   [data-theme='dune']:not(.dark) {
-    --background: 42 32% 94%;
-    --foreground: 36 25% 6%;
-    --card: 42 30% 99%;
-    --card-foreground: 36 25% 6%;
-    --popover: 42 30% 99%;
-    --popover-foreground: 36 25% 6%;
-    --primary: 38 28% 40%;
+    --background: 42 34% 93.5%;
+    --foreground: 28 28% 9%;
+    --card: 45 45% 98.5%;
+    --card-foreground: 28 28% 9%;
+    --popover: 45 45% 98.5%;
+    --popover-foreground: 28 28% 9%;
+    --primary: 188 55% 28%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 42 22% 88%;
-    --secondary-foreground: 36 15% 18%;
-    --muted: 42 22% 88%;
-    --muted-foreground: 40 8% 42%;
-    --accent: 42 22% 88%;
-    --accent-foreground: 36 15% 18%;
-    --border: 42 20% 83%;
-    --input: 42 20% 83%;
-    --ring: 38 28% 40%;
-    --beam-ink: 38 16% 42%;
-    --nav-glass-bg: 42 32% 94% / 0.7;
-    --nav-tab-glow: 38 28% 40% / 0.18;
-    --nav-tab-ring: 38 28% 40% / 0.10;
-    --nav-float-ring: 42 20% 83% / 0.5;
-    --nav-divider-color: 42 20% 83% / 0.5;
-    --nav-input-bg: 42 22% 88% / 0.5;
-    --nav-input-focus-ring: 38 28% 40% / 0.22;
+    --secondary: 42 26% 87.5%;
+    --secondary-foreground: 28 18% 18%;
+    --muted: 42 26% 87.5%;
+    --muted-foreground: 38 10% 40%;
+    --accent: 42 26% 87.5%;
+    --accent-foreground: 28 18% 18%;
+    --border: 42 22% 82%;
+    --input: 42 22% 82%;
+    --ring: 188 55% 28%;
+    --beam-ink: 40 10% 42%;
+    --nav-glass-bg: 42 34% 93.5% / 0.7;
+    --nav-tab-glow: 188 55% 28% / 0.18;
+    --nav-tab-ring: 188 55% 28% / 0.10;
+    --nav-float-ring: 42 22% 82% / 0.5;
+    --nav-divider-color: 42 22% 82% / 0.5;
+    --nav-input-bg: 42 26% 87.5% / 0.5;
+    --nav-input-focus-ring: 188 55% 28% / 0.22;
   }
 
   [data-theme='dune'].dark {
-    --background: 36 10% 8%;
-    --foreground: 42 15% 92%;
-    --card: 36 9% 12%;
-    --card-foreground: 42 15% 92%;
-    --popover: 36 9% 12%;
-    --popover-foreground: 42 15% 92%;
-    --primary: 40 24% 66%;
-    --primary-foreground: 36 20% 9%;
-    --secondary: 36 8% 16%;
-    --secondary-foreground: 42 15% 92%;
-    --muted: 36 8% 16%;
-    --muted-foreground: 40 6% 60%;
-    --accent: 36 8% 16%;
-    --accent-foreground: 42 15% 92%;
-    --border: 36 8% 16%;
-    --input: 36 8% 23%;
-    --ring: 40 24% 66%;
-    --beam-ink: 40 20% 76%;
-    --nav-glass-bg: 36 9% 12% / 0.55;
-    --nav-tab-glow: 40 24% 66% / 0.25;
-    --nav-tab-ring: 40 24% 66% / 0.15;
-    --nav-float-ring: 36 8% 16% / 0.3;
-    --nav-divider-color: 36 8% 16% / 0.5;
-    --nav-input-bg: 36 8% 16% / 0.5;
-    --nav-input-focus-ring: 40 24% 66% / 0.25;
+    --background: 36 14% 8%;
+    --foreground: 42 20% 90%;
+    --card: 36 12% 11.5%;
+    --card-foreground: 42 20% 90%;
+    --popover: 36 12% 11.5%;
+    --popover-foreground: 42 20% 90%;
+    --primary: 185 38% 58%;
+    --primary-foreground: 188 45% 8%;
+    --secondary: 36 10% 15.5%;
+    --secondary-foreground: 42 20% 90%;
+    --muted: 36 10% 15.5%;
+    --muted-foreground: 40 7% 60%;
+    --accent: 36 10% 15.5%;
+    --accent-foreground: 42 20% 90%;
+    --border: 36 10% 15.5%;
+    --input: 36 10% 22%;
+    --ring: 185 38% 58%;
+    --beam-ink: 42 14% 76%;
+    --nav-glass-bg: 36 12% 11.5% / 0.55;
+    --nav-tab-glow: 185 38% 58% / 0.25;
+    --nav-tab-ring: 185 38% 58% / 0.15;
+    --nav-float-ring: 36 10% 15.5% / 0.3;
+    --nav-divider-color: 36 10% 15.5% / 0.5;
+    --nav-input-bg: 36 10% 15.5% / 0.5;
+    --nav-input-focus-ring: 185 38% 58% / 0.25;
   }
 }
 

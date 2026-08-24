@@ -130,6 +130,11 @@
       "label": "Tema",
       "description": "Tüm uygulama için renk teması"
     },
+    "accent": {
+      "label": "Vurgu",
+      "description": "Etkin temanın üzerine özel vurgu rengi",
+      "reset": "Sıfırla"
+    },
     "projectSorting": {
       "label": "Proje Sıralama",
       "description": "Projelerin kenar çubuğunda nasıl sıralanacağı",

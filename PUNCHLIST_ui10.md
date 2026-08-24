@@ -47,9 +47,9 @@ Done check: on dev, login page and loader show the new mark in theme colors acro
 
 Goal: themes become layered systems, not flat accent recolors. Dependencies: phase 2 (mark must recolor).
 
-- [ ] Custom accent: an accent color picker in Appearance that overrides the active theme's accent token set (persisted, both instances of the token family, live preview).
-- [ ] Layered themes: rework or add 3-4 themes where surfaces, inks, borders, and accents are independently designed layers (distinct surface tint ramps, not one hue everywhere); keep Steel Blue the default; all monochromatic-icon friendly, no purple-gradient AI look.
-- [ ] Theme selector shows each option's palette as a row of small color dots next to its name; the custom accent shows its swatch.
+- [x] Custom accent: an accent color picker in Appearance that overrides the active theme's accent token set (persisted, both instances of the token family, live preview).
+- [x] Layered themes: rework or add 3-4 themes where surfaces, inks, borders, and accents are independently designed layers (distinct surface tint ramps, not one hue everywhere); keep Steel Blue the default; all monochromatic-icon friendly, no purple-gradient AI look.
+- [x] Theme selector shows each option's palette as a row of small color dots next to its name; the custom accent shows its swatch.
 
 Done check: on dev, switching among the reworked themes changes surface and ink tokens independently of accent (computed styles on three token families), a custom accent persists across reload and recolors the mark, dots render per theme in the dropdown. Fresh-context subagent verification. Commit.
 

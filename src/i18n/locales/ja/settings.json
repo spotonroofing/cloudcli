@@ -129,6 +129,11 @@
       "label": "テーマ",
       "description": "アプリ全体のカラーテーマ"
     },
+    "accent": {
+      "label": "アクセント",
+      "description": "アクティブなテーマに重ねるカスタムアクセントカラー",
+      "reset": "リセット"
+    },
     "projectSorting": {
       "label": "プロジェクトの並び順",
       "description": "サイドバーでのプロジェクトの並び順を設定します",

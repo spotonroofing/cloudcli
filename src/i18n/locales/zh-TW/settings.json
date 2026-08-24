@@ -130,6 +130,11 @@
       "label": "主題",
       "description": "整個應用程式的配色主題"
     },
+    "accent": {
+      "label": "強調色",
+      "description": "覆蓋目前主題的自訂強調色",
+      "reset": "重設"
+    },
     "projectSorting": {
       "label": "專案排序",
       "description": "專案在側邊欄中的排列方式",

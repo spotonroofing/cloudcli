@@ -10,9 +10,10 @@ import {
 } from '../../../../shared/view/beui/BeuiSelect';
 import type { CodeEditorSettingsState } from '../../types/types';
 import LanguageSelector from '../../../../shared/view/ui/LanguageSelector';
+import ThemePaletteDots from '../../../../shared/view/ThemePaletteDots';
 import { useUiPreferences } from '../../../../hooks/useUiPreferences';
 import { useTheme } from '../../../../contexts/ThemeContext';
-import { COLOR_THEMES } from '../../../../shared/themes';
+import { COLOR_THEMES, hslTokenToHex } from '../../../../shared/themes';
 import SettingsCard from '../SettingsCard';
 import SettingsRow from '../SettingsRow';
 import SettingsSection from '../SettingsSection';
@@ -35,7 +36,14 @@ export default function AppearanceSettingsTab({
 }: AppearanceSettingsTabProps) {
   const { t } = useTranslation('settings');
   const { preferences, setPreference } = useUiPreferences();
-  const { colorTheme, setColorTheme } = useTheme();
+  const { colorTheme, setColorTheme, isDarkMode, customAccent, setCustomAccent } = useTheme();
+
+  // Seed the color input from the accent actually in effect: the custom hex,
+  // or the active theme's own accent (last palette dot for the current mode).
+  const activeTheme = COLOR_THEMES.find((theme) => theme.id === colorTheme) ?? COLOR_THEMES[0];
+  const themeAccent = activeTheme.dots[isDarkMode ? 'dark' : 'light'][3];
+  const accentValue =
+    customAccent ?? hslTokenToHex(themeAccent.replace(/^hsl\(|\)$/g, '')) ?? '#000000';
 
   return (
     <div className="space-y-8">
@@ -55,12 +63,43 @@ export default function AppearanceSettingsTab({
               </SelectTrigger>
               <SelectContent>
                 {COLOR_THEMES.map((theme) => (
-                  <SelectItem key={theme.id} value={theme.id}>
-                    {theme.label}
+                  <SelectItem key={theme.id} value={theme.id} textValue={theme.label}>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate">{theme.label}</span>
+                      <ThemePaletteDots themeId={theme.id} />
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          </SettingsRow>
+          <SettingsRow
+            label={t('appearanceSettings.accent.label')}
+            description={t('appearanceSettings.accent.description')}
+          >
+            <div className="flex items-center gap-3">
+              {customAccent ? (
+                <button
+                  type="button"
+                  onClick={() => setCustomAccent(null)}
+                  className="touch-manipulation text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {t('appearanceSettings.accent.reset')}
+                </button>
+              ) : null}
+              <label
+                className="relative block h-9 w-14 cursor-pointer rounded-lg border border-input transition-colors hover:border-muted-foreground/40"
+                style={{ backgroundColor: 'hsl(var(--primary))' }}
+              >
+                <input
+                  type="color"
+                  value={accentValue}
+                  onChange={(event) => setCustomAccent(event.target.value)}
+                  aria-label={t('appearanceSettings.accent.label')}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                />
+              </label>
+            </div>
           </SettingsRow>
           <SettingsRow
             label={t('appearanceSettings.darkMode.label')}

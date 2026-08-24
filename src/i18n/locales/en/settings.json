@@ -160,6 +160,11 @@
       "label": "Theme",
       "description": "Color theme for the whole app"
     },
+    "accent": {
+      "label": "Accent",
+      "description": "Custom accent color over the active theme",
+      "reset": "Reset"
+    },
     "projectSorting": {
       "label": "Project Sorting",
       "description": "How projects are ordered in the sidebar",

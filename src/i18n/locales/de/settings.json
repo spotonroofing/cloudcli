@@ -129,6 +129,11 @@
       "label": "Farbschema",
       "description": "Farbschema für die gesamte App"
     },
+    "accent": {
+      "label": "Akzent",
+      "description": "Eigene Akzentfarbe über dem aktiven Theme",
+      "reset": "Zurücksetzen"
+    },
     "projectSorting": {
       "label": "Projektsortierung",
       "description": "Wie Projekte in der Seitenleiste angeordnet werden",

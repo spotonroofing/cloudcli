@@ -1,6 +1,36 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-import { DEFAULT_COLOR_THEME, isColorTheme } from '../shared/themes';
+import { DEFAULT_COLOR_THEME, hexToHsl, isAccentHex, isColorTheme } from '../shared/themes';
+
+// The accent token family: every custom-accent override touches exactly these
+// (light and dark instances both, derived from one picked hex).
+const ACCENT_TOKENS = [
+  '--primary',
+  '--primary-foreground',
+  '--ring',
+  '--nav-tab-glow',
+  '--nav-tab-ring',
+  '--nav-input-focus-ring',
+];
+
+// Derive the mode's accent set from the picked hex: light mode uses the hex
+// as-is; dark mode lifts lightness so the accent reads on dark surfaces
+// (mirrors how every theme's dark primary sits lighter than its light one).
+const applyCustomAccent = (root, hex, isDark) => {
+  const { h, s, l } = hexToHsl(hex);
+  const lift = isDark ? Math.max(l, 62) : l;
+  const hsl = `${h} ${s}% ${lift}%`;
+  root.style.setProperty('--primary', hsl);
+  root.style.setProperty('--ring', hsl);
+  root.style.setProperty('--primary-foreground', lift > 60 ? `${h} 25% 10%` : '0 0% 100%');
+  root.style.setProperty('--nav-tab-glow', `${hsl} / ${isDark ? 0.25 : 0.18}`);
+  root.style.setProperty('--nav-tab-ring', `${hsl} / ${isDark ? 0.15 : 0.1}`);
+  root.style.setProperty('--nav-input-focus-ring', `${hsl} / ${isDark ? 0.25 : 0.22}`);
+};
+
+const clearCustomAccent = (root) => {
+  ACCENT_TOKENS.forEach((token) => root.style.removeProperty(token));
+};
 
 const ThemeContext = createContext();
 
@@ -36,11 +66,30 @@ export const ThemeProvider = ({ children }) => {
     return isColorTheme(saved) ? saved : DEFAULT_COLOR_THEME;
   });
 
+  // Custom accent (ui10 phase 3): a picked hex that overrides the active
+  // theme's accent token family; null means the theme's own accent.
+  const [customAccent, setCustomAccentState] = useState(() => {
+    const saved = localStorage.getItem('custom-accent');
+    return isAccentHex(saved) ? saved : null;
+  });
+
+  const setCustomAccent = (hex) => {
+    setCustomAccentState(isAccentHex(hex) ? hex : null);
+  };
+
   // Update document class/attribute and localStorage when theme changes
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-theme', colorTheme);
     localStorage.setItem('color-theme', colorTheme);
+
+    if (customAccent) {
+      applyCustomAccent(root, customAccent, isDarkMode);
+      localStorage.setItem('custom-accent', customAccent);
+    } else {
+      clearCustomAccent(root);
+      localStorage.removeItem('custom-accent');
+    }
 
     if (isDarkMode) {
       root.classList.add('dark');
@@ -64,7 +113,7 @@ export const ThemeProvider = ({ children }) => {
         themeColorMeta.setAttribute('content', `hsl(${background})`);
       }
     }
-  }, [isDarkMode, colorTheme]);
+  }, [isDarkMode, colorTheme, customAccent]);
 
   // Listen for system theme changes
   useEffect(() => {
@@ -92,6 +141,8 @@ export const ThemeProvider = ({ children }) => {
     toggleDarkMode,
     colorTheme,
     setColorTheme,
+    customAccent,
+    setCustomAccent,
   };
 
   return (

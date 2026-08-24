@@ -129,6 +129,11 @@
       "label": "Thème",
       "description": "Thème de couleur pour toute l’application"
     },
+    "accent": {
+      "label": "Accent",
+      "description": "Couleur d'accent personnalisée sur le thème actif",
+      "reset": "Réinitialiser"
+    },
     "projectSorting": {
       "label": "Tri des projets",
       "description": "Ordre d'affichage des projets dans la barre latérale",

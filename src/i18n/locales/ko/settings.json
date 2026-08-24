@@ -155,6 +155,11 @@
       "label": "테마",
       "description": "앱 전체 색상 테마"
     },
+    "accent": {
+      "label": "강조 색상",
+      "description": "활성 테마 위에 적용되는 사용자 지정 강조 색상",
+      "reset": "초기화"
+    },
     "projectSorting": {
       "label": "프로젝트 정렬",
       "description": "사이드바에서 프로젝트 정렬 방식",
