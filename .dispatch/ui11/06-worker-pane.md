@@ -1,5 +1,5 @@
 <!-- browser -->
-Execute Phase 6 of PUNCHLIST_ui11.md in this repo (worker pane: status badge, live updates, phase navigator redesign): the goal is a worker pane with no status badge in any state, dispatched runs rendering live without a refresh, and a phase navigator that lists every phase at once as collapsible task drawers with check/working/idle icons per task and a done/total counter per phase fed by the manifest and the punch list check-offs. Read PUNCHLIST_ui11.md in the repo root and the recent git log; your items are exactly Phase 6's checkboxes; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when Phase 6's done check passes against the dev instance.
+Execute Phase 6 of PUNCHLIST_ui11.md in this repo (worker pane header and phase navigator): the goal is a worker pane header without the finished tag, a phase navigator that is open by default and collapsible, and a done/total counter on every phase row fed by the manifest and the punch list check-offs. Read PUNCHLIST_ui11.md in the repo root and the recent git log; your items are exactly Phase 6's checkboxes; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when Phase 6's done check passes against the dev instance.
 
 
 
