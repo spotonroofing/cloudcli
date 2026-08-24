@@ -4,7 +4,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { apiKeysDb, sessionsDb } from '@/modules/database/index.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
-import { watchdogService } from './watchdog.service.js';
+import { parseManifest, watchdogService } from './watchdog.service.js';
 
 /**
  * Watchdog surface (spec B3/B4): the dispatch CLI registers chains and posts
@@ -39,7 +39,7 @@ export function createWatchdogRouter(): express.Router {
         });
       }
       const phases = Number.isFinite(Number(body.phases)) ? Number(body.phases) : null;
-      watchdogService.registerChain({ slug, projectPath, phases });
+      watchdogService.registerChain({ slug, projectPath, phases, manifest: parseManifest(body.manifest) });
       res.status(201).json(createApiSuccessResponse({ slug }));
     }),
   );
@@ -108,8 +108,35 @@ export function createWatchdogRouter(): express.Router {
       const provider = typeof body.provider === 'string' && body.provider.trim() ? body.provider.trim() : 'claude';
       const baseCommit = typeof body.baseCommit === 'string' && body.baseCommit.trim() ? body.baseCommit.trim() : null;
       const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : null;
-      sessionsDb.setSessionOrigin(sessionId, 'dispatch', baseCommit, slug, model, { provider, projectPath });
+      const phase = Number.isFinite(Number(body.phase)) ? Number(body.phase) : null;
+      sessionsDb.setSessionOrigin(sessionId, 'dispatch', baseCommit, slug, model, { provider, projectPath }, phase);
       res.status(201).json(createApiSuccessResponse({ slug, sessionId }));
+    }),
+  );
+
+  // Queue additional work onto an active chain (ui9 B4 append): the manifest
+  // grows here immediately so the navigator updates live; the runner picks the
+  // queued prompt files up at the current phase's commit gate.
+  router.post(
+    '/chains/:slug/append',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const entries = parseManifest(body.entries);
+      if (!entries) {
+        throw new AppError('entries must be a non-empty array of {name, tasks?, kind?}.', {
+          code: 'WATCHDOG_APPEND_ENTRIES_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const slug = String(req.params.slug);
+      if (!watchdogService.appendToChain(slug, entries)) {
+        throw new AppError(`Chain "${slug}" is not registered or not running.`, {
+          code: 'WATCHDOG_CHAIN_UNKNOWN',
+          statusCode: 404,
+        });
+      }
+      res.status(201).json(createApiSuccessResponse({ slug, appended: entries.length }));
     }),
   );
 

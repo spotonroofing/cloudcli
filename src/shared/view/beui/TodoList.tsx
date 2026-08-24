@@ -111,7 +111,7 @@ function TodoHeaderIcon({ complete }: { complete: boolean }) {
   );
 }
 
-function TodoStatusIcon({
+export function TodoStatusIcon({
   status,
   progress,
 }: {

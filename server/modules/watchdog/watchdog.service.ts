@@ -12,6 +12,17 @@ import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/webs
 
 type ChainStatus = 'running' | 'completed' | 'stopped' | 'failed';
 
+/**
+ * One unit of a dispatch manifest (ui9 B4), in run order. `kind` 'phase' is a
+ * full compiled unit; 'task' is a small appended iteration and renders as a
+ * lighter row. `tasks` is the planner's concise per-phase task list.
+ */
+export type ChainManifestEntry = {
+  name: string;
+  tasks: string[];
+  kind: 'phase' | 'task';
+};
+
 type ChainRecord = {
   slug: string;
   projectPath: string;
@@ -21,6 +32,10 @@ type ChainRecord = {
   startedAt: number;
   lastEventAt: number;
   lastSummaryTail: string | null;
+  /** Planner-supplied manifest; appended units extend it. NULL when absent. */
+  manifest: ChainManifestEntry[] | null;
+  /** True between phase-start and phase-end/terminal — a session is live. */
+  phaseActive: boolean;
 };
 
 type DispatchRunRecord = {
@@ -47,10 +62,25 @@ type WorkerRun = {
   /** True when the run's first message was an auto-sent boot prompt. */
   booted: boolean;
   chainSlug: string | null;
+  /** 1-based unit index inside the dispatch chain; null outside chains. */
+  chainPhase: number | null;
   title: string | null;
   state: 'running' | 'finished' | 'stopped';
   model: string | null;
   lastActivity: string | null;
+};
+
+/** Chain snapshot the worker pane's phase navigator renders from. */
+type ChainSnapshot = {
+  slug: string;
+  projectPath: string;
+  status: ChainStatus;
+  phases: number | null;
+  currentPhase: number | null;
+  phaseActive: boolean;
+  manifest: ChainManifestEntry[] | null;
+  startedAt: number;
+  lastEventAt: number;
 };
 
 type WakeItem = {
@@ -123,6 +153,8 @@ class WatchdogService {
           startedAt: row.started_at,
           lastEventAt: row.last_event_at,
           lastSummaryTail: row.last_summary_tail,
+          manifest: parseManifest(row.manifest),
+          phaseActive: Boolean(row.phase_active),
         });
       }
       for (const row of watchdogDb.listDispatchRuns()) {
@@ -157,6 +189,8 @@ class WatchdogService {
         started_at: chain.startedAt,
         last_event_at: chain.lastEventAt,
         last_summary_tail: chain.lastSummaryTail,
+        manifest: chain.manifest ? JSON.stringify(chain.manifest) : null,
+        phase_active: chain.phaseActive ? 1 : 0,
       });
     } catch (error) {
       log(`chain persist failed for ${chain.slug}: ${error instanceof Error ? error.message : String(error)}`);
@@ -183,7 +217,15 @@ class WatchdogService {
 
   // ----- chain registry (populated by the dispatch CLI, spec B4) -----
 
-  registerChain(input: { slug: string; projectPath: string; phases?: number | null }): void {
+  registerChain(input: {
+    slug: string;
+    projectPath: string;
+    phases?: number | null;
+    manifest?: ChainManifestEntry[] | null;
+  }): void {
+    // A re-registration (restart-recovery via an event) without a manifest
+    // keeps the one the chain already has.
+    const existing = this.chains.get(input.slug);
     const chain: ChainRecord = {
       slug: input.slug,
       projectPath: input.projectPath,
@@ -193,10 +235,55 @@ class WatchdogService {
       startedAt: Date.now(),
       lastEventAt: Date.now(),
       lastSummaryTail: null,
+      manifest: input.manifest ?? existing?.manifest ?? null,
+      phaseActive: false,
     };
     this.chains.set(input.slug, chain);
     this.persistChain(chain);
+    this.broadcastChainProgress(chain);
     log(`chain registered: ${input.slug}`, { projectPath: input.projectPath, phases: input.phases ?? null });
+  }
+
+  /**
+   * Queues additional work onto an active chain (ui9 B4 append): the manifest
+   * grows immediately so the navigator updates live, ahead of the runner
+   * picking the queued files up at the current phase's commit gate.
+   */
+  appendToChain(slug: string, entries: ChainManifestEntry[]): boolean {
+    const chain = this.chains.get(slug);
+    if (!chain || chain.status !== 'running') {
+      return false;
+    }
+    chain.manifest = [...(chain.manifest ?? []), ...entries];
+    chain.lastEventAt = Date.now();
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    log(`chain ${slug}: ${entries.length} unit(s) appended`, { manifestLength: chain.manifest.length });
+    return true;
+  }
+
+  private chainSnapshot(chain: ChainRecord): ChainSnapshot {
+    return {
+      slug: chain.slug,
+      projectPath: chain.projectPath,
+      status: chain.status,
+      phases: chain.phases,
+      currentPhase: chain.currentPhase,
+      phaseActive: chain.phaseActive,
+      manifest: chain.manifest,
+      startedAt: chain.startedAt,
+      lastEventAt: chain.lastEventAt,
+    };
+  }
+
+  /** Streams per-phase progress to every open client (the navigator's feed). */
+  private broadcastChainProgress(chain: ChainRecord): void {
+    const event = JSON.stringify({ kind: 'chain_progress', chain: this.chainSnapshot(chain) });
+    connectedClients.forEach((client) => {
+      if (client.readyState === WS_OPEN_STATE) {
+        client.send(event);
+      }
+    });
   }
 
   chainEvent(
@@ -215,11 +302,15 @@ class WatchdogService {
     if (detail?.summaryTail) {
       chain.lastSummaryTail = detail.summaryTail.slice(-2000);
     }
+    // Honest run state: a phase session is live only between phase-start and
+    // phase-end/terminal — never inferred from a session row's age.
+    chain.phaseActive = event === 'phase-start';
     log(`chain ${slug}: ${event}`, { phase: chain.currentPhase, status: chain.status });
 
     if (event === 'completed' || event === 'stopped' || event === 'failed') {
       chain.status = event === 'completed' ? 'completed' : event === 'stopped' ? 'stopped' : 'failed';
       this.persistChain(chain);
+      this.broadcastChainProgress(chain);
       const flag = chain.status === 'completed'
         ? 'ended'
         : chain.status === 'stopped'
@@ -233,6 +324,7 @@ class WatchdogService {
       );
     } else {
       this.persistChain(chain);
+      this.broadcastChainProgress(chain);
     }
     return true;
   }
@@ -295,7 +387,7 @@ class WatchdogService {
    * cover runs the filesystem synchronizer has not indexed yet. Used by the
    * providers session routes.
    */
-  listWorkerRuns(projectPath: string): { runs: WorkerRun[] } {
+  listWorkerRuns(projectPath: string): { runs: WorkerRun[]; chains: Record<string, ChainSnapshot> } {
     const normalizedPath = normalizeProjectPath(projectPath);
     const rows = sessionsDb.listWorkerSessions(normalizedPath, 10);
 
@@ -318,8 +410,9 @@ class WatchdogService {
         origin: 'dispatch',
         booted: false,
         chainSlug: run.chainSlug,
+        chainPhase: null,
         title: null,
-        state: 'running',
+        state: 'running' as const,
         model: run.model,
         lastActivity: new Date(run.lastEventAt).toISOString(),
       }));
@@ -330,12 +423,24 @@ class WatchdogService {
     const fromRows: WorkerRun[] = rows.map((row) => {
       const live = this.dispatchRuns.get(row.session_id)
         ?? (row.provider_session_id ? this.dispatchRuns.get(row.provider_session_id) : undefined);
-      const running = (live ? !live.ended : false) || chatRunRegistry.isProcessing(row.session_id);
       const chainSlug = row.chain_slug ?? live?.chainSlug ?? null;
+      // Run-state truth (ui9 B4): a chain phase reads running from the live
+      // chain registry — its session row goes quiet between transcript syncs,
+      // so the row alone would misreport an active phase as finished.
+      const chain = chainSlug ? this.chains.get(chainSlug) : undefined;
+      const chainActive = Boolean(
+        chain
+        && chain.status === 'running'
+        && chain.phaseActive
+        && row.chain_phase != null
+        && chain.currentPhase === row.chain_phase,
+      );
+      const running = (live ? !live.ended : false)
+        || chatRunRegistry.isProcessing(row.session_id)
+        || chainActive;
 
       let state: WorkerRun['state'] = running ? 'running' : 'finished';
       if (!running && chainSlug && !chainStateClaimed.has(chainSlug)) {
-        const chain = this.chains.get(chainSlug);
         if (chain && (chain.status === 'stopped' || chain.status === 'failed')) {
           state = 'stopped';
         }
@@ -354,6 +459,7 @@ class WatchdogService {
         origin: row.origin,
         booted: Boolean(row.booted),
         chainSlug,
+        chainPhase: row.chain_phase,
         title,
         state,
         model: row.model ?? live?.model ?? null,
@@ -361,7 +467,23 @@ class WatchdogService {
       };
     });
 
-    return { runs: [...liveOnly, ...fromRows] };
+    // Snapshots for every chain this project's runs reference, plus chains
+    // registered for the project whose first phase session has not landed yet
+    // — the navigator shows the manifest the moment a dispatch registers.
+    const chains: Record<string, ChainSnapshot> = {};
+    for (const chain of this.chains.values()) {
+      if (chain.projectPath === normalizedPath) {
+        chains[chain.slug] = this.chainSnapshot(chain);
+      }
+    }
+    for (const run of [...liveOnly, ...fromRows]) {
+      const chain = run.chainSlug ? this.chains.get(run.chainSlug) : undefined;
+      if (chain && !chains[chain.slug]) {
+        chains[chain.slug] = this.chainSnapshot(chain);
+      }
+    }
+
+    return { runs: [...liveOnly, ...fromRows], chains };
   }
 
   permissionEvent(sessionId: string, kind: 'permission_request' | 'interactive_prompt', detail?: string): void {
@@ -778,6 +900,37 @@ function readPlannerBootPrompt(): string {
   }
   return 'Boot as this project\'s planner: read PLANNER.md, the project\'s PROJECT.md and STATE.md '
     + 'in the planner memory repo, and open with the session-start summary.';
+}
+
+/**
+ * Normalizes an untrusted manifest value (DB JSON or request body) into clean
+ * entries, dropping anything malformed. Returns null when nothing survives.
+ */
+export function parseManifest(value: unknown): ChainManifestEntry[] | null {
+  let raw = value;
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(raw)) {
+    return null;
+  }
+  const entries: ChainManifestEntry[] = [];
+  for (const item of raw) {
+    const entry = item as { name?: unknown; tasks?: unknown; kind?: unknown } | null;
+    const name = typeof entry?.name === 'string' ? entry.name.trim() : '';
+    if (!name) {
+      continue;
+    }
+    const tasks = Array.isArray(entry?.tasks)
+      ? entry.tasks.filter((task): task is string => typeof task === 'string' && task.trim() !== '')
+      : [];
+    entries.push({ name, tasks, kind: entry?.kind === 'task' ? 'task' : 'phase' });
+  }
+  return entries.length ? entries : null;
 }
 
 function readMemoryFreePercentage(): Promise<number | null> {

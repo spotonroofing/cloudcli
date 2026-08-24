@@ -126,6 +126,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     origin TEXT,
     base_commit TEXT,
     chain_slug TEXT,
+    -- 1-based unit index of the run inside its dispatch chain (ui9 B4), so
+    -- the switcher and phase navigator can map a session to its manifest
+    -- entry; NULL for direct and free-standing runs.
+    chain_phase INTEGER,
     -- 1 when the first message was an auto-sent boot prompt (/planner or
     -- /worker New Session); the client hides exactly those prologues.
     booted INTEGER DEFAULT 0,
@@ -202,7 +206,14 @@ CREATE TABLE IF NOT EXISTS watchdog_chains (
     status TEXT NOT NULL,
     started_at INTEGER NOT NULL,
     last_event_at INTEGER NOT NULL,
-    last_summary_tail TEXT
+    last_summary_tail TEXT,
+    -- Planner-supplied dispatch manifest (ui9 B4): JSON array of
+    -- {name, tasks[], kind: 'phase'|'task'} in run order; NULL for chains
+    -- dispatched without one. Appended units extend the array.
+    manifest TEXT,
+    -- 1 while a phase session is actually running (between phase-start and
+    -- phase-end/terminal), so run state never reads from a stale session row.
+    phase_active INTEGER NOT NULL DEFAULT 0
 );
 `;
 

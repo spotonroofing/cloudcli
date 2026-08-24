@@ -24,6 +24,8 @@ type SessionRow = {
   base_commit: string | null;
   /** Dispatch chain slug the run belongs to; NULL for direct/free-standing runs. */
   chain_slug: string | null;
+  /** 1-based unit index inside the dispatch chain; NULL outside chains. */
+  chain_phase: number | null;
   /** 1 when the session's first message was an auto-sent boot prompt. */
   booted: number;
   /** NULL | 'pending' | 'ready' | 'failed' — persisted boot lifecycle. */
@@ -48,7 +50,7 @@ type RecentSessionsPage = {
 // list/feed reader prefers the app-owned attach-to-project choice without each
 // call site repeating the COALESCE. Writes always name real columns explicitly.
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, booted, boot_state, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, chain_phase, booted, boot_state, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
 
 // WHERE-clause form of the same preference (SQLite cannot reference SELECT
 // aliases in WHERE).
@@ -255,6 +257,7 @@ export const sessionsDb = {
     chainSlug?: string | null,
     model?: string | null,
     upsertContext?: { provider: string; projectPath: string },
+    chainPhase?: number | null,
   ): void {
     const db = getConnection();
     const result = db.prepare(
@@ -262,9 +265,10 @@ export const sessionsDb = {
        SET origin = ?,
            base_commit = COALESCE(?, base_commit),
            chain_slug = COALESCE(?, chain_slug),
+           chain_phase = COALESCE(?, chain_phase),
            model = COALESCE(?, model)
        WHERE session_id = ? OR provider_session_id = ?`
-    ).run(origin, baseCommit ?? null, chainSlug ?? null, model ?? null, sessionId, sessionId);
+    ).run(origin, baseCommit ?? null, chainSlug ?? null, chainPhase ?? null, model ?? null, sessionId, sessionId);
 
     if (result.changes > 0 || !upsertContext) {
       return;
@@ -272,9 +276,9 @@ export const sessionsDb = {
 
     const effectiveProjectPath = resolveExistingProjectPath(normalizeProjectPath(upsertContext.projectPath));
     db.prepare(
-      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, origin, base_commit, chain_slug, model, jsonl_path, isArchived, created_at, updated_at)
-       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).run(sessionId, upsertContext.provider, sessionId, effectiveProjectPath, origin, baseCommit ?? null, chainSlug ?? null, model ?? null);
+      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, origin, base_commit, chain_slug, chain_phase, model, jsonl_path, isArchived, created_at, updated_at)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).run(sessionId, upsertContext.provider, sessionId, effectiveProjectPath, origin, baseCommit ?? null, chainSlug ?? null, chainPhase ?? null, model ?? null);
   },
 
   /**

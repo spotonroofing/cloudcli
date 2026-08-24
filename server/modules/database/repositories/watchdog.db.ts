@@ -9,6 +9,10 @@ export type WatchdogChainRow = {
   started_at: number;
   last_event_at: number;
   last_summary_tail: string | null;
+  /** Planner-supplied dispatch manifest as JSON (ui9 B4); NULL when absent. */
+  manifest: string | null;
+  /** 1 while a phase session is running (between phase-start and phase-end). */
+  phase_active: number;
 };
 
 export type WatchdogDispatchRunRow = {
@@ -33,8 +37,8 @@ export const watchdogDb = {
   upsertChain(row: WatchdogChainRow): void {
     const db = getConnection();
     db.prepare(`
-      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, manifest, phase_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(slug) DO UPDATE SET
         project_path = excluded.project_path,
         phases = excluded.phases,
@@ -42,7 +46,9 @@ export const watchdogDb = {
         status = excluded.status,
         started_at = excluded.started_at,
         last_event_at = excluded.last_event_at,
-        last_summary_tail = excluded.last_summary_tail
+        last_summary_tail = excluded.last_summary_tail,
+        manifest = excluded.manifest,
+        phase_active = excluded.phase_active
     `).run(
       row.slug,
       row.project_path,
@@ -52,6 +58,8 @@ export const watchdogDb = {
       row.started_at,
       row.last_event_at,
       row.last_summary_tail,
+      row.manifest,
+      row.phase_active,
     );
   },
 

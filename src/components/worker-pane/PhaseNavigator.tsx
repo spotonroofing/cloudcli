@@ -1,0 +1,284 @@
+import { ChevronDown, Milestone } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useEffect, useId, useRef, useState } from 'react';
+
+import { cn } from '../../lib/utils';
+import { AgentDisclosure } from '../../shared/view/beui/AgentDisclosure';
+import { SwapText } from '../../shared/view/beui/SwapText';
+import { TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
+import { EASE_OUT, SPRING_SWAP } from '../../shared/view/beui/ease';
+
+/** One unit of a dispatch manifest: a compiled phase or an appended task. */
+export type ChainManifestEntry = {
+  name: string;
+  tasks: string[];
+  kind: 'phase' | 'task';
+};
+
+/** The watchdog's live chain snapshot (worker-runs response / chain_progress). */
+export type ChainSnapshot = {
+  slug: string;
+  projectPath: string;
+  status: 'running' | 'completed' | 'stopped' | 'failed';
+  phases: number | null;
+  currentPhase: number | null;
+  phaseActive: boolean;
+  manifest: ChainManifestEntry[] | null;
+  startedAt: number;
+  lastEventAt: number;
+};
+
+type Unit = {
+  /** 1-based unit index — matches the chain's phase numbering. */
+  index: number;
+  name: string;
+  tasks: string[];
+  kind: 'phase' | 'task';
+  status: TodoListItemStatus;
+};
+
+function chainUnits(chain: ChainSnapshot): Unit[] {
+  // A manifest-less chain still navigates: synthesize numbered phases from
+  // the runner-reported count.
+  const entries: ChainManifestEntry[] = chain.manifest
+    ?? Array.from({ length: Math.max(chain.phases ?? 0, chain.currentPhase ?? 0, 1) }, (_, i) => ({
+      name: `Phase ${i + 1}`,
+      tasks: [],
+      kind: 'phase' as const,
+    }));
+  const current = chain.currentPhase ?? 0;
+  return entries.map((entry, i) => {
+    const index = i + 1;
+    let status: TodoListItemStatus = 'pending';
+    if (chain.status === 'completed' || index < current) {
+      status = 'completed';
+    } else if (index === current) {
+      status = chain.status === 'running' ? 'in-progress' : 'cancelled';
+    }
+    return { index, name: entry.name, tasks: entry.tasks, kind: entry.kind, status };
+  });
+}
+
+const runStateStatus: Record<'running' | 'finished' | 'stopped', TodoListItemStatus> = {
+  running: 'in-progress',
+  finished: 'completed',
+  stopped: 'cancelled',
+};
+
+type PhaseNavigatorProps = {
+  /** The viewed run's chain; null for a free-standing (single-prompt) run. */
+  chain: ChainSnapshot | null;
+  /** Single-prompt fallback: the run itself renders as phase 1 of 1. */
+  run: { label: string; state: 'running' | 'finished' | 'stopped' } | null;
+  /** Unit index of the session open in the pane; null when outside the chain. */
+  selectedPhase: number | null;
+  /** True when a session exists for the unit (it started); gates row clicks. */
+  hasSessionForPhase: (unitIndex: number) => boolean;
+  /** Opens that phase's session in the pane — same behavior as the switcher. */
+  onSelectPhase: (unitIndex: number) => void;
+};
+
+/**
+ * The worker pane's phase navigator (ui9 B4): the task-rows element across
+ * the top of the pane, molded to a dispatched chain's phases. Collapsed shows
+ * "Phase N of M" with counts; expanded shows each phase and its tasks with
+ * live states; breathes while running; entries stagger in as a manifest (or
+ * an append) lands. The primary status surface for a dispatched run.
+ */
+export default function PhaseNavigator({
+  chain,
+  run,
+  selectedPhase,
+  hasSessionForPhase,
+  onSelectPhase,
+}: PhaseNavigatorProps) {
+  const reduce = useReducedMotion() ?? false;
+  const baseId = useId();
+  const triggerId = `${baseId}-trigger`;
+  const contentId = `${baseId}-content`;
+
+  const units: Unit[] = chain
+    ? chainUnits(chain)
+    : run
+      ? [{ index: 1, name: run.label, tasks: [], kind: 'phase', status: runStateStatus[run.state] }]
+      : [];
+
+  const running = chain ? chain.status === 'running' : run?.state === 'running';
+  const phaseUnits = units.filter((unit) => unit.kind === 'phase');
+  const phaseTotal = Math.max(phaseUnits.length, 1);
+  const currentUnit = chain?.currentPhase ?? (units.length ? 1 : 0);
+  const currentOrdinal = Math.max(
+    units.slice(0, currentUnit).filter((unit) => unit.kind === 'phase').length,
+    1,
+  );
+  const currentName = units[currentUnit - 1]?.name ?? units[0]?.name ?? '';
+  const doneCount = units.filter((unit) => unit.status === 'completed').length;
+  const allComplete = units.length > 0 && doneCount === units.length;
+
+  const [open, setOpen] = useState(true);
+  // Auto-collapse once the chain lands, TodoList-style; reopen if work grows.
+  const previousComplete = useRef(false);
+  useEffect(() => {
+    if (!previousComplete.current && allComplete) {
+      setOpen(false);
+    }
+    if (previousComplete.current && !allComplete) {
+      setOpen(true);
+    }
+    previousComplete.current = allComplete;
+  }, [allComplete]);
+
+  // Populate animation: rows past the previously rendered count are new (a
+  // manifest landing or an append) and stagger in one by one; settled rows
+  // never replay their entrance.
+  const seenCountRef = useRef(0);
+  const seenCount = seenCountRef.current;
+  useEffect(() => {
+    seenCountRef.current = units.length;
+  }, [units.length]);
+
+  if (!units.length) {
+    return null;
+  }
+
+  return (
+    <section
+      aria-label="Run phases"
+      data-slot="phase-navigator"
+      data-state={chain?.status ?? run?.state}
+      className="flex-shrink-0 border-b border-border/60 bg-muted/20"
+    >
+      <button
+        id={triggerId}
+        type="button"
+        aria-expanded={open}
+        aria-controls={contentId}
+        onClick={() => setOpen(!open)}
+        className="group flex h-9 w-full items-center gap-2 px-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      >
+        <span
+          className={cn(
+            'flex min-w-0 items-center gap-2',
+            running && !reduce && 'animate-counter-breathe',
+          )}
+        >
+          <Milestone className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+          <span className="flex-shrink-0 text-xs font-medium tabular-nums text-foreground">
+            Phase <SwapText value={String(currentOrdinal)}>{currentOrdinal}</SwapText> of {phaseTotal}
+          </span>
+          {currentName && (
+            <span className="min-w-0 truncate text-xs text-muted-foreground">{currentName}</span>
+          )}
+        </span>
+        <span className="min-w-0 flex-1" />
+        <span
+          data-slot="phase-navigator-counts"
+          className={cn(
+            'flex-shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground',
+            allComplete && 'text-emerald-600 dark:text-emerald-400',
+          )}
+        >
+          <SwapText value={String(doneCount)}>{doneCount}</SwapText>
+          <span>/</span>
+          <span>{units.length}</span>
+        </span>
+        <motion.span
+          aria-hidden="true"
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={reduce ? { duration: 0 } : SPRING_SWAP}
+          className="flex-shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </motion.span>
+      </button>
+
+      <AgentDisclosure id={contentId} role="region" aria-labelledby={triggerId} open={open}>
+        <ol className="max-h-56 overflow-y-auto px-2 pb-2">
+          <AnimatePresence initial={false}>
+            {units.map((unit, i) => {
+              const selectable = Boolean(chain) && hasSessionForPhase(unit.index);
+              const selected = Boolean(chain) && selectedPhase === unit.index;
+              return (
+                <motion.li
+                  key={`${unit.index}-${unit.name}`}
+                  initial={reduce ? { opacity: 1 } : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={
+                    reduce
+                      ? { duration: 0 }
+                      : {
+                          duration: 0.22,
+                          ease: EASE_OUT,
+                          delay: i >= seenCount ? (i - seenCount) * 0.07 : 0,
+                        }
+                  }
+                >
+                  <button
+                    type="button"
+                    disabled={!selectable}
+                    onClick={() => onSelectPhase(unit.index)}
+                    data-slot="phase-navigator-row"
+                    data-phase={unit.index}
+                    data-kind={unit.kind}
+                    data-status={unit.status}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                      unit.kind === 'task' ? 'min-h-7 pl-4' : 'min-h-8',
+                      selectable && 'cursor-pointer',
+                      unit.status === 'in-progress' && !reduce && 'animate-counter-breathe',
+                    )}
+                  >
+                    <span className={cn(unit.kind === 'task' && 'scale-90')}>
+                      <TodoStatusIcon status={unit.status} />
+                    </span>
+                    <span
+                      className={cn(
+                        'min-w-0 flex-1 truncate leading-5',
+                        unit.kind === 'task' ? 'text-[12px]' : 'text-[13px]',
+                        unit.status === 'pending' && 'text-muted-foreground/65',
+                        unit.status === 'in-progress' && 'text-foreground',
+                        unit.status === 'completed' && 'text-muted-foreground/60',
+                        unit.status === 'cancelled' && 'text-muted-foreground/55',
+                        selectable && 'group-hover:text-foreground hover:text-foreground',
+                        selected && 'font-medium text-foreground',
+                      )}
+                    >
+                      {unit.name}
+                    </span>
+                  </button>
+                  {unit.tasks.length > 0 && (
+                    <ul className="pb-0.5 pl-9">
+                      {unit.tasks.map((task) => (
+                        <li
+                          key={task}
+                          data-slot="phase-navigator-task"
+                          className={cn(
+                            'flex min-h-5 items-center gap-1.5 text-[11px] leading-4',
+                            unit.status === 'completed'
+                              ? 'text-muted-foreground/45 line-through'
+                              : unit.status === 'in-progress'
+                                ? 'text-muted-foreground'
+                                : 'text-muted-foreground/50',
+                          )}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              'h-1 w-1 flex-shrink-0 rounded-full',
+                              unit.status === 'in-progress' ? 'bg-foreground/60' : 'bg-muted-foreground/40',
+                            )}
+                          />
+                          <span className="min-w-0 truncate">{task}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </motion.li>
+              );
+            })}
+          </AnimatePresence>
+        </ol>
+      </AgentDisclosure>
+    </section>
+  );
+}

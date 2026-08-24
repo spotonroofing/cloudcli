@@ -464,6 +464,21 @@ const addSessionWorkerColumns = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'origin', 'TEXT');
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'base_commit', 'TEXT');
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'chain_slug', 'TEXT');
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'chain_phase', 'INTEGER');
+};
+
+/**
+ * Adds the dispatch-manifest columns (ui9 B4) to watchdog_chains: `manifest`
+ * holds the planner-supplied phase manifest as JSON, `phase_active` records
+ * whether a phase session is running right now so run state never falls back
+ * to a stale session row.
+ */
+const addWatchdogChainManifestColumns = (db: Database): void => {
+  const chainsTableInfo = getTableInfo(db, 'watchdog_chains');
+  const columnNames = chainsTableInfo.map((column) => column.name);
+
+  addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'manifest', 'TEXT');
+  addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'phase_active', 'INTEGER NOT NULL DEFAULT 0');
 };
 
 /**
@@ -558,6 +573,7 @@ export const runMigrations = (db: Database) => {
     `);
     db.exec(COMPOSER_DRAFTS_TABLE_SCHEMA_SQL);
     db.exec(WATCHDOG_CHAINS_TABLE_SCHEMA_SQL);
+    addWatchdogChainManifestColumns(db);
     db.exec(WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL);
     db.exec(MESSAGE_VERSIONS_TABLE_SCHEMA_SQL);
     db.exec('CREATE INDEX IF NOT EXISTS idx_message_versions_session ON message_versions(session_id)');

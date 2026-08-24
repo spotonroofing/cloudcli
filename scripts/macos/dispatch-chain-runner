@@ -97,16 +97,43 @@ wait_for_chrome_slot() {
 
 CHAIN_BASE=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
 
+# The planner-supplied phase manifest (ui9 B4) rides along in the chain
+# registration; the watchdog stores it and the phase navigator renders it.
+MANIFEST_PATH="${DISPATCH_MANIFEST:-}"
+
 journal run "start" "chain $SLUG in $REPO ($TOTAL phases)"
-api_post "/api/watchdog/chains" "$(python3 - "$SLUG" "$REPO" "$TOTAL" <<'PYEOF'
+api_post "/api/watchdog/chains" "$(python3 - "$SLUG" "$REPO" "$TOTAL" "$MANIFEST_PATH" <<'PYEOF'
 import json, sys
-print(json.dumps({'slug': sys.argv[1], 'projectPath': sys.argv[2], 'phases': int(sys.argv[3])}))
+slug, repo, total, manifest_path = sys.argv[1:5]
+body = {'slug': slug, 'projectPath': repo, 'phases': int(total)}
+if manifest_path:
+    try:
+        body['manifest'] = json.load(open(manifest_path))
+    except Exception:
+        pass
+print(json.dumps(body))
 PYEOF
 )" 3
 
+# Append queue (ui9 B4): `dispatch append` drops prompt files here; they are
+# picked up after each phase's commit gate and run as additional units.
+APPEND_DIR="$JOURNAL_DIR/append"
+CONSUMED_DIR="$APPEND_DIR/consumed"
+pickup_appends() {
+  local f
+  for f in "$APPEND_DIR"/*.md(N); do
+    mkdir -p "$CONSUMED_DIR"
+    mv "$f" "$CONSUMED_DIR/${f:t}"
+    PHASE_FILES+=("$CONSUMED_DIR/${f:t}")
+    journal append "queued" "${f:t} picked up as unit ${#PHASE_FILES[@]}"
+  done
+  TOTAL=${#PHASE_FILES[@]}
+}
+
 PHASE_NUM=0
-for PHASE_FILE in "${PHASE_FILES[@]}"; do
+while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   PHASE_NUM=$((PHASE_NUM + 1))
+  PHASE_FILE="${PHASE_FILES[$PHASE_NUM]}"
   PHASE_NAME=$(basename "$PHASE_FILE")
   BASE_COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
 
@@ -121,10 +148,10 @@ for PHASE_FILE in "${PHASE_FILES[@]}"; do
   # server before claude starts, so the row exists tagged origin=dispatch
   # (with the chain slug) before transcript discovery can index it untagged.
   SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-  api_post "/api/watchdog/chains/$SLUG/sessions" "$(python3 - "$SESSION_ID" "$REPO" "$BASE_COMMIT" "$MODEL" <<'PYEOF'
+  api_post "/api/watchdog/chains/$SLUG/sessions" "$(python3 - "$SESSION_ID" "$REPO" "$BASE_COMMIT" "$MODEL" "$PHASE_NUM" <<'PYEOF'
 import json, sys
-sid, repo, base, model = sys.argv[1:5]
-print(json.dumps({'sessionId': sid, 'projectPath': repo, 'baseCommit': base, 'model': model}))
+sid, repo, base, model, phase = sys.argv[1:6]
+print(json.dumps({'sessionId': sid, 'projectPath': repo, 'baseCommit': base, 'model': model, 'phase': int(phase)}))
 PYEOF
 )" 3
 
@@ -165,6 +192,7 @@ PYEOF
 
   journal "phase $PHASE_NUM/$TOTAL" "end" "$(git -C "$REPO" log -1 --format=%h\ %s)"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body phase-end $PHASE_NUM '')" 3
+  pickup_appends
 done
 
 TAIL=$(git -C "$REPO" log --oneline "$CHAIN_BASE"..HEAD 2>/dev/null | head -20 | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))")

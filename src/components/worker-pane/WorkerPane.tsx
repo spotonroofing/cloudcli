@@ -12,6 +12,8 @@ import { ActionMenu, Badge, Button, Tooltip } from '../../shared/view/ui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 
+import PhaseNavigator, { type ChainSnapshot } from './PhaseNavigator';
+
 type WorkerRun = {
   sessionId: string;
   provider: string;
@@ -19,15 +21,31 @@ type WorkerRun = {
   /** True when the run's first message was an auto-sent boot prompt. */
   booted?: boolean;
   chainSlug: string | null;
+  /** 1-based unit index inside the dispatch chain; null outside chains. */
+  chainPhase: number | null;
   title: string | null;
   state: 'running' | 'finished' | 'stopped';
   model: string | null;
   lastActivity: string | null;
 };
 
-/** Run slug first, then the session title, then a short honest id — never a provider placeholder. */
-const runLabel = (run: WorkerRun): string =>
-  run.chainSlug || run.title || `run ${run.sessionId.slice(0, 8)}`;
+/**
+ * Chain runs read "slug Phase N - name" from the dispatch manifest (never the
+ * bare slug repeated); then the session title, then a short honest id — never
+ * a provider placeholder.
+ */
+const runLabel = (run: WorkerRun, chains: Record<string, ChainSnapshot>): string => {
+  if (run.chainSlug) {
+    if (run.chainPhase) {
+      const name = chains[run.chainSlug]?.manifest?.[run.chainPhase - 1]?.name;
+      return name
+        ? `${run.chainSlug} Phase ${run.chainPhase} - ${name}`
+        : `${run.chainSlug} Phase ${run.chainPhase}`;
+    }
+    return run.chainSlug;
+  }
+  return run.title || `run ${run.sessionId.slice(0, 8)}`;
+};
 
 type WorkerPaneProps = {
   selectedProject: Project;
@@ -72,6 +90,7 @@ export default function WorkerPane({
 
   const [paneSession, setPaneSession] = useState<ProjectSession | null>(null);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
+  const [chains, setChains] = useState<Record<string, ChainSnapshot>>({});
   const [newSessionTrigger, setNewSessionTrigger] = useState(0);
   const [touchedFiles, setTouchedFiles] = useState<string[] | null>(null);
   // Auto-follow pauses while the user is composing a brand-new pane session or
@@ -111,8 +130,11 @@ export default function WorkerPane({
       if (!response.ok) {
         return;
       }
-      const body = (await response.json()) as { data?: { runs?: WorkerRun[] } };
+      const body = (await response.json()) as {
+        data?: { runs?: WorkerRun[]; chains?: Record<string, ChainSnapshot> };
+      };
       setRuns(body.data?.runs ?? []);
+      setChains(body.data?.chains ?? {});
     } catch {
       // transient; the poll retries
     }
@@ -122,6 +144,7 @@ export default function WorkerPane({
   useEffect(() => {
     setPaneSession(null);
     setRuns([]);
+    setChains({});
     setTouchedFiles(null);
     followLatestRef.current = true;
     void refreshRuns();
@@ -129,9 +152,20 @@ export default function WorkerPane({
 
   // Watcher deltas plus a slow poll keep the run list and its states honest
   // even when a dispatched chain starts sessions with no browser involved.
+  // chain_progress is the watchdog streaming per-phase progress: merge the
+  // snapshot for an instant navigator update, then refetch to reconcile runs.
   useEffect(() => {
-    const unsubscribe = subscribe?.((event: { kind?: string } | null) => {
+    const unsubscribe = subscribe?.((event: { kind?: string; chain?: ChainSnapshot } | null) => {
       if (event?.kind === 'session_upserted') {
+        void refreshRuns();
+      }
+      if (event?.kind === 'chain_progress' && event.chain) {
+        const chain = event.chain;
+        setChains((previous) =>
+          previous[chain.slug] || chain.projectPath === projectPath
+            ? { ...previous, [chain.slug]: chain }
+            : previous,
+        );
         void refreshRuns();
       }
     });
@@ -142,7 +176,7 @@ export default function WorkerPane({
       unsubscribe?.();
       clearInterval(interval);
     };
-  }, [subscribe, refreshRuns]);
+  }, [subscribe, refreshRuns, projectPath]);
 
   // Auto-follow: the newest run is selected until the user pins another one.
   // Held off while the composer is focused; it catches up on blur.
@@ -216,6 +250,20 @@ export default function WorkerPane({
   };
 
   const selectedRun = runs.find((run) => run.sessionId === paneSession?.id) ?? null;
+  const selectedChain = selectedRun?.chainSlug ? (chains[selectedRun.chainSlug] ?? null) : null;
+
+  // Same behavior as the switcher: a past phase's row opens that phase's
+  // session in the pane.
+  const handleSelectPhase = (unitIndex: number) => {
+    const slug = selectedRun?.chainSlug;
+    if (!slug) {
+      return;
+    }
+    const target = runs.find((run) => run.chainSlug === slug && run.chainPhase === unitIndex);
+    if (target) {
+      handleSelectRun(target);
+    }
+  };
 
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -224,7 +272,7 @@ export default function WorkerPane({
         <span className="text-xs font-medium text-foreground">Worker</span>
         {runs.length > 0 && (
           <ActionMenu
-            label={selectedRun ? runLabel(selectedRun) : 'Runs'}
+            label={selectedRun ? runLabel(selectedRun, chains) : 'Runs'}
             ariaLabel="Switch worker run"
             align="left"
             variant="ghost"
@@ -234,7 +282,7 @@ export default function WorkerPane({
             menuClassName="w-72"
             items={runs.map((run) => ({
               key: run.sessionId,
-              label: runLabel(run),
+              label: runLabel(run, chains),
               description: [run.origin, run.state, run.model && modelDisplayLabel(run.model)]
                 .filter(Boolean)
                 .join(' · '),
@@ -310,6 +358,18 @@ export default function WorkerPane({
           </Tooltip>
         )}
       </div>
+
+      {selectedRun && (
+        <PhaseNavigator
+          chain={selectedChain}
+          run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
+          selectedPhase={selectedRun.chainPhase}
+          hasSessionForPhase={(unitIndex) =>
+            runs.some((run) => run.chainSlug === selectedRun.chainSlug && run.chainPhase === unitIndex)
+          }
+          onSelectPhase={handleSelectPhase}
+        />
+      )}
 
       {touchedFiles !== null && (
         <div className="max-h-40 flex-shrink-0 overflow-y-auto border-b border-border/60 bg-muted/20 px-3 py-2">

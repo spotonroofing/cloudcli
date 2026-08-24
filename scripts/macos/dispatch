@@ -2,10 +2,14 @@
 # dispatch — the fire-once chain runner (spec B4).
 #
 #   dispatch <project> <slug> [phase-file ...]
+#   dispatch append <project> <slug> <file ...> [--phase]
 #
 # <project> is a folder name under ~/Projects or an absolute repo path.
 # Phase prompt files: explicit paths, or by convention every file matching
-# <repo>/.dispatch/<slug>/*.md in lexical order. Validation happens here;
+# <repo>/.dispatch/<slug>/*.md in lexical order. A phase manifest the planner
+# wrote at <repo>/.dispatch/<slug>/manifest.json (or DISPATCH_MANIFEST) rides
+# along: JSON array of {name, tasks[]} in phase order; the watchdog stores it
+# and the worker pane's phase navigator renders it. Validation happens here;
 # execution is handed to dispatch-chain-runner, spawned fully detached (own
 # session) so a CloudCLI server restart or promote mid-chain never touches a
 # running chain. Each phase runs as a fresh headless `claude -p` session with
@@ -13,13 +17,81 @@
 # and the runner reports boundaries to the watchdog, which wakes the
 # project's planner at the end. The planner invokes this once and goes idle;
 # it never polls.
+#
+# `dispatch append` queues additional prompt files onto an active chain; the
+# runner picks them up after the current phase's commit gate. Appended units
+# are "tasks" (lighter navigator rows) unless --phase marks a full compiled
+# unit.
 set -u
 
 PROJECTS_ROOT="$HOME/Projects"
-DB_PATH="$HOME/.cloudcli/auth.db"
+SERVER_URL="${DISPATCH_SERVER_URL:-http://127.0.0.1:4747}"
+DB_PATH="${DISPATCH_DB_PATH:-$HOME/.cloudcli/auth.db}"
 
-usage() { print -u2 "usage: dispatch <project> <slug> [phase-file ...]"; exit 64; }
+usage() {
+  print -u2 "usage: dispatch <project> <slug> [phase-file ...]"
+  print -u2 "       dispatch append <project> <slug> <file ...> [--phase]"
+  exit 64
+}
 [[ $# -ge 2 ]] || usage
+
+# ----- append: queue additional work onto an active chain -----
+if [[ "$1" == "append" ]]; then
+  shift
+  [[ $# -ge 3 ]] || usage
+  PROJECT_ARG="$1"; SLUG="$2"; shift 2
+
+  KIND="task"
+  typeset -a APPEND_FILES
+  APPEND_FILES=()
+  for arg in "$@"; do
+    if [[ "$arg" == "--phase" ]]; then
+      KIND="phase"
+    else
+      APPEND_FILES+=("$arg")
+    fi
+  done
+  [[ ${#APPEND_FILES[@]} -gt 0 ]] || usage
+  for f in "${APPEND_FILES[@]}"; do
+    [[ -r "$f" ]] || { print -u2 "dispatch: cannot read append file $f"; exit 66; }
+  done
+
+  API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
+  [[ -n "$API_KEY" ]] || { print -u2 "dispatch: no active API key in server config"; exit 78; }
+  HEADER_FILE=$(mktemp)
+  chmod 600 "$HEADER_FILE"
+  print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
+  trap 'rm -f "$HEADER_FILE"' EXIT
+
+  # Announce first: a dead or finished chain refuses the append, and nothing
+  # gets queued for a runner that will never pick it up.
+  ENTRIES=$(python3 - "$KIND" "${APPEND_FILES[@]}" <<'PYEOF'
+import json, os, sys
+kind = sys.argv[1]
+entries = []
+for path in sys.argv[2:]:
+    name = os.path.splitext(os.path.basename(path))[0]
+    entries.append({'name': name, 'kind': kind, 'tasks': []})
+print(json.dumps({'entries': entries}))
+PYEOF
+)
+  if ! curl -sf -K "$HEADER_FILE" -m 30 -X POST "$SERVER_URL/api/watchdog/chains/$SLUG/append" \
+      -H 'Content-Type: application/json' -d "$ENTRIES" >/dev/null 2>&1; then
+    print -u2 "dispatch: chain $SLUG refused the append (not registered or not running)"
+    exit 69
+  fi
+
+  APPEND_DIR="$HOME/forge-logs/$SLUG/append"
+  mkdir -p "$APPEND_DIR"
+  STAMP=$(date +%s)
+  i=0
+  for f in "${APPEND_FILES[@]}"; do
+    i=$((i + 1))
+    cp "$f" "$APPEND_DIR/$STAMP-$i.$KIND.${f:t}"
+  done
+  print -r -- "dispatch: ${#APPEND_FILES[@]} $KIND(s) queued onto chain $SLUG; the runner picks them up after the current phase's commit gate"
+  exit 0
+fi
 
 PROJECT_ARG="$1"; SLUG="$2"; shift 2
 
@@ -45,6 +117,16 @@ for f in "${PHASE_FILES[@]}"; do
   ABS_PHASE_FILES+=("${f:A}")
 done
 
+# Phase manifest (ui9 B4): explicit DISPATCH_MANIFEST, else the convention
+# path. Optional; when present it must parse as JSON before anything launches.
+MANIFEST_PATH="${DISPATCH_MANIFEST:-$REPO/.dispatch/$SLUG/manifest.json}"
+if [[ -r "$MANIFEST_PATH" ]]; then
+  python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$MANIFEST_PATH" 2>/dev/null \
+    || { print -u2 "dispatch: manifest $MANIFEST_PATH is not valid JSON"; exit 65; }
+else
+  MANIFEST_PATH=""
+fi
+
 # Fail fast while the planner is still listening; the runner re-reads the key
 # itself (it may outlive several server restarts).
 API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
@@ -60,6 +142,7 @@ mkdir -p "$JOURNAL_DIR"
 # entirely, so neither the planner's session ending nor a server restart can
 # reach it.
 RUNNER_PID=$(DISPATCH_RUNNER_LOG="$JOURNAL_DIR/runner.log" \
+  DISPATCH_MANIFEST="$MANIFEST_PATH" \
   python3 - "$RUNNER" "$REPO" "$SLUG" "${ABS_PHASE_FILES[@]}" <<'PYEOF'
 import os, subprocess, sys
 with open(os.environ['DISPATCH_RUNNER_LOG'], 'ab') as out:
