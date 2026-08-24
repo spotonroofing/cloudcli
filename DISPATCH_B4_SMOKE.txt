@@ -1,2 +1,3 @@
 b4 smoke phase 1
 b4 smoke phase 2
+b4 smoke appended task
