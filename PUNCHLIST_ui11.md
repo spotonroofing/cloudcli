@@ -138,3 +138,13 @@ Goal: nothing in Command Center needs a refresh to be current, and whatever is s
 
 Done check: on dev with a stub chain producing output on an interval: the context ring value changes in the DOM without reload; opening the worker session in a fresh agent-browser profile lands scrolled to the bottom with the newest message present; the skeleton element renders during load on transcript, sidebar, and worker switcher (DOM check with throttled network), then disappears; holds at a phone viewport. Fresh-context subagent verification. Commit.
 
+## Phase 12 — Planner and worker counters open a drawer (appended 2026-08-24)
+
+Goal: the planner and worker counters at the bottom of the sidebar never jump to one arbitrary session. Clicking either opens a drawer listing every active session of that kind, and Willem picks. Files: the sidebar footer counters and their click handlers (src/components/sidebar), the drawer element phase 5 introduced for the account switcher, the session store, DESIGN.md. Dependencies: phase 5 (reuse its drawer).
+
+- [ ] Clicking the planner counter with the sidebar open slides up a drawer (the phase 5 drawer pattern: rises from above the Settings row, overlays the lists, second click, Escape, or outside tap closes it, full-width bottom sheet on phone) listing every active planner session, grouped by project, each row showing project, session title, and its live state (working, waiting on Willem, idle). Tapping a row opens that session in the pane. The same for the worker counter and active worker runs (dispatched, direct, maintenance), rows labeled the way the run switcher labels them.
+- [ ] With exactly one active session of that kind the drawer still opens with the one row (consistent behavior, no special case that jumps). With zero, the drawer shows an empty state in the app's existing empty-state style.
+- [ ] Record in the summary what the counters did before (which session a click landed on, and why).
+
+Done check: on dev with two planner sessions active on two projects (stub or real) and one worker run: clicking the planner counter mounts the drawer with two rows, tapping the second opens that session (URL and pane header match its id); the worker counter drawer shows the run; second click unmounts the drawer; holds at a phone viewport. Fresh-context subagent verification. Commit.
+
