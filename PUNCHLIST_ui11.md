@@ -106,3 +106,24 @@ Goal: dev is clean and the whole round holds together. Dependencies: phases 1 th
 - [ ] Round audit: walk every surface this round touched on dev at desktop and phone viewports, fix regressions, update DESIGN.md with any new element, and list findings in the summary.
 
 Done check: the dev DB shows no "proj" project and no throwaway; a project-less chat opens at a phone viewport; `/standalone/<id>` for a real dev session renders its messages; the audit list is in the summary. Fresh-context subagent verification. Commit.
+
+## Phase 9 — Numbers sit on the line (appended 2026-08-24)
+
+Goal: wherever a mono or tabular number renders inline with text, it sits vertically centered with that text, everywhere in the app. Files: the shared mono/number class or component and the theme typography tokens; every call site the sweep finds (the "Thinking 3m18.9s" timing, token and line counts, durations, the context ring label, phase counters). Dependencies: phase 4 (row components settled).
+
+- [ ] Fix the cause once, in the shared number/mono style (font metrics, line-height, vertical-align, or a font-feature and baseline correction), not per site; then sweep the app for inline numbers and apply the shared class so no site carries its own alignment hack.
+- [ ] Record the cause in one line in DESIGN.md under typography so it is not re-broken.
+
+Done check: on dev, for the Thinking timing row and at least three other inline-number sites, DOM measurements show the number glyph box's vertical center within 1px of the adjacent text's; holds at a phone viewport. Fresh-context subagent verification. Commit.
+
+## Phase 10 — Worker pane: no badge in any state, live updates, navigator drawers (appended 2026-08-24)
+
+Goal: the worker pane is live and legible: no status badge, real-time transcript for dispatched runs, and a phase navigator that lists every phase at once as collapsible task drawers with per-task status icons and per-phase counters. Files: the worker pane header and phase navigator components (extending phase 6's counter work), the worker pane's realtime wiring (src/contexts/WebSocketContext.tsx, the sessions watcher path under server/modules/providers/services), server/modules/watchdog chain events. Dependencies: phase 6.
+
+- [ ] The status badge in the worker pane's top row is gone in every state (running, finished, stopped, any other); state lives in the navigator and the run switcher.
+- [ ] Dispatched runs render live: a worker pane following a dispatched phase shows tool calls, thinking, and text as they happen, with no refresh. Reproduce (the ui11 phase 1 pane showed nothing while the run was active, and appended phases 9 and 10 changed the count without the header updating), find the cause of the pane falling out of sync, fix it, and add a regression check.
+- [ ] Navigator: all phases list at once as a scrollable list, not a single-phase strip; each phase row is a drawer that expands to show its tasks; the active phase's drawer is open by default, the others start collapsed, all toggleable. Each phase row keeps phase 6's done/total counter on its right and the phase ring advances with it. Appended phases show in the list and the "Phase N of M" header the moment they are announced.
+- [ ] Task rows inside a drawer carry a status icon instead of a bullet: a check for done, a working indicator for the first unchecked task of the active phase, an idle marker for untouched tasks.
+
+Done check: on dev, a stub chain with a manifest and a test punch list (stub claude per lesson chain-runner-fully-stubbable-via-env): the badge is absent from the header DOM in running and finished states; the pane shows the stub's output live without reload; all phases list at once, the active drawer open, others collapsed and toggleable; appending a unit updates the header count live; check/working/idle icons appear in the right rows as check-offs land. Holds at a phone viewport. Fresh-context subagent verification. Commit.
+
