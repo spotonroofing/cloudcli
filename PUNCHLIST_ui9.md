@@ -138,9 +138,9 @@ Done check: DOM asserts on the two-row bar structure and control placement, past
 
 Goal: the round proven whole on both form factors. Dependencies: all prior.
 
-- [ ] Every ui9 change verified at the phone viewport, one-to-one with desktop, tap-first (44px targets, no hover-gated actions, safe-area, dvh).
-- [ ] Full test suite green, build clean, dev restarted healthy.
-- [ ] Whole-app sweep on dev re-running each ui9 phase's done check at desktop and phone viewport; fix regressions.
-- [ ] Stop after dev verification; no promote — Willem eyeballs dev and calls it.
+- [x] Every ui9 change verified at the phone viewport, one-to-one with desktop, tap-first (44px targets, no hover-gated actions, safe-area, dvh).
+- [x] Full test suite green, build clean, dev restarted healthy.
+- [x] Whole-app sweep on dev re-running each ui9 phase's done check at desktop and phone viewport; fix regressions.
+- [x] Stop after dev verification; no promote — Willem eyeballs dev and calls it.
 
 Done check: the sweep passes with tests and health in the log. Fresh-context subagent verification. Commit and push.
