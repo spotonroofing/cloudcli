@@ -1,0 +1,10 @@
+[
+  {"name": "Cloud persistence", "tasks": ["Move every client preference to a per-user server settings store with live broadcast", "Persist queued messages server-side per session", "List migrated keys and anything left device-local"]},
+  {"name": "Queued steering", "tasks": ["Establish SDK support for mid-turn user input", "Deliver queued messages at the next tool boundary without interrupting", "Queued card lands as a bubble at intake, same on reload", "If infeasible, annotate the finding instead of faking it"]},
+  {"name": "Handoff auto-flow", "tasks": ["Slash commands render as compact expandable command bubbles", "Handoff turn end spawns and boots the next planner session with a loader", "Monday maintenance runs labeled as maintenance in the run switcher"]},
+  {"name": "Transcript rows", "tasks": ["Tool-call chevrons on one right-edge column", "Timestamp joins the description line, rows compacted", "One copy-control rule across every row type", "Pasted text in sent bubbles shows the PASTED chip and preview", "Interrupted marker row for killed turns"]},
+  {"name": "Composer and drawer", "tasks": ["Prompt bar as a true enclosure with the secondary row floating outside it", "Inline bordered attachment thumbnails, fit-contained, no gray container", "Account switcher as a sliding drawer above Settings"]},
+  {"name": "Worker pane", "tasks": ["Remove the finished tag from the header", "Phase navigator open by default, collapsible", "Per-phase done/total counter from manifest and punch list check-offs"]},
+  {"name": "Mark redesign", "tasks": ["Three candidate marks committed with concept notes", "Strongest mark swapped in everywhere, old asset removed"]},
+  {"name": "Cleanup and audit", "tasks": ["Delete stray proj and throwaway projects on dev", "Phone-width project-less chat passes the project gate", "/standalone deep links render", "Round audit at desktop and phone, DESIGN.md updated"]}
+]
