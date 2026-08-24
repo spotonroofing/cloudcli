@@ -133,7 +133,7 @@
       "sendNext": "Poner en cola el siguiente mensaje",
       "update": "Actualizar mensaje en cola",
       "label": "En cola",
-      "willSend": "Se enviará cuando esto termine",
+      "willSend": "Se envía en la próxima pausa",
       "edit": "Editar mensaje en cola",
       "delete": "Eliminar mensaje en cola"
     }

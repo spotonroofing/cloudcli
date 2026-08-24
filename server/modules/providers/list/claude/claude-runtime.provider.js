@@ -22,6 +22,8 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import {
   appendFilesInputTag,
   buildClaudeUserContent,
+  isImageAttachmentDescriptor,
+  normalizeAttachmentDescriptors,
   normalizeImageDescriptors
 } from '@/shared/image-attachments.js';
 import { appConfigDb, projectsDb } from '@/modules/database/index.js';
@@ -596,30 +598,83 @@ async function buildPromptMessages(command, images, files, cwd) {
 }
 
 /**
- * Wraps prompt messages in an async iterable that yields them and then parks.
+ * Wraps prompt messages in an async iterable that yields them, then parks and
+ * yields whatever is pushed later.
  *
  * The SDK closes the CLI's stdin as soon as its input iterable is exhausted (and
  * immediately on `result` for string prompts). The CLI reads that EOF as the end
  * of the run and kills anything still going in the background, so the iterable
- * has to stay pending until we actually want the process gone.
+ * has to stay pending until we actually want the process gone. While it is
+ * parked, `push` hands the CLI a further user message on the same stdin; Claude
+ * Code enqueues stdin messages at priority "next" and folds them into the
+ * running turn at its next main-thread tool-result boundary (ui11 phase 2).
  *
- * @param {Array<Object>} messages - SDKUserMessage records to send
- * @returns {{ stream: AsyncIterable, release: () => void }} Stream plus its closer
+ * @param {Array<Object>} messages - SDKUserMessage records to send first
+ * @returns {{ stream: AsyncIterable, push: (message: Object) => boolean, release: () => void }}
  */
 function createHeldPromptStream(messages) {
-  let release;
-  const held = new Promise((resolve) => { release = resolve; });
+  const pending = [...messages];
+  let released = false;
+  let wake = null;
+  const signal = () => {
+    if (wake) {
+      const resolve = wake;
+      wake = null;
+      resolve();
+    }
+  };
 
   const stream = (async function* () {
-    for (const message of messages) {
-      yield message;
+    while (true) {
+      if (pending.length > 0) {
+        yield pending.shift();
+        continue;
+      }
+      if (released) {
+        return;
+      }
+      // Keeps stdin open — the CLI stays alive until release() is called.
+      await new Promise((resolve) => { wake = resolve; });
     }
-    // Keeps stdin open — the CLI stays alive until release() is called.
-    await held;
   })();
 
-  return { stream, release };
+  return {
+    stream,
+    push(message) {
+      if (released) {
+        return false;
+      }
+      pending.push(message);
+      signal();
+      return true;
+    },
+    release() {
+      released = true;
+      signal();
+    },
+  };
 }
+
+/**
+ * True for a main-thread message whose content carries a block of the given
+ * type. Subagent messages (parent_tool_use_id set) never count: Claude Code
+ * only folds queued stdin messages into the main thread.
+ * @param {Object} sdkMessage - SDK stream message
+ * @param {string} messageType - 'assistant' or 'user'
+ * @param {string} blockType - 'tool_use' or 'tool_result'
+ * @returns {boolean}
+ */
+function isMainThreadMessageWith(sdkMessage, messageType, blockType) {
+  if (sdkMessage?.type !== messageType || sdkMessage.parent_tool_use_id) {
+    return false;
+  }
+  const content = sdkMessage.message?.content;
+  return Array.isArray(content) && content.some((block) => block?.type === blockType);
+}
+
+// How long a turn stays open after its `result` while a pushed steer that the
+// CLI did not fold mid-turn is expected to start as the follow-up turn.
+const STEER_FOLLOW_UP_GRACE_MS = 10 * 1000;
 
 /**
  * Loads MCP server configurations from ~/.claude.json
@@ -710,6 +765,9 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
   // Closes the held stdin stream so the CLI can wind down. Replaced once the
   // stream exists; the finally block calls it no matter how the run ends.
   let releasePromptStream = () => {};
+  // Hands the CLI a further user message on the held stdin (see
+  // createHeldPromptStream); replaced alongside releasePromptStream.
+  let pushPromptMessage = () => false;
   let idleReleaseTimer = null;
   // The client is told the turn is over as soon as `result` lands, even though
   // the process lingers, so the UI never waits out the idle hold.
@@ -744,6 +802,70 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
   // Hoisted above the try so the catch's cleanup can tell whether this run
   // still owns the activeSessions entry (or was superseded by a newer run).
   let queryInstance = null;
+
+  const reportTurnComplete = () => {
+    turnCompleteSent = true;
+    ws.send(createCompleteMessage({ provider: 'claude', sessionId: capturedSessionId || sessionId || null, exitCode: 0 }));
+    notifyRunStopped({
+      userId: ws?.userId || null,
+      provider: 'claude',
+      sessionId: sessionId || capturedSessionId || null,
+      sessionName: sessionSummary,
+      stopReason: 'completed'
+    });
+  };
+
+  // ui11 phase 2: a message queued while this turn runs steers it instead of
+  // waiting for it. Claude Code enqueues stdin user messages at priority
+  // "next" and folds them into the running turn at its next main-thread
+  // tool-result boundary, so the queued row is pushed down stdin the moment a
+  // tool call starts (it sits in the CLI's queue while the tool runs and lands
+  // for certain at that tool's result) and echoed as the user bubble when the
+  // post-boundary reply begins, which is where the CLI persists it as a
+  // `queued_command` attachment. The row is claimed at that point so no client
+  // flushes it at end of turn and every device clears the card; a row edited
+  // in between is left alone and rides the next tool call. Slash commands
+  // expand client-side and an edit-and-resend replaces an exchange, so both
+  // keep end-of-turn delivery.
+  let pendingSteer = null;
+  let steerFollowUpTimer = null;
+
+  const armQueuedSteer = async () => {
+    const key = sessionKey();
+    if (!sessionId || !key || pendingSteer || abortedSessionIds.has(key) || supersededInstances.has(queryInstance)) {
+      return;
+    }
+    const queued = context.queuedMessages.get(sessionId);
+    if (!queued) {
+      return;
+    }
+    const content = queued.content.trim();
+    if (!content || content.startsWith('/') || queued.options?.edit) {
+      return;
+    }
+    const attachments = normalizeAttachmentDescriptors(queued.attachments);
+    const [steer] = await buildPromptMessages(
+      queued.content,
+      attachments.filter(isImageAttachmentDescriptor),
+      attachments.filter((descriptor) => !isImageAttachmentDescriptor(descriptor)),
+      options.cwd,
+    );
+    if (pushPromptMessage(steer)) {
+      pendingSteer = { message: steer, updatedAt: queued.updatedAt, sawBoundary: false };
+    }
+  };
+
+  // The CLI has folded the pushed steer in (or is about to run it as the
+  // follow-up turn): claim the row and land the bubble.
+  const settleQueuedSteer = () => {
+    const steer = pendingSteer;
+    pendingSteer = null;
+    context.queuedMessages.claim(sessionId, steer.updatedAt);
+    const sid = capturedSessionId || sessionId;
+    for (const msg of context.normalizeMessage({ ...steer.message, uuid: createRequestId() }, sid)) {
+      ws.send(msg);
+    }
+  };
 
   try {
     const resolvedModel = await context.resolveResumeModel(sessionId, options.model);
@@ -874,6 +996,7 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
 
     let heldPrompt = createHeldPromptStream(promptMessages);
     releasePromptStream = heldPrompt.release;
+    pushPromptMessage = heldPrompt.push;
     try {
       queryInstance = query({
         prompt: heldPrompt.stream,
@@ -888,6 +1011,7 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
       heldPrompt.release();
       heldPrompt = createHeldPromptStream(promptMessages);
       releasePromptStream = heldPrompt.release;
+      pushPromptMessage = heldPrompt.push;
       queryInstance = query({
         prompt: heldPrompt.stream,
         options: sdkOptions
@@ -904,8 +1028,13 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
     // The get_context_usage control request only answers while the CLI process
     // is alive, so it is fired on assistant messages (mid-turn) and awaited at
     // the result message; a request first issued at the result itself loses the
-    // race against process exit.
+    // race against process exit. At most one is in flight at a time, only for
+    // main-thread messages, and none while a message is queued for this
+    // session: the CLI answers each request on its stdin reader (~500ms
+    // apiece), which holds up every later stdin message, and a queued steer
+    // (ui11 phase 2) has to reach the CLI before the tool it rides finishes.
     let contextUsagePromise = null;
+    let contextUsageInFlight = false;
     for await (const message of queryInstance) {
       // Capture session ID from first message
       if (message.session_id && !capturedSessionId) {
@@ -927,6 +1056,22 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
         // session_id already captured
       }
 
+      if (steerFollowUpTimer) {
+        // The CLI started the follow-up turn for a late steer.
+        clearTimeout(steerFollowUpTimer);
+        steerFollowUpTimer = null;
+      }
+
+      // The first main-thread reply event after a tool-result boundary is the
+      // post-fold API call: the steer landed just before it.
+      if (
+        pendingSteer?.sawBoundary
+        && !message.parent_tool_use_id
+        && (message.type === 'stream_event' || message.type === 'assistant')
+      ) {
+        settleQueuedSteer();
+      }
+
       // Transform and normalize message via adapter
       const transformedMessage = transformMessage(message);
       const sid = capturedSessionId || sessionId || null;
@@ -941,9 +1086,24 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
         ws.send(msg);
       }
 
+      if (isMainThreadMessageWith(message, 'user', 'tool_result') && pendingSteer) {
+        pendingSteer.sawBoundary = true;
+      }
+      if (isMainThreadMessageWith(message, 'assistant', 'tool_use')) {
+        await armQueuedSteer();
+      }
+
       // Extract and send token budget updates from assistant/result usage payloads
-      if (message.type === 'assistant') {
-        contextUsagePromise = queryInstance.getContextUsage().catch(() => null);
+      if (
+        message.type === 'assistant'
+        && !message.parent_tool_use_id
+        && !contextUsageInFlight
+        && !(sessionId && context.queuedMessages.get(sessionId))
+      ) {
+        contextUsageInFlight = true;
+        contextUsagePromise = queryInstance.getContextUsage()
+          .catch(() => null)
+          .finally(() => { contextUsageInFlight = false; });
       }
       // Subagent messages carry the subagent's own (much smaller) usage, not
       // the session's context, so they never produce a budget update.
@@ -993,19 +1153,27 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
         backgroundWorkPending = true;
       }
 
+      if (message.type === 'result' && pendingSteer) {
+        // The steer was pushed but no post-boundary reply followed: the CLI
+        // will run it as the follow-up turn (it drains its queue even on
+        // stdin close). Land the bubble now and keep the turn open for that
+        // turn's `result`; the grace timer only catches a CLI that never
+        // starts it.
+        settleQueuedSteer();
+        steerFollowUpTimer = setTimeout(() => {
+          steerFollowUpTimer = null;
+          reportTurnComplete();
+          releasePromptStream();
+        }, STEER_FOLLOW_UP_GRACE_MS);
+        steerFollowUpTimer.unref?.();
+        continue;
+      }
+
       if (message.type === 'result') {
         // The turn is done as far as the client is concerned.
         const abortPending = sessionKey() ? abortedSessionIds.has(sessionKey()) : false;
         if (!turnCompleteSent && !abortPending) {
-          turnCompleteSent = true;
-          ws.send(createCompleteMessage({ provider: 'claude', sessionId: capturedSessionId || sessionId || null, exitCode: 0 }));
-          notifyRunStopped({
-            userId: ws?.userId || null,
-            provider: 'claude',
-            sessionId: sessionId || capturedSessionId || null,
-            sessionName: sessionSummary,
-            stopReason: 'completed'
-          });
+          reportTurnComplete();
         } else if (heldForBackgroundWork && !abortPending) {
           // A result after the turn already reported complete means the work we
           // held the process open for has finished and pushed a follow-up turn.
@@ -1113,6 +1281,10 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
     if (idleReleaseTimer) {
       clearTimeout(idleReleaseTimer);
       idleReleaseTimer = null;
+    }
+    if (steerFollowUpTimer) {
+      clearTimeout(steerFollowUpTimer);
+      steerFollowUpTimer = null;
     }
     releasePromptStream();
   }
@@ -1226,6 +1398,7 @@ export const claudeRuntime = {
 
 // Export public API
 export {
+  createHeldPromptStream,
   queryClaudeSDK,
   abortClaudeSDKSession,
   isClaudeSDKSessionActive,

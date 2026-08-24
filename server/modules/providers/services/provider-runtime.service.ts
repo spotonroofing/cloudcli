@@ -1,6 +1,8 @@
+import { queuedMessagesDb } from '@/modules/database/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
+import { broadcastQueuedMessageUpdated, parseQueuedMessageRow } from '@/modules/queued-messages/index.js';
 import type { IProvider } from '@/shared/interfaces.js';
 import type {
   AnyRecord,
@@ -48,6 +50,20 @@ export function createProviderRuntimeService(
     provider: IProvider,
   ): ProviderRuntimeContext => ({
     resolveProviderSessionId: dependencies.resolveProviderSessionId,
+    queuedMessages: {
+      get(sessionId) {
+        const row = queuedMessagesDb.get(sessionId);
+        return row ? parseQueuedMessageRow(row) : null;
+      },
+      claim(sessionId, updatedAt) {
+        const row = queuedMessagesDb.get(sessionId);
+        if (!row || row.updated_at !== updatedAt || !queuedMessagesDb.remove(sessionId)) {
+          return false;
+        }
+        broadcastQueuedMessageUpdated(sessionId, null, null);
+        return true;
+      },
+    },
     resolveResumeModel: (sessionId, requestedModel) =>
       dependencies.resolveResumeModel(provider.id, sessionId, requestedModel),
     getProviderModels: async () => dependencies.getProviderModels(provider.id),

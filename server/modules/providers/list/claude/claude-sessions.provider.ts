@@ -316,6 +316,28 @@ export class ClaudeSessionsProvider implements IProviderSessions {
       return [createNormalizedMessage({ kind: 'stream_end', sessionId, provider: PROVIDER })];
     }
 
+    // A message queued while a turn ran is folded into that turn by the CLI
+    // and persisted as a `queued_command` attachment (parented to the tool
+    // result it landed after) instead of a user row. It is a user turn as far
+    // as the transcript is concerned, so reload renders it where it landed.
+    if (raw.type === 'attachment' && raw.attachment?.type === 'queued_command') {
+      const prompt = typeof raw.attachment.prompt === 'string' ? raw.attachment.prompt : '';
+      const parsedFiles = parseFilesInputTag(prompt);
+      if (!parsedFiles.text.trim() && parsedFiles.attachments.length === 0) {
+        return [];
+      }
+      return [createNormalizedMessage({
+        id: raw.uuid || generateMessageId('claude'),
+        sessionId,
+        timestamp: raw.timestamp || new Date().toISOString(),
+        provider: PROVIDER,
+        kind: 'text',
+        role: 'user',
+        content: parsedFiles.text,
+        files: parsedFiles.attachments.length > 0 ? parsedFiles.attachments : undefined,
+      })];
+    }
+
     const messages: NormalizedMessage[] = [];
     const ts = raw.timestamp || new Date().toISOString();
     const baseId = raw.uuid || generateMessageId('claude');

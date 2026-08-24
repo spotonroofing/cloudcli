@@ -16,6 +16,12 @@ export const queuedMessagesDb = {
     return db.prepare(`SELECT ${COLUMNS} FROM queued_messages`).all() as QueuedMessageRow[];
   },
 
+  get(sessionId: string): QueuedMessageRow | null {
+    const db = getConnection();
+    const row = db.prepare(`SELECT ${COLUMNS} FROM queued_messages WHERE session_id = ?`).get(sessionId);
+    return (row as QueuedMessageRow | undefined) ?? null;
+  },
+
   upsert(
     sessionId: string,
     content: string,

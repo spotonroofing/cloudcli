@@ -84,8 +84,11 @@ function findServerEchoForLocalUser(
 }
 
 /**
- * Removes local optimistic user rows once a corresponding persisted turn is
- * available. Matches are one-to-one so repeated sends cannot claim one row.
+ * Removes realtime user rows once a corresponding persisted turn is
+ * available: the composer's optimistic echo of a send, and the user bubble
+ * the server emits when a queued message steers a running turn (ui11 phase
+ * 2), which the transcript later serves from the CLI's own record of it.
+ * Matches are one-to-one so repeated sends cannot claim one row.
  */
 export function removeOptimisticUserEchoes(
   serverMessages: NormalizedMessage[],
@@ -94,10 +97,9 @@ export function removeOptimisticUserEchoes(
   const claimedServerIds = new Set<string>();
 
   return realtimeMessages.filter((message) => {
-    // Live run frames may arrive without an id; only locally-echoed user rows
-    // (id "local_...") are candidates for removal. A throw here would kill the
+    // Only user text rows are candidates. A throw here would kill the
     // websocket listener mid-append and freeze the transcript for the turn.
-    if (typeof message.id !== 'string' || !message.id.startsWith('local_')) {
+    if (typeof message.id !== 'string' || message.kind !== 'text' || message.role !== 'user') {
       return true;
     }
 

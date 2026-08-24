@@ -25,7 +25,7 @@ export default function QueuedMessageCard({
           <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-primary/70">
             <span>{t('input.queue.label', { defaultValue: 'Queued' })}</span>
             <span className="normal-case text-muted-foreground/60">
-              · {t('input.queue.willSend', { defaultValue: 'Will send when this finishes' })}
+              · {t('input.queue.willSend', { defaultValue: 'Sends at the next break' })}
             </span>
           </div>
           <p className="mt-0.5 line-clamp-2 break-words text-sm text-foreground/90">{content}</p>

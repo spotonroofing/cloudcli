@@ -133,7 +133,7 @@
       "sendNext": "Queue next message",
       "update": "Update queued message",
       "label": "Queued",
-      "willSend": "Will send when this finishes",
+      "willSend": "Sends at the next break",
       "edit": "Edit queued message",
       "delete": "Delete queued message"
     }

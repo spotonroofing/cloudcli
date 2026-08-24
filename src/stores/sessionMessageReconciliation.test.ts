@@ -83,3 +83,16 @@ test('keeps live frames that arrive without an id instead of throwing', () => {
 
   assert.deepEqual(removeOptimisticUserEchoes([persisted], [idlessLiveFrame]), [idlessLiveFrame]);
 });
+
+test('a server-emitted steer bubble reconciles against the persisted queued_command row', () => {
+  // The Claude runtime emits the queued message as a user bubble mid-turn; on
+  // refetch the transcript serves the CLI's attachment record of it under a
+  // different id. Same text within the window: one bubble, not two.
+  const live = createUserMessage('msg_steer_live', '2026-08-24T20:16:50.233Z', {
+    content: 'From now on end every summary with BANANA.',
+  });
+  const persisted = createUserMessage('attachment-uuid', '2026-08-24T20:16:50.236Z', {
+    content: 'From now on end every summary with BANANA.',
+  });
+  assert.deepEqual(removeOptimisticUserEchoes([persisted], [live]), []);
+});

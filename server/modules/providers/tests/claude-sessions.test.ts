@@ -59,3 +59,32 @@ test('claude: the Skill tool result itself still reaches the UI', () => {
   assert.equal(messages[0].kind, 'tool_result');
   assert.equal(messages[0].toolId, 'toolu_1');
 });
+
+test('claude: a queued_command attachment renders as the user turn it became', () => {
+  const provider = new ClaudeSessionsProvider();
+
+  // The CLI folds a message queued mid-turn into the running turn and persists
+  // it as an attachment (ui11 phase 2), not as a user row.
+  const messages = provider.normalizeMessage(
+    {
+      type: 'attachment',
+      uuid: 'att-1',
+      parentUuid: 'tool-result-uuid',
+      timestamp: '2026-08-24T19:41:11.882Z',
+      attachment: { type: 'queued_command', prompt: 'From now on end every summary with BANANA.', commandMode: 'prompt' },
+    },
+    SESSION_ID,
+  );
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].kind, 'text');
+  assert.equal(messages[0].role, 'user');
+  assert.equal(messages[0].id, 'att-1');
+  assert.equal(messages[0].timestamp, '2026-08-24T19:41:11.882Z');
+  assert.equal(messages[0].content, 'From now on end every summary with BANANA.');
+
+  assert.deepEqual(
+    provider.normalizeMessage({ type: 'attachment', uuid: 'att-2', attachment: { type: 'queued_command', prompt: '   ' } }, SESSION_ID),
+    [],
+  );
+});

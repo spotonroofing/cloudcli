@@ -1,8 +1,9 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 
-import { queuedMessagesDb, type QueuedMessageRow } from '@/modules/database/index.js';
-import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/index.js';
+import { queuedMessagesDb } from '@/modules/database/index.js';
+import { broadcastQueuedMessageUpdated, parseQueuedMessageRow } from '@/modules/queued-messages/queued-messages.shared.js';
+import { filterAttachmentsToUploadStore } from '@/modules/websocket/index.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
 /**
@@ -13,51 +14,11 @@ import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils
  * disappears everywhere live. `clientId` is echoed so the writing tab can
  * ignore its own update. DELETE returns `claimed`: only the client whose delete
  * removed the row sends the message, so two devices never double-send.
+ *
+ * Attachments are validated here, at the boundary, because the Claude runtime
+ * later reads the row straight into the running turn (ui11 phase 2) without a
+ * second chat.send pass.
  */
-
-const parseJsonArray = (json: string | null): unknown[] => {
-  if (!json) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-const parseJsonObject = (json: string | null): Record<string, unknown> | undefined => {
-  if (!json) {
-    return undefined;
-  }
-  try {
-    const parsed = JSON.parse(json);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-const toMessage = (row: QueuedMessageRow) => ({
-  content: row.content,
-  options: parseJsonObject(row.options_json),
-  attachments: parseJsonArray(row.attachments_json),
-  updatedAt: row.updated_at,
-});
-
-const broadcastQueuedMessageUpdated = (
-  sessionId: string,
-  message: ReturnType<typeof toMessage> | null,
-  clientId: string | null,
-) => {
-  const payload = JSON.stringify({ kind: 'queued_message_updated', sessionId, message, clientId });
-  connectedClients.forEach((client) => {
-    if (client.readyState === WS_OPEN_STATE) {
-      client.send(payload);
-    }
-  });
-};
 
 export function createQueuedMessagesRouter(): express.Router {
   const router = express.Router();
@@ -66,7 +27,7 @@ export function createQueuedMessagesRouter(): express.Router {
     '/',
     asyncHandler(async (_req: Request, res: Response) => {
       const messages = Object.fromEntries(
-        queuedMessagesDb.listAll().map((row) => [row.session_id, toMessage(row)]),
+        queuedMessagesDb.listAll().map((row) => [row.session_id, parseQueuedMessageRow(row)]),
       );
       res.json(createApiSuccessResponse({ messages }));
     }),
@@ -83,7 +44,7 @@ export function createQueuedMessagesRouter(): express.Router {
           statusCode: 400,
         });
       }
-      const attachments = Array.isArray(body.attachments) ? body.attachments : [];
+      const attachments = filterAttachmentsToUploadStore(body.attachments);
       const options = body.options && typeof body.options === 'object' && !Array.isArray(body.options)
         ? (body.options as Record<string, unknown>)
         : undefined;

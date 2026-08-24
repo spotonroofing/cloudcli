@@ -323,8 +323,25 @@ export type ProviderRuntimePermissionGateway = {
  * Keeping these lookups outside concrete SDK/CLI adapters prevents the
  * adapters from importing services that resolve back through providerRegistry.
  */
+/** A session's server-side queued message as the runtime reads it (ui11 phase 2). */
+export type QueuedMessageRecord = {
+  content: string;
+  options: Record<string, unknown> | undefined;
+  attachments: unknown[];
+  updatedAt: string;
+};
+
 export type ProviderRuntimeContext = {
   resolveProviderSessionId(sessionId: string | null | undefined): string | null;
+  /**
+   * Queued-message access for runtimes that can steer a running turn. `claim`
+   * deletes the row only if it is unchanged since `updatedAt` (an edit made in
+   * the meantime stays queued) and clears the card on every device.
+   */
+  queuedMessages: {
+    get(sessionId: string): QueuedMessageRecord | null;
+    claim(sessionId: string, updatedAt: string): boolean;
+  };
   resolveResumeModel(
     sessionId: string | undefined,
     requestedModel?: string | null,

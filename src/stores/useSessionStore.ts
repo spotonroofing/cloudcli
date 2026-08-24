@@ -358,15 +358,19 @@ function pruneRealtimeSupersededByServer(
       return false;
     }
 
+    // Turn ordinals count user rows across server + realtime; a realtime user
+    // row already reconciled against its persisted copy must not count twice,
+    // or every later assistant echo lands one turn off and survives as a
+    // duplicate.
     if (message.kind === 'stream_delta' || message.id === `__streaming_${message.sessionId}`) {
-      if (isAssistantTextEchoedInSameTurnOnServer(message, serverMessages, realtimeMessages)) {
+      if (isAssistantTextEchoedInSameTurnOnServer(message, serverMessages, reconciledRealtimeMessages)) {
         return false;
       }
       return true;
     }
 
     if (message.kind === 'text' && message.role === 'assistant') {
-      if (isAssistantTextEchoedInSameTurnOnServer(message, serverMessages, realtimeMessages)) {
+      if (isAssistantTextEchoedInSameTurnOnServer(message, serverMessages, reconciledRealtimeMessages)) {
         return false;
       }
       return true;
