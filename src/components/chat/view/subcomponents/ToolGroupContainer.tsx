@@ -111,7 +111,7 @@ export default function ToolGroupContainer({
 
   return (
     <motion.div
-      className="chat-message tool px-3 sm:px-0"
+      className="chat-message tool tool-row px-3 sm:px-0"
       data-message-timestamp={group.timestamp || undefined}
       initial={animateIn ? { opacity: 0, transform: 'translateY(8px) scale(0.95)' } : false}
       animate={animateIn ? { opacity: 1, transform: 'translateY(0px) scale(1)' } : undefined}
@@ -153,14 +153,16 @@ export default function ToolGroupContainer({
           aria-hidden="true"
           animate={{ rotate: isExpanded ? 180 : 0 }}
           transition={reduce ? { duration: 0 } : SPRING_SWAP}
-          className="ml-auto shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground"
+          className="ml-auto grid size-4 shrink-0 place-items-center text-muted-foreground/50 transition-colors group-hover:text-muted-foreground"
         >
           <ChevronDown className="size-3.5" />
         </motion.span>
       </button>
 
       <AgentDisclosure open={isExpanded}>
-        <div className="mt-1.5 space-y-3 pl-6 sm:space-y-4">
+        {/* The group root already carries the mobile px-3; nested rows must not
+            re-apply it or their chevrons fall off the shared right-edge column. */}
+        <div className="mt-1.5 space-y-3 pl-6 sm:space-y-4 [&_.chat-message]:px-0">
           {group.messages.map((message, index) => (
             <MessageComponent
               key={getMessageKey(message)}

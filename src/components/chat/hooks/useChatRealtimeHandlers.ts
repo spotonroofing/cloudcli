@@ -249,8 +249,22 @@ export function useChatRealtimeHandlers({
           }
 
           if (msg.aborted) {
-            // Abort was requested — the complete event confirms it. No
-            // further UI action is needed beyond clearing the entry above.
+            // Abort was requested — the complete event confirms it. Land an
+            // interrupted marker at the cut point; the transcript's own
+            // `[Request interrupted...]` row takes over on reload (consecutive
+            // markers collapse during conversion).
+            if (sid) {
+              sessionStore.appendRealtime(sid, {
+                id: `interrupt_${Date.now()}`,
+                sessionId: sid,
+                timestamp: new Date().toISOString(),
+                provider,
+                kind: 'text',
+                role: 'user',
+                content: '',
+                isInterruptMarker: true,
+              } as NormalizedMessage);
+            }
             break;
           }
 

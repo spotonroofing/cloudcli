@@ -63,9 +63,9 @@ const MessageCopyControl = ({ content }: { content: string; messageType?: 'user'
   const copyTitle = copied ? t('copyMessage.copied') : t('copyMessage.copy');
 
   return (
-    // Hover-gated like the timestamp (message furniture stays out of the way);
-    // always visible on touch via the md: fence.
-    <div className="relative flex items-center transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">
+    // One reveal rule for message furniture: hover-revealed on fine pointers,
+    // always visible on coarse (the `touch:` fence in index.css).
+    <div className="relative flex items-center transition-opacity duration-200 opacity-0 group-hover:opacity-100 touch:opacity-100">
       <button
         type="button"
         onClick={handleCopyClick}

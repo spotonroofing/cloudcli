@@ -224,12 +224,21 @@ async function getSessionMessages(
 const INTERNAL_CONTENT_PREFIXES = [
   '<system-reminder>',
   'Caveat:',
-  '[Request interrupted',
   'Base directory for this skill:',
 ] as const;
 
 function isInternalContent(content: string): boolean {
   return INTERNAL_CONTENT_PREFIXES.some((prefix) => content.startsWith(prefix));
+}
+
+/**
+ * The CLI writes `[Request interrupted by user...]` as a synthetic user row
+ * when a turn is killed mid-response. Instead of hiding it, surface it as an
+ * interrupt marker so the transcript shows where the turn was cut, live and
+ * on reload.
+ */
+function isInterruptText(content: string): boolean {
+  return content.startsWith('[Request interrupted');
 }
 
 /**
@@ -316,6 +325,19 @@ export class ClaudeSessionsProvider implements IProviderSessions {
             }));
           } else if (part.type === 'text') {
             const text = part.text || '';
+            if (isInterruptText(text)) {
+              messages.push(createNormalizedMessage({
+                id: `${baseId}_text_${partIndex}`,
+                sessionId,
+                timestamp: ts,
+                provider: PROVIDER,
+                kind: 'text',
+                role: 'user',
+                content: '',
+                isInterruptMarker: true,
+              }));
+              continue;
+            }
             const parsedFiles = parseFilesInputTag(text);
             if (
               (parsedFiles.text || parsedFiles.attachments.length > 0)
@@ -376,6 +398,20 @@ export class ClaudeSessionsProvider implements IProviderSessions {
         }
       } else if (typeof raw.message.content === 'string') {
         const text = raw.message.content;
+
+        if (isInterruptText(text)) {
+          messages.push(createNormalizedMessage({
+            id: baseId,
+            sessionId,
+            timestamp: ts,
+            provider: PROVIDER,
+            kind: 'text',
+            role: 'user',
+            content: '',
+            isInterruptMarker: true,
+          }));
+          return messages;
+        }
 
         /**
          * Claude stores compact summaries as synthetic "user" rows so the CLI

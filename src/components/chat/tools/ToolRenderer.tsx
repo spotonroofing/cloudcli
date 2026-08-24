@@ -20,6 +20,8 @@ interface ToolRendererProps {
   toolInput: any;
   toolResult?: any;
   toolId?: string;
+  /** Formatted send time for the row (input mode); Bash shows it on the description line. */
+  timestamp?: string;
   mode: 'input' | 'result';
   onFileOpen?: (filePath: string, diffInfo?: any) => void;
   createDiff?: (oldStr: string, newStr: string) => DiffLine[];
@@ -63,6 +65,7 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
   toolInput,
   toolResult,
   toolId,
+  timestamp,
   mode,
   onFileOpen,
   createDiff,
@@ -134,6 +137,7 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
       <BashCommandDisplay
         command={command}
         description={description}
+        timestamp={timestamp}
         output={output}
         isError={Boolean(toolResult?.isError)}
         status={toolStatus !== 'completed' ? toolStatus : undefined}

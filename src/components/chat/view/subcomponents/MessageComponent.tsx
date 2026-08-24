@@ -1,7 +1,7 @@
 import { memo, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, Pencil, RotateCcw, Wrench } from 'lucide-react';
+import { Ban, ChevronDown, Pencil, RotateCcw, Wrench } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import type {
@@ -56,6 +56,27 @@ type InteractiveOption = {
 };
 
 const COPY_HIDDEN_TOOL_NAMES = new Set(['Bash', 'Edit', 'Write', 'ApplyPatch']);
+
+/**
+ * One reveal rule for message furniture (copy, speak, edit, rerun, timestamp):
+ * hover-revealed on fine pointers, always visible on coarse pointers.
+ */
+export const META_REVEAL_CLASS = 'transition-opacity duration-200 opacity-0 group-hover:opacity-100 touch:opacity-100';
+
+/**
+ * Small marker row at the point a turn was killed mid-response (stop button,
+ * server restart, process death). Rendered for explicit transcript markers and
+ * for a dead tool-call tail on reload.
+ */
+export function InterruptedMarker() {
+  const { t } = useTranslation('chat');
+  return (
+    <div data-slot="interrupted-marker" className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground/80">
+      <Ban className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+      <span>{t('interrupted', { defaultValue: 'Interrupted' })}</span>
+    </div>
+  );
+}
 
 /**
  * Live assistant turn: the reveal engine paces the growing buffer while the
@@ -276,6 +297,14 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
     return null;
   }
 
+  if (message.isInterruptMarker) {
+    return (
+      <div className="chat-message assistant px-3 sm:px-0" data-message-timestamp={message.timestamp || undefined}>
+        <InterruptedMarker />
+      </div>
+    );
+  }
+
   return (
     <motion.div
       ref={messageRef}
@@ -284,7 +313,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
       animate={animateIn ? { opacity: 1, transform: 'translateY(0px) scale(1)' } : undefined}
       transition={MESSAGE_POP_UP}
       style={{ transformOrigin: message.type === 'user' ? '100% 100%' : '0% 100%' }}
-      className={`chat-message group ${message.type} ${isGrouped ? 'grouped' : ''} ${message.type === 'user' ? 'flex justify-end px-3 sm:px-0' : 'px-3 sm:px-0'}`}
+      className={`chat-message group ${message.type} ${message.isToolUse ? 'tool-row' : ''} ${isGrouped ? 'grouped' : ''} ${message.type === 'user' ? 'flex justify-end px-3 sm:px-0' : 'px-3 sm:px-0'}`}
     >
       {message.type === 'user' ? (
         /* User turn on the right: claude.ai-style attachment cards above the bubble */
@@ -319,7 +348,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                 )}
                 <div className="-mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
                   {shouldShowUserEditControl && (
-                    <div className="relative flex items-center transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">
+                    <div className={`relative flex items-center ${META_REVEAL_CLASS}`}>
                       <button
                         type="button"
                         onClick={() => onEditMessage?.(message)}
@@ -334,13 +363,13 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                   {shouldShowUserCopyControl && (
                     <MessageCopyControl content={userCopyContent} messageType="user" />
                   )}
-                  <span className="transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">{formattedTime}</span>
+                  <span className={META_REVEAL_CLASS}>{formattedTime}</span>
                 </div>
               </>
             ) : (
               /* Attachment-only turn: no text bubble, but the timestamp still shows on hover */
               <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
-                <span className="transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">{formattedTime}</span>
+                <span className={META_REVEAL_CLASS}>{formattedTime}</span>
               </div>
             )}
           </div>
@@ -394,6 +423,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                     toolInput={message.toolInput}
                     toolResult={message.toolResult}
                     toolId={message.toolId}
+                    timestamp={formattedTime}
                     mode="input"
                     onFileOpen={onFileOpen}
                     createDiff={createDiff}
@@ -600,7 +630,10 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
               </div>
             )}
 
-            {(shouldShowAssistantCopyControl || !isGrouped) && (
+            {/* Tool rows never render the meta line — the timestamp lives on the
+                tool row itself (Bash description line) and a lone timestamp row
+                would break the tight tool-row packing. */}
+            {!message.isToolUse && (shouldShowAssistantCopyControl || !isGrouped) && (
               <div className="mt-1 flex w-full items-center gap-2 text-[11px] text-gray-400 dark:text-gray-500">
                 {shouldShowAssistantCopyControl && (
                   <MessageCopyControl content={assistantCopyContent} messageType="assistant" />
@@ -610,7 +643,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                 )}
                 {shouldShowAssistantCopyControl && !message.isStreaming && onRerun && rerunContent && (
                   /* Rerun: send the prompt that produced this turn again (beautifului action row) */
-                  <div className="relative flex items-center transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">
+                  <div className={`relative flex items-center ${META_REVEAL_CLASS}`}>
                     <button
                       type="button"
                       onClick={(event) => onRerun(rerunContent, event)}
@@ -623,7 +656,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                   </div>
                 )}
                 {!isGrouped && (
-                  <span className="ml-auto transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">
+                  <span className={`ml-auto ${META_REVEAL_CLASS}`}>
                     {formattedTime}
                   </span>
                 )}

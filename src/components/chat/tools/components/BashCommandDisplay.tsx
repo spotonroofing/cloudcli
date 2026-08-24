@@ -16,6 +16,8 @@ interface BashCommandDisplayProps {
   isError?: boolean;
   status?: ToolStatus;
   defaultOpen?: boolean;
+  /** Formatted send time; sits at the right end of the description line. */
+  timestamp?: string;
 }
 
 /**
@@ -31,6 +33,7 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
   isError = false,
   status,
   defaultOpen = false,
+  timestamp,
 }) => {
   const reduce = useReducedMotion() ?? false;
   const trimmedOutput = (output || '').replace(/\s+$/, '');
@@ -106,7 +109,7 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
         )}
         {status && status !== 'running' && <ToolStatusBadge status={status} className="flex-shrink-0" />}
         {!open && hasOutput && !isRunning && (
-          <span className="flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/70 transition-opacity group-hover/cmd:opacity-0">
+          <span className="flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
             {outputLineCount} {outputLineCount === 1 ? 'line' : 'lines'}
           </span>
         )}
@@ -114,28 +117,37 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
         <button
           onClick={handleCopy}
           onKeyDown={(event) => event.stopPropagation()}
-          className="touch:opacity-100 flex-shrink-0 rounded p-0.5 text-muted-foreground/60 opacity-0 transition-all hover:bg-foreground/10 hover:text-foreground focus:opacity-100 group-hover/cmd:opacity-100"
+          className="touch:opacity-100 grid size-5 flex-shrink-0 place-items-center rounded text-muted-foreground/60 opacity-0 transition-all hover:bg-foreground/10 hover:text-foreground focus:opacity-100 group-hover/cmd:opacity-100"
           title="Copy command"
           aria-label="Copy command"
         >
           {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
 
-        {hasOutput && (
-          <motion.span
-            aria-hidden="true"
-            animate={{ rotate: open ? 180 : 0 }}
-            transition={reduce ? { duration: 0 } : SPRING_SWAP}
-            className="shrink-0 text-muted-foreground/50 transition-colors group-hover/cmd:text-muted-foreground"
-          >
-            <ChevronDown className="size-3.5" />
-          </motion.span>
-        )}
+        {/* Fixed chevron slot: every tool row ends in this size-4 slot so the
+            chevrons share one right-edge column regardless of content. */}
+        <span className="grid size-4 flex-shrink-0 place-items-center">
+          {hasOutput && (
+            <motion.span
+              aria-hidden="true"
+              animate={{ rotate: open ? 180 : 0 }}
+              transition={reduce ? { duration: 0 } : SPRING_SWAP}
+              className="text-muted-foreground/50 transition-colors group-hover/cmd:text-muted-foreground"
+            >
+              <ChevronDown className="size-3.5" />
+            </motion.span>
+          )}
+        </span>
       </div>
 
       {description && !open && (
-        <div className="truncate pl-6 text-[11px] italic text-muted-foreground/70">
-          {description}
+        <div className="flex items-center gap-2 pl-6 text-[11px] text-muted-foreground/70">
+          <span className="min-w-0 truncate italic">{description}</span>
+          {timestamp && (
+            <span className="touch:opacity-100 ml-auto flex-shrink-0 tabular-nums opacity-0 transition-opacity duration-200 group-hover/cmd:opacity-100">
+              {timestamp}
+            </span>
+          )}
         </div>
       )}
 

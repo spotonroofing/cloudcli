@@ -13,7 +13,7 @@ import { MessageScroller } from '../../../../shared/view/beui';
 import { Loader } from '../../../../shared/view/beui/Loader';
 
 import ActivityIndicator from './ActivityIndicator';
-import MessageComponent from './MessageComponent';
+import MessageComponent, { InterruptedMarker } from './MessageComponent';
 import MessageVersionNavigator from './MessageVersionNavigator';
 import ToolGroupContainer from './ToolGroupContainer';
 import LoadAllMessagesOverlay from './LoadAllMessagesOverlay';
@@ -381,6 +381,20 @@ function ChatMessagesPane({
                 </Fragment>
               );
             });
+          })()}
+
+          {/* Dead-tail marker: a turn killed without the CLI writing its
+              `[Request interrupted...]` row (server restart, process death)
+              leaves an unresolved tool call at the transcript tail. An
+              explicit marker row is never a tool row, so this cannot double
+              up with one. */}
+          {!isProcessing && !isBootingSession && (() => {
+            const tail = visibleMessages[visibleMessages.length - 1];
+            return tail?.isToolUse && !tail.toolResult ? (
+              <div className="chat-message assistant px-3 sm:px-0">
+                <InterruptedMarker />
+              </div>
+            ) : null;
           })()}
 
           <ActivityIndicator activity={activity} />

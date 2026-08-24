@@ -70,21 +70,25 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
   const renderCopyButton = () => (
     <button
       onClick={handleAction}
-      className="ml-1 flex-shrink-0 text-muted-foreground/40 transition-all hover:text-muted-foreground md:opacity-0 md:group-hover:opacity-100"
+      className="touch:opacity-100 grid size-5 flex-shrink-0 place-items-center rounded text-muted-foreground/60 opacity-0 transition-all hover:bg-foreground/10 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
       title="Copy to clipboard"
       aria-label="Copy to clipboard"
     >
       {copied ? (
-        <svg className="h-3 w-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="h-3.5 w-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
         </svg>
       ) : (
-        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
       )}
     </button>
   );
+
+  // Fixed size-4 slot at the row's right edge so trailing controls line up
+  // with the chevron column of expandable tool rows.
+  const chevronSlot = <span aria-hidden="true" className="size-4 flex-shrink-0" />;
 
   // Terminal style: dark pill around the command
   if (isTerminal) {
@@ -131,7 +135,10 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
         >
           {displayName}
         </button>
-        {status && <ToolStatusBadge status={status} className="ml-auto" />}
+        <span className="ml-auto flex flex-shrink-0 items-center gap-1">
+          {status && <ToolStatusBadge status={status} />}
+          {chevronSlot}
+        </span>
       </div>
     );
   }
@@ -151,16 +158,16 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
           </span>
         )}
         {status && <ToolStatusBadge status={status} />}
-        {toolResult && (
+        {toolResult ? (
           <a
             href={`#tool-result-${toolId}`}
-            className="flex flex-shrink-0 items-center gap-0.5 text-[11px] text-primary transition-colors hover:text-primary/80"
+            className="grid size-4 flex-shrink-0 place-items-center text-primary transition-colors hover:text-primary/80"
           >
-            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </a>
-        )}
+        ) : chevronSlot}
       </div>
     );
   }
@@ -187,6 +194,7 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
       )}
       {status && <ToolStatusBadge status={status} />}
       {action === 'copy' && renderCopyButton()}
+      {chevronSlot}
     </div>
   );
 };

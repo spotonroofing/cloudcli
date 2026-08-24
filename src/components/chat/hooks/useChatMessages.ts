@@ -94,6 +94,21 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
 
     switch (msg.kind) {
       case 'text': {
+        // Interrupt markers carry no content; consecutive markers collapse to
+        // one (a live abort can land both the synthetic marker and the
+        // transcript's own `[Request interrupted...]` row).
+        if (msg.isInterruptMarker) {
+          if (!converted[converted.length - 1]?.isInterruptMarker) {
+            converted.push({
+              type: 'assistant',
+              content: '',
+              timestamp: msg.timestamp,
+              isInterruptMarker: true,
+              ...sharedMetadata,
+            });
+          }
+          break;
+        }
         const content = msg.content || '';
         const images = Array.isArray(msg.images) && msg.images.length > 0 ? msg.images : undefined;
         const files = Array.isArray(msg.files) && msg.files.length > 0 ? msg.files : undefined;

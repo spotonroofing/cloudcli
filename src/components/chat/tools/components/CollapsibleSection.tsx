@@ -36,12 +36,14 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   const reduce = useReducedMotion() ?? false;
   const [isOpen, setIsOpen] = useState(open);
 
+  // Fixed size-4 chevron slot: every tool row ends in this slot so chevrons
+  // share one right-edge column across row types.
   const chevron = (
     <motion.span
       aria-hidden="true"
       animate={{ rotate: isOpen ? 180 : 0 }}
       transition={reduce ? { duration: 0 } : SPRING_SWAP}
-      className="ml-auto shrink-0 text-muted-foreground/50 transition-colors group-hover/section:text-muted-foreground"
+      className="grid size-4 shrink-0 place-items-center text-muted-foreground/50 transition-colors group-hover/section:text-muted-foreground"
     >
       <ChevronDown className="size-3.5" />
     </motion.span>
@@ -67,7 +69,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             type="button"
             aria-expanded={isOpen}
             onClick={() => setIsOpen((current) => !current)}
-            className="ml-auto flex shrink-0 items-center rounded-md p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="ml-auto flex shrink-0 items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {chevron}
           </button>

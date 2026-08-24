@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { authenticatedFetch } from '../../../../utils/api';
 import type { ChatAttachment } from '../../types/types';
 
+import { PastedTextChip, PastedTextViewer, isPastedTextName, useStoredPastedText } from './PastedTextAttachment';
+
 type ChatMessageFilesProps = {
   files: ChatAttachment[];
 };
@@ -23,6 +25,22 @@ const getFileIcon = (file: ChatAttachment) => {
   if (/\.(js|jsx|ts|tsx|py|rb|go|rs|java|c|cpp|css|html|json|ya?ml)$/.test(name)) return FileCodeIcon;
   return FileIcon;
 };
+
+/**
+ * A pasted-text attachment on a sent user bubble renders the same PASTED chip
+ * the composer shows, with the same scrollable full-text viewer behind it.
+ */
+function PastedTextMessageFile({ file, name }: { file: ChatAttachment; name: string }) {
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const text = useStoredPastedText(file.path?.split(/[\\/]/).pop(), true);
+
+  return (
+    <>
+      <PastedTextChip name={name} text={text} onOpen={() => setViewerOpen(true)} />
+      <PastedTextViewer name={name} text={text} open={viewerOpen} onOpenChange={setViewerOpen} />
+    </>
+  );
+}
 
 function ChatMessageFile({ file }: { file: ChatAttachment }) {
   const [isDownloading, setIsDownloading] = useState(false);
@@ -82,9 +100,14 @@ export default function ChatMessageFiles({ files }: ChatMessageFilesProps) {
 
   return (
     <div className="flex max-w-full flex-wrap justify-end gap-2">
-      {files.map((file, index) => (
-        <ChatMessageFile key={file.path || file.name || index} file={file} />
-      ))}
+      {files.map((file, index) => {
+        const name = file.name || file.path?.split(/[\\/]/).pop() || 'Attached file';
+        return isPastedTextName(name) ? (
+          <PastedTextMessageFile key={file.path || file.name || index} file={file} name={name} />
+        ) : (
+          <ChatMessageFile key={file.path || file.name || index} file={file} />
+        );
+      })}
     </div>
   );
 }

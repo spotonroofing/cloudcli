@@ -875,6 +875,13 @@
     contain: layout style;
   }
 
+  /* Consecutive tool rows pack tight: overrides the transcript's space-y gap
+     (higher specificity than the space-y sibling rule) so a run of tool calls
+     reads as one block instead of a spaced list. */
+  .chat-message.tool-row + .chat-message.tool-row {
+    margin-top: 0.25rem;
+  }
+
   /* Sidebar scrollbar: the transparent right border pulls the 4px thumb off
      the scroller's edge so it sits centered in the sidebar's right gutter. */
   .sidebar-scroll-viewport {

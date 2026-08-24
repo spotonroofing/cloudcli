@@ -59,11 +59,11 @@ Done check: on dev against a throwaway test project: click Handoff in a planner 
 
 Goal: tool-call rows line up and pack tight, copy controls follow one rule, pasted text looks the same in a sent bubble as in the composer, and a killed turn says so. Files: chat row components under src/components/chat/view/subcomponents (tool-call rows, assistant and user message rows, the PASTED chip), DESIGN.md. Dependencies: none.
 
-- [ ] Tool-call chevrons sit on one shared right-edge column across every tool row regardless of tool name or command length: the label column truncates with an ellipsis; the trailing controls (line count, copy, chevron) live in a fixed-width slot.
-- [ ] Compaction: the timestamp moves onto the description line under the command (the "Gather session id..." line) and the vertical gap between consecutive tool rows, and between a tool row and a Write row, tightens to DESIGN.md's compact spacing. No orphaned timestamp row.
-- [ ] Copy control consistency: one placement and visibility rule (hover-revealed on fine pointers, always visible on coarse) applied to every row type: tool call, assistant message (planner and worker), user message. Audit each row component and align them.
-- [ ] Pasted text in a sent user bubble renders the same PASTED chip the composer shows, never a "pastedtext.md" attachment; clicking opens the same scrollable preview.
-- [ ] Interrupted-marker row: a turn killed mid-response (stop button, server restart, process death) shows a small "Interrupted" marker row at the cut point, live and on reload from the transcript.
+- [x] Tool-call chevrons sit on one shared right-edge column across every tool row regardless of tool name or command length: the label column truncates with an ellipsis; the trailing controls (line count, copy, chevron) live in a fixed-width slot.
+- [x] Compaction: the timestamp moves onto the description line under the command (the "Gather session id..." line) and the vertical gap between consecutive tool rows, and between a tool row and a Write row, tightens to DESIGN.md's compact spacing. No orphaned timestamp row.
+- [x] Copy control consistency: one placement and visibility rule (hover-revealed on fine pointers, always visible on coarse) applied to every row type: tool call, assistant message (planner and worker), user message. Audit each row component and align them.
+- [x] Pasted text in a sent user bubble renders the same PASTED chip the composer shows, never a "pastedtext.md" attachment; clicking opens the same scrollable preview.
+- [x] Interrupted-marker row: a turn killed mid-response (stop button, server restart, process death) shows a small "Interrupted" marker row at the cut point, live and on reload from the transcript.
 
 Done check: agent-browser on dev using the synthetic transcript recipe (lesson synthetic-transcript-repro-sessions) with mixed tool rows: chevron right edges measure equal; the timestamp element shares a row with the description; each row type carries the same copy-control rule; a pasted-text send shows the chip and its preview opens; an interrupted turn shows the marker. Holds at a phone viewport. Fresh-context subagent verification. Commit.
 
