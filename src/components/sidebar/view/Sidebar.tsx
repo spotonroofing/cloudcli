@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -166,7 +166,7 @@ function Sidebar({
   // border-beam shimmer. Live-run origin/project come from the enriched run
   // registry poll; sessions the UI already loaded fill the gap between polls
   // (activeSessions flips instantly on websocket events).
-  const { plannerRunningCount, workerRunningCount, runningByProject } = useMemo(() => {
+  const { plannerRunningCount, workerRunningCount, runningByProject, runningJumpTargets } = useMemo(() => {
     const infoBySession = new Map<string, { origin: string | null; projectId: string | null }>();
     for (const project of projects) {
       for (const session of project.sessions ?? []) {
@@ -188,19 +188,45 @@ function Sidebar({
     let planner = 0;
     let worker = 0;
     const byProject = new Map<string, number>();
+    // Jump-to-running affordance: the counter columns open the first running
+    // session of their kind that the sidebar has actually loaded.
+    const jumpTargets: { planner: { sessionId: string; projectId: string } | null; worker: { sessionId: string; projectId: string } | null } = {
+      planner: null,
+      worker: null,
+    };
     for (const sessionId of runningIds) {
       const info = infoBySession.get(sessionId);
       const origin = info?.origin ?? null;
       // Same split as the pane headers: planner or null = Willem's chats.
-      if (origin === 'planner' || origin === null) planner += 1;
+      const kind = origin === 'planner' || origin === null ? 'planner' : 'worker';
+      if (kind === 'planner') planner += 1;
       else worker += 1;
       if (info?.projectId) {
         byProject.set(info.projectId, (byProject.get(info.projectId) ?? 0) + 1);
+        if (!jumpTargets[kind]) jumpTargets[kind] = { sessionId, projectId: info.projectId };
       }
     }
 
-    return { plannerRunningCount: planner, workerRunningCount: worker, runningByProject: byProject };
+    return {
+      plannerRunningCount: planner,
+      workerRunningCount: worker,
+      runningByProject: byProject,
+      runningJumpTargets: jumpTargets,
+    };
   }, [projects, runningRuns, activeSessions]);
+
+  const handleJumpToRunning = useCallback(
+    (kind: 'planner' | 'worker') => {
+      const target = runningJumpTargets[kind];
+      if (!target) return;
+      const project = projects.find((p) => p.projectId === target.projectId);
+      const session = project?.sessions?.find((s) => String(s.id) === target.sessionId);
+      if (session) {
+        handleSessionClick({ ...session, __provider: session.__provider ?? 'claude' }, target.projectId);
+      }
+    },
+    [runningJumpTargets, projects, handleSessionClick],
+  );
 
   const handleProjectCreated = () => {
     void paletteOps.refreshProjects();
@@ -314,6 +340,7 @@ function Sidebar({
             runningSessionsCount={runningSessionsCount}
             plannerRunningCount={plannerRunningCount}
             workerRunningCount={workerRunningCount}
+            onJumpToRunning={handleJumpToRunning}
             archivedProjects={archivedProjects}
             archivedSessions={archivedSessions}
             archivedSessionsCount={archivedSessionsCount}

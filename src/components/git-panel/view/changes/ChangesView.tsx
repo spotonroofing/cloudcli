@@ -1,6 +1,7 @@
 import { GitBranch, GitCommit, RefreshCw } from 'lucide-react';
 
 import { Loader } from '../../../../shared/view/beui/Loader';
+import { Button } from '../../../../shared/view/ui/Button';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ConfirmationRequest, FileStatusCode, GitDiffMap, GitStatusResponse } from '../../types/types';
 import { getAllChangedFiles, hasChangedFiles } from '../../utils/gitPanelUtils';
@@ -181,18 +182,17 @@ export default function ChangesView({
             <Loader variant="dot-matrix" size={20} className="text-muted-foreground" />
           </div>
         ) : gitStatus?.hasCommits === false && hasChangedFiles(gitStatus) ? (
-          <div className="flex flex-col items-center justify-center p-8 text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50">
-              <GitBranch className="h-7 w-7 text-muted-foreground/50" />
+          <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+              <GitBranch className="h-6 w-6 text-muted-foreground" />
             </div>
-            <h3 className="mb-2 text-lg font-medium text-foreground">No commits yet</h3>
+            <h3 className="mb-2 text-base font-medium text-foreground">No commits yet</h3>
             <p className="mb-6 max-w-md text-sm text-muted-foreground">
               This repository doesn&apos;t have any commits yet. Create your first commit to start tracking changes.
             </p>
-            <button
+            <Button
               onClick={() => void onCreateInitialCommit()}
               disabled={isCreatingInitialCommit}
-              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isCreatingInitialCommit ? (
                 <>
@@ -205,7 +205,7 @@ export default function ChangesView({
                   <span>Create Initial Commit</span>
                 </>
               )}
-            </button>
+            </Button>
           </div>
         ) : !gitStatus || !hasChangedFiles(gitStatus) ? (
           <div className="flex h-32 flex-col items-center justify-center text-muted-foreground">

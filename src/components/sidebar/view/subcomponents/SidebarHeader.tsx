@@ -112,7 +112,7 @@ export default function SidebarHeader({
                   {segmentIndicator('running')}
                   <span className="relative truncate">{t('search.modeRunning', 'Running')}</span>
                   {runningSessionsCount > 0 && (
-                    <span className="relative flex h-3.5 min-w-3.5 flex-shrink-0 items-center justify-center rounded-sm bg-emerald-500 px-0.5 text-[8px] font-semibold leading-none text-white">
+                    <span className="relative flex h-3.5 min-w-3.5 flex-shrink-0 items-center justify-center rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-0.5 text-[8px] font-semibold leading-none text-emerald-600 dark:text-emerald-400">
                       {runningBadgeText}
                     </span>
                   )}

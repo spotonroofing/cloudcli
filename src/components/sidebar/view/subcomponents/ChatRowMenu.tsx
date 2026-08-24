@@ -201,7 +201,7 @@ export default function ChatRowMenu({
       role="menu"
       data-slot="chat-row-menu"
       className={cn(
-        'fixed z-[70] rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-xl',
+        'fixed z-[70] rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-lg',
         'animate-in fade-in-0 zoom-in-95',
       )}
       style={{ ...position, width: MENU_WIDTH }}

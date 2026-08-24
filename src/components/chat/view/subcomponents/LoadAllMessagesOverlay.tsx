@@ -43,7 +43,7 @@ export default function LoadAllMessagesOverlay({
     >
       <style>{loadAllOverlayAnimationStyle}</style>
       {loadAllJustFinished ? (
-        <div className="flex items-center space-x-2 rounded-lg bg-green-600 px-4 py-1.5 text-xs font-medium text-white shadow-lg dark:bg-green-500">
+        <div className="flex items-center space-x-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
           <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
           </svg>

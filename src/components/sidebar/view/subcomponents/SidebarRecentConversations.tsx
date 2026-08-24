@@ -91,7 +91,7 @@ export default function SidebarRecentConversations({
 
   if (hasError && conversations.length === 0) {
     return (
-      <div className="px-4 py-10 text-center">
+      <div className="px-4 py-12 text-center md:py-8">
         <MessageSquare className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
         <p className="text-sm font-medium text-foreground">
           {t('recent.loadFailed', 'Could not load recent conversations')}
@@ -105,7 +105,7 @@ export default function SidebarRecentConversations({
 
   if (conversations.length === 0) {
     return (
-      <div className="px-4 py-10 text-center">
+      <div className="px-4 py-12 text-center md:py-8">
         <MessageSquare className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
         <p className="text-sm font-medium text-foreground">
           {t('recent.emptyTitle', 'No conversations yet')}

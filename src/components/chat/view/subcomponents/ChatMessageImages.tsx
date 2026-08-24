@@ -117,7 +117,7 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
         src={src}
         alt={alt}
         onClick={(event) => event.stopPropagation()}
-        className="max-h-[90vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
+        className="max-h-[90dvh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
       />
     </div>,
     document.body,

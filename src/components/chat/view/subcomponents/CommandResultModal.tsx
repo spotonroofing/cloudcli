@@ -112,7 +112,7 @@ function MetricCard({
 
   return (
     <div
-      className={`group rounded-2xl border border-border/70 bg-background/75 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md ${
+      className={`group rounded-lg border border-border/70 bg-background/75 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md ${
         compact ? 'p-3' : 'p-4'
       }`}
     >
@@ -175,7 +175,7 @@ function HelpContent({ data }: { data: HelpCommandData }) {
             {filteredCommands.map((command, index) => (
               <div
                 key={`${command.namespace || 'builtin'}-${command.name}`}
-                className="settings-content-enter rounded-2xl border border-border/70 bg-background/75 p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/25"
+                className="settings-content-enter rounded-lg border border-border/70 bg-background/75 p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/25"
                 style={{ animationDelay: `${Math.min(index * 18, 160)}ms` }}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -194,15 +194,15 @@ function HelpContent({ data }: { data: HelpCommandData }) {
           </div>
 
           {filteredCommands.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
-              No commands match that filter.
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
+              No commands match that filter
             </div>
           )}
         </div>
       </div>
 
       <aside className="space-y-3">
-        <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+        <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
             <TerminalSquare className="h-4 w-4 text-primary" />
             Syntax
@@ -215,7 +215,7 @@ function HelpContent({ data }: { data: HelpCommandData }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4">
+        <div className="rounded-lg border border-primary/25 bg-primary/10 p-4">
           <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
             <Sparkles className="h-4 w-4 text-primary" />
             Quick tip
@@ -317,7 +317,7 @@ function ModelsContent({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/20 px-3.5 py-2.5">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3.5 py-2.5">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Active model · {providerLabel}
@@ -361,7 +361,7 @@ function ModelsContent({
                   onClick={() => handleSelectModel(option.value)}
                   disabled={Boolean(changingModel)}
                   aria-label={`Select model ${option.value}`}
-                  className={`settings-content-enter group flex min-h-16 flex-col rounded-2xl border p-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60 ${
+                  className={`settings-content-enter group flex min-h-16 flex-col rounded-lg border p-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60 ${
                     isCurrent
                       ? 'border-primary/45 bg-primary/10'
                       : isPendingSelection
@@ -401,8 +401,8 @@ function ModelsContent({
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-border bg-background/60 px-4 py-10 text-center text-sm text-muted-foreground">
-          No models match that search.
+        <div className="rounded-lg border border-dashed border-border bg-background/60 px-4 py-10 text-center text-sm text-muted-foreground">
+          No models match that search
         </div>
       )}
 
@@ -457,7 +457,7 @@ function CostContent({ data }: { data: CostCommandData }) {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-2xl border border-border/70 bg-background/75">
+      <div className="overflow-hidden rounded-lg border border-border/70 bg-background/75">
         {usageRows.map((row) => {
           const Icon = row.icon;
 
@@ -478,7 +478,7 @@ function CostContent({ data }: { data: CostCommandData }) {
         })}
       </div>
 
-      <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+      <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Provider</p>
@@ -497,7 +497,7 @@ function CostContent({ data }: { data: CostCommandData }) {
 function StatusContent({ data }: { data: StatusCommandData }) {
   const memoryRssMb = data.memoryUsage?.rssMb;
   const rows = [
-    { label: 'Package', value: data.packageName || 'claude-code-ui', icon: Package },
+    { label: 'Package', value: data.packageName || 'command-center', icon: Package },
     { label: 'Version', value: data.version || 'Unknown', icon: BadgeCheck, tone: 'success' as const },
     { label: 'Uptime', value: data.uptime || 'Unknown', icon: Timer },
     { label: 'Provider', value: getProviderLabel(data.provider, data.provider || 'Unknown'), icon: Server, tone: 'primary' as const },
@@ -509,18 +509,15 @@ function StatusContent({ data }: { data: StatusCommandData }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between rounded-3xl border border-emerald-500/25 bg-emerald-500/10 p-4">
+      <div className="flex items-center justify-between rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-4">
         <div className="flex items-center gap-3">
-          <span className="relative flex h-3 w-3">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" />
-          </span>
+          <span className="inline-flex h-3 w-3 shrink-0 rounded-full bg-emerald-500" />
           <div>
             <p className="text-sm font-semibold text-foreground">Runtime online</p>
             <p className="text-xs text-muted-foreground">Process {data.pid ? `#${data.pid}` : 'status'} is responding.</p>
           </div>
         </div>
-        <Badge className="rounded-md bg-emerald-500 text-white hover:bg-emerald-500">Healthy</Badge>
+        <Badge status="success" size="sm">Healthy</Badge>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -548,7 +545,7 @@ export default function CommandResultModal({
 
   const modalMeta = {
     help: {
-      eyebrow: 'Command center',
+      eyebrow: 'Command Center',
       title: 'Help & Shortcuts',
       subtitle: 'Search built-ins, syntax patterns, and command usage without leaving the chat.',
       icon: CircleHelp,
@@ -578,7 +575,7 @@ export default function CommandResultModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="flex h-[min(92dvh,48rem)] w-[calc(100vw-1rem)] max-w-5xl flex-col overflow-hidden rounded-3xl border-border/80 bg-popover/95 p-0 shadow-2xl backdrop-blur-xl sm:w-[min(94vw,64rem)]">
+      <DialogContent className="flex h-[min(92dvh,48rem)] w-[calc(100vw-1rem)] max-w-5xl flex-col overflow-hidden rounded-lg border-border/80 bg-popover/95 p-0 shadow-lg backdrop-blur-xl sm:w-[min(94vw,64rem)]">
         <DialogTitle>{activeMeta?.title || 'Command Result'}</DialogTitle>
 
         <div

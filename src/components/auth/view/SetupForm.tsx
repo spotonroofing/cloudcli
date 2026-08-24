@@ -25,7 +25,7 @@ const initialState: SetupFormState = {
  */
 function validateSetupForm(formState: SetupFormState): string | null {
   if (!formState.username.trim() || !formState.password || !formState.confirmPassword) {
-    return 'Please fill in all fields.';
+    return 'All fields are required.';
   }
 
   if (formState.username.trim().length < 3) {

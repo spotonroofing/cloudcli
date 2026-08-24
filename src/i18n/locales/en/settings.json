@@ -3,29 +3,29 @@
   "tabs": {
     "account": "Account",
     "permissions": "Permissions",
-    "mcpServers": "MCP Servers",
+    "mcpServers": "MCP servers",
     "skills": "Skills",
     "appearance": "Appearance"
   },
   "account": {
     "title": "Account",
     "language": "Language",
-    "languageLabel": "Display Language",
+    "languageLabel": "Display language",
     "languageDescription": "Choose your preferred language for the interface",
     "username": "Username",
     "email": "Email",
     "profile": "Profile",
-    "changePassword": "Change Password"
+    "changePassword": "Change password"
   },
   "mcp": {
-    "title": "MCP Servers",
-    "addServer": "Add Server",
-    "editServer": "Edit Server",
-    "deleteServer": "Delete Server",
-    "serverName": "Server Name",
-    "serverType": "Server Type",
+    "title": "MCP servers",
+    "addServer": "Add server",
+    "editServer": "Edit server",
+    "deleteServer": "Delete server",
+    "serverName": "Server name",
+    "serverType": "Server type",
     "config": "Configuration",
-    "testConnection": "Test Connection",
+    "testConnection": "Test connection",
     "status": "Status",
     "connected": "Connected",
     "disconnected": "Disconnected",
@@ -38,17 +38,17 @@
   "appearance": {
     "title": "Appearance",
     "theme": "Theme",
-    "codeEditor": "Code Editor",
-    "editorTheme": "Editor Theme",
-    "wordWrap": "Word Wrap",
-    "showMinimap": "Show Minimap",
-    "lineNumbers": "Line Numbers",
-    "fontSize": "Font Size"
+    "codeEditor": "Code editor",
+    "editorTheme": "Editor theme",
+    "wordWrap": "Word wrap",
+    "showMinimap": "Show minimap",
+    "lineNumbers": "Line numbers",
+    "fontSize": "Font size"
   },
   "actions": {
-    "saveChanges": "Save Changes",
-    "resetToDefaults": "Reset to Defaults",
-    "cancelChanges": "Cancel Changes"
+    "saveChanges": "Save changes",
+    "resetToDefaults": "Reset to defaults",
+    "cancelChanges": "Cancel changes"
   },
   "voiceSettings": {
     "title": "Voice",
@@ -66,13 +66,13 @@
     "note": "A custom base URL is called directly by your browser and must allow browser CORS requests. Leave it blank to use the server-configured backend."
   },
   "quickSettings": {
-    "title": "Quick Settings",
+    "title": "Quick settings",
     "sections": {
       "appearance": "Appearance",
-      "toolDisplay": "Tool Display",
-      "inputSettings": "Input Settings"
+      "toolDisplay": "Tool display",
+      "inputSettings": "Input settings"
     },
-    "darkMode": "Dark Mode",
+    "darkMode": "Dark mode",
     "showRawParameters": "Show raw parameters",
     "showThinking": "Show thinking",
     "sendByCtrlEnter": "Send by Ctrl+Enter",
@@ -87,15 +87,15 @@
     }
   },
   "terminalShortcuts": {
-    "title": "Terminal Shortcuts",
+    "title": "Terminal shortcuts",
     "sectionKeys": "Keys",
     "sectionNavigation": "Navigation",
     "escape": "Escape",
     "tab": "Tab",
     "shiftTab": "Shift+Tab",
-    "arrowUp": "Arrow Up",
-    "arrowDown": "Arrow Down",
-    "scrollDown": "Scroll Down",
+    "arrowUp": "Arrow up",
+    "arrowDown": "Arrow down",
+    "scrollDown": "Scroll down",
     "handle": {
       "closePanel": "Close shortcuts panel",
       "openPanel": "Open shortcuts panel"
@@ -106,7 +106,7 @@
     "agents": "Agents",
     "appearance": "Appearance",
     "git": "Git",
-    "apiTokens": "API & Tokens",
+    "apiTokens": "API & tokens",
     "voice": "Voice",
     "tasks": "Tasks",
     "browser": "Browser",
@@ -124,7 +124,7 @@
       "enabled": "Notifications are enabled for this browser",
       "loading": "Updating...",
       "unsupported": "Push notifications are not supported in this browser.",
-      "denied": "Push notifications are blocked. Please allow them in your browser settings.",
+      "denied": "Push notifications are blocked. Allow them in your browser settings.",
       "enableDevice": "Enable notifications on this device",
       "stateEnabled": "Enabled",
       "stateBlocked": "Blocked",
@@ -145,7 +145,7 @@
       "test": "Test sound"
     },
     "events": {
-      "title": "Event Types",
+      "title": "Event types",
       "actionRequired": "Action required",
       "stop": "Run stopped",
       "error": "Run failed"
@@ -153,7 +153,7 @@
   },
   "appearanceSettings": {
     "darkMode": {
-      "label": "Dark Mode",
+      "label": "Dark mode",
       "description": "Toggle between light and dark themes"
     },
     "theme": {
@@ -166,60 +166,60 @@
       "reset": "Reset"
     },
     "projectSorting": {
-      "label": "Project Sorting",
+      "label": "Project sorting",
       "description": "How projects are ordered in the sidebar",
       "alphabetical": "Alphabetical",
-      "recentActivity": "Recent Activity"
+      "recentActivity": "Recent activity"
     },
     "codeEditor": {
-      "title": "Code Editor",
+      "title": "Code editor",
       "theme": {
-        "label": "Editor Theme",
+        "label": "Editor theme",
         "description": "Default theme for the code editor"
       },
       "wordWrap": {
-        "label": "Word Wrap",
+        "label": "Word wrap",
         "description": "Enable word wrapping by default in the editor"
       },
       "showMinimap": {
-        "label": "Show Minimap",
+        "label": "Show minimap",
         "description": "Display a minimap for easier navigation in diff view"
       },
       "lineNumbers": {
-        "label": "Show Line Numbers",
+        "label": "Show line numbers",
         "description": "Display line numbers in the editor"
       },
       "fontSize": {
-        "label": "Font Size",
+        "label": "Font size",
         "description": "Editor font size in pixels"
       }
     }
   },
   "mcpForm": {
     "title": {
-      "add": "Add MCP Server",
-      "edit": "Edit MCP Server"
+      "add": "Add MCP server",
+      "edit": "Edit MCP server"
     },
     "importMode": {
-      "form": "Form Input",
-      "json": "JSON Import"
+      "form": "Form input",
+      "json": "JSON import"
     },
     "scope": {
       "label": "Scope",
-      "userGlobal": "User (Global)",
-      "projectLocal": "Project (Local)",
+      "userGlobal": "User (global)",
+      "projectLocal": "Project (local)",
       "userDescription": "User scope: Available across all projects on your machine",
       "projectDescription": "Local scope: Only available in the selected project",
       "cannotChange": "Scope cannot be changed when editing an existing server"
     },
     "fields": {
-      "serverName": "Server Name",
-      "transportType": "Transport Type",
+      "serverName": "Server name",
+      "transportType": "Transport type",
       "command": "Command",
       "arguments": "Arguments (one per line)",
-      "jsonConfig": "JSON Configuration",
+      "jsonConfig": "JSON configuration",
       "url": "URL",
-      "envVars": "Environment Variables (KEY=value, one per line)",
+      "envVars": "Environment variables (KEY=value, one per line)",
       "headers": "Headers (KEY=value, one per line)",
       "selectProject": "Select a project..."
     },
@@ -235,37 +235,37 @@
       "jsonExampleStdio": "• stdio: {\"type\":\"stdio\",\"command\":\"npx\",\"args\":[\"@upstash/context7-mcp\"]}",
       "jsonExampleHttp": "• http/sse: {\"type\":\"http\",\"url\":\"https://api.example.com/mcp\"}"
     },
-    "configDetails": "Configuration Details (from {{configFile}})",
+    "configDetails": "Configuration details (from {{configFile}})",
     "projectPath": "Path: {{path}}",
     "actions": {
       "cancel": "Cancel",
       "saving": "Saving...",
-      "addServer": "Add Server",
-      "updateServer": "Update Server"
+      "addServer": "Add server",
+      "updateServer": "Update server"
     }
   },
   "saveStatus": {
-    "success": "Settings saved successfully!",
+    "success": "Settings saved",
     "error": "Failed to save settings",
     "saving": "Saving..."
   },
   "footerActions": {
-    "save": "Save Settings",
+    "save": "Save settings",
     "cancel": "Cancel"
   },
   "git": {
-    "title": "Git Configuration",
+    "title": "Git configuration",
     "description": "Configure your git identity for commits. These settings will be applied globally via git config --global",
     "name": {
-      "label": "Git Name",
+      "label": "Git name",
       "help": "Your name for git commits"
     },
     "email": {
-      "label": "Git Email",
+      "label": "Git email",
       "help": "Your email for git commits"
     },
     "actions": {
-      "save": "Save Configuration",
+      "save": "Save configuration",
       "saving": "Saving..."
     },
     "status": {
@@ -273,19 +273,19 @@
     }
   },
   "apiKeys": {
-    "title": "API Keys",
+    "title": "API keys",
     "description": "Generate API keys to access the external API from other applications.",
     "newKey": {
-      "alertTitle": "⚠️ Save Your API Key",
+      "alertTitle": "Save your API key",
       "alertMessage": "This is the only time you'll see this key. Store it securely.",
       "iveSavedIt": "I've saved it"
     },
     "form": {
-      "placeholder": "API Key Name (e.g., Production Server)",
+      "placeholder": "API key name (e.g., Production server)",
       "createButton": "Create",
       "cancelButton": "Cancel"
     },
-    "newButton": "New API Key",
+    "newButton": "New API key",
     "empty": "No API keys created yet.",
     "list": {
       "created": "Created:",
@@ -297,27 +297,27 @@
       "inactive": "Inactive"
     },
     "github": {
-      "title": "GitHub Tokens",
-      "description": "Add GitHub Personal Access Tokens to clone private repositories via the external API.",
-      "descriptionAlt": "Add GitHub Personal Access Tokens to clone private repositories. You can also pass tokens directly in API requests without storing them.",
-      "addButton": "Add Token",
+      "title": "GitHub tokens",
+      "description": "Add GitHub personal access tokens to clone private repositories via the external API.",
+      "descriptionAlt": "Add GitHub personal access tokens to clone private repositories. You can also pass tokens directly in API requests without storing them.",
+      "addButton": "Add token",
       "form": {
-        "namePlaceholder": "Token Name (e.g., Personal Repos)",
-        "tokenPlaceholder": "GitHub Personal Access Token (ghp_...)",
+        "namePlaceholder": "Token name (e.g., Personal repos)",
+        "tokenPlaceholder": "GitHub personal access token (ghp_...)",
         "descriptionPlaceholder": "Description (optional)",
-        "addButton": "Add Token",
+        "addButton": "Add token",
         "cancelButton": "Cancel",
-        "howToCreate": "How to create a GitHub Personal Access Token →"
+        "howToCreate": "How to create a GitHub personal access token →"
       },
       "empty": "No GitHub tokens added yet.",
       "added": "Added:",
       "confirmDelete": "Are you sure you want to delete this GitHub token?"
     },
-    "apiDocsLink": "API Documentation",
+    "apiDocsLink": "API documentation",
     "documentation": {
-      "title": "External API Documentation",
+      "title": "External API documentation",
       "description": "Learn how to use the external API to trigger Claude/Cursor sessions from your applications.",
-      "viewLink": "View API Documentation →"
+      "viewLink": "View API documentation →"
     },
     "loading": "Loading...",
     "version": {
@@ -327,7 +327,7 @@
   "tasks": {
     "checking": "Checking TaskMaster installation...",
     "notInstalled": {
-      "title": "TaskMaster AI CLI Not Installed",
+      "title": "TaskMaster AI CLI not installed",
       "description": "TaskMaster CLI is required to use task management features. Install it to get started:",
       "installCommand": "npm install -g task-master-ai",
       "viewOnGitHub": "View on GitHub",
@@ -339,7 +339,7 @@
       }
     },
     "settings": {
-      "enableLabel": "Enable TaskMaster Integration",
+      "enableLabel": "Enable TaskMaster integration",
       "enableDescription": "Show TaskMaster tasks, banners, and sidebar indicators across the interface"
     }
   },
@@ -367,7 +367,7 @@
         "description": "OpenCode CLI assistant"
       }
     },
-    "connectionStatus": "Connection Status",
+    "connectionStatus": "Connection status",
     "login": {
       "title": "Login",
       "reAuthenticate": "Re-authenticate",
@@ -379,54 +379,54 @@
     "error": "Error: {{error}}"
   },
   "permissions": {
-    "title": "Permission Settings",
+    "title": "Permission settings",
     "skipPermissions": {
       "label": "Skip permission prompts (use with caution)",
       "claudeDescription": "Equivalent to --dangerously-skip-permissions flag",
       "cursorDescription": "Equivalent to -f flag in Cursor CLI"
     },
     "allowedTools": {
-      "title": "Allowed Tools",
+      "title": "Allowed tools",
       "description": "Tools that are automatically allowed without prompting for permission",
       "placeholder": "e.g., \"Bash(git log:*)\" or \"Write\"",
       "quickAdd": "Quick add common tools:",
       "empty": "No allowed tools configured"
     },
     "blockedTools": {
-      "title": "Blocked Tools",
+      "title": "Blocked tools",
       "description": "Tools that are automatically blocked without prompting for permission",
       "placeholder": "e.g., \"Bash(rm:*)\"",
       "empty": "No blocked tools configured"
     },
     "allowedCommands": {
-      "title": "Allowed Shell Commands",
+      "title": "Allowed shell commands",
       "description": "Shell commands that are automatically allowed without prompting",
       "placeholder": "e.g., \"Shell(ls)\" or \"Shell(git status)\"",
       "quickAdd": "Quick add common commands:",
       "empty": "No allowed commands configured"
     },
     "blockedCommands": {
-      "title": "Blocked Shell Commands",
+      "title": "Blocked shell commands",
       "description": "Shell commands that are automatically blocked",
       "placeholder": "e.g., \"Shell(rm -rf)\" or \"Shell(sudo)\"",
       "empty": "No blocked commands configured"
     },
     "toolExamples": {
-      "title": "Tool Pattern Examples:",
+      "title": "Tool pattern examples:",
       "bashGitLog": "- Allow all git log commands",
       "bashGitDiff": "- Allow all git diff commands",
       "write": "- Allow all Write tool usage",
       "bashRm": "- Block all rm commands (dangerous)"
     },
     "shellExamples": {
-      "title": "Shell Command Examples:",
+      "title": "Shell command examples:",
       "ls": "- Allow ls command",
       "gitStatus": "- Allow git status",
       "npmInstall": "- Allow npm install",
       "rmRf": "- Block recursive delete"
     },
     "codex": {
-      "permissionMode": "Permission Mode",
+      "permissionMode": "Permission mode",
       "description": "Controls how Codex handles file modifications and command execution",
       "modes": {
         "default": {
@@ -434,11 +434,11 @@
           "description": "Only trusted commands (ls, cat, grep, git status, etc.) run automatically. Other commands are skipped. Can write to workspace."
         },
         "acceptEdits": {
-          "title": "Accept Edits",
+          "title": "Accept edits",
           "description": "All commands run automatically within the workspace. Full auto mode with sandboxed execution."
         },
         "bypassPermissions": {
-          "title": "Bypass Permissions",
+          "title": "Bypass permissions",
           "description": "Full system access with no restrictions. All commands run automatically with full disk and network access. Use with caution."
         }
       },
@@ -462,7 +462,7 @@
       "codex": "Model Context Protocol servers provide additional tools and data sources to Codex",
       "opencode": "Model Context Protocol servers provide additional tools and data sources to OpenCode"
     },
-    "addButton": "Add MCP Server",
+    "addButton": "Add MCP server",
     "empty": "No MCP servers configured",
     "serverType": "Type",
     "scope": {
@@ -486,7 +486,7 @@
     },
     "managed": {
       "badge": "Managed",
-      "hint": "Managed by CloudCLI."
+      "hint": "Managed by Command Center."
     },
     "help": {
       "title": "About Codex MCP",
@@ -503,7 +503,7 @@
     "scanningPlugins": "Scanning plugins…",
     "noPluginsInstalled": "No plugins installed",
     "pullLatest": "Pull latest from git",
-    "noGitRemote": "No git remote — update not available",
+    "noGitRemote": "No git remote. Update not available",
     "uninstallPlugin": "Uninstall plugin",
     "confirmUninstall": "Click again to confirm",
     "confirmUninstallMessage": "Remove {{name}}? This cannot be undone.",
@@ -513,13 +513,13 @@
     "installFailed": "Installation failed",
     "uninstallFailed": "Uninstall failed",
     "toggleFailed": "Toggle failed",
-    "starterPluginLabel": "Starter Plugin",
+    "starterPluginLabel": "Starter plugin",
     "starter": "Starter",
     "docs": "Docs",
     "sections": {
-      "officialTitle": "Official Plugins",
-      "officialDescription": "Maintained by the CloudCLI team and ready for direct install.",
-      "unofficialTitle": "Other Plugins",
+      "officialTitle": "Official plugins",
+      "officialDescription": "Maintained by the Command Center team and ready for direct install.",
+      "unofficialTitle": "Other plugins",
       "unofficialDescription": "Unofficial plugins and integrations from other users. Review the source before installing."
     },
     "starterPlugin": {
@@ -549,7 +549,7 @@
     "prismCloudCLI": {
       "name": "PRISM CloudCLI",
       "badge": "unofficial",
-      "description": "Session intelligence for Claude Code, inside CloudCLI. See why your sessions are burning tokens without leaving the browser.",
+      "description": "Session intelligence for Claude Code, inside Command Center. See why your sessions are burning tokens without leaving the browser.",
       "install": "Install"
     },
     "sessionManagerPlugin": {

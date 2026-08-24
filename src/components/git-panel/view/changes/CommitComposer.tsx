@@ -71,7 +71,7 @@ export default function CommitComposer({
 
   return (
     <div
-      className={`transition-all duration-300 ease-in-out ${
+      className={`transition-all duration-200 ${
         isHidden ? 'max-h-0 -translate-y-2 overflow-hidden opacity-0' : 'max-h-96 translate-y-0 opacity-100'
       }`}
     >
@@ -104,7 +104,7 @@ export default function CommitComposer({
             value={commitMessage}
             onChange={(event) => setCommitMessage(event.target.value)}
             placeholder="Message (Ctrl+Enter to commit)"
-            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/20 md:text-sm"
             rows={3}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {

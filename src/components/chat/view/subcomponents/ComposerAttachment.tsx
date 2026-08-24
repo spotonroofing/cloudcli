@@ -206,7 +206,7 @@ const ComposerAttachment = ({ file, descriptor, onRemove, uploadProgress, error 
       )}
       {isPastedText && (
         <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
-          <DialogContent data-slot="pasted-text-viewer" className="flex max-h-[80vh] max-w-xl flex-col">
+          <DialogContent data-slot="pasted-text-viewer" className="flex max-h-[80dvh] max-w-xl flex-col">
             <DialogTitle>{name}</DialogTitle>
             <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
               <span className="text-sm font-medium text-foreground">{name.replace(/\.txt$/, '')}</span>

@@ -53,7 +53,7 @@ export const CONFIRMATION_BUTTON_CLASSES: Record<ConfirmActionType, string> = {
   commit: 'bg-primary hover:bg-primary/90',
   pull: 'bg-green-600 hover:bg-green-700',
   push: 'bg-primary hover:bg-primary/90',
-  publish: 'bg-purple-600 hover:bg-purple-700',
+  publish: 'bg-primary hover:bg-primary/90',
   revertLocalCommit: 'bg-yellow-600 hover:bg-yellow-700',
   deleteBranch: 'bg-red-600 hover:bg-red-700',
 };

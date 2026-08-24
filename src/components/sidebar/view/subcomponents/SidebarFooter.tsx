@@ -15,6 +15,8 @@ type SidebarFooterProps = {
   plannerRunningCount: number;
   /** Live worker-origin runs (direct, dispatch, external). */
   workerRunningCount: number;
+  /** Opens the first running session of the clicked column's kind. */
+  onJumpToRunning?: (kind: 'planner' | 'worker') => void;
   t: TFunction;
 };
 
@@ -27,32 +29,39 @@ function ActivityCounterColumn({
   kind,
   count,
   label,
+  onJump,
 }: {
   kind: 'planner' | 'worker';
   count: number;
   label: string;
+  onJump?: (kind: 'planner' | 'worker') => void;
 }) {
   const Icon = kind === 'planner' ? Compass : Hammer;
   const active = count > 0;
+  const jumpable = active && Boolean(onJump);
 
   return (
-    <div
+    <button
+      type="button"
       data-slot={`${kind}-counter`}
       data-count={count}
+      disabled={!jumpable}
+      onClick={jumpable ? () => onJump?.(kind) : undefined}
       className={cn(
-        'flex min-w-0 items-center justify-center gap-1.5 py-2 text-[11px] font-medium',
+        'flex min-w-0 items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+        jumpable ? 'cursor-pointer hover:bg-accent/60' : 'cursor-default',
         active
           ? kind === 'planner'
             ? 'animate-counter-breathe text-primary'
             : 'animate-counter-breathe text-emerald-700 dark:text-emerald-300'
           : 'text-muted-foreground',
       )}
-      title={`${label}: ${count}`}
+      title={jumpable ? `${label}: ${count}. Open running session` : `${label}: ${count}`}
     >
       <Icon className="h-3.5 w-3.5 flex-shrink-0" />
       <span className="truncate">{label}</span>
       <NumberTicker value={count} className="tabular-nums" />
-    </div>
+    </button>
   );
 }
 
@@ -61,6 +70,7 @@ export default function SidebarFooter({
   onShowSettings,
   plannerRunningCount,
   workerRunningCount,
+  onJumpToRunning,
   t,
 }: SidebarFooterProps) {
   const showCounterBar = plannerRunningCount > 0 || workerRunningCount > 0;
@@ -122,11 +132,13 @@ export default function SidebarFooter({
                 kind="planner"
                 count={plannerRunningCount}
                 label={t('running.plannerCounter', 'Planner')}
+                onJump={onJumpToRunning}
               />
               <ActivityCounterColumn
                 kind="worker"
                 count={workerRunningCount}
                 label={t('running.workerCounter', 'Worker')}
+                onJump={onJumpToRunning}
               />
             </div>
           </div>

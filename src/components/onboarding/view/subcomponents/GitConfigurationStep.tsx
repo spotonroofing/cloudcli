@@ -18,10 +18,10 @@ export default function GitConfigurationStep({
   return (
     <div className="space-y-5">
       <div className="text-center">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-inset ring-primary/20">
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-inset ring-primary/20">
           <GitBranch className="h-7 w-7 text-primary" />
         </div>
-        <h2 className="font-serif text-xl font-bold tracking-tight text-foreground">Git Configuration</h2>
+        <h2 className="font-serif text-xl font-bold tracking-tight text-foreground">Git configuration</h2>
         <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
           Configure your git identity to ensure proper attribution for commits.
         </p>
@@ -31,7 +31,7 @@ export default function GitConfigurationStep({
         <div>
           <label htmlFor="gitName" className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
             <User className="h-4 w-4" />
-            Git Name <span className="text-red-500">*</span>
+            Git name <span className="text-destructive">*</span>
           </label>
           <input
             type="text"
@@ -49,7 +49,7 @@ export default function GitConfigurationStep({
         <div>
           <label htmlFor="gitEmail" className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
             <Mail className="h-4 w-4" />
-            Git Email <span className="text-red-500">*</span>
+            Git email <span className="text-destructive">*</span>
           </label>
           <input
             type="email"

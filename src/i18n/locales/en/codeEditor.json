@@ -5,7 +5,7 @@
     "nextChange": "Next change",
     "hideDiff": "Hide diff highlighting",
     "showDiff": "Show diff highlighting",
-    "settings": "Editor Settings",
+    "settings": "Editor settings",
     "collapse": "Collapse editor",
     "expand": "Expand editor to full width"
   },
@@ -19,7 +19,7 @@
     "download": "Download file",
     "save": "Save",
     "saving": "Saving...",
-    "saved": "Saved!",
+    "saved": "Saved",
     "exitFullscreen": "Exit fullscreen",
     "fullscreen": "Fullscreen",
     "close": "Close",
@@ -32,7 +32,7 @@
     "shortcuts": "Press Ctrl+S to save • Esc to close"
   },
   "binaryFile": {
-    "title": "Binary File",
+    "title": "Binary file",
     "message": "The file \"{{fileName}}\" cannot be displayed in the text editor because it is a binary file."
   },
   "filePreview": {

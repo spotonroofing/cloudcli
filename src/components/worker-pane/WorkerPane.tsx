@@ -324,7 +324,7 @@ export default function WorkerPane({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+            className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
             onClick={() => {
               void handleShowTouchedFiles();
             }}
@@ -337,7 +337,7 @@ export default function WorkerPane({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+            className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
             onClick={handleNewWorkerSession}
             aria-label="New worker session"
           >

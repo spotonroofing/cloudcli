@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTranslation } from "react-i18next";
@@ -95,31 +96,31 @@ export function VersionUpgradeModal({
                     setReloadCountdown(null);
                     const message = `The update endpoint returned an unexpected response (HTTP ${response.status}). Update manually with the command below.`;
                     setUpdateError(message);
-                    setUpdateOutput(prev => prev + '\n❌ Update failed: ' + message + '\n');
+                    setUpdateOutput(prev => prev + '\nUpdate failed: ' + message + '\n');
                 }
                 return;
             }
 
             if (response.ok) {
                 setUpdateOutput(prev => prev + (data.output || '') + '\n');
-                setUpdateOutput(prev => prev + '\n✅ Update completed successfully!\n');
+                setUpdateOutput(prev => prev + '\nUpdate completed\n');
                 if (!IS_PLATFORM) {
-                    setUpdateOutput(prev => prev + 'Please restart the server to apply changes.' + '\n');
+                    setUpdateOutput(prev => prev + 'Restart the server to apply changes.' + '\n');
                 }
             } else {
                 setReloadCountdown(null);
                 setUpdateError(data.error || 'Update failed');
-                setUpdateOutput(prev => prev + '\n❌ Update failed: ' + (data.error || 'Unknown error') + '\n');
+                setUpdateOutput(prev => prev + '\nUpdate failed: ' + (data.error || 'Unknown error') + '\n');
             }
         } catch (error: any) {
             if (IS_PLATFORM) {
                 // Connection dropped mid-request — expected when the platform
                 // update restarts the server. Keep the countdown running.
-                setUpdateOutput(prev => prev + '\nConnection to the server was interrupted — it is likely restarting to apply the update.\n');
+                setUpdateOutput(prev => prev + '\nConnection to the server was interrupted. It is likely restarting to apply the update.\n');
             } else {
                 setReloadCountdown(null);
                 setUpdateError(error.message);
-                setUpdateOutput(prev => prev + '\n❌ Update failed: ' + error.message + '\n');
+                setUpdateOutput(prev => prev + '\nUpdate failed: ' + error.message + '\n');
             }
         } finally {
             setIsUpdating(false);
@@ -138,7 +139,7 @@ export function VersionUpgradeModal({
             />
 
             {/* Modal */}
-            <div className="relative mx-4 max-h-[90vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+            <div className="relative mx-4 max-h-[90dvh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -265,7 +266,7 @@ export function VersionUpgradeModal({
                             >
                                 {isUpdating ? (
                                     <>
-                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                        <Loader2 className="h-4 w-4 animate-spin" />
                                         {t('versionUpdate.buttons.updating')}
                                     </>
                                 ) : (

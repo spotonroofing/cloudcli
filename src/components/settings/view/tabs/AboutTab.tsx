@@ -116,7 +116,7 @@ export default function AboutTab() {
       {/* Hosted CTA (OSS mode only) */}
       {!IS_PLATFORM && (
         <div className="rounded-lg border border-primary/10 bg-primary/5 p-4">
-          <h4 className="text-sm font-medium text-foreground">Try CloudCLI Hosted</h4>
+          <h4 className="text-sm font-medium text-foreground">Try Command Center hosted</h4>
           <p className="mt-1 text-xs text-muted-foreground">
             Team collaboration, shared MCP configs, settings sync across environments, and managed infrastructure.
           </p>
@@ -135,15 +135,15 @@ export default function AboutTab() {
       {/* Premium feature placeholders (OSS mode only) */}
       {!IS_PLATFORM && (
         <div className="space-y-4 border-t border-border/50 pt-6">
-          <h3 className="text-sm font-medium text-foreground">CloudCLI Pro Features</h3>
+          <h3 className="text-sm font-medium text-foreground">Command Center Pro features</h3>
           <PremiumFeatureCard
             icon={<Cloud className="h-5 w-5" />}
-            title="Sync Settings"
+            title="Sync settings"
             description="Keep your preferences, MCP configs, and theme in sync across all your environments."
           />
           <PremiumFeatureCard
             icon={<Users className="h-5 w-5" />}
-            title="Team Management"
+            title="Team management"
             description="Multiple users, role-based access, and shared projects for your team."
           />
         </div>

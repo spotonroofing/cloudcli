@@ -1,8 +1,8 @@
 import { useRef, type ReactNode } from 'react';
-import { Activity, Archive, Folder, MessageSquare, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { Activity, Archive, Folder, Loader2, MessageSquare, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { ScrollArea } from '../../../../shared/view/ui';
+import { Badge, ScrollArea } from '../../../../shared/view/ui';
 import { Loader } from '../../../../shared/view/beui/Loader';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import type { LLMProvider, Project } from '../../../../types/app';
@@ -95,6 +95,7 @@ type SidebarContentProps = {
   runningSessionsCount: number;
   plannerRunningCount: number;
   workerRunningCount: number;
+  onJumpToRunning?: (kind: 'planner' | 'worker') => void;
   archivedProjects: ArchivedProjectListItem[];
   archivedSessions: ArchivedSessionListItem[];
   archivedSessionsCount: number;
@@ -150,6 +151,7 @@ export default function SidebarContent({
   runningSessionsCount,
   plannerRunningCount,
   workerRunningCount,
+  onJumpToRunning,
   archivedProjects,
   archivedSessions,
   archivedSessionsCount,
@@ -358,7 +360,7 @@ export default function SidebarContent({
                   {isSearching && searchProgress && (
                     <div className="space-y-1.5 px-1">
                       <div className="flex items-center justify-end gap-1.5">
-                        <div className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-muted-foreground/40 border-t-primary" />
+                        <Loader2 className="h-3 w-3 animate-spin" />
                         <p className="text-[10px] text-muted-foreground/60">
                           {searchProgress.scannedProjects}/{searchProgress.totalProjects}
                         </p>
@@ -477,9 +479,9 @@ export default function SidebarContent({
                     {t('running.title', 'Running now')}
                   </span>
                 </div>
-                <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">
+                <Badge status="success" size="sm" showIcon={false}>
                   {runningSessionsCount}
-                </span>
+                </Badge>
               </div>
               <SidebarProjectList {...projectListProps} />
             </div>
@@ -513,22 +515,20 @@ export default function SidebarContent({
               ))}
             </div>
           ) : archivedProjects.length === 0 && groupedArchivedSessions.length === 0 ? (
-            <div className="px-3 py-8 text-center">
-              <div className="mx-auto max-w-[240px] rounded-2xl border border-dashed border-border/80 bg-muted/20 px-5 py-7">
-                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-border/70 bg-background shadow-sm">
-                  <Archive className="h-[18px] w-[18px] text-muted-foreground" />
-                </div>
-                <h3 className="text-sm font-medium text-foreground">
-                  {archivedSessionsCount > 0
-                    ? t('archived.noMatchingSessions', 'No matching archived items')
-                    : t('archived.emptyTitle', 'No archived items')}
-                </h3>
-                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                  {archivedSessionsCount > 0
-                    ? t('archived.tryDifferentSearch', 'Try a different search term.')
-                    : t('archived.emptyDescription', 'Archived workspaces and sessions will appear here when you hide them from the active list.')}
-                </p>
+            <div className="px-4 py-12 text-center md:py-8">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted md:mb-3">
+                <Archive className="h-6 w-6 text-muted-foreground" />
               </div>
+              <h3 className="mb-2 text-base font-medium text-foreground md:mb-1">
+                {archivedSessionsCount > 0
+                  ? t('archived.noMatchingSessions', 'No matching archived items')
+                  : t('archived.emptyTitle', 'No archived items')}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {archivedSessionsCount > 0
+                  ? t('archived.tryDifferentSearch', 'Try a different search term.')
+                  : t('archived.emptyDescription', 'Archived workspaces and sessions will appear here when you hide them from the active list.')}
+              </p>
             </div>
           ) : (
             <div className="space-y-2.5 px-2 pb-3">
@@ -585,7 +585,7 @@ export default function SidebarContent({
                         </p>
                       </div>
                       <button
-                        className="flex h-7 flex-shrink-0 items-center gap-1.5 rounded-lg border border-emerald-600/15 bg-emerald-500/10 px-2 text-[10px] font-medium text-emerald-700 transition-all hover:border-emerald-600/25 hover:bg-emerald-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:text-emerald-300"
+                        className="flex h-7 flex-shrink-0 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 text-[10px] font-medium text-emerald-600 transition-all hover:border-emerald-500/40 hover:bg-emerald-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:text-emerald-400"
                         onClick={() => onRestoreArchivedProject(project.projectId)}
                         title={t('archived.restoreProject', 'Restore workspace')}
                         aria-label={`${t('archived.restoreProject', 'Restore workspace')}: ${project.displayName}`}
@@ -717,7 +717,7 @@ export default function SidebarContent({
                         </button>
                         <div className="flex flex-shrink-0 items-center gap-0.5">
                           <button
-                            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="relative touch-hit flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             onClick={() => onRestoreArchivedSession(session.sessionId)}
                             title={t('archived.restore', 'Restore session')}
                             aria-label={`${t('archived.restore', 'Restore session')}: ${session.sessionTitle}`}
@@ -725,7 +725,7 @@ export default function SidebarContent({
                             <RotateCcw className="h-3.5 w-3.5" />
                           </button>
                           <button
-                            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+                            className="relative touch-hit flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
                             onClick={() => onDeleteArchivedSession(session)}
                             title={t('archived.deletePermanently', 'Delete permanently')}
                             aria-label={`${t('archived.deletePermanently', 'Delete permanently')}: ${session.sessionTitle}`}
@@ -751,6 +751,7 @@ export default function SidebarContent({
           onShowSettings={onShowSettings}
           plannerRunningCount={plannerRunningCount}
           workerRunningCount={workerRunningCount}
+          onJumpToRunning={onJumpToRunning}
           t={t}
         />
       )}

@@ -366,7 +366,6 @@ export default function FileContextMenu({
             initial={false}
             exit={{ opacity: 0, transition: { duration: 0.15, ease: EASE_OUT } }}
             style={{ position: 'fixed', left: menuPosition.x, top: menuPosition.y, zIndex: 9999 }}
-            className="[filter:drop-shadow(0_18px_28px_rgba(0,0,0,0.2))]"
           >
             <motion.div
               ref={menuRef}
@@ -390,7 +389,7 @@ export default function FileContextMenu({
                     }
               }
               onContextMenu={(event) => event.preventDefault()}
-              className="min-w-56 overflow-hidden rounded-lg border border-border bg-popover p-1.5 text-popover-foreground outline-none"
+              className="min-w-56 overflow-hidden rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-lg outline-none"
             >
               {isLoading ? (
                 <div className="flex items-center justify-center py-4">

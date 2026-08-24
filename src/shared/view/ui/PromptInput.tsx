@@ -97,7 +97,7 @@ export const PromptInputTextarea = React.forwardRef<
     data-slot="prompt-input-textarea"
     className={cn(
       // text-base below md keeps iOS Safari from zooming the viewport on focus.
-      'chat-input-placeholder block max-h-[40vh] w-full resize-none overflow-y-auto bg-transparent px-4 py-2 text-base leading-6 text-foreground placeholder-muted-foreground/50 focus:outline-none sm:max-h-[300px] md:text-sm',
+      'chat-input-placeholder block max-h-[40dvh] w-full resize-none overflow-y-auto bg-transparent px-4 py-2 text-base leading-6 text-foreground placeholder-muted-foreground/50 focus:outline-none sm:max-h-[300px] md:text-sm',
       className
     )}
     {...props}

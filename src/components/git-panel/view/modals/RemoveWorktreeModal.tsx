@@ -52,14 +52,14 @@ export default function RemoveWorktreeModal({
       }}
     >
       <DialogContent className="max-w-md overflow-hidden bg-card">
-        <DialogTitle>Remove Worktree</DialogTitle>
+        <DialogTitle>Remove worktree</DialogTitle>
         <div className="p-6">
           <div className="mb-4 flex items-center">
             <div className="mr-3 rounded-full bg-muted p-2">
               <Trash2 className="h-4 w-4 text-foreground" />
             </div>
             <h3 id="remove-worktree-title" className="text-lg font-semibold text-foreground">
-              Remove Worktree
+              Remove worktree
             </h3>
           </div>
 

@@ -468,6 +468,7 @@
   /* Root element with safe area padding for PWA */
   #root {
     min-height: 100vh;
+    min-height: 100dvh;
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -489,6 +490,7 @@
     padding-left: var(--safe-area-inset-left);
     padding-right: var(--safe-area-inset-right);
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
   }
 
@@ -508,7 +510,7 @@
   select,
   [role="button"],
   .transition-all {
-    transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   /* Color transitions for theme switching - exclude interactive elements */
@@ -524,7 +526,7 @@
   
   /* Transform transitions */
   .transition-transform {
-    transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   /* Opacity transitions */
@@ -534,7 +536,7 @@
   
   /* Scale transitions for interactions */
   .transition-scale {
-    transition: transform 100ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   /* Shadow transitions */
@@ -581,7 +583,7 @@
   
   /* Sidebar transitions */
   .sidebar-transition {
-    transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1),
+    transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
                 opacity 300ms ease-in-out;
   }
 
@@ -624,13 +626,13 @@
   /* Modal and dropdown transitions */
   .modal-transition {
     transition: opacity 200ms ease-in-out,
-                transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+                transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   /* Chat message transitions */
   .message-transition {
     transition: opacity 300ms ease-in-out,
-                transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+                transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   /* Height transitions for expanding elements */
@@ -952,17 +954,7 @@
       touch-action: pan-y;
     }
     
-    /* Fix hover states on mobile */
-    .group:active .group-hover\:opacity-100,
-    .group .group-hover\:opacity-100 {
-      opacity: 1 !important;
-    }
-    
     @media (hover: none) and (pointer: coarse) {
-      .group-hover\:opacity-100 {
-        opacity: 1 !important;
-      }
-      
       .hover\:bg-gray-50:hover,
       .hover\:bg-gray-100:hover,
       .hover\:bg-red-200:hover,
@@ -1228,7 +1220,7 @@
   /* Smooth chevron transition */
   .details-chevron,
   summary svg[class*="transition-transform"] {
-    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   /* Settings content fade-in transition */

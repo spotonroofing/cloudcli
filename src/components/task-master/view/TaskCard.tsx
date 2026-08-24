@@ -41,9 +41,9 @@ function getStatusStyle(status?: string): TaskStatusStyle {
   if (status === 'in-progress') {
     return {
       icon: Clock,
-      statusText: 'In Progress',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-      textColor: 'text-blue-900 dark:text-blue-100',
+      statusText: 'In progress',
+      iconColor: 'text-primary',
+      textColor: 'text-primary',
     };
   }
 
@@ -60,8 +60,8 @@ function getStatusStyle(status?: string): TaskStatusStyle {
     return {
       icon: Pause,
       statusText: 'Deferred',
-      iconColor: 'text-gray-500 dark:text-gray-400',
-      textColor: 'text-gray-700 dark:text-gray-300',
+      iconColor: 'text-muted-foreground',
+      textColor: 'text-muted-foreground',
     };
   }
 
@@ -77,8 +77,8 @@ function getStatusStyle(status?: string): TaskStatusStyle {
   return {
     icon: Circle,
     statusText: 'Pending',
-    iconColor: 'text-slate-500 dark:text-slate-400',
-    textColor: 'text-slate-900 dark:text-slate-100',
+    iconColor: 'text-muted-foreground',
+    textColor: 'text-foreground',
   };
 }
 
@@ -106,8 +106,8 @@ function renderPriorityIcon(priority?: string) {
   if (priority === 'low') {
     return (
       <Tooltip content="Low priority">
-        <div className="flex h-4 w-4 items-center justify-center rounded bg-blue-100 dark:bg-blue-900/30">
-          <Circle className="h-1.5 w-1.5 fill-current text-blue-600 dark:text-blue-400" />
+        <div className="flex h-4 w-4 items-center justify-center rounded bg-muted">
+          <Circle className="h-1.5 w-1.5 fill-current text-muted-foreground" />
         </div>
       </Tooltip>
     );
@@ -115,8 +115,8 @@ function renderPriorityIcon(priority?: string) {
 
   return (
     <Tooltip content="No priority set">
-      <div className="flex h-4 w-4 items-center justify-center rounded bg-gray-100 dark:bg-gray-800">
-        <Circle className="h-1.5 w-1.5 text-gray-400 dark:text-gray-500" />
+      <div className="flex h-4 w-4 items-center justify-center rounded bg-muted">
+        <Circle className="h-1.5 w-1.5 text-muted-foreground" />
       </div>
     </Tooltip>
   );
@@ -138,8 +138,8 @@ function TaskCard({ task, onClick = null, showParent = false, className = '' }: 
   return (
     <div
       className={cn(
-        'bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-3',
-        'hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200',
+        'bg-card rounded-lg border border-border p-3 space-y-3',
+        'hover:shadow-md hover:border-ring transition-all duration-200',
         onClick ? 'cursor-pointer hover:-translate-y-0.5' : 'cursor-default',
         className,
       )}
@@ -149,18 +149,18 @@ function TaskCard({ task, onClick = null, showParent = false, className = '' }: 
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2">
             <Tooltip content={`Task ID: ${task.id}`}>
-              <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+              <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
                 {task.id}
               </span>
             </Tooltip>
           </div>
 
-          <h3 className="line-clamp-2 text-sm font-medium leading-tight text-gray-900 dark:text-white">
+          <h3 className="line-clamp-2 text-sm font-medium leading-tight text-foreground">
             {task.title}
           </h3>
 
           {showParent && task.parentId && (
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Task {task.parentId}</span>
+            <span className="text-xs font-medium text-muted-foreground">Task {task.parentId}</span>
           )}
         </div>
 
@@ -190,14 +190,14 @@ function TaskCard({ task, onClick = null, showParent = false, className = '' }: 
       {progress.total > 0 && (
         <div className="ml-3">
           <div className="mb-1 flex items-center gap-2">
-            <span className="text-xs text-gray-500 dark:text-gray-400">Progress:</span>
-            <div className="h-1.5 flex-1 rounded-sm bg-gray-200 dark:bg-gray-700" title={`${progress.completed} of ${progress.total} subtasks completed`}>
+            <span className="text-xs text-muted-foreground">Progress:</span>
+            <div className="h-1.5 flex-1 rounded-sm bg-muted" title={`${progress.completed} of ${progress.total} subtasks completed`}>
               <div
-                className={cn('h-full rounded-sm transition-all duration-300', task.status === 'done' ? 'bg-green-500' : 'bg-blue-500')}
+                className={cn('h-full rounded-sm transition-all duration-300', task.status === 'done' ? 'bg-green-500' : 'bg-primary')}
                 style={{ width: `${progress.percentage}%` }}
               />
             </div>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-muted-foreground">
               {progress.completed}/{progress.total}
             </span>
           </div>

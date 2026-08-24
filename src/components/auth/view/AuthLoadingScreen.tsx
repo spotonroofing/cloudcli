@@ -5,7 +5,7 @@ const loadingDotAnimationDelays = ['0s', '0.15s', '0.3s'];
 
 export default function AuthLoadingScreen() {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background p-4">
       <div aria-hidden className="pointer-events-none absolute inset-0">
         <div className="absolute -top-40 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
       </div>

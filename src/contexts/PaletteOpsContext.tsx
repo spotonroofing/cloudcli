@@ -8,6 +8,9 @@ export type PaletteOps = {
   openFileInEditor: (path: string) => void;
   openSettings: (tab?: string) => void;
   refreshProjects: () => Promise<void> | void;
+  // Copies the open chat's last assistant response as plain text; registered
+  // by the chat surface, so it is a no-op when no chat is open.
+  copyLastResponse: () => void;
 };
 
 type Registry = MutableRefObject<Partial<PaletteOps>>;
@@ -19,6 +22,7 @@ const defaultOps: PaletteOps = {
   openFileInEditor: () => undefined,
   openSettings: () => undefined,
   refreshProjects: () => undefined,
+  copyLastResponse: () => undefined,
 };
 
 export function PaletteOpsProvider({ children }: { children: ReactNode }) {
@@ -35,6 +39,7 @@ export function usePaletteOps(): PaletteOps {
         (ref?.current.openFileInEditor ?? defaultOps.openFileInEditor)(path),
       openSettings: (tab) => (ref?.current.openSettings ?? defaultOps.openSettings)(tab),
       refreshProjects: () => (ref?.current.refreshProjects ?? defaultOps.refreshProjects)(),
+      copyLastResponse: () => (ref?.current.copyLastResponse ?? defaultOps.copyLastResponse)(),
     }),
     [ref],
   );
@@ -42,7 +47,7 @@ export function usePaletteOps(): PaletteOps {
 
 export function usePaletteOpsRegister(partial: Partial<PaletteOps>) {
   const ref = useContext(PaletteOpsContext);
-  const { openFile, openFileInEditor, openSettings, refreshProjects } = partial;
+  const { openFile, openFileInEditor, openSettings, refreshProjects, copyLastResponse } = partial;
 
   useEffect(() => {
     if (!ref) return undefined;
@@ -51,11 +56,13 @@ export function usePaletteOpsRegister(partial: Partial<PaletteOps>) {
     if (openFileInEditor) ref.current.openFileInEditor = openFileInEditor;
     if (openSettings) ref.current.openSettings = openSettings;
     if (refreshProjects) ref.current.refreshProjects = refreshProjects;
+    if (copyLastResponse) ref.current.copyLastResponse = copyLastResponse;
     return () => {
       if (openFile && ref.current.openFile === openFile) ref.current.openFile = prev.openFile;
       if (openFileInEditor && ref.current.openFileInEditor === openFileInEditor) ref.current.openFileInEditor = prev.openFileInEditor;
       if (openSettings && ref.current.openSettings === openSettings) ref.current.openSettings = prev.openSettings;
       if (refreshProjects && ref.current.refreshProjects === refreshProjects) ref.current.refreshProjects = prev.refreshProjects;
+      if (copyLastResponse && ref.current.copyLastResponse === copyLastResponse) ref.current.copyLastResponse = prev.copyLastResponse;
     };
-  }, [ref, openFile, openFileInEditor, openSettings, refreshProjects]);
+  }, [ref, openFile, openFileInEditor, openSettings, refreshProjects, copyLastResponse]);
 }

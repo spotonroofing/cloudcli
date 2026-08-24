@@ -83,7 +83,7 @@ function BranchRow({ name, isCurrent, isRemote, aheadCount, behindCount, isMobil
       </div>
 
       {/* Actions */}
-      <div className={`flex shrink-0 items-center gap-1 ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
+      <div className={`flex shrink-0 items-center gap-1 ${isCurrent ? 'opacity-100' : 'md:opacity-0 md:group-hover:opacity-100'} transition-opacity`}>
         {isCurrent ? (
           <Check className="h-4 w-4 text-primary" />
         ) : !isRemote ? (
@@ -209,7 +209,7 @@ export default function BranchesView({
           value={branchSearchQuery}
           onChange={(event) => setBranchSearchQuery(event.target.value)}
           placeholder="Search branches..."
-          className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+          className="w-full bg-transparent text-base text-foreground placeholder:text-muted-foreground focus:outline-none md:text-sm"
         />
         {branchSearchQuery && (
           <button
@@ -264,7 +264,7 @@ export default function BranchesView({
 
         {filteredLocalBranches.length === 0 && filteredRemoteBranches.length === 0 && (
           <div className="flex h-32 flex-col items-center justify-center gap-2 text-muted-foreground">
-            <GitBranch className="h-10 w-10 opacity-30" />
+            <GitBranch className="h-10 w-10 opacity-40" />
             <p className="text-sm">{normalizedQuery ? 'No branches match your search' : 'No branches found'}</p>
           </div>
         )}

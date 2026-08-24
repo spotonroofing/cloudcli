@@ -79,9 +79,9 @@ const SCOPE_LABELS: Record<SkillsScope, string> = {
 
 const SCOPE_BADGE_CLASSES: Record<SkillsScope, string> = {
   user: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  plugin: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300',
+  plugin: 'border-primary/30 bg-primary/10 text-primary',
   repo: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  project: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+  project: 'border-border bg-muted text-muted-foreground',
   admin: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
   system: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300',
 };
@@ -582,14 +582,14 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
           wrapperClassName="z-[10000]"
           className="flex h-[calc(100vh-2rem)] max-h-[760px] w-[calc(100vw-2rem)] max-w-4xl flex-col overflow-hidden p-0 sm:h-[720px]"
         >
-          <DialogTitle>Add {providerName} Skill</DialogTitle>
+          <DialogTitle>Add {providerName} skill</DialogTitle>
           <div className="flex-shrink-0 border-b border-border/60 px-4 py-4">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/20 text-muted-foreground">
                 <FileUp className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-base font-medium text-foreground">Add {providerName} Skill</div>
+                <div className="text-base font-medium text-foreground">Add {providerName} skill</div>
                 <div className="mt-1 text-sm text-muted-foreground">
                   Upload a SKILL.md file or a complete skill folder.
                 </div>
@@ -677,8 +677,8 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
 
         {!isLoading && skills.length === 0 && (
           <div className="rounded-lg border border-dashed border-border/70 bg-muted/15 px-4 py-10 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg border border-border/60 bg-background/80 text-muted-foreground">
-              <FileText className="h-6 w-6" />
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <FileText className="h-5 w-5" />
             </div>
             <div className="mt-4 text-sm font-medium text-foreground">No skills discovered yet</div>
             <div className="mt-1 text-sm text-muted-foreground">
@@ -689,8 +689,10 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
 
         {!isLoading && skills.length > 0 && filteredSkills.length === 0 && (
           <div className="rounded-lg border border-dashed border-border/70 bg-muted/15 px-4 py-10 text-center">
-            <Search className="mx-auto h-6 w-6 text-muted-foreground" />
-            <div className="mt-3 text-sm font-medium text-foreground">No matching skills</div>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <Search className="h-5 w-5" />
+            </div>
+            <div className="mt-4 text-sm font-medium text-foreground">No matching skills</div>
             <div className="mt-1 text-sm text-muted-foreground">
               Try a different command, name, scope, project, or source path.
             </div>

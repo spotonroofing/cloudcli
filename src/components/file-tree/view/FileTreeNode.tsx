@@ -121,7 +121,7 @@ export default function FileTreeNode({
     isDirectory && isOpen && 'border-l-2 border-primary/30',
     (isDirectory && !isOpen) || !isDirectory ? 'border-l-2 border-transparent' : '',
     'relative',
-    isDropTarget && 'bg-blue-500/10 ring-1 ring-inset ring-blue-500/40',
+    isDropTarget && 'bg-primary/[0.07] ring-1 ring-inset ring-primary/40',
   );
 
   // Render rename input if this item is being renamed
@@ -166,8 +166,8 @@ export default function FileTreeNode({
       aria-label={t('fileTree.uploadToFolder', 'Upload files to "{{folder}}"', { folder: item.name })}
       className={cn(
         'absolute right-1 top-1/2 -translate-y-1/2 rounded p-1',
-        'bg-background/80 text-muted-foreground opacity-0 transition-opacity',
-        'group-hover:opacity-100 focus-visible:opacity-100 hover:bg-accent hover:text-foreground',
+        'bg-background/80 text-muted-foreground md:opacity-0 transition-opacity',
+        'md:group-hover:opacity-100 focus-visible:opacity-100 hover:bg-accent hover:text-foreground',
       )}
     >
       <Upload className="h-3.5 w-3.5" />

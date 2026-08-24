@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import { Loader } from '../../../../shared/view/beui/Loader';
+import { Button } from '../../../../shared/view/ui/Button';
 import { useState } from 'react';
 
 import type { Project } from '../../../../types/app';
@@ -256,8 +257,8 @@ export default function WorktreesView({
 
         {/* Explainer under the list while only the main worktree exists */}
         {linkedWorktreeCount === 0 && (
-          <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-            <GitFork className="h-10 w-10 text-muted-foreground opacity-30" />
+          <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+            <GitFork className="h-10 w-10 text-muted-foreground opacity-40" />
             <div>
               <p className="text-sm font-medium text-foreground/80">Work on branches in parallel</p>
               <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
@@ -265,14 +266,10 @@ export default function WorktreesView({
                 sessions side by side and merge the results back when they're ready.
               </p>
             </div>
-            <button
-              onClick={() => setShowNewWorktreeModal(true)}
-              disabled={!worktreeData}
-              className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Plus className="h-3.5 w-3.5" />
+            <Button onClick={() => setShowNewWorktreeModal(true)} disabled={!worktreeData}>
+              <Plus className="h-4 w-4" />
               Create your first worktree
-            </button>
+            </Button>
           </div>
         )}
       </div>

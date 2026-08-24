@@ -36,15 +36,15 @@ export default function StepReview({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
-        <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+      <div className="rounded-lg border border-border bg-muted/30 p-4">
+        <h4 className="mb-3 text-sm font-semibold text-foreground">
           {t('projectWizard.step3.reviewConfig')}
         </h4>
 
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-600 dark:text-gray-400">{t('projectWizard.step3.path')}</span>
-            <span className="break-all font-mono text-xs text-gray-900 dark:text-white">
+            <span className="text-muted-foreground">{t('projectWizard.step3.path')}</span>
+            <span className="break-all font-mono text-xs text-foreground">
               {formState.workspacePath}
             </span>
           </div>
@@ -52,19 +52,19 @@ export default function StepReview({
           {formState.githubUrl && (
             <>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">
+                <span className="text-muted-foreground">
                   {t('projectWizard.step3.cloneFrom')}
                 </span>
-                <span className="break-all font-mono text-xs text-gray-900 dark:text-white">
+                <span className="break-all font-mono text-xs text-foreground">
                   {formState.githubUrl}
                 </span>
               </div>
 
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">
+                <span className="text-muted-foreground">
                   {t('projectWizard.step3.authentication')}
                 </span>
-                <span className="text-xs text-gray-900 dark:text-white">{authenticationLabel}</span>
+                <span className="text-xs text-foreground">{authenticationLabel}</span>
               </div>
             </>
           )}

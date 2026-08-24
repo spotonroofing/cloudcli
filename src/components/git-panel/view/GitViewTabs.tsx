@@ -20,7 +20,7 @@ const TABS: { id: GitPanelView; label: string; Icon: typeof FileText }[] = [
 export default function GitViewTabs({ activeView, isHidden, changeCount, onChange }: GitViewTabsProps) {
   return (
     <div
-      className={`transition-all duration-300 ease-in-out ${
+      className={`transition-all duration-200 ${
         isHidden ? 'max-h-0 -translate-y-2 overflow-hidden opacity-0' : 'max-h-16 translate-y-0 opacity-100'
       }`}
     >

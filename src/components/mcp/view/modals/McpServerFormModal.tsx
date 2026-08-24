@@ -122,7 +122,7 @@ export default function McpServerFormModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-background">
+      <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-background">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h3 className="text-lg font-medium text-foreground">{modalTitle}</h3>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -216,7 +216,7 @@ export default function McpServerFormModal({
                   <select
                     value={formData.workspacePath}
                     onChange={(event) => updateForm('workspacePath', event.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-base text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 md:text-sm"
                     required
                   >
                     <option value="">{t('mcpForm.fields.selectProject')}</option>
@@ -257,7 +257,7 @@ export default function McpServerFormModal({
                 <select
                   value={formData.transport}
                   onChange={(event) => updateTransport(event.target.value as McpFormState['transport'])}
-                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-base text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 md:text-sm"
                 >
                   {availableTransports.map((transport) => (
                     <option key={transport} value={transport}>
@@ -279,7 +279,7 @@ export default function McpServerFormModal({
                 onChange={(event) => updateJsonInput(event.target.value)}
                 className={`w-full border px-3 py-2 ${
                   jsonValidationError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                } rounded-lg bg-gray-50 font-mono text-sm text-gray-900 focus:border-ring focus:ring-ring dark:bg-gray-800 dark:text-gray-100`}
+                } rounded-lg bg-gray-50 font-mono text-base text-gray-900 focus:border-ring focus:ring-ring dark:bg-gray-800 dark:text-gray-100 md:text-sm`}
                 rows={8}
                 placeholder={'{\n  "type": "stdio",\n  "command": "npx",\n  "args": ["@upstash/context7-mcp"]\n}'}
                 required
@@ -318,7 +318,7 @@ export default function McpServerFormModal({
                 <textarea
                   value={multilineText.args}
                   onChange={(event) => updateMultilineText('args', event.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-base text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 md:text-sm"
                   rows={3}
                   placeholder="--port&#10;3000"
                 />
@@ -362,7 +362,7 @@ export default function McpServerFormModal({
               <textarea
                 value={multilineText.env}
                 onChange={(event) => updateMultilineText('env', event.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-base text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 md:text-sm"
                 rows={3}
                 placeholder="API_KEY=your-key&#10;DEBUG=true"
               />
@@ -377,7 +377,7 @@ export default function McpServerFormModal({
               <textarea
                 value={multilineText.headers}
                 onChange={(event) => updateMultilineText('headers', event.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-base text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 md:text-sm"
                 rows={3}
                 placeholder="Authorization=Bearer token&#10;X-API-Key=your-key"
               />
@@ -392,7 +392,7 @@ export default function McpServerFormModal({
               <textarea
                 value={multilineText.envVars}
                 onChange={(event) => updateMultilineText('envVars', event.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-base text-gray-900 focus:border-ring focus:ring-ring dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 md:text-sm"
                 rows={3}
                 placeholder="GITHUB_TOKEN&#10;API_KEY"
               />

@@ -19,9 +19,9 @@ const providerCards = [
   {
     provider: 'cursor' as const,
     title: 'Cursor',
-    connectedClassName: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
-    iconContainerClassName: 'bg-purple-100 dark:bg-purple-900/30',
-    loginButtonClassName: 'bg-purple-600 hover:bg-purple-700',
+    connectedClassName: 'bg-muted border-border',
+    iconContainerClassName: 'bg-muted',
+    loginButtonClassName: 'bg-primary hover:bg-primary/90 text-primary-foreground',
   },
   {
     provider: 'codex' as const,
@@ -52,7 +52,7 @@ export default function AgentConnectionsStep({
         </p>
       </div>
 
-      <div className="-mr-1 max-h-[38vh] space-y-2 overflow-y-auto pr-1">
+      <div className="-mr-1 max-h-[38dvh] space-y-2 overflow-y-auto pr-1">
         {providerCards.map((providerCard) => (
           <AgentConnectionCard
             key={providerCard.provider}

@@ -12,6 +12,9 @@ import { useChatComposerState, type BootState } from '../hooks/useChatComposerSt
 import { useMessageVersions } from '../hooks/useMessageVersions';
 import { findEditGroupId } from '../utils/messageVersions';
 import { useSessionStore } from '../../../stores/useSessionStore';
+import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
+import { copyTextToClipboard } from '../../../utils/clipboard';
+import { convertMarkdownToPlainText } from './subcomponents/MessageCopyControl';
 
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
@@ -163,6 +166,19 @@ function ChatInterface({
     bootTurnActive: bootState.phase === 'booting',
     messageVersions: messageVersionView,
   });
+
+  // Palette convenience: "Copy last response" copies the newest assistant
+  // text of the open chat as plain text (same conversion as the copy button).
+  const copyLastResponse = useCallback(() => {
+    for (let i = chatMessages.length - 1; i >= 0; i -= 1) {
+      const message = chatMessages[i];
+      if (message.type === 'assistant' && typeof message.content === 'string' && message.content.trim()) {
+        void copyTextToClipboard(convertMarkdownToPlainText(message.content));
+        return;
+      }
+    }
+  }, [chatMessages]);
+  usePaletteOpsRegister(useMemo(() => (isActive ? { copyLastResponse } : {}), [isActive, copyLastResponse]));
 
   // Brand-new conversation: the composer allocated a stable session id via
   // the session gateway before the first send. Record it locally and put it

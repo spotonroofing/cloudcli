@@ -1,7 +1,7 @@
 import { memo, useMemo, useRef } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, RotateCcw } from 'lucide-react';
+import { Pencil, RotateCcw, Wrench } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import type {
@@ -267,7 +267,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                 </div>
                 <div className="-mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
                   {shouldShowUserEditControl && (
-                    <div className="relative flex items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                    <div className="relative flex items-center transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">
                       <button
                         type="button"
                         onClick={() => onEditMessage?.(message)}
@@ -282,13 +282,13 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                   {shouldShowUserCopyControl && (
                     <MessageCopyControl content={userCopyContent} messageType="user" />
                   )}
-                  <span className="opacity-0 transition-opacity duration-200 group-hover:opacity-100">{formattedTime}</span>
+                  <span className="transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">{formattedTime}</span>
                 </div>
               </>
             ) : (
               /* Attachment-only turn: no text bubble, but the timestamp still shows on hover */
               <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
-                <span className="opacity-0 transition-opacity duration-200 group-hover:opacity-100">{formattedTime}</span>
+                <span className="transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">{formattedTime}</span>
               </div>
             )}
           </div>
@@ -307,15 +307,15 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
           {!isGrouped && message.type !== 'assistant' && (
             <div className="mb-2 flex items-center space-x-3">
               {message.type === 'error' ? (
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-sm text-white">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-sm font-medium text-destructive">
                   !
                 </div>
               ) : (
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-600 text-sm text-white dark:bg-gray-700">
-                  🔧
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                  <Wrench className="h-4 w-4 text-muted-foreground" />
                 </div>
               )}
-              <div className="text-sm font-medium text-gray-900 dark:text-white">
+              <div className="text-sm font-medium text-foreground">
                 {message.type === 'error' ? t('messageTypes.error') : t('messageTypes.tool')}
               </div>
             </div>
@@ -558,7 +558,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                 )}
                 {shouldShowAssistantCopyControl && !message.isStreaming && onRerun && rerunContent && (
                   /* Rerun: send the prompt that produced this turn again (beautifului action row) */
-                  <div className="relative flex items-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  <div className="relative flex items-center transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">
                     <button
                       type="button"
                       onClick={(event) => onRerun(rerunContent, event)}
@@ -571,7 +571,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                   </div>
                 )}
                 {!isGrouped && (
-                  <span className="ml-auto opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  <span className="ml-auto transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">
                     {formattedTime}
                   </span>
                 )}

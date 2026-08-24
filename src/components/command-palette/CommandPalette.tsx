@@ -5,6 +5,7 @@ import {
   ArrowUpFromLine,
   ChevronRight,
   FileText,
+  FolderOpen,
   GitCommit,
   GitMerge,
   MessageSquare,
@@ -50,6 +51,8 @@ const PAGE_LABELS: Record<Page, string> = {
 
 type CommandPaletteProps = {
   selectedProject: Project | null;
+  projects?: Project[];
+  onProjectSelect?: (project: Project) => void;
   onStartNewChat: (project: Project) => void;
   onOpenSettings: (tab?: string) => void;
   onShowTab?: (tab: AppTab) => void;
@@ -65,6 +68,8 @@ const NAV_TABS: Array<{ id: AppTab; label: string; keywords: string }> = [
 
 export default function CommandPalette({
   selectedProject,
+  projects,
+  onProjectSelect,
   onStartNewChat,
   onOpenSettings,
   onShowTab,
@@ -208,6 +213,13 @@ export default function CommandPalette({
                     <span className="text-xs text-muted-foreground">Select a project first</span>
                   )}
                 </CommandItem>
+                <CommandItem
+                  value="Copy last response assistant message clipboard"
+                  onSelect={() => run(() => ops.copyLastResponse())}
+                >
+                  <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="flex-1">Copy last response</span>
+                </CommandItem>
                 <CommandItem value="Open settings" onSelect={() => run(() => onOpenSettings())}>
                   <Settings className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="flex-1">Open settings</span>
@@ -216,6 +228,23 @@ export default function CommandPalette({
                   <SunMoon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="flex-1">Toggle theme</span>
                 </CommandItem>
+              </CommandGroup>
+            )}
+
+            {showActions && onProjectSelect && (projects?.length ?? 0) > 1 && (
+              <CommandGroup heading="Switch project">
+                {(projects ?? [])
+                  .filter((project) => project.projectId !== projectId)
+                  .map((project) => (
+                    <CommandItem
+                      key={project.projectId}
+                      value={`Switch project ${project.displayName ?? project.projectId}`}
+                      onSelect={() => run(() => onProjectSelect(project))}
+                    >
+                      <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="flex-1 truncate">{project.displayName ?? project.projectId}</span>
+                    </CommandItem>
+                  ))}
               </CommandGroup>
             )}
 

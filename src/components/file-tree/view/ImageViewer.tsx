@@ -59,7 +59,7 @@ export default function ImageViewer({ file, onClose }: ImageViewerProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="mx-4 max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-lg bg-white shadow-xl dark:bg-gray-800">
+      <div className="mx-4 max-h-[90dvh] w-full max-w-4xl overflow-hidden rounded-lg bg-white shadow-xl dark:bg-gray-800">
         <div className="flex items-center justify-between border-b p-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{file.name}</h3>
           <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
@@ -77,7 +77,7 @@ export default function ImageViewer({ file, onClose }: ImageViewerProps) {
             <img
               src={imageUrl}
               alt={file.name}
-              className="max-h-[70vh] max-w-full rounded-lg object-contain shadow-md"
+              className="max-h-[70dvh] max-w-full rounded-lg object-contain shadow-md"
             />
           )}
           {!loading && !imageUrl && (

@@ -90,10 +90,10 @@ export default function NewWorktreeModal({
       }}
     >
       <DialogContent className="max-w-md overflow-hidden bg-card">
-        <DialogTitle>New Worktree</DialogTitle>
+        <DialogTitle>New worktree</DialogTitle>
         <div className="p-6">
           <h3 id="new-worktree-title" className="mb-1 text-lg font-semibold text-foreground">
-            New Worktree
+            New worktree
           </h3>
           <p className="mb-4 text-sm text-muted-foreground">
             Check out a branch in its own folder and work on it in parallel.

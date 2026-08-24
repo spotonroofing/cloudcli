@@ -10,7 +10,7 @@ type TaskMasterPanelProps = {
   isVisible: boolean;
 };
 
-const PRD_SAVE_MESSAGE = 'PRD saved successfully!';
+const PRD_SAVE_MESSAGE = 'PRD saved';
 
 export default function TaskMasterPanel({ isVisible }: TaskMasterPanelProps) {
   const { tasks, currentProject, refreshTasks } = useTaskMaster();

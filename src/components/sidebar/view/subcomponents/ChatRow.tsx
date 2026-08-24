@@ -103,12 +103,12 @@ export default function ChatRow({
               else if (event.key === 'Escape') setIsEditing(false);
             }}
             onClick={(event) => event.stopPropagation()}
-            className="w-full min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-base text-foreground md:text-xs focus:outline-none focus:ring-1 focus:ring-primary"
             autoFocus
           />
           <button
             type="button"
-            className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="touch-hit relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             onClick={(event) => {
               event.stopPropagation();
               saveRename();
@@ -119,7 +119,7 @@ export default function ChatRow({
           </button>
           <button
             type="button"
-            className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="touch-hit relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             onClick={(event) => {
               event.stopPropagation();
               setIsEditing(false);

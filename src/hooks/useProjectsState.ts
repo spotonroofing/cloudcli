@@ -980,7 +980,11 @@ export function useProjectsState({
       }
     }
 
-    if (selectedSession?.id === sessionId) {
+    // A row click can set the session before its owning project is known
+    // (Chats-feed rows for projects outside the loaded list, e.g. the scratch
+    // project): with no selected project the chat surface cannot render, so
+    // fall through to the backend lookup instead of stopping here.
+    if (selectedSession?.id === sessionId && selectedProject) {
       return;
     }
 

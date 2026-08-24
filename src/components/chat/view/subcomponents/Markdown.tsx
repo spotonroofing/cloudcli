@@ -13,6 +13,7 @@ import oneLight from 'react-syntax-highlighter/dist/esm/styles/prism/one-light';
 import { useTranslation } from 'react-i18next';
 
 import MermaidDiagram from '../../../code-editor/view/subcomponents/markdown/MermaidDiagram';
+import { ActionSwapIcon } from '../../../../shared/view/beui/ActionSwap';
 import { normalizeInlineCodeFences } from '../../utils/chatFormatting';
 import { copyTextToClipboard } from '../../../../utils/clipboard';
 import { usePaletteOps } from '../../../../contexts/PaletteOpsContext';
@@ -171,12 +172,14 @@ const CodeBlock = ({ node: _node, className, children, forceBlock, ...props }: C
           }
           className={`ml-auto grid size-7 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${copied
             ? 'text-emerald-600 dark:text-emerald-400'
-            : 'text-muted-foreground opacity-0 hover:bg-background/70 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100'
+            : 'text-muted-foreground hover:bg-background/70 hover:text-foreground focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100'
             }`}
           title={copied ? t('codeBlock.copied') : t('codeBlock.copyCode')}
           aria-label={copied ? t('codeBlock.copied') : t('codeBlock.copyCode')}
         >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          <ActionSwapIcon value={copied ? 'copied' : 'copy'} className="size-3.5">
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          </ActionSwapIcon>
         </button>
       </div>
 

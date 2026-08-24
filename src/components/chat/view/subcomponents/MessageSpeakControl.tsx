@@ -1,5 +1,6 @@
 import { Volume2, Loader2, Square } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { ActionSwapIcon } from '../../../../shared/view/beui/ActionSwap';
 import { useTts } from '../../hooks/useTts';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
 
@@ -17,15 +18,14 @@ const MessageSpeakControl = ({ content }: { content: string }) => {
 
   return (
     // Hover-gated with the copy button beside it, except mid-playback where
-    // the stop control must stay reachable; always visible on touch via the
-    // global (hover:none)(pointer:coarse) override.
+    // the stop control must stay reachable; always visible on touch via the md: fence.
     <span className={`relative inline-flex ${
       state === 'playing' || state === 'loading'
         ? ''
-        : 'opacity-0 transition-opacity duration-200 group-hover:opacity-100'
+        : 'transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100'
     }`}>
       {error && (
-        <span className="absolute bottom-full left-1/2 z-10 mb-1 max-w-[240px] -translate-x-1/2 whitespace-normal rounded bg-red-600 px-2 py-1 text-center text-xs text-white shadow-lg">
+        <span className="absolute bottom-full left-1/2 z-10 mb-1 max-w-[240px] -translate-x-1/2 whitespace-normal rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-center text-xs text-destructive shadow-lg">
           {error}
         </span>
       )}
@@ -34,15 +34,17 @@ const MessageSpeakControl = ({ content }: { content: string }) => {
         onClick={toggle}
         title={title}
         aria-label={title}
-        className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+        className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-muted-foreground transition-colors hover:text-foreground"
       >
-        {state === 'playing' ? (
-          <Square className="h-3.5 w-3.5" />
-        ) : state === 'loading' ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Volume2 className="h-3.5 w-3.5" />
-        )}
+        <ActionSwapIcon value={state} className="h-3.5 w-3.5">
+          {state === 'playing' ? (
+            <Square className="h-3.5 w-3.5" />
+          ) : state === 'loading' ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Volume2 className="h-3.5 w-3.5" />
+          )}
+        </ActionSwapIcon>
       </button>
     </span>
   );

@@ -379,6 +379,8 @@ function AppContentInner() {
 
       <CommandPalette
         selectedProject={selectedProject}
+        projects={projects}
+        onProjectSelect={handleProjectSelect}
         onStartNewChat={handleNewSession}
         onOpenSettings={() => openSettings()}
         // Desktop is chat-only (phase 2 chrome strip): no tab navigation from the palette.

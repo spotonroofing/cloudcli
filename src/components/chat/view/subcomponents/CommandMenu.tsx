@@ -41,8 +41,7 @@ type CommandMenuRow = {
 const menuBaseStyle: CSSProperties = {
   maxHeight: '360px',
   overflowY: 'auto',
-  borderRadius: '8px',
-  boxShadow: '0 24px 60px rgba(2, 6, 23, 0.38), 0 0 0 1px rgba(148, 163, 184, 0.12)',
+  borderRadius: 'var(--radius)',
   zIndex: 1000,
   padding: '6px',
   transition: 'opacity 150ms ease-in-out, transform 150ms ease-in-out',
@@ -96,7 +95,7 @@ const getMenuPosition = (position: { top: number; left: number; bottom?: number 
       right: '16px',
       width: 'auto',
       maxWidth: 'calc(100vw - 32px)',
-      maxHeight: `min(54vh, calc(100dvh - ${anchorBottom}px - ${MENU_EDGE_GAP}px))`,
+      maxHeight: `min(54dvh, calc(100dvh - ${anchorBottom}px - ${MENU_EDGE_GAP}px))`,
     };
   }
   const anchorBottom = Math.min(Math.max(MENU_EDGE_GAP, position.bottom ?? 90), maxAnchorBottom);
@@ -218,7 +217,7 @@ export default function CommandMenu({
     return renderInPortal(
       <div
         ref={menuRef}
-        className="command-menu command-menu-empty border border-border bg-popover/95 text-sm text-muted-foreground"
+        className="command-menu command-menu-empty border border-border bg-popover/95 text-sm text-muted-foreground shadow-lg"
         style={{
           ...menuBaseStyle,
           ...menuPosition,
@@ -239,7 +238,7 @@ export default function CommandMenu({
       ref={menuRef}
       role="listbox"
       aria-label="Available commands"
-      className="command-menu border border-border bg-popover/95 text-popover-foreground"
+      className="command-menu border border-border bg-popover/95 text-popover-foreground shadow-lg"
       style={{ ...menuBaseStyle, ...menuPosition, opacity: 1, transform: 'translateY(0)' }}
     >
       {orderedNamespaces.map((namespace) => (

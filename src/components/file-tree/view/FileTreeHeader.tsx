@@ -73,7 +73,7 @@ export default function FileTreeHeader({
               <Button
                 variant="ghost"
                 size="sm"
-                className="relative h-7 w-7 p-0"
+                className="touch-hit relative h-7 w-7 p-0"
                 onClick={() => uploadInputRef.current?.click()}
                 title={
                   isUploading
@@ -107,7 +107,7 @@ export default function FileTreeHeader({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="touch-hit relative h-7 w-7 p-0"
               onClick={onNewFile}
               title={t('fileTree.newFile', 'New File (Cmd+N)')}
               aria-label={t('fileTree.newFile', 'New File (Cmd+N)')}
@@ -120,7 +120,7 @@ export default function FileTreeHeader({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="touch-hit relative h-7 w-7 p-0"
               onClick={onNewFolder}
               title={t('fileTree.newFolder', 'New Folder (Cmd+Shift+N)')}
               aria-label={t('fileTree.newFolder', 'New Folder (Cmd+Shift+N)')}
@@ -133,7 +133,7 @@ export default function FileTreeHeader({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="touch-hit relative h-7 w-7 p-0"
               onClick={onRefresh}
               title={t('fileTree.refresh', 'Refresh')}
               aria-label={t('fileTree.refresh', 'Refresh')}
@@ -146,7 +146,7 @@ export default function FileTreeHeader({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="touch-hit relative h-7 w-7 p-0"
               onClick={onCollapseAll}
               title={t('fileTree.collapseAll', 'Collapse All')}
               aria-label={t('fileTree.collapseAll', 'Collapse All')}
@@ -160,7 +160,7 @@ export default function FileTreeHeader({
           <Button
             variant={viewMode === 'simple' ? 'default' : 'ghost'}
             size="sm"
-            className="h-7 w-7 p-0"
+            className="touch-hit relative h-7 w-7 p-0"
             onClick={() => onViewModeChange('simple')}
             title={t('fileTree.simpleView')}
             aria-label={t('fileTree.simpleView')}
@@ -170,7 +170,7 @@ export default function FileTreeHeader({
           <Button
             variant={viewMode === 'compact' ? 'default' : 'ghost'}
             size="sm"
-            className="h-7 w-7 p-0"
+            className="touch-hit relative h-7 w-7 p-0"
             onClick={() => onViewModeChange('compact')}
             title={t('fileTree.compactView')}
             aria-label={t('fileTree.compactView')}
@@ -180,7 +180,7 @@ export default function FileTreeHeader({
           <Button
             variant={viewMode === 'detailed' ? 'default' : 'ghost'}
             size="sm"
-            className="h-7 w-7 p-0"
+            className="touch-hit relative h-7 w-7 p-0"
             onClick={() => onViewModeChange('detailed')}
             title={t('fileTree.detailedView')}
             aria-label={t('fileTree.detailedView')}
@@ -204,7 +204,7 @@ export default function FileTreeHeader({
           <Button
             variant="ghost"
             size="sm"
-            className="absolute right-0.5 top-1/2 h-5 w-5 -translate-y-1/2 p-0 hover:bg-accent"
+            className="touch-hit absolute right-0.5 top-1/2 h-5 w-5 -translate-y-1/2 p-0 hover:bg-accent"
             onClick={() => onSearchQueryChange('')}
             title={t('fileTree.clearSearch')}
             aria-label={t('fileTree.clearSearch')}

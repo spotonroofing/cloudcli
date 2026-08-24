@@ -23,12 +23,12 @@ export default function GitRepositoryErrorState({
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-muted-foreground">
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
-        <GitBranch className="h-8 w-8 opacity-40" />
+      <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+        <GitBranch className="h-6 w-6 text-muted-foreground" />
       </div>
       {showInitAction ? (
         <>
-          <h3 className="mb-3 text-center text-lg font-medium text-foreground">No git repository</h3>
+          <h3 className="mb-3 text-center text-base font-medium text-foreground">No git repository</h3>
           <p className="mb-6 max-w-md text-center text-sm leading-relaxed">
             This project is not a git repository yet. Initialize one to start tracking changes and use source control features.
           </p>
@@ -57,7 +57,7 @@ export default function GitRepositoryErrorState({
         </>
       ) : (
         <>
-          <h3 className="mb-3 text-center text-lg font-medium text-foreground">{error}</h3>
+          <h3 className="mb-3 text-center text-base font-medium text-foreground">{error}</h3>
           {details && (
             <p className="max-w-md text-center text-sm leading-relaxed">{details}</p>
           )}

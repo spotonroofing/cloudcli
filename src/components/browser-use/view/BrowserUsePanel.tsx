@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';
-import { Badge, Button } from '../../../shared/view/ui';
+import { Badge, Button, type BadgeStatus } from '../../../shared/view/ui';
 import { authenticatedFetch } from '../../../utils/api';
 
 type BrowserUseStatus = {
@@ -93,15 +93,13 @@ function formatAction(action: string | null): string {
   return action.replace(/_/g, ' ').replace(/:/g, ': ');
 }
 
-function getStatusTone(status: BrowserUseSession['status']): string {
-  if (status === 'ready') {
-    return 'border-primary/30 bg-primary/5 text-foreground';
-  }
-  if (status === 'stopped') {
-    return 'border-border bg-muted text-muted-foreground';
-  }
-  return 'border-border bg-background text-muted-foreground';
-}
+const SESSION_STATUS_BADGE: Record<BrowserUseSession['status'], { status: BadgeStatus; label: string }> = {
+  ready: { status: 'success', label: 'Ready' },
+  stopped: { status: 'neutral', label: 'Stopped' },
+  unavailable: { status: 'danger', label: 'Unavailable' },
+};
+
+const IDLE_SESSION_BADGE: { status: BadgeStatus; label: string } = { status: 'neutral', label: 'Idle' };
 
 function getRuntimeTone(status: BrowserUseStatus | null, installing: boolean): string {
   if (!status?.enabled) return 'border-border bg-muted text-muted-foreground';
@@ -135,6 +133,10 @@ export default function BrowserUsePanel({ isVisible }: BrowserUsePanelProps) {
     () => sessions.find((session) => session.id === selectedSessionId) || sessions[0] || null,
     [selectedSessionId, sessions],
   );
+
+  const selectedSessionBadge = selectedSession
+    ? SESSION_STATUS_BADGE[selectedSession.status]
+    : IDLE_SESSION_BADGE;
 
   const activeSessions = sessions.filter((session) => session.status === 'ready');
   const needsBrowserBinaries = Boolean(status?.enabled && (!status.playwrightInstalled || !status.chromiumInstalled));
@@ -259,7 +261,7 @@ export default function BrowserUsePanel({ isVisible }: BrowserUsePanelProps) {
       <div className="w-full max-w-2xl rounded-md border border-border bg-card/40 p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-background">
-            <MonitorPlay className="h-5 w-5 text-primary" />
+            <MonitorPlay className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="min-w-0">
             <div className="text-sm font-semibold text-foreground">
@@ -415,8 +417,8 @@ export default function BrowserUsePanel({ isVisible }: BrowserUsePanelProps) {
             <div className="min-h-0 flex-1 overflow-auto bg-muted/20 p-4">
               <div className="mx-auto flex min-h-[500px] max-w-7xl flex-col overflow-hidden rounded-md border border-border bg-background shadow-sm">
                 <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2">
-                  <Badge variant="outline" className={selectedSession ? cn('text-[10px]', getStatusTone(selectedSession.status)) : 'text-[10px]'}>
-                    {selectedSession?.status || 'empty'}
+                  <Badge status={selectedSessionBadge.status} size="sm">
+                    {selectedSessionBadge.label}
                   </Badge>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-foreground">

@@ -93,7 +93,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     }
 
     if (!gitEmailPattern.test(gitEmail)) {
-      setErrorMessage('Please enter a valid email address.');
+      setErrorMessage('Enter a valid email address.');
       return;
     }
 
@@ -148,7 +148,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
   return (
     <>
-      <div className="relative h-screen overflow-y-auto bg-background">
+      <div className="relative h-dvh overflow-y-auto bg-background">
         <div aria-hidden className="pointer-events-none fixed inset-0">
           <div className="absolute -top-40 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
           <div className="absolute -bottom-32 -left-24 h-[26rem] w-[26rem] rounded-full bg-primary/5 blur-3xl" />
@@ -159,7 +159,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           <div className="w-full py-6">
           <OnboardingStepProgress currentStep={currentStep} />
 
-          <div className="rounded-2xl border border-border/70 bg-card/90 p-6 shadow-[0_24px_60px_-20px_hsl(var(--foreground)/0.18)] ring-1 ring-foreground/5 backdrop-blur-xl">
+          <div className="rounded-lg border border-border/70 bg-card/90 p-6 shadow-[0_24px_60px_-20px_hsl(var(--foreground)/0.18)] ring-1 ring-foreground/5 backdrop-blur-xl">
             {currentStep === 0 ? (
               <GitConfigurationStep
                 gitName={gitName}

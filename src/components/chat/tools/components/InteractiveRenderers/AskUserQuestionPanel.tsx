@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import type { PermissionPanelProps } from '../../configs/permissionPanelRegistry';
 import type { Question } from '../../../types/types';
 import { RadioDot } from '../../../../../shared/view/beui/BeuiRadio';
-import { SPRING_PRESS } from '../../../../../shared/view/beui/ease';
+import { EASE_OUT_CSS, SPRING_PRESS } from '../../../../../shared/view/beui/ease';
 import { Tooltip } from '../../../../../shared/view/ui';
 
 /**
@@ -190,14 +190,14 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
       ref={containerRef}
       tabIndex={-1}
       onKeyDown={handleKeyDown}
-      className={`w-full outline-none transition-all duration-500 ease-out ${
+      className={`w-full outline-none transition-all duration-300 ${
         mounted ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'
       }`}
       data-slot="ask-user-question"
     >
       <div className="overflow-hidden rounded-lg border border-border bg-card shadow-lg">
         {/* Header + question */}
-        <div key={currentStep} className="px-4 pb-1 pt-3" style={reduce ? undefined : { animation: 'bui-fade-up 350ms cubic-bezier(0.23,1,0.32,1) both' }}>
+        <div key={currentStep} className="px-4 pb-1 pt-3" style={reduce ? undefined : { animation: `bui-fade-up 350ms ${EASE_OUT_CSS} both` }}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex items-center gap-2">
