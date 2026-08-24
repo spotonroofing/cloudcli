@@ -117,7 +117,10 @@ export const authenticatedFetch = (url, options = {}) => {
     if (refreshedToken) {
       storeAuthToken(refreshedToken);
     }
-    if (response.headers.get('X-Auth-Error')) {
+    // Only a request that actually carried a token can expire a session; a
+    // token-less boot request rejected by the server must not surface the
+    // "session expired" message to a visitor who never logged in.
+    if (token && response.headers.get('X-Auth-Error')) {
       expireAuthSession();
     }
     return response;

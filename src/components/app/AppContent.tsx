@@ -64,8 +64,9 @@ function AppContentInner() {
   const navigate = useNavigate();
   const location = useLocation();
   const { sessionId, projectId } = useParams<{ sessionId?: string; projectId?: string }>();
-  // /standalone hosts project-less chats (backed by the hidden scratch repo).
-  const standaloneMode = location.pathname === '/standalone';
+  // /standalone hosts project-less chats (backed by the hidden scratch repo);
+  // /standalone/:sessionId deep-links one of them.
+  const standaloneMode = location.pathname === '/standalone' || location.pathname.startsWith('/standalone/');
   // Scoped tab (`/project/:projectId`): session navigation keeps the prefix so
   // the tab stays docked to its project.
   const projectBasePath = projectId ? `/project/${projectId}` : '';

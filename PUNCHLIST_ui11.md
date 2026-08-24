@@ -100,10 +100,10 @@ Done check: grep shows no references to the old mark asset; the new mark renders
 
 Goal: dev is clean and the whole round holds together. Dependencies: phases 1 through 7.
 
-- [ ] Delete the stray "proj" test project on dev, and any throwaway project phase 3 created, from the dev DB and filesystem.
-- [ ] A project-less chat at phone width no longer hits the project gate.
-- [ ] `/standalone/<id>` deep links render the session instead of a blank page.
-- [ ] Round audit: walk every surface this round touched on dev at desktop and phone viewports, fix regressions, update DESIGN.md with any new element, and list findings in the summary.
+- [x] Delete the stray "proj" test project on dev, and any throwaway project phase 3 created, from the dev DB and filesystem.
+- [x] A project-less chat at phone width no longer hits the project gate.
+- [x] `/standalone/<id>` deep links render the session instead of a blank page.
+- [x] Round audit: walk every surface this round touched on dev at desktop and phone viewports, fix regressions, update DESIGN.md with any new element, and list findings in the summary.
 
 Done check: the dev DB shows no "proj" project and no throwaway; a project-less chat opens at a phone viewport; `/standalone/<id>` for a real dev session renders its messages; the audit list is in the summary. Fresh-context subagent verification. Commit.
 

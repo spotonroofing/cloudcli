@@ -447,7 +447,11 @@ export const sessionsService = {
     // Standalone chats bind to the scratch repo for their working directory
     // but present as project-less: a pseudo project keeps the chat runnable
     // (it needs a path) without surfacing scratch as a real project anywhere.
-    if (isScratchProjectPath(projectPath)) {
+    // Sessions with no project_path at all (discovered rows, detached chats)
+    // present the same way — without a project the chat surface can only show
+    // the project gate, so they borrow the scratch pseudo project too.
+    if (projectPath === null || isScratchProjectPath(projectPath)) {
+      const standalonePath = projectPath ?? getScratchProjectPath();
       return {
         sessionId: session.session_id,
         provider: session.provider as LLMProvider,
@@ -461,8 +465,8 @@ export const sessionsService = {
         isArchived: Boolean(session.isArchived),
         project: {
           projectId: '__standalone__',
-          path: projectPath as string,
-          fullPath: projectPath as string,
+          path: standalonePath,
+          fullPath: standalonePath,
           displayName: 'No project',
           isStarred: false,
           isArchived: false,
