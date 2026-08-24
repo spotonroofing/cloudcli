@@ -168,7 +168,10 @@ function Badge({
 
   return (
     <motion.span
-      layout
+      // "size", not full layout: content swaps still animate the badge's width,
+      // but position changes (a divider drag re-laying-out the header) apply
+      // instantly — a FLIP on position made the tag visibly trail the header.
+      layout="size"
       transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
       className={cn(
         'relative inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap rounded-md border font-medium tabular-nums',

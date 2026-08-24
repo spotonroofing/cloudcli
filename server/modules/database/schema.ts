@@ -129,6 +129,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- 1 when the first message was an auto-sent boot prompt (/planner or
     -- /worker New Session); the client hides exactly those prologues.
     booted INTEGER DEFAULT 0,
+    -- Boot lifecycle, persisted so a restart cannot reopen an aborted boot as
+    -- a plain chat: NULL = not a boot session, 'pending' = boot prompt sent,
+    -- 'ready' = boot turn completed, 'failed' = boot errored or was aborted
+    -- (pending rows are swept to 'failed' at server start).
+    boot_state TEXT,
     isArchived BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -181,6 +186,40 @@ CREATE TABLE IF NOT EXISTS provider_models (
  * composer, so no FK — keys outlive and predate session rows. `updated_at` is
  * written as an ISO string by the drafts route.
  */
+/**
+ * Watchdog chain and dispatched-run registries, persisted so a server restart
+ * keeps reporting a stopped chain as stopped instead of falling back to
+ * "finished". Chain runners and dispatched runs are external processes that
+ * survive restarts, so rows are restored as-is; liveness is judged by events.
+ * Timestamps are epoch milliseconds.
+ */
+export const WATCHDOG_CHAINS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS watchdog_chains (
+    slug TEXT PRIMARY KEY,
+    project_path TEXT NOT NULL,
+    phases INTEGER,
+    current_phase INTEGER,
+    status TEXT NOT NULL,
+    started_at INTEGER NOT NULL,
+    last_event_at INTEGER NOT NULL,
+    last_summary_tail TEXT
+);
+`;
+
+export const WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS watchdog_dispatch_runs (
+    session_id TEXT PRIMARY KEY,
+    project_path TEXT NOT NULL,
+    chain_slug TEXT,
+    provider TEXT NOT NULL,
+    model TEXT,
+    started_at INTEGER NOT NULL,
+    last_event_at INTEGER NOT NULL,
+    stuck_wake_sent INTEGER NOT NULL DEFAULT 0,
+    ended INTEGER NOT NULL DEFAULT 0
+);
+`;
+
 export const COMPOSER_DRAFTS_TABLE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS composer_drafts (
     draft_key TEXT PRIMARY KEY,
@@ -239,4 +278,8 @@ CREATE INDEX IF NOT EXISTS idx_provider_models_provider_order
 ON provider_models(provider, sort_order, id);
 
 ${COMPOSER_DRAFTS_TABLE_SCHEMA_SQL}
+
+${WATCHDOG_CHAINS_TABLE_SCHEMA_SQL}
+
+${WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL}
 `;

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { RefObject } from 'react';
 
 import type { ChatMessage } from '../../types/types';
@@ -103,6 +103,75 @@ function ChatMessagesPane({
     animateEpochRef.current = { key: sessionKey, at: Date.now() };
   }
   const animateFrom = animateEpochRef.current.at;
+
+  // Replay guard: a message whose content this pane has already shown must not
+  // pop in again. Mid-turn the same logical row remounts under a new React key
+  // (optimistic user echo swapped for the server echo, streamed text swapped
+  // for the transcript row), which resets MessageComponent's per-mount latch —
+  // so the guard tracks what was rendered, not what was mounted. Signatures
+  // count occurrences so a genuinely new duplicate (same text sent twice)
+  // still animates.
+  // Length + prefix, not full text: streamed turns record one signature per
+  // reveal commit, so full-text keys would grow the registry by the whole
+  // message per frame. Same type + length + first 200 chars only collides on
+  // effectively identical messages, which occurrence counting already handles.
+  const messageSignature = (message: ChatMessage): string => {
+    if (message.toolId) return `${message.type}:tool:${message.toolId}`;
+    const content = typeof message.content === 'string' ? message.content.trim() : '';
+    return `${message.type}:${message.isThinking ? 'think' : 'text'}:${content.length}:${content.slice(0, 200)}`;
+  };
+  const seenSignaturesRef = useRef<{ key: string | null; counts: Map<string, number> }>({
+    key: sessionKey,
+    counts: new Map(),
+  });
+  if (seenSignaturesRef.current.key !== sessionKey) {
+    seenSignaturesRef.current = { key: sessionKey, counts: new Map() };
+  }
+  const alreadySeenMap = useMemo(() => {
+    const seen = seenSignaturesRef.current.counts;
+    const occurrences = new Map<string, number>();
+    const map = new WeakMap<ChatMessage, boolean>();
+    const visit = (message: ChatMessage) => {
+      const signature = messageSignature(message);
+      const index = occurrences.get(signature) ?? 0;
+      occurrences.set(signature, index + 1);
+      map.set(message, index < (seen.get(signature) ?? 0));
+    };
+    for (const item of groupedVisibleMessages) {
+      if (isToolGroupItem(item)) {
+        item.messages.forEach(visit);
+      } else {
+        visit(item);
+      }
+    }
+    return map;
+  }, [groupedVisibleMessages]);
+  useEffect(() => {
+    const seen = seenSignaturesRef.current.counts;
+    const occurrences = new Map<string, number>();
+    const record = (message: ChatMessage) => {
+      const signature = messageSignature(message);
+      occurrences.set(signature, (occurrences.get(signature) ?? 0) + 1);
+    };
+    for (const item of groupedVisibleMessages) {
+      if (isToolGroupItem(item)) {
+        item.messages.forEach(record);
+      } else {
+        record(item);
+      }
+    }
+    for (const [signature, count] of occurrences) {
+      if (count > (seen.get(signature) ?? 0)) seen.set(signature, count);
+    }
+    // Streaming partials add an entry per reveal commit; cap the registry so a
+    // marathon session stays bounded. Evicted entries are ancient rows whose
+    // remount-replay risk is nil (remounts happen at the live edge).
+    while (seen.size > 4000) {
+      seen.delete(seen.keys().next().value as string);
+    }
+  }, [groupedVisibleMessages]);
+  // A seen row gets epoch 0: both row components treat a falsy epoch as "render statically".
+  const epochFor = (message: ChatMessage) => (alreadySeenMap.get(message) ? 0 : animateFrom);
 
   // Stable, deterministic keys for the messages rendered this pass.
   //
@@ -237,7 +306,7 @@ function ChatMessagesPane({
                   <ToolGroupContainer
                     key={`tool-group-${getMessageKey(item.messages[0])}`}
                     group={item}
-                    animateFrom={animateFrom}
+                    animateFrom={epochFor(item.messages[0])}
                     prevMessage={groupPrevMessage}
                     createDiff={createDiff}
                     getMessageKey={getMessageKey}
@@ -259,7 +328,7 @@ function ChatMessagesPane({
                 <MessageComponent
                   key={getMessageKey(item)}
                   message={item}
-                  animateFrom={animateFrom}
+                  animateFrom={epochFor(item)}
                   prevMessage={messagePrevMessage}
                   createDiff={createDiff}
                   onFileOpen={onFileOpen}

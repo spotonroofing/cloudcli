@@ -387,6 +387,13 @@ async function startServer() {
             // Start watching the projects folder for changes
             await initializeSessionsWatcher();
 
+            // A boot mid-flight when the previous process died can never
+            // complete; persist the failure before any client reopens it.
+            const failedBoots = sessionsDb.failPendingBoots();
+            if (failedBoots > 0) {
+                console.log(`[Boot] Marked ${failedBoots} interrupted boot(s) as failed`);
+            }
+
             // Watchdog + scheduler (spec B3): zero-token monitoring of
             // dispatched runs, resource thresholds, weekly push self-test.
             watchdogService.start();

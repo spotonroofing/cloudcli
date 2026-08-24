@@ -35,6 +35,10 @@ type ChatRun = {
   writer: ChatSessionWriter;
   startedAt: number;
   completedAt: number | null;
+  /** True once any error event streamed during the run (boot-outcome signal). */
+  sawError: boolean;
+  /** True when the terminal complete came from the abort path. */
+  aborted: boolean;
 };
 
 /**
@@ -85,6 +89,7 @@ async function broadcastCanonicalSessionUpsert(appSessionId: string): Promise<vo
       // direct/dispatch/external runs slip into chat lists as null-origin rows.
       origin: row.origin ?? null,
       booted: Boolean(row.booted),
+      bootState: row.boot_state ?? null,
       messageCount: 0,
       lastActivity: row.updated_at ?? row.created_at ?? new Date().toISOString(),
     },
@@ -139,6 +144,10 @@ function decorateAndRecordEvent(run: ChatRun, message: NormalizedMessage): Norma
   }
 
   run.lastSeq += 1;
+
+  if (message.kind === 'error') {
+    run.sawError = true;
+  }
 
   const outbound: NormalizedMessage = {
     ...message,
@@ -233,6 +242,8 @@ export const chatRunRegistry = {
       writer: null as unknown as ChatSessionWriter,
       startedAt: Date.now(),
       completedAt: null,
+      sawError: false,
+      aborted: false,
     };
 
     run.writer = new ChatSessionWriter({
@@ -299,6 +310,9 @@ export const chatRunRegistry = {
       return;
     }
 
+    if (opts.aborted) {
+      run.aborted = true;
+    }
     run.writer.sendComplete(opts);
   },
 

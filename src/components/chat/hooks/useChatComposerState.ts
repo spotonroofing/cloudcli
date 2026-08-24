@@ -685,11 +685,19 @@ export function useChatComposerState({
   // refreshed list lands (or fails again when the refetch comes back dry).
   const [bootRetryTick, setBootRetryTick] = useState(0);
   const retryBoot = useCallback(() => {
-    setBootState((previous) => ({ ...previous, phase: 'booting', attempt: previous.attempt + 1 }));
+    setBootState((previous) => ({
+      ...previous,
+      phase: 'booting',
+      // A persisted-failed boot retried from a reopened session has no local
+      // boot record; bind the attempt to the open session so the boot view
+      // tracks it and the resend targets the same session.
+      sessionId: previous.sessionId ?? currentSessionId ?? null,
+      attempt: previous.attempt + 1,
+    }));
     pendingBootRetryRef.current = { seqAtRequest: commandsFetchSeq };
     setBootRetryTick((tick) => tick + 1);
     refreshSlashCommands();
-  }, [commandsFetchSeq, refreshSlashCommands, setBootState]);
+  }, [commandsFetchSeq, currentSessionId, refreshSlashCommands, setBootState]);
 
   useEffect(() => {
     const pending = pendingBootRetryRef.current;

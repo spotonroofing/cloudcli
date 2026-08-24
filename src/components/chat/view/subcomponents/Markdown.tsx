@@ -6,7 +6,10 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+// Direct style-file imports: the styles/prism index re-exports every theme
+// (worse for the bundle) and node's test runner can't parse it as CJS.
+import oneDark from 'react-syntax-highlighter/dist/esm/styles/prism/one-dark';
+import oneLight from 'react-syntax-highlighter/dist/esm/styles/prism/one-light';
 import { useTranslation } from 'react-i18next';
 
 import MermaidDiagram from '../../../code-editor/view/subcomponents/markdown/MermaidDiagram';
@@ -180,10 +183,13 @@ const markdownComponents = {
   ul: ({ children }: { children?: React.ReactNode }) => (
     <ul className="mb-2 list-outside list-disc space-y-1 pl-5 marker:text-current last:mb-0">{children}</ul>
   ),
-  ol: ({ children }: { children?: React.ReactNode }) => (
-    // pl-6, not pl-5: two-digit markers overflow a 1.25rem gutter and the
-    // chat row's `contain: paint` clips them to their last digit.
-    <ol className="mb-2 list-outside list-decimal space-y-1 pl-6 marker:text-current last:mb-0">{children}</ol>
+  ol: ({ start, children }: { start?: number; children?: React.ReactNode }) => (
+    // pl-8: outside markers hang left of the list's content edge, and the chat
+    // row's paint containment (content-visibility: auto) clips anything past
+    // the row's border box — a 1.5rem gutter cut "20." down to "!0.". 2rem
+    // holds two- and three-digit markers. `start` passes through so a list
+    // resuming at 10 keeps its real numbers.
+    <ol start={start} className="mb-2 list-outside list-decimal space-y-1 pl-8 marker:text-current last:mb-0">{children}</ol>
   ),
   li: ({ children }: { children?: React.ReactNode }) => <li className="[&>div:last-child]:mb-0 [&>div]:mb-1">{children}</li>,
   table: ({ children }: { children?: React.ReactNode }) => (

@@ -62,6 +62,8 @@ type SessionDetails = {
   origin: string | null;
   /** True when the session's first message was an auto-sent boot prompt; boot-prologue hiding keys off it. */
   booted: boolean;
+  /** Persisted boot lifecycle: null | 'pending' | 'ready' | 'failed'. */
+  bootState: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   lastActivity: string | null;
@@ -452,6 +454,7 @@ export const sessionsService = {
         summary: session.custom_name?.trim() || '',
         origin: session.origin ?? null,
         booted: Boolean(session.booted),
+        bootState: session.boot_state ?? null,
         createdAt: session.created_at ?? null,
         updatedAt: session.updated_at ?? null,
         lastActivity: session.updated_at ?? session.created_at ?? null,
@@ -475,6 +478,7 @@ export const sessionsService = {
       summary: session.custom_name?.trim() || '',
       origin: session.origin ?? null,
       booted: Boolean(session.booted),
+      bootState: session.boot_state ?? null,
       createdAt: session.created_at ?? null,
       updatedAt: session.updated_at ?? null,
       lastActivity: session.updated_at ?? session.created_at ?? null,

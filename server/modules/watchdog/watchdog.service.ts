@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { appConfigDb, sessionsDb } from '@/modules/database/index.js';
+import { appConfigDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
 import { providerRuntimeService, providerTokenUsageService } from '@/modules/providers/index.js';
 import { sendFleetNotification } from '@/modules/notifications/index.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
@@ -94,6 +94,7 @@ class WatchdogService {
     if (this.sweeper) {
       return;
     }
+    this.hydrateFromDb();
     this.sweeper = setInterval(() => {
       void this.sweep();
     }, SWEEP_INTERVAL_MS);
@@ -103,10 +104,87 @@ class WatchdogService {
     log('started (sweep every 5m, weekly self-test scheduled)');
   }
 
+  /**
+   * Restores both registries from the DB at startup. Chain runners and
+   * dispatched runs are external processes that survive a server restart, so
+   * records come back exactly as last known — a live run keeps posting events
+   * and stays current; a dead one is caught by the stuck sweep. What this
+   * fixes: a stopped/failed chain no longer reads "finished" after a restart.
+   */
+  private hydrateFromDb(): void {
+    try {
+      for (const row of watchdogDb.listChains()) {
+        this.chains.set(row.slug, {
+          slug: row.slug,
+          projectPath: row.project_path,
+          phases: row.phases,
+          currentPhase: row.current_phase,
+          status: row.status as ChainStatus,
+          startedAt: row.started_at,
+          lastEventAt: row.last_event_at,
+          lastSummaryTail: row.last_summary_tail,
+        });
+      }
+      for (const row of watchdogDb.listDispatchRuns()) {
+        this.dispatchRuns.set(row.session_id, {
+          sessionId: row.session_id,
+          projectPath: row.project_path,
+          chainSlug: row.chain_slug,
+          provider: row.provider,
+          model: row.model,
+          startedAt: row.started_at,
+          lastEventAt: row.last_event_at,
+          stuckWakeSent: Boolean(row.stuck_wake_sent),
+          ended: Boolean(row.ended),
+        });
+      }
+      if (this.chains.size || this.dispatchRuns.size) {
+        log(`hydrated from DB: ${this.chains.size} chain(s), ${this.dispatchRuns.size} dispatched run(s)`);
+      }
+    } catch (error) {
+      log(`hydration failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private persistChain(chain: ChainRecord): void {
+    try {
+      watchdogDb.upsertChain({
+        slug: chain.slug,
+        project_path: chain.projectPath,
+        phases: chain.phases,
+        current_phase: chain.currentPhase,
+        status: chain.status,
+        started_at: chain.startedAt,
+        last_event_at: chain.lastEventAt,
+        last_summary_tail: chain.lastSummaryTail,
+      });
+    } catch (error) {
+      log(`chain persist failed for ${chain.slug}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private persistDispatchRun(run: DispatchRunRecord): void {
+    try {
+      watchdogDb.upsertDispatchRun({
+        session_id: run.sessionId,
+        project_path: run.projectPath,
+        chain_slug: run.chainSlug,
+        provider: run.provider,
+        model: run.model,
+        started_at: run.startedAt,
+        last_event_at: run.lastEventAt,
+        stuck_wake_sent: run.stuckWakeSent ? 1 : 0,
+        ended: run.ended ? 1 : 0,
+      });
+    } catch (error) {
+      log(`run persist failed for ${run.sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   // ----- chain registry (populated by the dispatch CLI, spec B4) -----
 
   registerChain(input: { slug: string; projectPath: string; phases?: number | null }): void {
-    this.chains.set(input.slug, {
+    const chain: ChainRecord = {
       slug: input.slug,
       projectPath: input.projectPath,
       phases: input.phases ?? null,
@@ -115,7 +193,9 @@ class WatchdogService {
       startedAt: Date.now(),
       lastEventAt: Date.now(),
       lastSummaryTail: null,
-    });
+    };
+    this.chains.set(input.slug, chain);
+    this.persistChain(chain);
     log(`chain registered: ${input.slug}`, { projectPath: input.projectPath, phases: input.phases ?? null });
   }
 
@@ -139,6 +219,7 @@ class WatchdogService {
 
     if (event === 'completed' || event === 'stopped' || event === 'failed') {
       chain.status = event === 'completed' ? 'completed' : event === 'stopped' ? 'stopped' : 'failed';
+      this.persistChain(chain);
       const flag = chain.status === 'completed'
         ? 'ended'
         : chain.status === 'stopped'
@@ -150,6 +231,8 @@ class WatchdogService {
         `Watchdog: dispatched chain "${slug}" ${flag}${chain.phases ? ` (phase ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''}. `
         + `Verify the result against git log and the punch list before declaring anything done.${tail}`,
       );
+    } else {
+      this.persistChain(chain);
     }
     return true;
   }
@@ -163,7 +246,7 @@ class WatchdogService {
     provider = 'claude',
     model: string | null = null,
   ): void {
-    this.dispatchRuns.set(sessionId, {
+    const run: DispatchRunRecord = {
       sessionId,
       projectPath,
       chainSlug,
@@ -173,13 +256,16 @@ class WatchdogService {
       lastEventAt: Date.now(),
       stuckWakeSent: false,
       ended: false,
-    });
+    };
+    this.dispatchRuns.set(sessionId, run);
+    this.persistDispatchRun(run);
   }
 
   runActivity(sessionId: string): void {
     const run = this.dispatchRuns.get(sessionId);
     if (run) {
       run.lastEventAt = Date.now();
+      this.persistDispatchRun(run);
     }
   }
 
@@ -188,6 +274,7 @@ class WatchdogService {
     if (run) {
       run.ended = true;
       run.lastEventAt = Date.now();
+      this.persistDispatchRun(run);
     }
     // Chain phases end at the chain runner's commit gate; the chain-end event
     // is the planner's wake for those. Only free-standing dispatched runs wake
@@ -460,6 +547,7 @@ class WatchdogService {
       }
       if (now - run.lastEventAt > STUCK_SILENCE_MS) {
         run.stuckWakeSent = true;
+        this.persistDispatchRun(run);
         log(`dispatched run ${run.sessionId} silent for 30m; waking planner to assess`);
         this.queueWake(
           run.projectPath,
@@ -474,6 +562,11 @@ class WatchdogService {
     for (const [sessionId, run] of this.dispatchRuns) {
       if (run.ended && now - run.lastEventAt > 24 * 60 * 60 * 1000) {
         this.dispatchRuns.delete(sessionId);
+        try {
+          watchdogDb.deleteDispatchRun(sessionId);
+        } catch {
+          // prune retries next sweep
+        }
       }
     }
 

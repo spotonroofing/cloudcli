@@ -257,9 +257,11 @@ async function handleChatSend(
     projectPath: session.project_path ?? clientOptions.projectPath,
   };
 
+  let runtimeThrew = false;
   try {
     await dependencies.runtime.run(provider, command, runtimeOptions, run.writer);
   } catch (error) {
+    runtimeThrew = true;
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[Chat] Provider runtime "${provider}" failed`, { sessionId, error: message });
   } finally {
@@ -269,6 +271,13 @@ async function handleChatSend(
     // a queued message can start the session's next run before this promise
     // settles, and the session-keyed completeRun would kill that new run.
     chatRunRegistry.completeRunIfCurrent(run, { exitCode: 1 });
+
+    // Persist the boot turn's outcome so a refresh (or restart) reopens an
+    // aborted or errored boot as a failed boot, never as a plain chat.
+    if (clientOptions.bootPrompt === true) {
+      const failed = runtimeThrew || run.sawError || run.aborted;
+      sessionsDb.setSessionBootState(sessionId, failed ? 'failed' : 'ready');
+    }
   }
 }
 

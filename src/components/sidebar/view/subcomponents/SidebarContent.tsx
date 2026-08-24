@@ -246,7 +246,14 @@ export default function SidebarContent({
           </span>
         </div>
       )}
-      <ScrollArea ref={scrollViewportRef} className="flex-1 overflow-y-auto overscroll-contain px-1.5 py-2">
+      {/* Horizontal padding lives on the viewport (with a transparent right
+          border) so the 4px thumb sits centered in the sidebar's right gutter
+          instead of hugging the rows. */}
+      <ScrollArea
+        ref={scrollViewportRef}
+        className="flex-1 overscroll-contain py-2"
+        viewportClassName="sidebar-scroll-viewport overscroll-contain px-1.5"
+      >
         {showConversationSearch ? (
           isSearching && !conversationResults ? (
             <div className="px-4 py-12 text-center md:py-8">

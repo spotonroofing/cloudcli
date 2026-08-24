@@ -259,7 +259,6 @@ function ChatInterface({
     bootState.phase !== 'idle'
     && (bootState.sessionId ? bootState.sessionId === activeSessionKey : activeSessionKey === null);
   const isBootingView = viewingBootSession && bootState.phase === 'booting';
-  const bootFailedView = viewingBootSession && bootState.phase === 'failed';
 
   const hasReadyAssistantText = useMemo(
     () =>
@@ -273,6 +272,15 @@ function ChatInterface({
       ),
     [chatMessages],
   );
+  // A reopened session whose persisted boot failed (aborted mid-boot, server
+  // died) shows the failed-boot view instead of a plain empty chat. The local
+  // machinery takes over the moment a retry engages, and any ready assistant
+  // text means the chat became usable despite the stamp.
+  const persistedBootFailedView =
+    bootState.phase === 'idle'
+    && selectedSession?.bootState === 'failed'
+    && !hasReadyAssistantText;
+  const bootFailedView = (viewingBootSession && bootState.phase === 'failed') || persistedBootFailedView;
   const errorMessageCount = useMemo(
     () => chatMessages.filter((message) => message.type === 'error').length,
     [chatMessages],

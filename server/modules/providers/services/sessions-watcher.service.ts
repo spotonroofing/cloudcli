@@ -169,6 +169,7 @@ async function buildSessionUpsertedEvent(updatedProviderSessionId: string): Prom
       summary: row.custom_name || '',
       origin: row.origin ?? null,
       booted: Boolean(row.booted),
+      bootState: row.boot_state ?? null,
       messageCount: 0,
       lastActivity: row.updated_at ?? row.created_at ?? new Date().toISOString(),
     },

@@ -16,4 +16,6 @@ export { pushSubscriptionsDb } from '@/modules/database/repositories/push-subscr
 export { scanStateDb } from '@/modules/database/repositories/scan-state.db.js';
 export { sessionsDb } from '@/modules/database/repositories/sessions.db.js';
 export { userDb } from '@/modules/database/repositories/users.js';
+// watchdogDb: persists the watchdog's chain/dispatched-run registries across restarts.
+export { watchdogDb } from '@/modules/database/repositories/watchdog.db.js';
 export { vapidKeysDb } from '@/modules/database/repositories/vapid-keys.js';

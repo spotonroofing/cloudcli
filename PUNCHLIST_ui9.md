@@ -60,12 +60,12 @@ Done check: on dev, drive a planner-origin turn end to end over a real socket �
 
 Goal: the transcript renders standard markdown faithfully and run state survives restarts. Dependencies: chain ui9a promoted.
 
-- [ ] Markdown renderer fixed: two-digit ordered lists render as "10." not ".0"; bold-led bullets render without stray "!" artifacts; standard GitHub-flavored markdown round-trips faithfully (add renderer unit tests from the exact broken planner messages in the transcript).
-- [ ] Message re-animation bug: an already-rendered message never replays its enter animation mid-turn.
-- [ ] Run persistence across restarts: chain/run stopped-failed-finished status and boot-failure state persist in the DB, so a server restart no longer misreports a stopped run as finished or reopens an aborted boot as a plain chat.
-- [ ] Chat transcript scrollbar spans the full pane height — never starts above or overlaps the composer; fully scrolled means bottom, no whitespace break.
-- [ ] Sidebar scrollbar horizontally centered in its right gutter (the trackless restyle left it hugging content); everywhere else stays as is.
-- [ ] The worker header's state tag ("finished") stays pinned in the header during divider drags — no lag or float.
+- [x] Markdown renderer fixed: two-digit ordered lists render as "10." not ".0"; bold-led bullets render without stray "!" artifacts; standard GitHub-flavored markdown round-trips faithfully (add renderer unit tests from the exact broken planner messages in the transcript).
+- [x] Message re-animation bug: an already-rendered message never replays its enter animation mid-turn.
+- [x] Run persistence across restarts: chain/run stopped-failed-finished status and boot-failure state persist in the DB, so a server restart no longer misreports a stopped run as finished or reopens an aborted boot as a plain chat.
+- [x] Chat transcript scrollbar spans the full pane height — never starts above or overlaps the composer; fully scrolled means bottom, no whitespace break.
+- [x] Sidebar scrollbar horizontally centered in its right gutter (the trackless restyle left it hugging content); everywhere else stays as is.
+- [x] The worker header's state tag ("finished") stays pinned in the header during divider drags — no lag or float.
 
 Done check: renderer tests green including the regression cases; restart the dev server with a stopped chain recorded and confirm status reads stopped; scrollbar geometry asserted in DOM at both panes; drag test shows the tag translating with its header. Fresh-context subagent verification. Commit.
 

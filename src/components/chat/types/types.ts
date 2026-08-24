@@ -39,6 +39,8 @@ export interface SubagentChildTool {
 }
 
 export interface ChatMessage {
+  /** Store message id (NormalizedMessage.id); the stable React-key source. */
+  id?: string;
   type: string;
   content?: string;
   displayText?: string;

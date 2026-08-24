@@ -855,20 +855,18 @@
     will-change: transform, opacity, filter;
   }
 
+  /* No content-visibility here: its intrinsic-size estimates made scrollHeight
+     lie, so the scrollbar jumped and "fully scrolled" landed on whitespace.
+     Pagination already bounds the DOM; layout/style containment is kept, paint
+     dropped so outside list markers ("10.") can hang into the gutter unclipped. */
   .chat-message {
-    contain: layout style paint;
-    content-visibility: auto;
-    contain-intrinsic-size: auto 180px;
+    contain: layout style;
   }
 
-  .chat-message.assistant {
-    contain-intrinsic-size: auto 240px;
-  }
-
-  .chat-message.user,
-  .chat-message.tool,
-  .chat-message.error {
-    contain-intrinsic-size: auto 96px;
+  /* Sidebar scrollbar: the transparent right border pulls the 4px thumb off
+     the scroller's edge so it sits centered in the sidebar's right gutter. */
+  .sidebar-scroll-viewport {
+    border-right: 3px solid transparent;
   }
 
   /* Mobile touch optimization and safe areas */

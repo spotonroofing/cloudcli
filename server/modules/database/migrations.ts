@@ -11,6 +11,8 @@ import {
   SESSIONS_TABLE_SCHEMA_SQL,
   USER_NOTIFICATION_PREFERENCES_TABLE_SCHEMA_SQL,
   VAPID_KEYS_TABLE_SCHEMA_SQL,
+  WATCHDOG_CHAINS_TABLE_SCHEMA_SQL,
+  WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL,
 } from '@/modules/database/schema.js';
 
 const SQLITE_UUID_SQL = `
@@ -481,6 +483,21 @@ const addSessionBootedColumn = (db: Database): void => {
 };
 
 /**
+ * Adds `boot_state`: the persisted boot lifecycle (NULL / 'pending' / 'ready' /
+ * 'failed') so a server restart cannot reopen an aborted boot as a plain chat.
+ * Existing booted rows backfill to 'ready' — they were all usable chats.
+ */
+const addSessionBootStateColumn = (db: Database): void => {
+  const sessionsTableInfo = getTableInfo(db, 'sessions');
+  const columnNames = sessionsTableInfo.map((column) => column.name);
+
+  if (!columnNames.includes('boot_state')) {
+    addColumnToTableIfNotExists(db, 'sessions', columnNames, 'boot_state', 'TEXT');
+    db.exec("UPDATE sessions SET boot_state = 'ready' WHERE booted = 1");
+  }
+};
+
+/**
  * Adds `planner_memory_name`: the per-project planner identity injected into
  * every session as PLANNER_PROJECT. NULL means "use the project path basename".
  */
@@ -539,6 +556,8 @@ export const runMigrations = (db: Database) => {
       ON provider_models(provider, sort_order, id)
     `);
     db.exec(COMPOSER_DRAFTS_TABLE_SCHEMA_SQL);
+    db.exec(WATCHDOG_CHAINS_TABLE_SCHEMA_SQL);
+    db.exec(WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL);
 
     db.exec(PROJECTS_TABLE_SCHEMA_SQL);
     rebuildProjectsTableWithPrimaryKeySchema(db);
@@ -552,6 +571,7 @@ export const runMigrations = (db: Database) => {
     addSessionAssignedProjectColumn(db);
     addSessionWorkerColumns(db);
     addSessionBootedColumn(db);
+    addSessionBootStateColumn(db);
     addProjectPlannerMemoryColumn(db);
     ensureProjectsForSessionPaths(db);
 

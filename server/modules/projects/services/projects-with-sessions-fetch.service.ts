@@ -17,6 +17,7 @@ type SessionSummary = {
   origin: string | null;
   /** True when the first message was an auto-sent boot prompt; boot-prologue hiding keys off it. */
   booted: boolean;
+  bootState: string | null;
   messageCount: number;
   lastActivity: string;
 };
@@ -27,6 +28,7 @@ type SessionRepositoryRow = {
   custom_name?: string | null;
   origin?: string | null;
   booted?: number | null;
+  boot_state?: string | null;
   updated_at?: string | null;
   created_at?: string | null;
 };
@@ -136,6 +138,7 @@ function mapSessionRowToSummary(row: SessionRepositoryRow): SessionSummary {
     summary: row.custom_name || '',
     origin: row.origin ?? null,
     booted: Boolean(row.booted),
+    bootState: row.boot_state ?? null,
     messageCount: 0,
     lastActivity: row.updated_at ?? row.created_at ?? new Date().toISOString(),
   };

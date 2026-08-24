@@ -20,6 +20,7 @@ function createSessionRow(overrides: Record<string, unknown> = {}) {
     base_commit: null,
     chain_slug: null,
     booted: 0,
+    boot_state: null,
     jsonl_path: null,
     custom_name: null,
     model: null,
