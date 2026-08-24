@@ -752,6 +752,7 @@ export default function SidebarContent({
           plannerRunningCount={plannerRunningCount}
           workerRunningCount={workerRunningCount}
           onJumpToRunning={onJumpToRunning}
+          isMobile={isMobile}
           t={t}
         />
       )}

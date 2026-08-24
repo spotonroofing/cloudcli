@@ -387,27 +387,26 @@ export default function ChatComposer({
           )}
 
           {hasAttachments && (
-            <PromptInputHeader>
-              <div className="rounded-lg bg-muted/40 p-2">
-                <div className="flex flex-wrap gap-2">
-                  {draftAttachments.map((attachment, index) => (
-                    <ComposerAttachment
-                      key={attachment.path || `${attachment.name}-${index}`}
-                      descriptor={attachment}
-                      onRemove={() => onRemoveDraftAttachment(index)}
-                    />
-                  ))}
-                  {attachedFiles.map((file, index) => (
-                    <ComposerAttachment
-                      key={`${file.name}-${file.lastModified}-${index}`}
-                      file={file}
-                      onRemove={() => onRemoveAttachment(index)}
-                      uploadProgress={uploadingFiles.get(file.name)}
-                      error={fileErrors.get(file.name)}
-                    />
-                  ))}
-                </div>
-              </div>
+            /* Inline attachment previews (claude.ai composer): bordered square
+               thumbnails sit directly above the text inside the enclosure — no
+               gray container. */
+            <PromptInputHeader className="flex flex-wrap gap-2">
+              {draftAttachments.map((attachment, index) => (
+                <ComposerAttachment
+                  key={attachment.path || `${attachment.name}-${index}`}
+                  descriptor={attachment}
+                  onRemove={() => onRemoveDraftAttachment(index)}
+                />
+              ))}
+              {attachedFiles.map((file, index) => (
+                <ComposerAttachment
+                  key={`${file.name}-${file.lastModified}-${index}`}
+                  file={file}
+                  onRemove={() => onRemoveAttachment(index)}
+                  uploadProgress={uploadingFiles.get(file.name)}
+                  error={fileErrors.get(file.name)}
+                />
+              ))}
             </PromptInputHeader>
           )}
 
@@ -498,13 +497,16 @@ export default function ChatComposer({
               </PromptInputSubmit>
             </div>
           </div>
+      </PromptInput>
 
-          {/* Slim secondary row: handoff + slash (+ voice/clear) left, the
-              character counter and a smaller context ring right. */}
-          <div
-            data-slot="composer-secondary-row"
-            className="flex items-center justify-between gap-2 px-2 py-1"
-          >
+        {/* Slim secondary row (ui11 phase 5): floats under the enclosure,
+            outside its border — handoff + slash (+ voice/clear) left, the
+            character counter and the context ring right, aligned to the
+            enclosure's edges. */}
+        <div
+          data-slot="composer-secondary-row"
+          className="mt-1 flex items-center justify-between gap-2 px-2"
+        >
             <PromptInputTools className="ml-0.5 min-w-0">
               {handoffAvailable && (
                 <PromptInputButton
@@ -552,8 +554,7 @@ export default function ChatComposer({
               )}
               <TokenUsageSummary usage={tokenBudget} />
             </div>
-          </div>
-      </PromptInput>
+        </div>
       </div>}
     </div>
   );

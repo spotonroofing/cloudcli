@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import type { CSSProperties, RefObject } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Ban, ChevronDown, ChevronUp, Loader2, LogIn, Plus, Power } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { Button, Dialog, DialogContent, DialogTitle, Input } from '../../../../shared/view/ui';
+import { Button, Input } from '../../../../shared/view/ui';
+import { EASE_OUT } from '../../../../shared/view/beui/ease';
 import { authenticatedFetch } from '../../../../utils/api';
 import { cn } from '../../../../lib/utils';
 
@@ -47,6 +51,13 @@ type AccountsPanelProps = {
   onOpenChange: (open: boolean) => void;
   /** Reports the active account's email whenever a fresh list arrives. */
   onActiveChange: (email: string | null) => void;
+  /** Phone renders a full-width bottom sheet; desktop a sidebar-width drawer
+      rising from the anchor block. Both portal to the body — the sidebar's
+      backdrop-blur makes it the containing block for `fixed` descendants, so
+      an in-tree backdrop could never cover the main pane. */
+  isMobile: boolean;
+  /** Desktop anchor: the accounts/settings block the drawer rises from. */
+  anchorRef: RefObject<HTMLDivElement>;
   t: TFunction;
 };
 
@@ -108,7 +119,23 @@ function UsageBar({ label, kind, window: win }: { label: string; kind: string; w
   );
 }
 
-export default function AccountsPanel({ open, onOpenChange, onActiveChange, t }: AccountsPanelProps) {
+export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMobile, anchorRef, t }: AccountsPanelProps) {
+  const reduceMotion = useReducedMotion();
+
+  // Desktop drawer geometry: measured from the anchor block on open, so the
+  // portaled panel sits flush over the sidebar with its bottom edge just
+  // above the accounts/settings rows.
+  const [anchorStyle, setAnchorStyle] = useState<CSSProperties | null>(null);
+  useLayoutEffect(() => {
+    if (!open || isMobile) {
+      setAnchorStyle(null);
+      return;
+    }
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (rect) {
+      setAnchorStyle({ left: rect.left, width: rect.width, bottom: window.innerHeight - rect.top });
+    }
+  }, [open, isMobile, anchorRef]);
   const [accounts, setAccounts] = useState<CswapAccount[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +170,16 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, t }:
       setError(null);
     }
   }, [open, refresh]);
+
+  // Escape closes the drawer (the Dialog primitive used to own this).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') onOpenChange(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onOpenChange]);
 
   const runAction = async (key: string, action: () => Promise<void>) => {
     setBusy(key);
@@ -204,14 +241,49 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, t }:
 
   const sorted = (accounts ?? []).slice().sort((a, b) => a.number - b.number);
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-lg p-0" data-slot="accounts-panel">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+  // Drawer shell (ui11 phase 5): slides up from above the Settings row inside
+  // the sidebar on desktop, a full-width bottom sheet on phone. The backdrop
+  // catches outside taps (including a second tap on the trigger).
+  const drawer = (
+    <AnimatePresence>
+      {open && (isMobile || anchorStyle) && (
+        <>
+          <motion.div
+            className={cn('fixed inset-0 z-40', isMobile ? 'bg-background/60 backdrop-blur-sm' : 'bg-transparent')}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.15 }}
+            onClick={() => onOpenChange(false)}
+            aria-hidden
+          />
+          <div
+            className={cn(
+              'pointer-events-none fixed z-50',
+              isMobile ? 'inset-x-0 bottom-0' : 'overflow-hidden px-1.5 pb-1',
+            )}
+            style={isMobile ? undefined : anchorStyle ?? undefined}
+          >
+            <motion.div
+              role="dialog"
+              aria-label={t('accounts.title', 'Claude accounts')}
+              data-slot="accounts-panel"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: EASE_OUT }}
+              className={cn(
+                'pointer-events-auto border-border bg-popover shadow-lg',
+                isMobile
+                  ? 'border-t rounded-t-lg pb-safe-area-inset-bottom'
+                  : 'rounded-lg border',
+              )}
+            >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="min-w-0">
-            <DialogTitle className="not-sr-only text-sm font-medium text-foreground">
+            <h2 className="text-sm font-medium text-foreground">
               {t('accounts.title', 'Claude accounts')}
-            </DialogTitle>
+            </h2>
             <p className="truncate text-xs text-muted-foreground">
               {t('accounts.subtitle', 'Switching applies to new sessions')}
             </p>
@@ -416,7 +488,12 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, t }:
             {error}
           </p>
         )}
-      </DialogContent>
-    </Dialog>
+            </motion.div>
+          </div>
+        </>
+      )}
+    </AnimatePresence>
   );
+
+  return createPortal(drawer, document.body);
 }

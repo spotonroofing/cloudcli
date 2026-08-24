@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Compass, Hammer, Settings, AlertTriangle, AtSign } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
@@ -17,6 +17,8 @@ type SidebarFooterProps = {
   workerRunningCount: number;
   /** Opens the first running session of the clicked column's kind. */
   onJumpToRunning?: (kind: 'planner' | 'worker') => void;
+  /** Phone: the accounts drawer renders as a full-width bottom sheet. */
+  isMobile: boolean;
   t: TFunction;
 };
 
@@ -71,6 +73,7 @@ export default function SidebarFooter({
   plannerRunningCount,
   workerRunningCount,
   onJumpToRunning,
+  isMobile,
   t,
 }: SidebarFooterProps) {
   const showCounterBar = plannerRunningCount > 0 || workerRunningCount > 0;
@@ -79,6 +82,7 @@ export default function SidebarFooter({
   // Claude account and opens the accounts panel.
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [activeAccountEmail, setActiveAccountEmail] = useState<string | null>(null);
+  const accountsAnchorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,35 +151,41 @@ export default function SidebarFooter({
 
       {/* Accounts + Settings pinned to the bottom, one treatment on every
           form factor. The accounts row shows the active Claude account and
-          opens the cswap panel (ui8 phase 6). */}
-      <div className="nav-divider" />
-      <div className="space-y-0.5 px-2 py-1.5">
-        <button
-          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-          onClick={() => setAccountsOpen(true)}
-          title={activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
-          data-slot="account-switcher-trigger"
-        >
-          <AtSign className="h-3.5 w-3.5 flex-shrink-0" />
-          <span className="min-w-0 truncate text-sm" data-slot="account-switcher-active">
-            {activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
-          </span>
-        </button>
-        <button
-          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-          onClick={onShowSettings}
-        >
-          <Settings className="h-3.5 w-3.5" />
-          <span className="text-sm">{t('actions.settings')}</span>
-        </button>
-      </div>
+          opens the accounts drawer, which slides up from this block's top
+          edge and overlays the lists (ui11 phase 5). */}
+      <div ref={accountsAnchorRef}>
+        <div className="nav-divider" />
+        <div className="space-y-0.5 px-2 py-1.5">
+          <button
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            onClick={() => setAccountsOpen((open) => !open)}
+            title={activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
+            aria-expanded={accountsOpen}
+            data-slot="account-switcher-trigger"
+          >
+            <AtSign className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="min-w-0 truncate text-sm" data-slot="account-switcher-active">
+              {activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
+            </span>
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            onClick={onShowSettings}
+          >
+            <Settings className="h-3.5 w-3.5" />
+            <span className="text-sm">{t('actions.settings')}</span>
+          </button>
+        </div>
 
-      <AccountsPanel
-        open={accountsOpen}
-        onOpenChange={setAccountsOpen}
-        onActiveChange={setActiveAccountEmail}
-        t={t}
-      />
+        <AccountsPanel
+          open={accountsOpen}
+          onOpenChange={setAccountsOpen}
+          onActiveChange={setActiveAccountEmail}
+          isMobile={isMobile}
+          anchorRef={accountsAnchorRef}
+          t={t}
+        />
+      </div>
     </div>
   );
 }

@@ -110,25 +110,24 @@ const ComposerAttachment = ({ file, descriptor, onRemove, uploadProgress, error 
           type="button"
           onClick={() => preview && setExpanded(true)}
           aria-label={`Expand ${name}`}
-          className="block overflow-hidden rounded-lg border border-border/50 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+          className="block overflow-hidden rounded-lg border border-border/50 bg-background/80 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
         >
           {preview
-            ? <img src={preview} alt={name} className="h-20 w-20 cursor-zoom-in object-cover" />
+            ? <img src={preview} alt={name} className="h-20 w-20 cursor-zoom-in object-contain" />
             : <div className="h-20 w-20 animate-pulse bg-muted" />}
         </button>
       ) : isPastedText ? (
         <PastedTextChip name={name} text={pastedText} onOpen={() => setViewerOpen(true)} />
       ) : (
-        <div className="flex h-20 w-56 max-w-full items-center gap-3 rounded-lg border border-border/50 bg-background/80 px-3 shadow-sm">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <FileIcon className="h-5 w-5" aria-hidden />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground" title={name}>{name}</p>
-            {size !== undefined && (
-              <p className="mt-0.5 text-xs text-muted-foreground">{formatFileSize(size)}</p>
-            )}
-          </div>
+        <div
+          className="flex h-20 w-20 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border border-border/50 bg-background/80 px-1.5 shadow-sm"
+          title={size !== undefined ? `${name} (${formatFileSize(size)})` : name}
+        >
+          <FileIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          <p className="w-full truncate text-center text-[10px] font-medium leading-3 text-foreground">{name}</p>
+          {size !== undefined && (
+            <p className="text-[9px] leading-3 text-muted-foreground">{formatFileSize(size)}</p>
+          )}
         </div>
       )}
       {uploadProgress !== undefined && uploadProgress < 100 && (
