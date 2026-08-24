@@ -91,8 +91,8 @@ Done check: on dev, a stub chain with a manifest and a test punch list (stub cla
 
 Goal: a mark Willem likes. He rejected the twisted circle. Direction: a confident geometric line mark that reads at 16px favicon and 48px header, one stroke family, stroke bound to theme tokens, no fills that fight themes, nothing that reads as generic AI branding. Files: the mark SVG and every surface that renders it (login, loader, headers, favicon, web-app icons). Dependencies: none. Taste work: run solo, no subagents on the design itself.
 
-- [ ] Produce three candidate marks as SVGs in `candidate-marks/` at the repo root (committed), each with a one-line concept note in a README there, and pick the strongest as the live mark; the other two stay for Willem to compare.
-- [ ] Swap the chosen mark in everywhere the old one renders, including favicon and web-app icon renders; remove the twisted-circle asset and its references.
+- [x] Produce three candidate marks as SVGs in `candidate-marks/` at the repo root (committed), each with a one-line concept note in a README there, and pick the strongest as the live mark; the other two stay for Willem to compare.
+- [x] Swap the chosen mark in everywhere the old one renders, including favicon and web-app icon renders; remove the twisted-circle asset and its references.
 
 Done check: grep shows no references to the old mark asset; the new mark renders in theme colors at login and in the header across two themes; three candidates plus README present. Commit.
 

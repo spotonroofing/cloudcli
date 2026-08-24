@@ -1,18 +1,18 @@
 /**
  * Command Center mark + icon generator.
  *
- * The mark is an abstract twisted circle: three open strands orbit the same
- * center, each strand's radius modulated by two sine terms (a slow 2θ twist
- * that braids the strands through each other, plus a faster 5θ wobble for the
- * organic feel). Everything brand-shaped in public/ is derived from here:
+ * The mark is the command bracket: a caret held between two square brackets,
+ * the console frame around the prompt. Three round-capped line paths, one
+ * stroke family. Everything brand-shaped in public/ is derived from here:
  *
  *   node public/generate-icons.js
  *
  * writes mark.svg (canonical, stroke="currentColor"), favicon.svg/png,
- * icons/icon-*.png (manifest sizes), and mark-128/256.png (sw notifications).
- * The inline React copy of the same paths lives in
- * src/shared/view/CommandCenterMark.tsx — regenerate and re-paste if the
- * strand math changes.
+ * icons/icon-*.png (manifest sizes), and mark-128/256/512.png (sw
+ * notifications + electron window icon). The inline React copy of the same
+ * paths lives in src/shared/view/CommandCenterMark.tsx — keep the two in sync
+ * if the geometry changes. The other two candidates from the ui11 redesign
+ * live in candidate-marks/ at the repo root.
  */
 import fs from 'fs';
 import path from 'path';
@@ -21,33 +21,11 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const CENTER = 32;
-const BASE_RADIUS = 21.5;
-const TWIST_DEPTH = 3.4; // 2θ term: how far strands dive across each other
-const WOBBLE_DEPTH = 1.4; // 5θ term: organic irregularity
-const STRANDS = 3;
-const SPAN_DEG = 318; // open strands: round caps + gaps keep it line-art, not a solid ring
-const STEP_DEG = 3;
-
-function strandPath(k) {
-  const phase = (k * 2 * Math.PI) / STRANDS;
-  const startDeg = k * (360 / STRANDS) + 22;
-  const points = [];
-  for (let deg = startDeg; deg <= startDeg + SPAN_DEG; deg += STEP_DEG) {
-    const t = (deg * Math.PI) / 180;
-    const r =
-      BASE_RADIUS +
-      TWIST_DEPTH * Math.sin(2 * t + phase) +
-      WOBBLE_DEPTH * Math.sin(5 * t + phase * 1.7);
-    points.push([
-      (CENTER + r * Math.cos(t)).toFixed(2),
-      (CENTER + r * Math.sin(t)).toFixed(2),
-    ]);
-  }
-  return `M${points.map((p) => p.join(' ')).join(' L')}`;
-}
-
-const strandPaths = Array.from({ length: STRANDS }, (_, k) => strandPath(k));
+const MARK_PATHS = [
+  'M25 13 L15 13 L15 51 L25 51',
+  'M39 13 L49 13 L49 51 L39 51',
+  'M26.5 22.5 L38 32 L26.5 41.5',
+];
 
 function markSvg({ stroke, strokeWidth, background = null, size = 64, markScale = 1 }) {
   const bg = background
@@ -56,11 +34,11 @@ function markSvg({ stroke, strokeWidth, background = null, size = 64, markScale 
   const inset = (1 - markScale) / 2;
   const group =
     markScale === 1
-      ? strandPaths.map((d) => `<path d="${d}"/>`).join('')
-      : `<g transform="translate(${(64 * inset).toFixed(2)} ${(64 * inset).toFixed(2)}) scale(${markScale})">${strandPaths
-          .map((d) => `<path d="${d}"/>`)
-          .join('')}</g>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="${size}" height="${size}" fill="none">${bg}<g fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round">${group}</g></svg>`;
+      ? MARK_PATHS.map((d) => `<path d="${d}"/>`).join('')
+      : `<g transform="translate(${(64 * inset).toFixed(2)} ${(64 * inset).toFixed(2)}) scale(${markScale})">${MARK_PATHS.map(
+          (d) => `<path d="${d}"/>`,
+        ).join('')}</g>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="${size}" height="${size}" fill="none">${bg}<g fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round">${group}</g></svg>`;
 }
 
 // Steel Blue theme anchors (hex renders of the token values in src/index.css):
@@ -76,13 +54,13 @@ async function main() {
   // Canonical asset: theme-agnostic, inherits color from wherever it's inlined.
   fs.writeFileSync(
     path.join(publicDir, 'mark.svg'),
-    markSvg({ stroke: 'currentColor', strokeWidth: 2.5 }),
+    markSvg({ stroke: 'currentColor', strokeWidth: 4 }),
   );
 
   // Favicon: transparent background, steel stroke readable on light and dark tabs.
-  const faviconSvg = markSvg({ stroke: STEEL_PRIMARY, strokeWidth: 4 });
+  const faviconSvg = markSvg({ stroke: STEEL_PRIMARY, strokeWidth: 5.5 });
   fs.writeFileSync(path.join(publicDir, 'favicon.svg'), faviconSvg);
-  await sharp(Buffer.from(markSvg({ stroke: STEEL_PRIMARY, strokeWidth: 4, size: 64 })), {
+  await sharp(Buffer.from(markSvg({ stroke: STEEL_PRIMARY, strokeWidth: 5.5, size: 64 })), {
     density: 288,
   })
     .resize(64, 64)
@@ -92,7 +70,7 @@ async function main() {
   // Web-app icons: dark tile, mark inside the maskable safe area.
   const tileSvg = markSvg({
     stroke: ICON_STROKE,
-    strokeWidth: 3,
+    strokeWidth: 4,
     background: { fill: ICON_BG, radius: 14 },
     markScale: 0.72,
   });
@@ -112,9 +90,7 @@ async function main() {
       .toFile(path.join(publicDir, `mark-${size}.png`));
   }
 
-  console.log('strand paths (paste into CommandCenterMark.tsx if changed):');
-  strandPaths.forEach((d) => console.log(d));
-  console.log('\nWrote mark.svg, favicon.svg/png, icons/icon-*.png, mark-128/256.png');
+  console.log('Wrote mark.svg, favicon.svg/png, icons/icon-*.png, mark-128/256/512.png');
 }
 
 main();

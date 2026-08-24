@@ -36,7 +36,7 @@ export default function AboutTab() {
       {/* Logo + name + version */}
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center">
-          <CommandCenterMark className="h-10 w-10 text-primary" strokeWidth={3} />
+          <CommandCenterMark className="h-10 w-10 text-primary" />
         </div>
         <div>
           <div className="flex items-center gap-2">
