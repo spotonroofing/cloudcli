@@ -37,9 +37,9 @@ Done check: with a stub claude binary that exits 1 printing the limit message on
 
 Goal: the app is Command Center with its own mark, themed everywhere. Dependencies: none (parallel-safe with phase 1's files).
 
-- [ ] Design the mark: line-art SVG, abstract twisted circle with organic parts, single stroke weight family, no fills that fight themes; stroke color bound to theme tokens. Save as the canonical asset plus favicon/web-app icon renders (the sizes the manifest needs).
-- [ ] Replace the old logo everywhere it renders: login page, the app loading animation, headers, favicon, web-app manifest icons, page title. App name reads Command Center across UI copy, manifest, and titles.
-- [ ] Theming attaches properly to the branded surfaces: login and the loader recolor with the active theme (no hardcoded brand hexes left; sweep for the old logo asset references).
+- [x] Design the mark: line-art SVG, abstract twisted circle with organic parts, single stroke weight family, no fills that fight themes; stroke color bound to theme tokens. Save as the canonical asset plus favicon/web-app icon renders (the sizes the manifest needs).
+- [x] Replace the old logo everywhere it renders: login page, the app loading animation, headers, favicon, web-app manifest icons, page title. App name reads Command Center across UI copy, manifest, and titles.
+- [x] Theming attaches properly to the branded surfaces: login and the loader recolor with the active theme (no hardcoded brand hexes left; sweep for the old logo asset references).
 
 Done check: on dev, login page and loader show the new mark in theme colors across two themes (computed styles), document title and manifest read Command Center, zero references to the old logo asset remain (grep). Aesthetic quality is Willem's eyeball. Fresh-context subagent verification. Commit.
 

@@ -1,6 +1,7 @@
-import { Cloud, ExternalLink, MessageSquare, Star, Users } from 'lucide-react';
+import { Cloud, ExternalLink, Star, Users } from 'lucide-react';
 
 import { CLOUDCLI_WORDMARK_FONT_FAMILY } from '../../../../shared/constants';
+import CommandCenterMark from '../../../../shared/view/CommandCenterMark';
 import { IS_PLATFORM } from '../../../../shared/utils';
 import { useVersionCheck } from '../../../../hooks/useVersionCheck';
 import PremiumFeatureCard from '../PremiumFeatureCard';
@@ -34,8 +35,8 @@ export default function AboutTab() {
     <div className="space-y-6">
       {/* Logo + name + version */}
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/90 shadow-sm">
-          <MessageSquare className="h-5 w-5 text-primary-foreground" />
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center">
+          <CommandCenterMark className="h-10 w-10 text-primary" strokeWidth={3} />
         </div>
         <div>
           <div className="flex items-center gap-2">
@@ -43,7 +44,7 @@ export default function AboutTab() {
               className="text-base font-semibold text-foreground"
               style={{ fontFamily: CLOUDCLI_WORDMARK_FONT_FAMILY }}
             >
-              CloudCLI
+              Command Center
             </span>
             <a
               href={releasesUrl}

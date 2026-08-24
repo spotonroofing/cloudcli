@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { IS_PLATFORM } from '../../../shared/utils';
+import CommandCenterMark from '../../../shared/view/CommandCenterMark';
 
 type AuthScreenLayoutProps = {
   title: string;
@@ -32,11 +33,7 @@ export default function AuthScreenLayout({
         <div className="w-full rounded-2xl border border-border/70 bg-card/90 p-8 shadow-[0_24px_60px_-20px_hsl(var(--foreground)/0.18)] ring-1 ring-foreground/5 backdrop-blur-xl sm:p-10">
           <div className="text-center">
             <div className="mb-5 flex justify-center">
-              {logo ?? (
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/25 ring-1 ring-inset ring-white/20">
-                  <img src="/logo.svg" alt="CloudCLI" className="h-9 w-9" />
-                </div>
-              )}
+              {logo ?? <CommandCenterMark className="h-16 w-16 text-primary" />}
             </div>
             <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground">{title}</h1>
             <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">{description}</p>
@@ -59,7 +56,7 @@ export default function AuthScreenLayout({
                 rel="noopener noreferrer"
                 className="text-xs text-muted-foreground/50 transition-colors hover:text-muted-foreground"
               >
-                CloudCLI is open source
+                Built on open source
               </a>
             </div>
           )}

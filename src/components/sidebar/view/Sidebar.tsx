@@ -159,7 +159,7 @@ function Sidebar({
       return;
     }
 
-    document.title = selectedProject?.displayName?.trim() || 'CloudCLI UI';
+    document.title = selectedProject?.displayName?.trim() || 'Command Center';
   }, [selectedProject]);
 
   // Planner/worker split and per-project activity for the counters and the

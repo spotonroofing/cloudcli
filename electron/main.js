@@ -50,7 +50,7 @@ function getWindowIconPath() {
   if (process.platform === 'darwin') {
     return path.join(getAppRoot(), 'electron', 'assets', 'logo-macos.png');
   }
-  return path.join(getAppRoot(), 'public', 'logo-512.png');
+  return path.join(getAppRoot(), 'public', 'mark-512.png');
 }
 
 function getStorePath() {

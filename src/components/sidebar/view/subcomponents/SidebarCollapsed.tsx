@@ -64,7 +64,7 @@ export default function SidebarCollapsed({
 
   return (
     <div className="flex h-full w-12 flex-col items-center gap-1 bg-background/80 py-3 backdrop-blur-sm">
-      {/* Expand button with brand logo */}
+      {/* Expand button */}
       <button
         onClick={onExpand}
         className="group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"

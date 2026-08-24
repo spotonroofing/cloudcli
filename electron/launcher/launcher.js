@@ -19,7 +19,7 @@ window.__MOCK_STATE__ = {
 (function cloudCliLauncher() {
   var MOCK = window.__MOCK_STATE__ || {};
   var VERSION = window.__APP_VERSION__ || '';
-  var LOGO_URL = new URL('../../public/logo-32.png', window.location.href).toString();
+  var LOGO_URL = new URL('../../public/mark-128.png', window.location.href).toString();
   var SEARCH = new URLSearchParams(window.location.search || '');
 
   function clone(value) {

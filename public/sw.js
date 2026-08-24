@@ -84,8 +84,8 @@ self.addEventListener('push', event => {
 
   const options = {
     body: payload.body || '',
-    icon: '/logo-256.png',
-    badge: '/logo-128.png',
+    icon: '/mark-256.png',
+    badge: '/mark-128.png',
     data: payload.data || {},
     tag: payload.data?.tag || `${payload.data?.sessionId || 'global'}:${payload.data?.code || 'default'}`,
     renotify: true

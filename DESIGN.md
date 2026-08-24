@@ -1,10 +1,14 @@
-# DESIGN.md — CloudCLI UI design system
+# DESIGN.md — Command Center design system
 
 Read this before any UI work. Reuse the closest existing element listed below; a new variant extends the existing pattern, never a parallel style.
 
 One design across form factors: the desktop-only gating from UI rounds 1–3 is removed, so mobile renders the same language (radius token, silver-blue accent, unified composer with Handoff, grouped model switcher, usage ring + left-anchored popover, tool-row treatment, sidebar segmented control and bottom-pinned Settings, self-hosted font). Mobile-only functional controls with no desktop equivalent (tab rail, drawers, bottom sheets, keyboard insets, the Running view, create-project) stay, restyled with these same tokens — never a parallel style.
 
 Mobile parity laws (ui7 phase 8): the mobile sidebar project/session rows are the same beUI ai-sidebar row anatomy as desktop (borderless `min-h-11 rounded-lg` rows — 44px-tall touch variant of the desktop `min-h-9` — icon tile, MarqueeLabel, count numeral, spring chevron), with actions always visible instead of hover-revealed; session actions open the bottom sheet (rename / move / copy / delete on token colorways). The mobile top bar is hamburger + tab rail only, on the pane-header bar chrome — the old chat-title block is gone on both form factors; titles live in the pane header. The sidebar refresh button is desktop-only; mobile refreshes by pulling the sidebar list down (`usePullToRefresh` + the indicator row in SidebarContent, `data-slot="pull-to-refresh"`). Touch laws on every mobile-reachable control: 44px minimum hit area — visually small controls keep their size and extend the tap area with the `touch-hit` utility (`src/index.css`, pointer-coarse only, requires `relative`); no action gated behind hover (fence hover reveals with `md:` or `touch:opacity-100`, never `sm:`); text inputs 16px below md (`text-base md:text-sm`) so iOS Safari never zooms on focus; bottom chrome pads `env(safe-area-inset-bottom)`; full-height mobile surfaces use `dvh`, never `vh`/`h-screen`.
+
+## Brand
+
+The app is Command Center (ui10 phase 2). The mark is an abstract twisted circle — three open line strands braided by parametric math in `public/generate-icons.js`, which is the single source of truth: running it regenerates `public/mark.svg` (canonical, `stroke="currentColor"`), favicon.svg/png, the manifest icon PNGs, and `mark-{128,256,512}.png` (service-worker notifications + electron window icon). In React, render `CommandCenterMark` (`src/shared/view/CommandCenterMark.tsx`) — inline SVG, stroke inherits `currentColor`, so branded surfaces color it with a token class (`text-primary` on login and the auth loader) and it recolors with every theme. Never reintroduce a fixed-hex or filled logo; static renders (favicon, icon tiles) are the only baked colors and live only in generated files.
 
 ## Tokens
 
