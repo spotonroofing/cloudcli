@@ -92,9 +92,9 @@ Done check: on dev, a planner-session test write of a lesson file produces the i
 
 Goal: the worker sidebar's status icons live and breathe. Today the task loading icons sit static. Willem confirmed the word Job. Files: the job/task status icon components from phase 4, the app's existing ramped spinner element, theme motion tokens, DESIGN.md. Dependencies: phase 4 (semantic colors land first).
 
-- [ ] The working task's icon is the app's existing partial-circle spinner with its eased, ramped rotation (find and reuse it; do not roll a new one), and the working task row breathes: a subtle opacity/scale pulse, transform and opacity only, honoring prefers-reduced-motion.
-- [ ] The active job's indicator breathes the same way, and its progress ring is a static partial circle segmented by task count (three tasks, three arc segments with small gaps): each completed task fills its segment (green per phase 4); when the last task completes, a full-circle sweep animation runs and the checkmark animates in.
-- [ ] Jobs with no manifest tasks keep a plain spinner while running and the same sweep-to-check on completion.
+- [x] The working task's icon is the app's existing partial-circle spinner with its eased, ramped rotation (find and reuse it; do not roll a new one), and the working task row breathes: a subtle opacity/scale pulse, transform and opacity only, honoring prefers-reduced-motion.
+- [x] The active job's indicator breathes the same way, and its progress ring is a static partial circle segmented by task count (three tasks, three arc segments with small gaps): each completed task fills its segment (green per phase 4); when the last task completes, a full-circle sweep animation runs and the checkmark animates in.
+- [x] Jobs with no manifest tasks keep a plain spinner while running and the same sweep-to-check on completion.
 
 Done check: on dev with a stub chain of a 3-task job: the working task icon's computed animation is running (non-none, rotating), the job ring shows 3 segments with the completed count filled after check-offs, the completion sweep and check-in animation fire at job end, and with prefers-reduced-motion emulated the pulses and sweep reduce to state changes. Phone viewport holds. Fresh-context subagent verification. Commit.
 

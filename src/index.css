@@ -1168,9 +1168,76 @@
     animation: counter-breathe 2.6s ease-in-out infinite;
   }
 
+  /* Ramped spinner rotation (ui12 job 8): the shared partial-circle working
+     arc — each revolution ramps up and settles instead of spinning linearly.
+     CSS-driven (not a motion inline transform) so the computed animation is
+     inspectable and keeps running independent of React renders. */
+  @keyframes spinner-ramp {
+    from {
+      transform: rotate(-90deg);
+    }
+    to {
+      transform: rotate(270deg);
+    }
+  }
+
+  .animate-spinner-ramp {
+    animation: spinner-ramp 1.2s cubic-bezier(0.5, 0.15, 0.5, 0.85) infinite;
+    will-change: transform;
+  }
+
+  /* Working-row breathe (ui12 job 8): opacity/scale-only pulse for the active
+     task row and the active job's indicator in the jobs sidebar. */
+  @keyframes row-breathe {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.65;
+      transform: scale(0.985);
+    }
+  }
+
+  .animate-row-breathe {
+    animation: row-breathe 2.4s ease-in-out infinite;
+  }
+
+  /* Completion sweep (ui12 job 8): a full-circle stroke draw then fade on a
+     pathLength=1 circle. CSS-driven because motion mount animations are
+     suppressed under the status icon's initial={false} svg. */
+  @keyframes status-sweep {
+    0% {
+      stroke-dashoffset: 1;
+      opacity: 1;
+      animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
+    }
+    65% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+      animation-timing-function: ease-out;
+    }
+    100% {
+      stroke-dashoffset: 0;
+      opacity: 0;
+    }
+  }
+
+  .animate-status-sweep {
+    animation: status-sweep 0.85s both;
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .animate-counter-breathe {
+    .animate-counter-breathe,
+    .animate-spinner-ramp,
+    .animate-row-breathe {
       animation: none;
+    }
+
+    .animate-status-sweep {
+      animation: none;
+      opacity: 0;
     }
   }
   

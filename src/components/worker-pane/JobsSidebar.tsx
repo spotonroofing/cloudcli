@@ -252,20 +252,30 @@ export default function JobsSidebar({ chain, run, onCollapse }: JobsSidebarProps
                     'group/row flex w-full items-center gap-2 rounded-md px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                     unit.kind === 'task' ? 'min-h-7 pl-4' : 'min-h-8',
                     hasDrawer && 'cursor-pointer',
-                    unit.status === 'in-progress' && !reduce && 'animate-counter-breathe',
                   )}
                 >
                   <span className={cn(unit.kind === 'task' && 'scale-90')}>
-                    <TodoStatusIcon
-                      status={unit.status}
-                      // The job ring advances with the counter; without
-                      // counts the active ring stays indeterminate.
-                      progress={
-                        unit.status === 'in-progress' && unit.done != null && unit.tasks.length > 0
-                          ? Math.min(100, (unit.done / unit.tasks.length) * 100)
-                          : undefined
-                      }
-                    />
+                    {/* The active job's indicator breathes (ui12 job 8);
+                        the pulse wraps only the icon, not the row. */}
+                    <span
+                      className={cn(
+                        'block',
+                        unit.status === 'in-progress' && !reduce && 'animate-row-breathe',
+                      )}
+                    >
+                      <TodoStatusIcon
+                        status={unit.status}
+                        sweepOnComplete
+                        // The job ring is a static circle segmented per task,
+                        // filling green as check-offs land; a job with no
+                        // manifest tasks keeps the plain ramped spinner.
+                        segments={
+                          unit.status === 'in-progress' && unit.tasks.length > 0
+                            ? { done: displayedDone(unit), total: unit.tasks.length }
+                            : undefined
+                        }
+                      />
+                    </span>
                   </span>
                   <span
                     className={cn(
@@ -319,6 +329,8 @@ export default function JobsSidebar({ chain, run, onCollapse }: JobsSidebarProps
                               status === 'completed' && 'text-muted-foreground/45 line-through',
                               status === 'in-progress' && 'text-foreground',
                               status === 'pending' && 'text-muted-foreground/50',
+                              // The working task row breathes (ui12 job 8).
+                              status === 'in-progress' && !reduce && 'animate-row-breathe',
                             )}
                           >
                             <span className="flex-shrink-0 scale-[0.7]">

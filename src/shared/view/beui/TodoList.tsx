@@ -114,13 +114,50 @@ function TodoHeaderIcon({ complete }: { complete: boolean }) {
 export function TodoStatusIcon({
   status,
   progress,
+  segments,
+  sweepOnComplete = false,
 }: {
   status: TodoListItemStatus;
   progress?: number;
+  /**
+   * Job ring (ui12 job 8): while in-progress, render a static circle
+   * segmented per task with small gaps; the first `done` segments fill green.
+   */
+  segments?: { done: number; total: number };
+  /**
+   * Play the full-circle sweep before the check when completion lands while
+   * mounted (job rows); a row that mounts already completed shows the plain
+   * drawn check.
+   */
+  sweepOnComplete?: boolean;
 }) {
   const reduce = useReducedMotion() ?? false;
   const normalizedProgress =
     progress === undefined ? 0.68 : Math.min(100, Math.max(0, progress)) / 100;
+  const hasSegments =
+    status === 'in-progress' && segments !== undefined && segments.total > 0;
+
+  // Completion sweep arming: only a completed status that arrives while this
+  // icon is mounted in another state sweeps — loaded history renders settled.
+  // Armed during render (derive-state-from-props), not in an effect, so the
+  // checkmark's sweep delay is in place on the same commit the status flips.
+  const previousStatus = useRef(status);
+  const [sweeping, setSweeping] = useState(false);
+  if (previousStatus.current !== status) {
+    previousStatus.current = status;
+    if (
+      sweepOnComplete
+      && !reduce
+      && status === 'completed'
+      // Re-read the media query at transition time: useReducedMotion caches
+      // its value per subscription and can lag an emulated/system change.
+      && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      setSweeping(true);
+    } else if (sweeping) {
+      setSweeping(false);
+    }
+  }
 
   return (
     <motion.svg
@@ -136,47 +173,102 @@ export function TodoStatusIcon({
         status === 'cancelled' && 'text-rose-600 dark:text-rose-400',
       )}
     >
-      <motion.circle
-        cx="12"
-        cy="12"
-        r="9"
-        fill="currentColor"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeDasharray={status === 'pending' ? '2 3' : undefined}
-        strokeLinecap="round"
-        initial={false}
-        animate={{ fillOpacity: status === 'completed' ? 0.06 : 0 }}
-        transition={reduce ? { duration: 0 } : { duration: 0.18, ease: EASE_OUT }}
-        className={cn(status === 'in-progress' && 'opacity-20')}
-      />
-      <motion.circle
-        cx="12"
-        cy="12"
-        r="9"
-        pathLength="1"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        initial={false}
-        animate={{
-          pathLength: status === 'in-progress' ? normalizedProgress : 0,
-          opacity: status === 'in-progress' ? 1 : 0,
-          rotate:
-            status === 'in-progress' && progress === undefined && !reduce
-              ? 360
-              : -90,
-        }}
-        transition={
-          status === 'in-progress' && progress === undefined && !reduce
-            ? { rotate: { duration: 1.1, repeat: Infinity, ease: 'linear' } }
-            : reduce
-              ? { duration: 0 }
-              : SPRING_LAYOUT
-        }
-        style={{ transformOrigin: '12px 12px' }}
-      />
+      {!hasSegments && (
+        <motion.circle
+          cx="12"
+          cy="12"
+          r="9"
+          fill="currentColor"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeDasharray={status === 'pending' ? '2 3' : undefined}
+          strokeLinecap="round"
+          initial={false}
+          animate={{ fillOpacity: status === 'completed' ? 0.06 : 0 }}
+          transition={reduce ? { duration: 0 } : { duration: 0.18, ease: EASE_OUT }}
+          className={cn(status === 'in-progress' && 'opacity-20')}
+        />
+      )}
+      {!hasSegments && (
+        // The working arc — the app's ramped partial-circle spinner. Rotation
+        // is the CSS spinner-ramp animation (transform-only, reduced-motion
+        // aware); the static -90° fallback anchors the arc at 12 o'clock for
+        // determinate progress and reduced motion.
+        <g
+          className={cn(
+            status === 'in-progress'
+              && progress === undefined
+              && 'animate-spinner-ramp',
+          )}
+          style={{ transformOrigin: '12px 12px', transform: 'rotate(-90deg)' }}
+        >
+          <motion.circle
+            cx="12"
+            cy="12"
+            r="9"
+            pathLength="1"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            initial={false}
+            animate={{
+              pathLength: status === 'in-progress' ? normalizedProgress : 0,
+              opacity: status === 'in-progress' ? 1 : 0,
+            }}
+            transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
+          />
+        </g>
+      )}
+      {hasSegments && (
+        <g style={{ transformOrigin: '12px 12px', transform: 'rotate(-90deg)' }}>
+          {Array.from({ length: segments.total }, (_, i) => {
+            const frac = 1 / segments.total;
+            const gap = Math.min(0.05, frac / 3);
+            const done = i < segments.done;
+            return (
+              <circle
+                key={i}
+                data-slot="job-ring-segment"
+                data-done={done}
+                cx="12"
+                cy="12"
+                r="9"
+                pathLength="1"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeDasharray={`${frac - gap} ${1 - frac + gap}`}
+                strokeDashoffset={-(i * frac + gap / 2)}
+                className={cn(
+                  'transition-[color,opacity] duration-300',
+                  done ? 'text-status-done' : 'text-status-idle opacity-40',
+                )}
+              />
+            );
+          })}
+        </g>
+      )}
+      {sweeping && status === 'completed' && (
+        // CSS-animated, not motion: the parent svg's initial={false}
+        // suppresses motion mount animations, so this circle would render
+        // at its end state. The status-sweep keyframes draw the full
+        // circle then fade (see src/index.css).
+        <circle
+          data-slot="status-sweep"
+          cx="12"
+          cy="12"
+          r="9"
+          pathLength="1"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray="1 1"
+          className="animate-status-sweep"
+          style={{ transformOrigin: '12px 12px', transform: 'rotate(-90deg)' }}
+        />
+      )}
       <motion.path
         d="M7.5 12.25 10.5 15.25 16.75 8.75"
         fill="none"
@@ -189,7 +281,11 @@ export function TodoStatusIcon({
           pathLength: status === 'completed' ? 1 : 0,
           opacity: status === 'completed' ? 1 : 0,
         }}
-        transition={reduce ? { duration: 0 } : { duration: 0.24, ease: EASE_OUT }}
+        transition={
+          reduce
+            ? { duration: 0 }
+            : { duration: 0.24, ease: EASE_OUT, delay: sweeping ? 0.42 : 0 }
+        }
       />
       <motion.path
         d="M8.5 8.5 15.5 15.5M15.5 8.5 8.5 15.5"
