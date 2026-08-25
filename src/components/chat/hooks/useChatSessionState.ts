@@ -8,6 +8,8 @@ import type { SessionStore, NormalizedMessage } from '../../../stores/useSession
 import { SESSION_MESSAGES_PAGE_SIZE } from '../../../stores/sessionMessagePagination';
 import type { ChatMessage } from '../types/types';
 import { createMessageHistoryRefreshCoordinator } from '../utils/messageHistoryRefreshCoordinator';
+import { resolveInitialScrollAction } from '../utils/initialScroll';
+import { mergeTokenBudget } from '../utils/tokenBudget';
 import { createCachedDiffCalculator, type DiffCalculator } from '../utils/messageTransforms';
 import { applyMessageVersions, type MessageVersionView } from '../utils/messageVersions';
 
@@ -343,6 +345,24 @@ export function useChatSessionState({
   isActiveRef.current = isActive;
   activeSessionIdRef.current = activeSessionId;
 
+  // Externally-driven runs (dispatched chains, terminal sessions) never
+  // stream token_budget frames, so their ring only advances by re-reading the
+  // persisted usage snapshot after a tail refresh lands new rows. Live runs
+  // stream fresher SDK budgets and skip this path entirely.
+  const refreshTokenUsageSnapshot = useCallback(async (sessionId: string) => {
+    try {
+      const url = `/api/providers/sessions/${encodeURIComponent(sessionId)}/token-usage`;
+      const response = await authenticatedFetch(url);
+      if (!response.ok) return;
+      const payload = await response.json();
+      const usage = payload.data as Record<string, unknown> | null;
+      if (!usage || activeSessionIdRef.current !== sessionId) return;
+      setTokenBudget((previous) => mergeTokenBudget(previous, usage));
+    } catch {
+      // Best-effort; the next changed tail refresh retries.
+    }
+  }, []);
+
   const latestRefreshExecutorRef = useRef<(sessionId: string) => Promise<boolean | void>>(
     async () => true,
   );
@@ -363,6 +383,9 @@ export function useChatSessionState({
       // real value may replace the live streamed budget.
       if (slot.tokenUsage != null) {
         setTokenBudget(slot.tokenUsage as Record<string, unknown>);
+      }
+      if (result.changed && !processingSessionsRef.current?.has(sessionId)) {
+        void refreshTokenUsageSnapshot(sessionId);
       }
     }
     return !result.deferred;
@@ -684,10 +707,21 @@ export function useChatSessionState({
   // still growing, capped at ~1s (60 frames) or 3 consecutive stable
   // frames. Cancels cleanly on session change via the pending flag.
   useEffect(() => {
-    if (!isActive) return;
-    if (!pendingInitialScrollRef.current || !scrollContainerRef.current || isLoadingSessionMessages) return;
-    if (chatMessages.length === 0) { pendingInitialScrollRef.current = false; return; }
-    if (searchScrollActiveRef.current) { pendingInitialScrollRef.current = false; return; }
+    if (!isActive || !scrollContainerRef.current) return;
+    // An empty transcript only disarms the pass once the session's history
+    // fetch has actually completed — this effect runs before the loading flag
+    // flips on a session switch, and consuming the flag then left only the
+    // fragile one-shot 50ms scroll (regression: initialScroll.test.ts).
+    const slot = activeSessionId ? sessionStore.getSessionSlot(activeSessionId) : null;
+    const action = resolveInitialScrollAction({
+      pending: pendingInitialScrollRef.current,
+      isLoading: isLoadingSessionMessages,
+      hasMessages: chatMessages.length > 0,
+      hydrated: Boolean(slot?.fetchedAt),
+      searchActive: searchScrollActiveRef.current,
+    });
+    if (action === 'disarm') { pendingInitialScrollRef.current = false; return; }
+    if (action === 'wait') return;
 
     const container = scrollContainerRef.current;
     let frame = 0;
@@ -715,7 +749,7 @@ export function useChatSessionState({
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [chatMessages.length, isActive, isLoadingSessionMessages, scrollToBottom]);
+  }, [activeSessionId, chatMessages.length, isActive, isLoadingSessionMessages, sessionStore]);
 
   // Session replay/subscription remains active regardless of which main tab is
   // visible. Only persisted-history HTTP traffic is visibility-gated below.

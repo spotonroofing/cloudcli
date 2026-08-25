@@ -1,6 +1,7 @@
 import { Folder, Search } from 'lucide-react';
 import type { TFunction } from 'i18next';
-import { Loader } from '../../../../shared/view/beui/Loader';
+
+import { Skeleton } from '../../../../shared/view/ui';
 import type { LoadingProgress } from '../../../../types/app';
 
 type SidebarProjectsStateProps = {
@@ -19,34 +20,20 @@ export default function SidebarProjectsState({
   t,
 }: SidebarProjectsStateProps) {
   if (isLoading) {
+    // Project rows still arriving: row-shaped skeletons hold the list's space
+    // (ui11 phase 11); the scan progress stays as one honest muted line.
     return (
-      <div className="px-4 py-12 text-center md:py-8">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted md:mb-3">
-          <Loader variant="dot-matrix" size={24} className="text-muted-foreground" />
-        </div>
-        <h3 className="mb-2 text-base font-medium text-foreground md:mb-1">{t('projects.loadingProjects')}</h3>
-        {loadingProgress && loadingProgress.total > 0 ? (
-          <div className="space-y-2">
-            <div className="h-2 w-full overflow-hidden rounded-sm bg-muted">
-              <div
-                className="h-full bg-primary transition-all duration-300 ease-out"
-                style={{ width: `${(loadingProgress.current / loadingProgress.total) * 100}%` }}
-              />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {loadingProgress.current}/{loadingProgress.total} {t('projects.projects')}
-            </p>
-            {loadingProgress.currentProject && (
-              <p
-                className="mx-auto max-w-[200px] truncate text-xs text-muted-foreground/70"
-                title={loadingProgress.currentProject}
-              >
-                {loadingProgress.currentProject.split('-').slice(-2).join('/')}
-              </p>
-            )}
+      <div className="space-y-1 px-2 py-1" aria-busy="true" aria-live="polite">
+        {[0, 1, 2, 3, 4].map((row) => (
+          <div key={row} className="flex min-h-9 items-center gap-2 rounded-lg px-2 md:min-h-9">
+            <Skeleton className="size-5 rounded-[5px]" />
+            <Skeleton className="h-3.5 rounded-sm" style={{ width: `${[70, 45, 60, 50, 65][row]}%` }} />
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">{t('projects.fetchingProjects')}</p>
+        ))}
+        {loadingProgress && loadingProgress.total > 0 && (
+          <p className="px-2 pt-1 text-xs text-muted-foreground">
+            {loadingProgress.current}/{loadingProgress.total} {t('projects.projects')}
+          </p>
         )}
       </div>
     );

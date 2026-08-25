@@ -2,7 +2,7 @@ import { useRef, type ReactNode } from 'react';
 import { Activity, Archive, Folder, Loader2, MessageSquare, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { Badge, ScrollArea } from '../../../../shared/view/ui';
+import { Badge, ScrollArea, Skeleton } from '../../../../shared/view/ui';
 import { Loader } from '../../../../shared/view/beui/Loader';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import type { LLMProvider, Project } from '../../../../types/app';
@@ -489,26 +489,13 @@ export default function SidebarContent({
         ) : searchMode === 'archived' ? (
           isArchivedSessionsLoading ? (
             <div className="space-y-2 px-2 py-1" aria-live="polite" aria-busy="true">
-              <div className="flex items-center gap-2 px-1 py-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/70">
-                  <Loader variant="dot-matrix" size={14} className="text-muted-foreground" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-medium text-foreground">
-                    {t('archived.loadingTitle', 'Loading archive...')}
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    {t('archived.loadingDescription', 'Fetching hidden workspaces and sessions you can restore later.')}
-                  </p>
-                </div>
-              </div>
-              {[0, 1].map((skeleton) => (
-                <div key={skeleton} className="animate-pulse rounded-lg border border-border/50 bg-card/40 p-3">
+              {[0, 1, 2].map((row) => (
+                <div key={row} className="rounded-lg border border-border/50 bg-card/40 p-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="h-8 w-8 rounded-lg bg-muted" />
+                    <Skeleton className="h-8 w-8 rounded-lg" />
                     <div className="min-w-0 flex-1 space-y-2">
-                      <div className="h-3 w-2/3 rounded bg-muted" />
-                      <div className="h-2.5 w-5/6 rounded bg-muted/70" />
+                      <Skeleton className="h-3 w-2/3 rounded-sm" />
+                      <Skeleton className="h-2.5 w-5/6 rounded-sm" />
                     </div>
                   </div>
                 </div>
@@ -717,7 +704,7 @@ export default function SidebarContent({
                         </button>
                         <div className="flex flex-shrink-0 items-center gap-0.5">
                           <button
-                            className="relative touch-hit flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="touch-hit relative flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             onClick={() => onRestoreArchivedSession(session.sessionId)}
                             title={t('archived.restore', 'Restore session')}
                             aria-label={`${t('archived.restore', 'Restore session')}: ${session.sessionTitle}`}
@@ -725,7 +712,7 @@ export default function SidebarContent({
                             <RotateCcw className="h-3.5 w-3.5" />
                           </button>
                           <button
-                            className="relative touch-hit flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+                            className="touch-hit relative flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
                             onClick={() => onDeleteArchivedSession(session)}
                             title={t('archived.deletePermanently', 'Delete permanently')}
                             aria-label={`${t('archived.deletePermanently', 'Delete permanently')}: ${session.sessionTitle}`}

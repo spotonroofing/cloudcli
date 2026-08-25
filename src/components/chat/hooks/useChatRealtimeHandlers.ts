@@ -9,6 +9,7 @@ import type { PendingPermissionRequest } from '../types/types';
 import type { ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionStore, NormalizedMessage } from '../../../stores/useSessionStore';
 import { sessionUpsertRefreshTarget } from '../utils/messageHistoryRefreshCoordinator';
+import { mergeTokenBudget } from '../utils/tokenBudget';
 
 const isActionablePermissionRequest = (request: { toolName?: unknown } | null | undefined): boolean => {
   return request?.toolName !== 'ExitPlanMode' && request?.toolName !== 'exit_plan_mode';
@@ -346,16 +347,7 @@ export function useChatRealtimeHandlers({
             // events, so a mismatch is another pane's usage.
             if (sid !== activeViewSessionId) break;
             const incoming = msg.tokenBudget as Record<string, unknown>;
-            setTokenBudget((previous) => {
-              // Mid-stream budgets carry fresh counters but only the env-guess
-              // denominator; keep the SDK-derived window and category breakdown
-              // from the last result until the next one lands.
-              if (incoming.contextUsageSource !== 'sdk' && previous?.contextUsageSource === 'sdk') {
-                const { total, rawTotal, totalIsUsableWindow, categories, contextUsageSource } = previous;
-                return { ...incoming, total, rawTotal, totalIsUsableWindow, categories, contextUsageSource };
-              }
-              return incoming;
-            });
+            setTokenBudget((previous) => mergeTokenBudget(previous, incoming));
           } else if (msg.text && typeof msg.sessionId === 'string' && msg.sessionId) {
             // Run events always carry their session id (the gateway stamps
             // it), so never fall back to the viewed session here — a stray

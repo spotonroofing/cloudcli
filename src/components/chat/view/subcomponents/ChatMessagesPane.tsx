@@ -8,7 +8,7 @@ import type { SessionActivity } from '../../../../hooks/useSessionProtection';
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import { getIntrinsicMessageKey } from '../../utils/messageKeys';
 import { groupConsecutiveTools, isToolGroupItem } from '../../utils/toolGrouping';
-import { Button } from '../../../../shared/view/ui';
+import { Button, Skeleton } from '../../../../shared/view/ui';
 import { MessageScroller } from '../../../../shared/view/beui';
 import { Loader } from '../../../../shared/view/beui/Loader';
 
@@ -245,7 +245,28 @@ function ChatMessagesPane({
             {t('session.boot.retry', { defaultValue: 'Retry' })}
           </Button>
         </div>
-      ) : (isLoadingSessionMessages || isProcessing || isBootingSession) && chatMessages.length === 0 ? (
+      ) : isLoadingSessionMessages && chatMessages.length === 0 ? (
+        // Persisted history still arriving: content-shaped skeleton rows hold
+        // the transcript's space (ui11 phase 11), never a spinner or a blank.
+        <div data-slot="transcript-skeleton" className="space-y-4 pt-2" aria-busy="true">
+          <div className="flex justify-end">
+            <Skeleton className="h-14 w-3/5 rounded-lg" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-11/12" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+          <div className="space-y-1.5">
+            <Skeleton className="h-5 w-2/5 rounded-sm" />
+            <Skeleton className="h-5 w-1/3 rounded-sm" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+        </div>
+      ) : (isProcessing || isBootingSession) && chatMessages.length === 0 ? (
         <div className="mt-8 text-center text-gray-500 dark:text-gray-400">
           <div className="flex items-center justify-center space-x-2">
             <Loader variant="dot-matrix" size={16} className="shrink-0 text-muted-foreground" />

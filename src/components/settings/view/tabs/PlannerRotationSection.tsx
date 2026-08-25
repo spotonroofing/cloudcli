@@ -2,6 +2,7 @@ import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { authenticatedFetch } from '../../../../utils/api';
+import { Skeleton } from '../../../../shared/view/ui';
 
 type RotationSettings = {
   enabled: boolean;
@@ -15,6 +16,7 @@ type RotationSettings = {
  */
 export default function PlannerRotationSection() {
   const [settings, setSettings] = useState<RotationSettings | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -31,6 +33,10 @@ export default function PlannerRotationSection() {
         }
       } catch {
         // section stays hidden on load failure
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -52,6 +58,21 @@ export default function PlannerRotationSection() {
       setSaving(false);
     }
   };
+
+  if (loading) {
+    // Section content still arriving: skeleton rows hold its space instead of
+    // the section blinking in after the fetch (ui11 phase 11).
+    return (
+      <div className="space-y-3 border-t border-border/60 pt-4" aria-busy="true">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4 rounded-sm" />
+          <Skeleton className="h-4 w-40 rounded-sm" />
+        </div>
+        <Skeleton className="h-3 w-4/5 rounded-sm" />
+        <Skeleton className="h-3 w-3/5 rounded-sm" />
+      </div>
+    );
+  }
 
   if (!settings) {
     return null;

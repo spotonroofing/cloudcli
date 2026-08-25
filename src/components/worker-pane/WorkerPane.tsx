@@ -8,7 +8,7 @@ import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
 import { modelDisplayLabel } from '../../utils/modelLabels';
 import { formatCompactAge } from '../sidebar/utils/utils';
-import { ActionMenu, Badge, Button, Tooltip } from '../../shared/view/ui';
+import { ActionMenu, Badge, Button, Skeleton, Tooltip } from '../../shared/view/ui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 
@@ -94,6 +94,9 @@ export default function WorkerPane({
 
   const [paneSession, setPaneSession] = useState<ProjectSession | null>(null);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
+  // False until the first run fetch for this project settles; the switcher
+  // and navigator hold their space with skeletons meanwhile (ui11 phase 11).
+  const [runsLoaded, setRunsLoaded] = useState(false);
   const [chains, setChains] = useState<Record<string, ChainSnapshot>>({});
   const [newSessionTrigger, setNewSessionTrigger] = useState(0);
   const [touchedFiles, setTouchedFiles] = useState<string[] | null>(null);
@@ -141,6 +144,8 @@ export default function WorkerPane({
       setChains(body.data?.chains ?? {});
     } catch {
       // transient; the poll retries
+    } finally {
+      setRunsLoaded(true);
     }
   }, [projectPath]);
 
@@ -148,6 +153,7 @@ export default function WorkerPane({
   useEffect(() => {
     setPaneSession(null);
     setRuns([]);
+    setRunsLoaded(false);
     setChains({});
     setTouchedFiles(null);
     followLatestRef.current = true;
@@ -261,7 +267,8 @@ export default function WorkerPane({
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
         <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         <span className="text-xs font-medium text-foreground">Worker</span>
-        {runs.length > 0 && (
+        {!runsLoaded && <Skeleton className="h-4 w-36 rounded-sm" />}
+        {runsLoaded && runs.length > 0 && (
           <ActionMenu
             label={selectedRun ? runLabel(selectedRun, chains) : 'Runs'}
             ariaLabel="Switch worker run"
@@ -337,7 +344,17 @@ export default function WorkerPane({
         )}
       </div>
 
-      {selectedRun && (
+      {!runsLoaded ? (
+        <div
+          data-slot="phase-navigator-skeleton"
+          aria-busy="true"
+          className="flex h-9 flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/20 px-3"
+        >
+          <Skeleton className="h-3.5 w-3.5 rounded-sm" />
+          <Skeleton className="h-3 w-24 rounded-sm" />
+          <Skeleton className="h-3 w-40 rounded-sm" />
+        </div>
+      ) : selectedRun && (
         <PhaseNavigator
           chain={selectedChain}
           run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
