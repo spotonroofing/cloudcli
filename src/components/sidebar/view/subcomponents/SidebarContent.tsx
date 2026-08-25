@@ -740,6 +740,7 @@ export default function SidebarContent({
           workerRunningCount={workerRunningCount}
           activeSessionRows={activeSessionRows}
           onOpenActiveSession={onOpenActiveSession}
+          selectedProject={projectListProps.selectedProject ?? null}
           isMobile={isMobile}
           t={t}
         />

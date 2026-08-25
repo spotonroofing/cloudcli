@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Ban, ChevronDown, Info, Pencil, RotateCcw, Wrench } from 'lucide-react';
+import { Ban, BookMarked, ChevronDown, Info, Pencil, RotateCcw, Wrench } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import type {
@@ -81,6 +81,26 @@ export function InterruptedMarker() {
     <div data-slot="interrupted-marker" className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground/80">
       <Ban className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
       <span>{t('interrupted', { defaultValue: 'Interrupted' })}</span>
+    </div>
+  );
+}
+
+/**
+ * Small marker row where the planner wrote memory (ui12 phase 7): the
+ * server-side watcher on the memory paths detected the write, so the row
+ * names the files without relying on the model announcing itself.
+ */
+export function MemoryUpdatedMarker({ files }: { files: string[] }) {
+  const { t } = useTranslation('chat');
+  return (
+    <div data-slot="memory-updated-marker" className="flex min-w-0 items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground/80">
+      <BookMarked className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+      <span className="flex-shrink-0">{t('memoryUpdated', { defaultValue: 'Memory updated' })}</span>
+      {files.length > 0 && (
+        <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground/60" title={files.join(', ')}>
+          {files.join(', ')}
+        </span>
+      )}
     </div>
   );
 }
@@ -392,6 +412,14 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
     return (
       <div className="chat-message assistant px-3 sm:px-0" data-message-timestamp={message.timestamp || undefined}>
         <InterruptedMarker />
+      </div>
+    );
+  }
+
+  if (message.isMemoryUpdate) {
+    return (
+      <div className="chat-message assistant px-3 sm:px-0" data-message-timestamp={message.timestamp || undefined}>
+        <MemoryUpdatedMarker files={Array.isArray(message.memoryFiles) ? message.memoryFiles : []} />
       </div>
     );
   }

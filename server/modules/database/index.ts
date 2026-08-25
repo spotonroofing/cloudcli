@@ -6,6 +6,8 @@ export { appConfigDb } from '@/modules/database/repositories/app-config.js';
 export { composerDraftsDb } from '@/modules/database/repositories/composer-drafts.db.js';
 export { credentialsDb } from '@/modules/database/repositories/credentials.js';
 export { githubTokensDb } from '@/modules/database/repositories/github-tokens.js';
+// memoryUpdatesDb: memory-updated transcript indicators (ui12 phase 7).
+export { memoryUpdatesDb } from '@/modules/database/repositories/memory-updates.db.js';
 // messageVersionsDb: edit-and-resend response versioning (ui9 B3).
 export { messageVersionsDb } from '@/modules/database/repositories/message-versions.db.js';
 export { notificationChannelEndpointsDb } from '@/modules/database/repositories/notification-channel-endpoints.js';

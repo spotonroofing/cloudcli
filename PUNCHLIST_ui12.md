@@ -82,9 +82,9 @@ Done check: on dev via agent-browser with reduced-motion off: during collapse, a
 
 Goal: when the planner logs memory, Willem sees it, and memory is browsable. Files: server watch on the memory repo paths, a transcript indicator component, a memory viewer surface, the /planner boot flow for the global folder, DESIGN.md. Dependencies: none.
 
-- [ ] When a planner session writes into planner memory (the spoton-worker repo: STATE.md, PROJECT.md, lessons/, sessions/) or native auto-memory, the transcript shows a small memory-updated indicator row naming the file (grouped when several land in one turn), rendered live and on reload. Detection watches the memory paths server-side; no reliance on the model announcing itself.
-- [ ] A read-only memory viewer (a drawer or panel consistent with the app's patterns) lists the current project's PROJECT.md, STATE.md, lessons (one-line summaries, expandable), and recent session summaries, plus a Global tab reading planner/_global/.
-- [ ] Create `planner/_global/` in the spoton-worker repo with a seed README describing its contract (cross-project preferences and lessons; the planner reads it at boot alongside project memory); the viewer reads it. Keep CLAUDE.md files out of scope; nothing new writes to them.
+- [x] When a planner session writes into planner memory (the spoton-worker repo: STATE.md, PROJECT.md, lessons/, sessions/) or native auto-memory, the transcript shows a small memory-updated indicator row naming the file (grouped when several land in one turn), rendered live and on reload. Detection watches the memory paths server-side; no reliance on the model announcing itself.
+- [x] A read-only memory viewer (a drawer or panel consistent with the app's patterns) lists the current project's PROJECT.md, STATE.md, lessons (one-line summaries, expandable), and recent session summaries, plus a Global tab reading planner/_global/.
+- [x] Create `planner/_global/` in the spoton-worker repo with a seed README describing its contract (cross-project preferences and lessons; the planner reads it at boot alongside project memory); the viewer reads it. Keep CLAUDE.md files out of scope; nothing new writes to them.
 
 Done check: on dev, a planner-session test write of a lesson file produces the indicator row in that session's transcript live and after reload; the viewer lists PROJECT.md/STATE.md/lessons and opens content; the Global tab shows the seed file. Fresh-context subagent verification. Commit.
 

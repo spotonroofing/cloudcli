@@ -5,6 +5,7 @@ import { promises as fsPromises } from 'node:fs';
 import chokidar, { type FSWatcher } from 'chokidar';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { handleAutoMemoryFileEvent } from '@/modules/memory/index.js';
 import { sessionSynchronizerService } from '@/modules/providers/services/session-synchronizer.service.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { LLMProvider } from '@/shared/types.js';
@@ -245,6 +246,12 @@ async function onUpdate(
   filePath: string,
   provider: LLMProvider
 ): Promise<void> {
+  // Native auto-memory writes (projects/<slug>/memory/*.md) ride this watcher
+  // instead of a second poll over the same tree (ui12 phase 7).
+  if (provider === 'claude') {
+    handleAutoMemoryFileEvent(PROVIDER_WATCH_PATHS[0].rootPath, filePath);
+  }
+
   if (!isWatcherTargetFile(provider, filePath)) {
     return;
   }

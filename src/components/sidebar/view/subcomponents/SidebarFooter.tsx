@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Compass, Hammer, Settings, AlertTriangle, AtSign } from 'lucide-react';
+import { Compass, Hammer, Settings, AlertTriangle, AtSign, BookMarked } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { NumberTicker } from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 import { authenticatedFetch } from '../../../../utils/api';
+import type { Project } from '../../../../types/app';
 import type { ActiveSessionRow } from '../../types/types';
 
 import AccountsPanel from './AccountsPanel';
 import ActiveSessionsDrawer from './ActiveSessionsDrawer';
+import MemoryDrawer from './MemoryDrawer';
 
 type SidebarFooterProps = {
   restartRequired: boolean;
@@ -21,6 +23,8 @@ type SidebarFooterProps = {
   activeSessionRows: ActiveSessionRow[];
   /** Opens a drawer row's session in the pane. */
   onOpenActiveSession: (row: ActiveSessionRow) => void;
+  /** The memory viewer's Project tab reads this project's planner memory. */
+  selectedProject: Project | null;
   /** Phone: the footer drawers render as full-width bottom sheets. */
   isMobile: boolean;
   t: TFunction;
@@ -77,16 +81,17 @@ export default function SidebarFooter({
   workerRunningCount,
   activeSessionRows,
   onOpenActiveSession,
+  selectedProject,
   isMobile,
   t,
 }: SidebarFooterProps) {
   const showCounterBar = plannerRunningCount > 0 || workerRunningCount > 0;
 
   // One footer drawer at a time: the account switcher (ui8 phase 6, drawer in
-  // ui11 phase 5) or a counter drawer (ui11 phase 12). All three rise from
-  // the same anchor block above Settings.
-  const [openDrawer, setOpenDrawer] = useState<'accounts' | 'planner' | 'worker' | null>(null);
-  const toggleDrawer = (drawer: 'accounts' | 'planner' | 'worker') =>
+  // ui11 phase 5), a counter drawer (ui11 phase 12), or the memory viewer
+  // (ui12 phase 7). All rise from the same anchor block above Settings.
+  const [openDrawer, setOpenDrawer] = useState<'accounts' | 'planner' | 'worker' | 'memory' | null>(null);
+  const toggleDrawer = (drawer: 'accounts' | 'planner' | 'worker' | 'memory') =>
     setOpenDrawer((current) => (current === drawer ? null : drawer));
   const [activeAccountEmail, setActiveAccountEmail] = useState<string | null>(null);
   const accountsAnchorRef = useRef<HTMLDivElement>(null);
@@ -165,6 +170,15 @@ export default function SidebarFooter({
         <div className="space-y-0.5 px-2 py-1.5">
           <button
             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            onClick={() => toggleDrawer('memory')}
+            aria-expanded={openDrawer === 'memory'}
+            data-slot="memory-viewer-trigger"
+          >
+            <BookMarked className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="text-sm">{t('memory.title', 'Memory')}</span>
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
             onClick={() => toggleDrawer('accounts')}
             title={activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
             aria-expanded={openDrawer === 'accounts'}
@@ -188,6 +202,15 @@ export default function SidebarFooter({
           open={openDrawer === 'accounts'}
           onOpenChange={(open) => setOpenDrawer(open ? 'accounts' : null)}
           onActiveChange={setActiveAccountEmail}
+          isMobile={isMobile}
+          anchorRef={accountsAnchorRef}
+          t={t}
+        />
+
+        <MemoryDrawer
+          open={openDrawer === 'memory'}
+          onClose={() => setOpenDrawer(null)}
+          selectedProject={selectedProject}
           isMobile={isMobile}
           anchorRef={accountsAnchorRef}
           t={t}

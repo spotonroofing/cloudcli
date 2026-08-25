@@ -9,6 +9,7 @@ import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
 import { useChatRealtimeHandlers } from '../hooks/useChatRealtimeHandlers';
 import { useChatComposerState, type BootState } from '../hooks/useChatComposerState';
+import { useMemoryUpdates } from '../hooks/useMemoryUpdates';
 import { useMessageVersions } from '../hooks/useMessageVersions';
 import { findEditGroupId } from '../utils/messageVersions';
 import { useSessionStore } from '../../../stores/useSessionStore';
@@ -118,6 +119,12 @@ function ChatInterface({
     processingSessions,
   });
 
+  // Persisted memory-updated indicator rows (ui12 phase 7).
+  const { updates: memoryUpdates } = useMemoryUpdates({
+    sessionId: selectedSession?.id ?? null,
+    processingSessions,
+  });
+
   const {
     chatMessages,
     addMessage,
@@ -165,6 +172,7 @@ function ChatInterface({
     hideBootPrologue,
     bootTurnActive: bootState.phase === 'booting',
     messageVersions: messageVersionView,
+    memoryUpdates,
   });
 
   // Palette convenience: "Copy last response" copies the newest assistant

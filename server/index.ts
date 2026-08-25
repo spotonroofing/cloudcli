@@ -52,6 +52,7 @@ import { initializeDatabase, sessionsDb } from './modules/database/index.js';
 import { configureWebPush } from './modules/notifications/index.js';
 import { createWatchdogRouter, watchdogService } from './modules/watchdog/index.js';
 import { createDraftsRouter } from './modules/drafts/index.js';
+import { createMemoryRouter, initializeMemoryWatcher } from './modules/memory/index.js';
 import { createQueuedMessagesRouter } from './modules/queued-messages/index.js';
 import { createAccountsRouter } from './modules/accounts/index.js';
 
@@ -217,6 +218,9 @@ app.use('/api/drafts', authenticateToken, createDraftsRouter());
 
 // Queued message persistence (protected, ui11 phase 1)
 app.use('/api/queued-messages', authenticateToken, createQueuedMessagesRouter());
+
+// Memory-updated indicators + read-only memory viewer (protected, ui12 phase 7)
+app.use('/api/memory', authenticateToken, createMemoryRouter());
 
 // Claude account switcher via cswap (protected)
 app.use('/api/accounts', authenticateToken, createAccountsRouter());
@@ -396,6 +400,9 @@ async function startServer() {
 
             // Start watching the projects folder for changes
             await initializeSessionsWatcher();
+
+            // Watch the planner memory repo for memory writes (ui12 phase 7)
+            await initializeMemoryWatcher();
 
             // A boot mid-flight when the previous process died can never
             // complete; persist the failure before any client reopens it.

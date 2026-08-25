@@ -13,7 +13,8 @@ import { mergeTokenBudget } from '../utils/tokenBudget';
 import { createCachedDiffCalculator, type DiffCalculator } from '../utils/messageTransforms';
 import { applyMessageVersions, type MessageVersionView } from '../utils/messageVersions';
 
-import { normalizedToChatMessages } from './useChatMessages';
+import { mergeMemoryUpdateRows, normalizedToChatMessages } from './useChatMessages';
+import type { SessionMemoryUpdate } from './useChatMessages';
 
 const INITIAL_VISIBLE_MESSAGES = 100;
 
@@ -44,6 +45,8 @@ interface UseChatSessionStateArgs {
   bootTurnActive?: boolean;
   /** Edit-and-resend version rows + selections; non-selected segments hide. */
   messageVersions?: MessageVersionView;
+  /** Persisted memory-updated rows; merged into the transcript by timestamp. */
+  memoryUpdates?: SessionMemoryUpdate[];
 }
 
 interface ScrollRestoreState {
@@ -223,6 +226,7 @@ export function useChatSessionState({
   hideBootPrologue = false,
   bootTurnActive = false,
   messageVersions,
+  memoryUpdates,
 }: UseChatSessionStateArgs) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
@@ -491,9 +495,14 @@ export function useChatSessionState({
     const converted = normalizedToChatMessages(storeMessages);
     // Edit-and-resend versioning: non-selected version segments hide before
     // any windowing, so segment boundaries see the whole loaded transcript.
-    const all = messageVersions
+    const versioned = messageVersions
       ? applyMessageVersions(converted, messageVersions)
       : converted;
+    // Memory-updated markers (ui12 phase 7): persisted rows merge in by
+    // timestamp before windowing; live frames already sit in the store.
+    const all = memoryUpdates && memoryUpdates.length > 0
+      ? mergeMemoryUpdateRows(versioned, memoryUpdates)
+      : versioned;
     // The boot prologue only hides when the loaded window includes the
     // transcript start; a mid-transcript window has no boot prompt in view.
     const applyBootFilter = hideBootPrologue && !hasMoreMessages;
@@ -508,7 +517,7 @@ export function useChatSessionState({
       ? all.slice(0, -viewHiddenCount)
       : all;
     return applyBootFilter ? stripBootPrologue(windowed, excludeTrailingTurn) : windowed;
-  }, [storeMessages, viewHiddenCount, pendingUserMessage, hideBootPrologue, hasMoreMessages, bootTurnActive, isProcessing, messageVersions]);
+  }, [storeMessages, viewHiddenCount, pendingUserMessage, hideBootPrologue, hasMoreMessages, bootTurnActive, isProcessing, messageVersions, memoryUpdates]);
 
   /* ---------------------------------------------------------------- */
   /*  addMessage / clearMessages / rewindMessages                     */

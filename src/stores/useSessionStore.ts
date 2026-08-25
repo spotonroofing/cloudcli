@@ -40,7 +40,8 @@ export type MessageKind =
   | 'permission_cancelled'
   | 'session_created'
   | 'interactive_prompt'
-  | 'task_notification';
+  | 'task_notification'
+  | 'memory_update';
 
 export interface NormalizedMessage {
   id: string;
@@ -75,6 +76,8 @@ export interface NormalizedMessage {
   isCompactSummary?: boolean;
   /** A turn was killed mid-response here; renders as the interrupted marker row. */
   isInterruptMarker?: boolean;
+  /** `memory_update` rows: memory-relative paths written in this burst (ui12 phase 7). */
+  memoryFiles?: string[];
   images?: Array<{ path?: string; data?: string; name?: string }>;
   files?: Array<{ path?: string; name?: string; mimeType?: string; size?: number }>;
   toolName?: string;

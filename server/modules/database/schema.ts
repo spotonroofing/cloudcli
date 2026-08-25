@@ -298,6 +298,21 @@ CREATE TABLE IF NOT EXISTS message_versions (
 );
 `;
 
+/**
+ * Memory-updated transcript indicators (ui12 phase 7). The server-side watcher
+ * on the planner memory repo and native auto-memory paths records one row per
+ * coalesced write burst, attributed to a session; the client merges these into
+ * the transcript on reload (the provider JSONL is never touched).
+ */
+export const MEMORY_UPDATES_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS memory_updates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    files_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+`;
+
 export const INIT_SCHEMA_SQL = `
 -- Initialize authentication database
 PRAGMA foreign_keys = ON;
@@ -354,4 +369,7 @@ ${WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL}
 
 ${MESSAGE_VERSIONS_TABLE_SCHEMA_SQL}
 CREATE INDEX IF NOT EXISTS idx_message_versions_session ON message_versions(session_id);
+
+${MEMORY_UPDATES_TABLE_SCHEMA_SQL}
+CREATE INDEX IF NOT EXISTS idx_memory_updates_session ON memory_updates(session_id);
 `;

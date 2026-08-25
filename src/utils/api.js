@@ -172,6 +172,13 @@ export const api = {
     const queryString = params.toString();
     return authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/messages${queryString ? `?${queryString}` : ''}`);
   },
+  // Memory-updated indicator rows for one session (ui12 phase 7).
+  sessionMemoryUpdates: (sessionId) =>
+    authenticatedFetch(`/api/memory/sessions/${encodeURIComponent(sessionId)}/updates`),
+  // Read-only memory viewer payloads (ui12 phase 7).
+  memoryProject: (projectId) =>
+    authenticatedFetch(`/api/memory/project/${encodeURIComponent(projectId)}`),
+  memoryGlobal: () => authenticatedFetch('/api/memory/global'),
   // Edit-and-resend response versions for one session (ui9 B3).
   sessionMessageVersions: (sessionId) =>
     authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/message-versions`),

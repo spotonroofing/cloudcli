@@ -67,6 +67,10 @@ export interface ChatMessage {
   isCompactSummary?: boolean;
   /** A turn was killed mid-response here; renders as the interrupted marker row. */
   isInterruptMarker?: boolean;
+  /** The planner wrote memory here; renders as the memory-updated marker row. */
+  isMemoryUpdate?: boolean;
+  /** Memory-relative paths written in the burst this row marks. */
+  memoryFiles?: string[];
   isSubagentContainer?: boolean;
   subagentState?: {
     childTools: SubagentChildTool[];

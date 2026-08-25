@@ -63,6 +63,47 @@ function parseTaskNotification(content: string): ParsedTaskNotification | null {
  * transcript artifacts such as local slash commands and compact summaries are
  * intentionally preserved and annotated so they can render like normal chat.
  */
+export type SessionMemoryUpdate = { id: number; files: string[]; createdAt: string };
+
+/**
+ * Merges persisted memory-updated rows (ui12 phase 7) into a converted
+ * transcript by timestamp. Live `memory_update` frames already sit in the
+ * store under the same `memory_<rowId>` id, so persisted duplicates skip.
+ */
+export function mergeMemoryUpdateRows(
+  messages: ChatMessage[],
+  updates: SessionMemoryUpdate[],
+): ChatMessage[] {
+  const existingIds = new Set(messages.map((message) => message.id).filter(Boolean));
+  const fresh = updates
+    .filter((update) => !existingIds.has(`memory_${update.id}`))
+    .map((update): ChatMessage => ({
+      id: `memory_${update.id}`,
+      type: 'assistant',
+      content: '',
+      timestamp: update.createdAt,
+      isMemoryUpdate: true,
+      memoryFiles: update.files,
+    }));
+  if (fresh.length === 0) return messages;
+
+  const merged: ChatMessage[] = [];
+  let next = 0;
+  for (const message of messages) {
+    const messageTime = new Date(message.timestamp as string | number | Date).getTime();
+    while (next < fresh.length && new Date(fresh[next].timestamp as string).getTime() <= messageTime) {
+      merged.push(fresh[next]);
+      next += 1;
+    }
+    merged.push(message);
+  }
+  while (next < fresh.length) {
+    merged.push(fresh[next]);
+    next += 1;
+  }
+  return merged;
+}
+
 export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMessage[] {
   const converted: ChatMessage[] = [];
 
@@ -244,6 +285,17 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
           timestamp: msg.timestamp,
           isTaskNotification: true,
           taskStatus: msg.status || 'completed',
+          ...sharedMetadata,
+        });
+        break;
+
+      case 'memory_update':
+        converted.push({
+          type: 'assistant',
+          content: '',
+          timestamp: msg.timestamp,
+          isMemoryUpdate: true,
+          memoryFiles: Array.isArray(msg.memoryFiles) ? msg.memoryFiles : [],
           ...sharedMetadata,
         });
         break;

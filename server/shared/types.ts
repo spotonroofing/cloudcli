@@ -198,7 +198,8 @@ export type MessageKind =
   | 'permission_cancelled'
   | 'session_created'
   | 'interactive_prompt'
-  | 'task_notification';
+  | 'task_notification'
+  | 'memory_update';
 
 /**
  * Event kinds added by the chat gateway layer on top of provider message kinds.
@@ -265,6 +266,8 @@ export type NormalizedMessage = {
   isCompactSummary?: boolean;
   /** A turn was killed mid-response here; the UI renders a small marker row. */
   isInterruptMarker?: boolean;
+  /** `memory_update` rows: memory-relative paths written in this burst (ui12 phase 7). */
+  memoryFiles?: string[];
   images?: unknown;
   /** Non-image files attached to a user turn after provider history normalization. */
   files?: unknown;
