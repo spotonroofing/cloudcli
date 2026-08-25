@@ -1,5 +1,5 @@
 import { animate, motion, useInView, useReducedMotion } from 'motion/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { cn } from '../../../lib/utils';
 
@@ -35,15 +35,6 @@ export interface NumberTickerProps {
 const DIGIT_HEIGHT_EM = 1.1;
 const DIGITS = Array.from({ length: 10 }, (_, n) => n);
 
-// Non-digit glyphs (k, M, %, separators, prefix/suffix) get the same 1.1em box
-// as the rolling digit columns, with a matching line-height so every glyph
-// shares one baseline. Without this the plain spans inherit the surrounding
-// line-height and sit a pixel or two off the digits.
-const GLYPH_BOX_STYLE = {
-  height: `${DIGIT_HEIGHT_EM}em`,
-  lineHeight: `${DIGIT_HEIGHT_EM}em`,
-} as const;
-
 export function NumberTicker({
   value,
   pad,
@@ -61,6 +52,28 @@ export function NumberTicker({
   const containerRef = useRef<HTMLSpanElement>(null);
   const inView = useInView(containerRef, { once: true, amount: 0.6 });
   const [armed, setArmed] = useState(!startOnView);
+
+  // The rolling columns translate by whole multiples of the digit-box height
+  // on a composited layer, and browsers pixel-snap each column's layer
+  // independently. A fractional box height (1.1em is fractional at most
+  // font sizes, zooms, and DPRs) snaps every column a different subpixel
+  // amount, so digits visibly ride high or low relative to each other.
+  // Snapping the step to whole device pixels keeps every column on the grid.
+  const [stepPx, setStepPx] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const fontSize = parseFloat(getComputedStyle(el).fontSize);
+    const dpr = window.devicePixelRatio || 1;
+    setStepPx(Math.round(fontSize * DIGIT_HEIGHT_EM * dpr) / dpr);
+  }, []);
+  const step = stepPx === null ? `${DIGIT_HEIGHT_EM}em` : `${stepPx}px`;
+
+  // Non-digit glyphs (k, M, %, separators, prefix/suffix) get the same box
+  // as the rolling digit columns, with a matching line-height so every glyph
+  // shares one baseline. Without this the plain spans inherit the surrounding
+  // line-height and sit a pixel or two off the digits.
+  const glyphBoxStyle = { height: step, lineHeight: step };
 
   useEffect(() => {
     if (startOnView && inView) setArmed(true);
@@ -109,15 +122,15 @@ export function NumberTicker({
             edge to the surrounding text baseline and the digits float high.
             A real text glyph first gives the ticker the true 1.1em-box
             baseline, so it sits on the line like plain text. */}
-        <span className="inline-block w-0" style={GLYPH_BOX_STYLE}>
+        <span className="inline-block w-0" style={glyphBoxStyle}>
           {'\u200B'}
         </span>
-        {prefix ? <span className="inline-block" style={GLYPH_BOX_STYLE}>{prefix}</span> : null}
+        {prefix ? <span className="inline-block" style={glyphBoxStyle}>{prefix}</span> : null}
         {glyphs.map(({ char, id }, i) => {
           const isDigit = /\d/.test(char);
           if (!isDigit) {
             return (
-              <span key={id} className="inline-block" style={GLYPH_BOX_STYLE}>
+              <span key={id} className="inline-block" style={glyphBoxStyle}>
                 {char}
               </span>
             );
@@ -130,11 +143,12 @@ export function NumberTicker({
               delay={entered ? 0 : i * stagger}
               duration={duration}
               blur={blur}
+              stepPx={stepPx}
               className={digitClassName}
             />
           );
         })}
-        {suffix ? <span className="inline-block" style={GLYPH_BOX_STYLE}>{suffix}</span> : null}
+        {suffix ? <span className="inline-block" style={glyphBoxStyle}>{suffix}</span> : null}
       </span>
     </span>
   );
@@ -145,12 +159,14 @@ function Digit({
   delay,
   duration,
   blur,
+  stepPx,
   className,
 }: {
   digit: number;
   delay: number;
   duration: number;
   blur: boolean;
+  stepPx: number | null;
   className?: string;
 }) {
   const reduce = useReducedMotion();
@@ -178,15 +194,16 @@ function Digit({
     };
   }, [blur, delay, digit, duration, reduce]);
 
+  const boxHeight = stepPx === null ? `${DIGIT_HEIGHT_EM}em` : `${stepPx}px`;
   return (
     <span
       className={cn('relative inline-block overflow-hidden', className)}
-      style={{ height: `${DIGIT_HEIGHT_EM}em`, width: '1ch' }}
+      style={{ height: boxHeight, width: '1ch' }}
     >
       <motion.span
         ref={columnRef}
         initial={{ y: 0 }}
-        animate={{ y: `-${digit * DIGIT_HEIGHT_EM}em` }}
+        animate={{ y: stepPx === null ? `-${digit * DIGIT_HEIGHT_EM}em` : `-${digit * stepPx}px` }}
         transition={
           reduce
             ? { duration: 0 }
@@ -197,7 +214,8 @@ function Digit({
         {DIGITS.map((n) => (
           <span
             key={n}
-            className="flex h-[1.1em] items-center justify-center leading-none"
+            className="flex items-center justify-center leading-none"
+            style={{ height: boxHeight }}
           >
             {n}
           </span>

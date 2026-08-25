@@ -524,7 +524,7 @@ export default function ChatComposer({
                 <span
                   data-slot="char-counter"
                   title={t('input.characterCount', { defaultValue: 'Characters' })}
-                  className="text-[10px] font-medium tabular-nums text-muted-foreground"
+                  className="font-mono text-[10px] font-medium tabular-nums text-muted-foreground"
                 >
                   <NumberTicker value={input.length} locale duration={0.35} stagger={0} startOnView={false} />
                 </span>

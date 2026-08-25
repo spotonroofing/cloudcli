@@ -486,10 +486,23 @@
     @apply bg-background text-foreground;
 
     font-family: var(--font-ui);
+    /* Lining figures everywhere: digits share one top and bottom line. The
+       bundled Schibsted only carries lining figures, but a fallback family on
+       an unloaded font may not — force it, don't trust defaults (ui12 job 9). */
+    font-variant-numeric: lining-nums;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     margin: 0;
     padding: 0;
+  }
+
+  /* Tailwind's tabular-nums utility rebuilds font-variant-numeric from its
+     composable vars, which drops the inherited lining-nums above. Defaulting
+     the figure channel keeps every tabular site on lining figures too. */
+  *,
+  ::before,
+  ::after {
+    --tw-numeric-figure: lining-nums;
   }
 
   html, body {
