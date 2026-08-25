@@ -147,7 +147,7 @@ function ChatMessageImage({ image, projectId }: { image: ChatImage; projectId?: 
         type="button"
         onClick={() => setExpanded(true)}
         aria-label={`Expand ${alt}`}
-        className="block overflow-hidden rounded-lg border border-border/50 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+        className="block overflow-hidden rounded-lg border border-border/50 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       >
         <img
           src={src}

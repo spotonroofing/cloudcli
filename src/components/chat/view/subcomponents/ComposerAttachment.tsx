@@ -110,7 +110,7 @@ const ComposerAttachment = ({ file, descriptor, onRemove, uploadProgress, error 
           type="button"
           onClick={() => preview && setExpanded(true)}
           aria-label={`Expand ${name}`}
-          className="block overflow-hidden rounded-lg border border-border/50 bg-background/80 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+          className="block overflow-hidden rounded-lg border border-border/50 bg-background/80 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
         >
           {preview
             ? <img src={preview} alt={name} className="h-20 w-20 cursor-zoom-in object-contain" />

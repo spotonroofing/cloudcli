@@ -383,22 +383,22 @@ export default function ChatComposer({
 
           <input {...getInputProps()} />
 
-          {/* Input row (Claude-desktop style): plus flanks the text left, model
-              selector + send flank it right; items-end pins the controls to the
-              last text line so a long draft stacks above them. */}
-          <div data-slot="composer-input-row" className="flex items-end gap-1 px-2 pt-1">
+          {/* Input row (Claude-desktop style): plus flanks the text left, send
+              flanks it right; items-end pins the controls to the last text line
+              so a long draft stacks above them. */}
+          <div data-slot="composer-input-row" className="flex items-end gap-1 px-2 pb-1.5 pt-1">
             <PromptInputButton
               tooltip={{ content: t('input.attachFiles') }}
               onClick={openAttachmentPicker}
               aria-label={t('input.attachFiles')}
-              className="mb-0.5 ml-0.5"
+              className="mb-0.5 ml-0.5 h-7 w-7"
             >
               <PlusIcon />
             </PromptInputButton>
 
             <PromptInputBody className="min-w-0 flex-1">
               <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
-                <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words px-2 py-2 text-base leading-6 text-transparent md:text-sm">
+                <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words px-2 py-1.5 text-base leading-6 text-transparent md:text-[13px] md:leading-5">
                   {renderInputWithMentions(input)}
                 </div>
               </div>
@@ -417,49 +417,40 @@ export default function ChatComposer({
                 onInput={onTextareaInput}
                 placeholder={isBootLocked ? t('input.bootLocked', { defaultValue: 'Starting session...' }) : placeholder}
                 disabled={isBootLocked}
-                className="px-2"
+                className="px-2 py-1.5 md:text-[13px] md:leading-5"
               />
             </PromptInputBody>
 
             <div className="mb-0.5 flex shrink-0 items-center gap-1.5">
-              <ComposerModelMenu
-                effort={effort}
-                effortOptions={availableEffortOptions}
-                onSelectEffort={onSelectEffort}
-                model={model}
-                modelOptions={availableModelOptions}
-                onSelectModel={onSelectModel}
-                modelsLoading={modelsLoading}
-              />
-
               <PromptInputSubmit
-              onClick={
-                canQueueDraft
-                  ? (e: MouseEvent<HTMLButtonElement>) => {
-                      e.preventDefault();
-                      onSubmit(e);
-                    }
-                  : isLoading
-                    ? onAbortSession
-                    : isRecording
-                      ? (e: MouseEvent<HTMLButtonElement>) => {
-                          e.preventDefault();
-                          voiceStop({ send: true });
-                        }
-                      : undefined
-              }
-              disabled={
-                isLoading
-                  ? false
-                  : isRecording
+                className="h-7 w-7"
+                onClick={
+                  canQueueDraft
+                    ? (e: MouseEvent<HTMLButtonElement>) => {
+                        e.preventDefault();
+                        onSubmit(e);
+                      }
+                    : isLoading
+                      ? onAbortSession
+                      : isRecording
+                        ? (e: MouseEvent<HTMLButtonElement>) => {
+                            e.preventDefault();
+                            voiceStop({ send: true });
+                          }
+                        : undefined
+                }
+                disabled={
+                  isLoading
                     ? false
-                    : isTranscribing
-                      ? true
-                      : !input.trim() && !hasAttachments
-              }
-              aria-label={submitAriaLabel}
-              title={submitAriaLabel}
-            >
+                    : isRecording
+                      ? false
+                      : isTranscribing
+                        ? true
+                        : !input.trim() && !hasAttachments
+                }
+                aria-label={submitAriaLabel}
+                title={submitAriaLabel}
+              >
                 {isTranscribing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : canQueueDraft ? (
@@ -470,15 +461,16 @@ export default function ChatComposer({
           </div>
       </PromptInput>
 
-        {/* Slim secondary row (ui11 phase 5): floats under the enclosure,
-            outside its border — handoff + slash (+ voice/clear) left, the
-            character counter and the context ring right, aligned to the
-            enclosure's edges. */}
+        {/* Slim secondary row (ui11 phase 5, ui12 phase 2): floats under the
+            enclosure, outside its border — handoff + slash (+ voice/clear)
+            left, the model selector + character counter + context ring right.
+            No horizontal padding: the left cluster's edge and the ring's right
+            edge sit flush with the enclosure's borders. */}
         <div
           data-slot="composer-secondary-row"
-          className="mt-1 flex items-center justify-between gap-2 px-2"
+          className="mt-1 flex items-center justify-between gap-2"
         >
-            <PromptInputTools className="ml-0.5 min-w-0">
+            <PromptInputTools className="min-w-0">
               {handoffAvailable && (
                 <PromptInputButton
                   tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
@@ -514,6 +506,15 @@ export default function ChatComposer({
             </PromptInputTools>
 
             <div className="flex shrink-0 items-center gap-1.5">
+              <ComposerModelMenu
+                effort={effort}
+                effortOptions={availableEffortOptions}
+                onSelectEffort={onSelectEffort}
+                model={model}
+                modelOptions={availableModelOptions}
+                onSelectModel={onSelectModel}
+                modelsLoading={modelsLoading}
+              />
               {input.length > 0 && (
                 <span
                   data-slot="char-counter"

@@ -36,9 +36,9 @@ Done check: on dev with two agent-browser profiles: plant a fake pre-ui11 localS
 
 Goal: the prompt bar reads slightly smaller and properly padded, its floating row lines up flush with the enclosure edges, and attachments carry the promised border without the click-flash. Sizing and placement reference is the Claude Code desktop composer (model selector low in the corner, controls aligned to the box edges); keep Command Center's own look and components. Files: ChatComposer.tsx and its attachment previews, the secondary-row components, DESIGN.md. Dependencies: none.
 
-- [ ] Compact pass: reduce the composer's overall scale a step (text, control heights, paddings proportionally); restore the missing bottom padding so the send button and text no longer touch the enclosure's bottom edge.
-- [ ] The floating row under the enclosure aligns flush: the left control cluster's left edge to the enclosure's left border, the usage ring's right edge to the enclosure's right border. The model selector moves down into that row (Claude Code desktop placement), keeping the existing selector component.
-- [ ] Attachment previews (images, files, pasted text) carry the enclosure's border style as ui11 specified; images fit-contained. The 2-3px stroke that flashes when clicking a preview open (a focus/active artifact) is found and removed; opening a preview is visually clean.
+- [x] Compact pass: reduce the composer's overall scale a step (text, control heights, paddings proportionally); restore the missing bottom padding so the send button and text no longer touch the enclosure's bottom edge.
+- [x] The floating row under the enclosure aligns flush: the left control cluster's left edge to the enclosure's left border, the usage ring's right edge to the enclosure's right border. The model selector moves down into that row (Claude Code desktop placement), keeping the existing selector component.
+- [x] Attachment previews (images, files, pasted text) carry the enclosure's border style as ui11 specified; images fit-contained. The 2-3px stroke that flashes when clicking a preview open (a focus/active artifact) is found and removed; opening a preview is visually clean.
 
 Done check: on dev, DOM measurements: bottom padding present between send button and border; left cluster and usage ring flush with the enclosure edges within 1px; thumbnails carry the border classes; clicking a preview produces no transient outline (assert no outline/ring style on active). Phone viewport holds. Fresh-context subagent verification. Commit.
 
