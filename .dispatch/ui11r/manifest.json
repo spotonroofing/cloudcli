@@ -1,0 +1,34 @@
+[
+ {
+  "name": "Live loading (finish phase 11)",
+  "tasks": [
+   "Verify and commit the uncommitted phase 11 work",
+   "Fresh-context verification",
+   "Commit the runner limit-pattern fix"
+  ]
+ },
+ {
+  "name": "Counter drawers (phase 12)",
+  "tasks": [
+   "Planner counter opens a drawer of active planners",
+   "Worker counter drawer for active runs",
+   "One-or-zero rows, no jump; record old behavior"
+  ]
+ },
+ {
+  "name": "Edit in place (phase 13)",
+  "tasks": [
+   "Pencil turns the bubble into an inline editor",
+   "Save resends via versioning, Cancel restores",
+   "Phone-ready editor"
+  ]
+ },
+ {
+  "name": "Appended phases first-class (phase 14)",
+  "tasks": [
+   "Append pipeline carries name and tasks from prompt headers",
+   "Backfill ui11 manifest entries 9-14",
+   "Retro-fit headers on queued append files"
+  ]
+ }
+]
