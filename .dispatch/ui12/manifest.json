@@ -1,0 +1,55 @@
+[
+ {
+  "name": "Queued messages cannot ghost-send",
+  "tasks": [
+   "Remove every client-local auto-send path",
+   "Server queue authoritative across devices",
+   "Lifecycle matrix walked and fixed"
+  ]
+ },
+ {
+  "name": "Prompt bar sizing and alignment",
+  "tasks": [
+   "Compact pass with bottom padding restored",
+   "Floating row flush with enclosure edges, model selector lower",
+   "Attachment borders on, click-flash stroke removed"
+  ]
+ },
+ {
+  "name": "The scrollbar tells the truth",
+  "tasks": [
+   "Scroll track spans the full pane to the viewport bottom",
+   "Bottom of scroll is the real bottom, no whitespace"
+  ]
+ },
+ {
+  "name": "Semantic status colors and job counters",
+  "tasks": [
+   "Green done, accent working, muted idle via theme tokens",
+   "Per-job task counters render for every manifest chain",
+   "Monochromatic law exception documented"
+  ]
+ },
+ {
+  "name": "Jobs sidebar with bottom-up history",
+  "tasks": [
+   "Right sidebar hosts jobs and tasks, top strip removed",
+   "Bottom-to-top order with scrollable history",
+   "UI copy says Job everywhere"
+  ]
+ },
+ {
+  "name": "Selection dot vanishes with the drawer",
+  "tasks": [
+   "Dot hides in sync with the collapse animation, never lingers"
+  ]
+ },
+ {
+  "name": "Memory writes visible and manageable",
+  "tasks": [
+   "Memory-updated indicator rows in the transcript",
+   "Read-only memory viewer with a Global tab",
+   "planner/_global seeded and read at boot"
+  ]
+ }
+]
