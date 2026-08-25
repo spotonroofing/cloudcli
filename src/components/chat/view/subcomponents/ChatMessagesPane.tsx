@@ -232,7 +232,7 @@ function ChatMessagesPane({
     <MessageScroller
       className="relative min-h-0 flex-1"
       viewportRef={scrollContainerRef as unknown as RefObject<HTMLElement>}
-      viewportClassName="chat-messages-pane overflow-x-hidden pb-3 pt-3 sm:pb-4 sm:pt-4"
+      viewportClassName="chat-messages-pane overflow-x-hidden pt-3 sm:pt-4"
       viewportProps={{ onWheel, onTouchMove }}
       busy={isProcessing}
       label={t('session.transcriptLabel', { defaultValue: 'Conversation' })}
@@ -445,6 +445,14 @@ function ChatMessagesPane({
         </>
       )}
       </div>
+      {/* Bottom clearance for the floating composer (ui12 phase 3). A spacer
+          element, not padding: the follow-output engine observes the content's
+          content-box, which padding growth never changes — a spacer resize
+          re-pins the live edge when the composer grows. */}
+      <div
+        aria-hidden
+        className="h-[calc(var(--composer-height,5.5rem)+0.75rem)] sm:h-[calc(var(--composer-height,5.5rem)+1rem)]"
+      />
     </MessageScroller>
   );
 }

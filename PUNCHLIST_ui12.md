@@ -46,8 +46,8 @@ Done check: on dev, DOM measurements: bottom padding present between send button
 
 Goal: the transcript scrollbar spans the full pane, and the bottom of the scroll is the real bottom. Today the scrollbar's track stops at the top of the prompt bar and over-scroll lands in whitespace. Known constraints: Chrome ignores ::-webkit-scrollbar when scrollbar-width is set (lesson scrollbar-width-disables-webkit-scrollbar-css: use layout tricks, webkit width edits do nothing) and scroll geometry must stay honest (lesson content-visibility-breaks-scroll-truth: do not reintroduce content-visibility). Files: the transcript scroll container in ChatMessagesPane/ChatInterface, layout CSS. Dependencies: phase 2 (composer height settles first).
 
-- [ ] The scroll container (and its scrollbar track) extends from the top of the pane to the bottom of the viewport, the composer floating above it, so the thumb's travel covers the full pane height like the top already does.
-- [ ] Scrolled fully down means the last message sits just above the composer: no whitespace run-out below the content, and the bottom-anchor logic agrees with the visual bottom.
+- [x] The scroll container (and its scrollbar track) extends from the top of the pane to the bottom of the viewport, the composer floating above it, so the thumb's travel covers the full pane height like the top already does.
+- [x] Scrolled fully down means the last message sits just above the composer: no whitespace run-out below the content, and the bottom-anchor logic agrees with the visual bottom.
 
 Done check: on dev via agent-browser: the scroll container's bounding box reaches the viewport bottom; scrollHeight minus clientHeight equals the scrollTop at which the last message row is fully visible with no empty band below it; desktop and phone. Fresh-context subagent verification. Commit.
 

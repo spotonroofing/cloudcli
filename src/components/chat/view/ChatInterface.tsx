@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowDownIcon } from 'lucide-react';
 
@@ -475,6 +475,26 @@ function ChatInterface({
   // (the permission banner is the active status surface then).
   const paneActivity = pendingPermissionRequests.length === 0 ? sessionActivity : null;
 
+  // The composer floats over the transcript (ui12 phase 3) so the scrollbar
+  // track runs the full pane height. The transcript clears it with a trailing
+  // spacer inside the scroller content sized by this measured height, so a
+  // growing composer resizes the content and the follow-output engine re-pins.
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const composerAreaRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    const area = composerAreaRef.current;
+    if (!pane || !area) return;
+
+    const publish = () => {
+      pane.style.setProperty('--composer-height', `${area.offsetHeight}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(area);
+    return () => observer.disconnect();
+  }, [selectedProject]);
+
   // Rerun action on assistant turns: resend the prompt that produced the turn
   // through the normal submit path, without touching the composer draft.
   const handleRerun = useCallback((content: string, event: React.MouseEvent) => {
@@ -541,7 +561,7 @@ function ChatInterface({
 
   return (
     <PermissionContext.Provider value={permissionContextValue}>
-      <div className="flex h-full min-h-0 flex-col">
+      <div ref={paneRef} className="relative flex h-full min-h-0 flex-col">
         <ChatMessagesPane
           scrollContainerRef={scrollContainerRef}
           onWheel={handleScroll}
@@ -582,7 +602,7 @@ function ChatInterface({
           onSelectVersion={selectVersion}
         />
 
-        <div className="relative flex-shrink-0">
+        <div ref={composerAreaRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
           {isUserScrolledUp && chatMessages.length > 0 && (
             <div className="pointer-events-none absolute -top-11 left-0 right-0 z-20 flex justify-center">
               <button
