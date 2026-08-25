@@ -10,7 +10,7 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { PlusIcon, FileTextIcon, XIcon, Loader2, ArrowUpIcon, Pencil } from 'lucide-react';
+import { PlusIcon, FileTextIcon, XIcon, Loader2, ArrowUpIcon } from 'lucide-react';
 import type { SVGProps } from 'react';
 
 import { useVoiceInput } from '../../hooks/useVoiceInput';
@@ -104,9 +104,6 @@ interface ChatComposerProps {
   queuedDraft: QueuedDraft | null;
   onEditQueuedDraft: () => void;
   onDeleteQueuedDraft: () => void;
-  /** Non-null while the composer holds a past message for edit-and-resend. */
-  isEditingMessage?: boolean;
-  onCancelEditMessage?: () => void;
   attachedFiles: File[];
   onRemoveAttachment: (index: number) => void;
   /** Draft attachments already uploaded to the asset store (restored or attach-time uploads). */
@@ -168,8 +165,6 @@ export default function ChatComposer({
   queuedDraft,
   onEditQueuedDraft,
   onDeleteQueuedDraft,
-  isEditingMessage = false,
-  onCancelEditMessage,
   attachedFiles,
   onRemoveAttachment,
   draftAttachments,
@@ -299,30 +294,6 @@ export default function ChatComposer({
       )}
 
       {!hasQuestionPanel && <div className="relative mx-auto max-w-[54.25rem]">
-        {isEditingMessage && (
-          /* Edit-and-resend indicator: sending silently replaces the edited
-             exchange; the X drops the edit and keeps the typed text. */
-          <div
-            data-slot="composer-edit-indicator"
-            className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground"
-          >
-            <span className="flex min-w-0 items-center gap-1.5">
-              <Pencil className="h-3 w-3 flex-shrink-0" aria-hidden />
-              <span className="truncate">
-                {t('input.editingMessage', { defaultValue: 'Editing a previous message. Sending replaces its response.' })}
-              </span>
-            </span>
-            <button
-              type="button"
-              onClick={onCancelEditMessage}
-              title={t('input.cancelEdit', { defaultValue: 'Cancel edit' })}
-              aria-label={t('input.cancelEdit', { defaultValue: 'Cancel edit' })}
-              className="relative touch-hit inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <XIcon className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
         {showFileDropdown && filteredFiles.length > 0 && (
           <div
             ref={fileDropdownRef}

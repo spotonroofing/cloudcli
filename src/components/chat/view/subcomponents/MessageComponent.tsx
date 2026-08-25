@@ -1,7 +1,7 @@
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Ban, ChevronDown, Pencil, RotateCcw, Wrench } from 'lucide-react';
+import { Ban, ChevronDown, Info, Pencil, RotateCcw, Wrench } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import type {
@@ -16,6 +16,7 @@ import { ToolRenderer, ToolErrorDisplay, shouldHideToolResult } from '../../tool
 import { AgentDisclosure, MESSAGE_POP_UP, StreamingResponse, Thinking, useStreamedReveal } from '../../../../shared/view/beui';
 import type { ThinkingRow } from '../../../../shared/view/beui';
 import { Citations } from '../../../../shared/view/beui/Citations';
+import { Button } from '../../../../shared/view/ui';
 
 import ChatMessageImages from './ChatMessageImages';
 import ChatMessageFiles from './ChatMessageFiles';
@@ -45,8 +46,14 @@ type MessageComponentProps = {
   /** The user prompt that produced this assistant turn; enables the rerun action. */
   rerunContent?: string;
   onRerun?: (content: string, event: ReactMouseEvent) => void;
-  /** Pencil on user turns: loads the text into the composer for a silent resend. */
+  /** Pencil on user turns: opens the inline transcript editor on that bubble. */
   onEditMessage?: (message: ChatMessage) => void;
+  /** Id of the user message currently in inline edit mode (one at a time). */
+  editingMessageId?: string | null;
+  /** Save from the inline editor: resends through edit-and-resend versioning. */
+  onSaveEditMessage?: (message: ChatMessage, content: string) => void;
+  /** Cancel/Escape from the inline editor: restores the original bubble. */
+  onCancelEditMessage?: () => void;
 };
 
 type InteractiveOption = {
@@ -241,7 +248,83 @@ function UserCommandBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, rerunContent, onRerun, onEditMessage }: MessageComponentProps) => {
+/**
+ * Inline transcript editor (ui11 phase 13): the pencil swaps the user bubble
+ * for this editable box, claude.ai-style — the editor, then an info / Cancel /
+ * Save row below it. The composer draft is never touched; Save resends through
+ * edit-and-resend versioning, Cancel and Escape restore the original bubble.
+ */
+function UserMessageEditor({ initialText, onCancel, onSave }: {
+  initialText: string;
+  onCancel: () => void;
+  onSave: (text: string) => void;
+}) {
+  const { t } = useTranslation('chat');
+  const [text, setText] = useState(initialText);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const autosize = (element: HTMLTextAreaElement) => {
+    element.style.height = 'auto';
+    element.style.height = `${element.scrollHeight}px`;
+  };
+
+  useEffect(() => {
+    const element = textareaRef.current;
+    if (!element) return;
+    autosize(element);
+    element.focus();
+    element.setSelectionRange(element.value.length, element.value.length);
+    // Keeps the editor visible above a phone keyboard.
+    element.scrollIntoView({ block: 'nearest' });
+  }, []);
+
+  const canSave = text.trim().length > 0;
+
+  return (
+    <div data-slot="message-edit" className="flex w-full flex-col gap-2">
+      <div className="w-full rounded-lg border border-muted-foreground/40 bg-secondary shadow-md ring-1 ring-muted-foreground/20">
+        <textarea
+          ref={textareaRef}
+          value={text}
+          dir="auto"
+          rows={1}
+          aria-label={t('editMessage', { defaultValue: 'Edit message' })}
+          className="block w-full resize-none overflow-hidden bg-transparent px-3 py-2 font-serif text-base text-secondary-foreground outline-none sm:px-4 sm:text-sm"
+          onChange={(event) => {
+            setText(event.target.value);
+            autosize(event.target);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              onCancel();
+            } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              if (canSave) onSave(text);
+            }
+          }}
+        />
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <span
+          className="text-muted-foreground/70"
+          title={t('editMessageInfo', { defaultValue: 'Saving resends this message as a new version; earlier versions stay reachable.' })}
+        >
+          <Info className="h-3.5 w-3.5" aria-hidden />
+        </span>
+        <Button type="button" variant="ghost" size="sm" className="touch-hit relative" onClick={onCancel}>
+          {t('editMessageCancel', { defaultValue: 'Cancel' })}
+        </Button>
+        <Button type="button" size="sm" className="touch-hit relative" disabled={!canSave} onClick={() => onSave(text)}>
+          {t('editMessageSave', { defaultValue: 'Save' })}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, rerunContent, onRerun, onEditMessage, editingMessageId, onSaveEditMessage, onCancelEditMessage }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   const reduceMotion = useReducedMotion() ?? false;
   // Evaluated once per mount: a row that pops in must not replay on re-render.
@@ -290,6 +373,14 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
     !message.isThinking;
 
 
+  // Inline edit mode (ui11 phase 13): this row's bubble renders as the editor.
+  const isEditingThis = Boolean(
+    editingMessageId
+    && message.type === 'user'
+    && typeof message.id === 'string'
+    && message.id === editingMessageId,
+  );
+
   const formattedTime = useMemo(() => new Date(message.timestamp).toLocaleTimeString(), [message.timestamp]);
   const shouldHideThinkingMessage = Boolean(message.isThinking && !showThinking);
 
@@ -316,9 +407,10 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
       className={`chat-message group ${message.type} ${message.isToolUse ? 'tool-row' : ''} ${isGrouped ? 'grouped' : ''} ${message.type === 'user' ? 'flex justify-end px-3 sm:px-0' : 'px-3 sm:px-0'}`}
     >
       {message.type === 'user' ? (
-        /* User turn on the right: claude.ai-style attachment cards above the bubble */
-        <div className="flex w-full items-end sm:w-auto sm:max-w-[85%] md:max-w-md lg:max-w-lg xl:max-w-xl">
-          <div className="flex min-w-0 flex-1 flex-col items-end gap-2 sm:flex-initial">
+        /* User turn on the right: claude.ai-style attachment cards above the bubble.
+           Edit mode fills the column width so the editor gets a stable box. */
+        <div className={`flex w-full items-end ${isEditingThis ? '' : 'sm:w-auto'} sm:max-w-[85%] md:max-w-md lg:max-w-lg xl:max-w-xl`}>
+          <div className={`flex min-w-0 flex-1 flex-col items-end gap-2 ${isEditingThis ? '' : 'sm:flex-initial'}`}>
             {message.images && message.images.length > 0 && (
               <ChatMessageImages
                 images={message.images}
@@ -328,7 +420,13 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
             {message.files && message.files.length > 0 && (
               <ChatMessageFiles files={message.files} />
             )}
-            {userCopyContent.trim().length > 0 || (!message.images?.length && !message.files?.length) ? (
+            {isEditingThis ? (
+              <UserMessageEditor
+                initialText={userCopyContent}
+                onCancel={() => onCancelEditMessage?.()}
+                onSave={(text) => onSaveEditMessage?.(message, text)}
+              />
+            ) : userCopyContent.trim().length > 0 || (!message.images?.length && !message.files?.length) ? (
               /* Meta (copy + timestamp) sits below the bubble, outside it; the
                  hover fades key off the row-level `group` on the message root */
               <>

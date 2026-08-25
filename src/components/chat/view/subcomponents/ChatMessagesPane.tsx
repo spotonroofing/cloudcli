@@ -57,8 +57,14 @@ interface ChatMessagesPaneProps {
   selectedProject: Project;
   /** Sends a prior user prompt again (the rerun action on assistant turns). */
   onRerun?: (content: string, event: ReactMouseEvent) => void;
-  /** Pencil on user turns: loads the text into the composer for a silent resend. */
+  /** Pencil on user turns: opens the inline transcript editor on that bubble. */
   onEditMessage?: (message: ChatMessage) => void;
+  /** Id of the user message currently in inline edit mode (one at a time). */
+  editingMessageId?: string | null;
+  /** Save from the inline editor: resends through edit-and-resend versioning. */
+  onSaveEditMessage?: (message: ChatMessage, content: string) => void;
+  /** Cancel/Escape from the inline editor: restores the original bubble. */
+  onCancelEditMessage?: () => void;
   /** Flips the visible response version of an edited exchange. */
   onSelectVersion?: (groupId: string, version: number) => void;
 }
@@ -97,6 +103,9 @@ function ChatMessagesPane({
   selectedProject,
   onRerun,
   onEditMessage,
+  editingMessageId,
+  onSaveEditMessage,
+  onCancelEditMessage,
   onSelectVersion,
 }: ChatMessagesPaneProps) {
   const { t } = useTranslation('chat');
@@ -391,6 +400,9 @@ function ChatMessagesPane({
                     rerunContent={rerunContent ?? undefined}
                     onRerun={onRerun}
                     onEditMessage={onEditMessage}
+                    editingMessageId={editingMessageId}
+                    onSaveEditMessage={onSaveEditMessage}
+                    onCancelEditMessage={onCancelEditMessage}
                   />
                   {messageNav && onSelectVersion && (
                     <MessageVersionNavigator

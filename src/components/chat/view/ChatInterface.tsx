@@ -221,9 +221,7 @@ function ChatInterface({
     queuedDraft,
     editQueuedDraft,
     deleteQueuedDraft,
-    editingMessage,
-    beginMessageEdit,
-    cancelMessageEdit,
+    submitMessageEdit,
     handleVoiceTranscript,
     handleInputChange,
     handleKeyDown,
@@ -428,6 +426,12 @@ function ChatInterface({
         return;
       }
 
+      // An open inline message editor owns Escape: it cancels the edit
+      // instead of aborting the run.
+      if ((event.target as HTMLElement | null)?.closest?.('[data-slot="message-edit"]')) {
+        return;
+      }
+
       event.preventDefault();
       handleAbortSession();
     };
@@ -477,18 +481,39 @@ function ChatInterface({
     void handleSubmit(event, { content, attachments: [], preserveComposer: true });
   }, [handleSubmit]);
 
-  // Pencil on a user turn: load its text into the composer and arm the next
-  // send as a silent resend. An already-versioned turn keeps its group.
+  // Pencil on a user turn: turn that bubble into the inline transcript editor
+  // (ui11 phase 13). One message edits at a time; opening another closes the
+  // first, and switching sessions closes any open editor.
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  useEffect(() => {
+    setEditingMessageId(null);
+  }, [selectedSession?.id]);
+
   const handleEditMessage = useCallback((message: ChatMessage) => {
     const messageId = typeof message.id === 'string' ? message.id : '';
     const content = typeof message.content === 'string' ? message.content : '';
     if (!messageId || !content.trim()) return;
-    beginMessageEdit({
+    setEditingMessageId(messageId);
+  }, []);
+
+  const handleCancelEditMessage = useCallback(() => {
+    setEditingMessageId(null);
+  }, []);
+
+  // Save from the inline editor: resend through edit-and-resend versioning.
+  // An unchanged save is a no-op that just closes the editor. An
+  // already-versioned turn keeps its group.
+  const handleSaveEditMessage = useCallback((message: ChatMessage, content: string) => {
+    setEditingMessageId(null);
+    const messageId = typeof message.id === 'string' ? message.id : '';
+    const original = typeof message.content === 'string' ? message.content : '';
+    if (!messageId || !content.trim() || content.trim() === original.trim()) return;
+    submitMessageEdit({
       groupId: findEditGroupId(messageVersionGroups, message),
       anchorUserMessageId: messageId,
-      anchorPromptText: content,
-    });
-  }, [beginMessageEdit, messageVersionGroups]);
+      anchorPromptText: original,
+    }, content);
+  }, [submitMessageEdit, messageVersionGroups]);
 
   const selectedProviderLabel =
     provider === 'cursor'
@@ -551,6 +576,9 @@ function ChatInterface({
           selectedProject={selectedProject}
           onRerun={handleRerun}
           onEditMessage={handleEditMessage}
+          editingMessageId={editingMessageId}
+          onSaveEditMessage={handleSaveEditMessage}
+          onCancelEditMessage={handleCancelEditMessage}
           onSelectVersion={selectVersion}
         />
 
@@ -594,8 +622,6 @@ function ChatInterface({
           queuedDraft={queuedDraft}
           onEditQueuedDraft={editQueuedDraft}
           onDeleteQueuedDraft={deleteQueuedDraft}
-          isEditingMessage={Boolean(editingMessage)}
-          onCancelEditMessage={cancelMessageEdit}
           attachedFiles={attachedFiles}
           onRemoveAttachment={removeAttachedFile}
           draftAttachments={draftAttachments}

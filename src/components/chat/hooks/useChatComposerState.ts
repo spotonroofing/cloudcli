@@ -314,9 +314,9 @@ export function useChatComposerState({
   // Drafts are server-persisted per session (ui8 phase 2); the load effect
   // below fills the input, so the composer mounts empty.
   const [input, setInput] = useState('');
-  // Edit-and-resend (ui9 B3): set while the composer holds a past user
-  // message's text; the next send silently replaces that exchange.
-  const [editingMessage, setEditingMessage] = useState<MessageEditContext | null>(null);
+  // Edit-and-resend (ui9 B3): armed while a send should silently replace a
+  // past exchange. Set only by a queued edit pulled back for more typing —
+  // the pencil flow itself sends straight from the inline transcript editor.
   const editContextRef = useRef<MessageEditContext | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   /** Draft attachments already uploaded to the asset store, restorable anywhere. */
@@ -1040,7 +1040,6 @@ export function useChatComposerState({
         if (editContextRef.current) {
           queuedOptions.edit = editContextRef.current;
           editContextRef.current = null;
-          setEditingMessage(null);
         }
         const queuedSessionKey = sessionKey;
         let uploadedAttachments: unknown[] = [];
@@ -1270,7 +1269,6 @@ export function useChatComposerState({
       if (editPayload) {
         onEditResend?.(editPayload, messageContent);
         editContextRef.current = null;
-        setEditingMessage(null);
       } else {
         // A normal send continues the latest thread: flip any group viewed on
         // an older version back to latest so this turn never lands hidden.
@@ -1430,9 +1428,13 @@ export function useChatComposerState({
         if (!claimed) {
           return;
         }
-        setInput(queuedDraft.content);
-        inputValueRef.current = queuedDraft.content;
-        setAttachedFilesSync(queuedDraft.attachments);
+        // A preserveComposer draft (inline edit save, rerun) never lived in
+        // the composer; restoring it here would clobber the typed draft.
+        if (!queuedDraft.preserveComposer) {
+          setInput(queuedDraft.content);
+          inputValueRef.current = queuedDraft.content;
+          setAttachedFilesSync(queuedDraft.attachments);
+        }
         handleSubmitRef.current?.(createFakeSubmitEvent(), queuedDraft);
       });
     }, delay);
@@ -1452,7 +1454,6 @@ export function useChatComposerState({
     const queuedEdit = queuedDraft.options?.edit as MessageEditContext | undefined;
     if (queuedEdit) {
       editContextRef.current = queuedEdit;
-      setEditingMessage(queuedEdit);
     }
     setInput(queuedDraft.content);
     inputValueRef.current = queuedDraft.content;
@@ -1464,26 +1465,23 @@ export function useChatComposerState({
     setQueuedDraft(null);
   }, []);
 
-  // Pencil on a user message: load its text into the composer and arm the
-  // next send as a silent resend of that exchange.
-  const beginMessageEdit = useCallback((edit: MessageEditContext) => {
-    editContextRef.current = edit;
-    setEditingMessage(edit);
-    setInput(edit.anchorPromptText);
-    inputValueRef.current = edit.anchorPromptText;
-    resetCommandMenuState();
-    textareaRef.current?.focus();
-  }, [resetCommandMenuState]);
-
-  const cancelMessageEdit = useCallback(() => {
-    editContextRef.current = null;
-    setEditingMessage(null);
-  }, []);
+  // Save from the inline transcript editor (ui11 phase 13): resend the edited
+  // text through the normal submit path as a new version of that exchange,
+  // leaving the composer draft untouched. Riding the queued-submission shape
+  // means a save during a live run queues like any other message and still
+  // carries its edit context to the eventual flush.
+  const submitMessageEdit = useCallback((edit: MessageEditContext, content: string) => {
+    void handleSubmitRef.current?.(createFakeSubmitEvent(), {
+      content,
+      attachments: [],
+      options: { ...buildSendOptions(content), edit },
+      preserveComposer: true,
+    });
+  }, [buildSendOptions]);
 
   // An armed edit belongs to one session's transcript; switching drops it.
   useEffect(() => {
     editContextRef.current = null;
-    setEditingMessage(null);
   }, [sessionKey]);
 
   // A voice transcript either fills the input (to edit before sending) or, when the
@@ -1725,7 +1723,6 @@ export function useChatComposerState({
     setInput('');
     inputValueRef.current = '';
     editContextRef.current = null;
-    setEditingMessage(null);
     resetCommandMenuState();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -1844,9 +1841,7 @@ export function useChatComposerState({
     queuedDraft,
     editQueuedDraft,
     deleteQueuedDraft,
-    editingMessage,
-    beginMessageEdit,
-    cancelMessageEdit,
+    submitMessageEdit,
     handleVoiceTranscript,
     handleInputChange,
     handleKeyDown,
