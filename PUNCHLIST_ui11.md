@@ -169,3 +169,13 @@ Goal: a phase appended onto a running chain looks exactly like a dispatched one 
 
 Done check: on dev, the ui11 chain's navigator (or a stub chain exercising an append with headers) shows appended phases as "Phase N - Title" with task rows and counters, no filename slugs anywhere in the navigator DOM; the stored ui11 manifest contains names and tasks for entries 9-14. Fresh-context subagent verification. Commit.
 
+## Phase 15 — Project-tab chat rows match the Chats tab (appended 2026-08-25)
+
+Goal: a chat row looks identical whether it renders in the Chats tab or nested under a project in the Projects tab; today the Projects-tab rows have different padding and the active-session dot floats far to the left of the row instead of sitting tight against the title the way the Chats tab does. Files: the sidebar list row components (src/components/sidebar/view/subcomponents, the Chats-tab conversation row and the Projects-tab nested session row), DESIGN.md. Dependencies: none.
+
+- [ ] The nested chat rows under an expanded project in the Projects tab use the same row component (or the exact same classes) as the Chats tab's conversation rows: identical horizontal and vertical padding, title and meta typography, truncation, chevron placement, and hover/selected treatment; the only sanctioned difference is the indent that nests them under the project header and the absence of the project name in the meta line.
+- [ ] The active-session dot sits in the same position relative to the row as in the Chats tab (immediately left of the title block, inside the row's padding), never out at the pane edge; verify the selected-session bounce-dot treatment stays consistent between both tabs.
+- [ ] Sweep the two tabs side by side for any other drift (row height, divider spacing, timestamp format) and align to the Chats tab as the reference.
+
+Done check: on dev via agent-browser, DOM measurements on a project with an active session: the nested row's padding box, title font size, and dot offset from the row's content edge match the Chats-tab row for the same session within 1px, at desktop and phone viewports. Aesthetics are Willem's eyeball. Fresh-context subagent verification. Commit.
+
