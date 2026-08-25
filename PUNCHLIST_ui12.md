@@ -87,3 +87,23 @@ Goal: when the planner logs memory, Willem sees it, and memory is browsable. Fil
 - [ ] Create `planner/_global/` in the spoton-worker repo with a seed README describing its contract (cross-project preferences and lessons; the planner reads it at boot alongside project memory); the viewer reads it. Keep CLAUDE.md files out of scope; nothing new writes to them.
 
 Done check: on dev, a planner-session test write of a lesson file produces the indicator row in that session's transcript live and after reload; the viewer lists PROJECT.md/STATE.md/lessons and opens content; the Global tab shows the seed file. Fresh-context subagent verification. Commit.
+
+## Job 8 — Job rings and task spinners actually animate (appended 2026-08-25)
+
+Goal: the worker sidebar's status icons live and breathe. Today the task loading icons sit static. Willem confirmed the word Job. Files: the job/task status icon components from phase 4, the app's existing ramped spinner element, theme motion tokens, DESIGN.md. Dependencies: phase 4 (semantic colors land first).
+
+- [ ] The working task's icon is the app's existing partial-circle spinner with its eased, ramped rotation (find and reuse it; do not roll a new one), and the working task row breathes: a subtle opacity/scale pulse, transform and opacity only, honoring prefers-reduced-motion.
+- [ ] The active job's indicator breathes the same way, and its progress ring is a static partial circle segmented by task count (three tasks, three arc segments with small gaps): each completed task fills its segment (green per phase 4); when the last task completes, a full-circle sweep animation runs and the checkmark animates in.
+- [ ] Jobs with no manifest tasks keep a plain spinner while running and the same sweep-to-check on completion.
+
+Done check: on dev with a stub chain of a 3-task job: the working task icon's computed animation is running (non-none, rotating), the job ring shows 3 segments with the completed count filled after check-offs, the completion sweep and check-in animation fire at job end, and with prefers-reduced-motion emulated the pulses and sweep reduce to state changes. Phone viewport holds. Fresh-context subagent verification. Commit.
+
+## Job 9 — Lining numerals everywhere, and the thinking counter reads right (appended 2026-08-25)
+
+Goal: digits sit on one line, everywhere, for real this time, and the thinking duration is formatted like beautifului's. The composer's character counter shows 5 and 8 riding higher than 1: the font is rendering oldstyle (text) figures, whose digits have ascenders and descenders by design; ui11 phase 9 centered the boxes but did not force lining figures. Files: the shared number/mono style from ui11 phase 9, global font-feature CSS, the thinking/turning duration component, DESIGN.md. Dependencies: none.
+
+- [ ] Force lining figures app-wide for numeric UI: `font-variant-numeric: lining-nums` (plus `tabular-nums` where columns align: counters, timers, token counts) on the shared number style, and verify the loaded font honors it (computed style plus a rendered-glyph bounding check); if the font family itself lacks lining figures in the weight used, swap the numeric style to a weight or family that has them. Sweep the app for digit sites not on the shared style (the composer character counter is one) and put them on it.
+- [ ] Thinking/turning duration format: consult beautifului's transcript components in the GitHub mirror TurboKach/ai-native-react-components (beautifului.dev itself is unreachable from this network, see the lesson) for their duration convention; adopt it exactly (unit spacing like "1m 50s" versus "1m50s", casing, tabular digits). If the mirror shows no duration component, use "1m 50s" with a thin space and note that in the summary. The counter's digits sit on the text baseline per the lining fix.
+
+Done check: on dev, DOM glyph-box measurements on the composer character counter and the thinking timer: all digits share top and bottom bounds within 1px; computed font-variant-numeric shows lining-nums; the duration renders in the adopted format with the space decision recorded in the summary. Phone viewport holds. Fresh-context subagent verification. Commit.
+
