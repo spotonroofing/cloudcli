@@ -74,7 +74,7 @@ Done check: on dev with a stub chain and the ui11r history: the sidebar renders 
 
 Goal: the bouncing selection dot never lingers over other rows when its project collapses. Today it fades in place and overlaps the rows that slide up. Files: the BounceIndicator and sidebar collapse animation. Dependencies: none.
 
-- [ ] Collapsing a project (or anything that removes the dot's target row) hides the dot in sync with the collapse animation: it either rides the row out or disappears within the collapse duration, never floating over unrelated rows; reopening seats it correctly again.
+- [x] Collapsing a project (or anything that removes the dot's target row) hides the dot in sync with the collapse animation: it either rides the row out or disappears within the collapse duration, never floating over unrelated rows; reopening seats it correctly again.
 
 Done check: on dev via agent-browser with reduced-motion off: during collapse, at animation midpoint the dot is not visible over any other project's row (opacity/position assertions per lesson dev-nested-row-fixture-and-hidden-bounce-dot); after reopen the dot seats at the active row. Fresh-context subagent verification. Commit.
 

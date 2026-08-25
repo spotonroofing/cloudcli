@@ -69,6 +69,22 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
     if (!row) return null;
     const containerRect = container.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
+    // A collapsing project clips its session rows behind an overflow-hidden
+    // height animation before removing them; the rect alone stays full-size
+    // the whole time. Intersect with clipping ancestors (up to the container)
+    // so the dot counts as gone the moment the clip edge swallows its row,
+    // in sync with the collapse instead of after DOM removal.
+    let clipTop = -Infinity;
+    let clipBottom = Infinity;
+    for (let node = row.parentElement; node && node !== container; node = node.parentElement) {
+      if (getComputedStyle(node).overflowY !== 'visible') {
+        const clipRect = node.getBoundingClientRect();
+        clipTop = Math.max(clipTop, clipRect.top);
+        clipBottom = Math.min(clipBottom, clipRect.bottom);
+      }
+    }
+    const rowCenterY = rowRect.top + rowRect.height / 2;
+    if (rowCenterY < clipTop || rowCenterY > clipBottom) return null;
     // The x offset seats the dot against the destination row's own left
     // edge, not the container's, so indented rows (a chat nested under a
     // project) keep the dot inside their padding instead of at the pane edge.
@@ -85,10 +101,11 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
     const destination = measure(key);
     if (destination === null) {
       // Destination row left the layout (collapsed group, filtered list):
-      // fade out rather than hover stale or vanish in a hard cut; the next
-      // resize with the row back re-seats the dot.
+      // hide with a hard cut — the rows below are already sliding up over
+      // this spot, so a fade floats over unrelated rows. The next resize
+      // with the row back re-seats the dot.
       animationRef.current?.stop();
-      animate(opacity, 0, FADE);
+      opacity.set(0);
       hasPositionRef.current = false;
       return;
     }
