@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import Sidebar from '../sidebar/view/Sidebar';
 import type { RunningRunInfo } from '../sidebar/types/types';
+import type { LLMProvider } from '../../types/app';
 import CommandPalette from '../command-palette/CommandPalette';
 import { QuickSettingsPanel } from '../quick-settings-panel';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -23,11 +24,17 @@ import { useWorkspace } from './workspace/useWorkspace';
 
 type RunningSessionApiItem = {
   sessionId?: unknown;
+  provider?: unknown;
   startedAt?: unknown;
   statusText?: unknown;
   canInterrupt?: unknown;
   origin?: unknown;
   projectId?: unknown;
+  projectDisplayName?: unknown;
+  title?: unknown;
+  chainSlug?: unknown;
+  chainPhase?: unknown;
+  chainPhaseName?: unknown;
 };
 
 const RUN_ORIGINS = ['planner', 'direct', 'dispatch', 'external', 'maintenance'] as const;
@@ -200,8 +207,14 @@ function AppContentInner() {
             typeof session.sessionId === 'string' && session.sessionId.length > 0)
           .map((session) => ({
             sessionId: session.sessionId,
+            provider: (typeof session.provider === 'string' ? session.provider : 'claude') as LLMProvider,
             origin: RUN_ORIGINS.includes(session.origin as RunOrigin) ? (session.origin as RunOrigin) : null,
             projectId: typeof session.projectId === 'string' ? session.projectId : null,
+            projectDisplayName: typeof session.projectDisplayName === 'string' ? session.projectDisplayName : null,
+            title: typeof session.title === 'string' ? session.title : null,
+            chainSlug: typeof session.chainSlug === 'string' ? session.chainSlug : null,
+            chainPhase: typeof session.chainPhase === 'number' ? session.chainPhase : null,
+            chainPhaseName: typeof session.chainPhaseName === 'string' ? session.chainPhaseName : null,
           })),
       );
 

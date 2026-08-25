@@ -426,6 +426,15 @@ class WatchdogService {
    * cover runs the filesystem synchronizer has not indexed yet. Used by the
    * providers session routes.
    */
+  /**
+   * Manifest name of one chain unit, for labeling a run outside the worker
+   * pane (the sidebar counter drawer, ui11 phase 12). Null when the chain or
+   * unit is unknown.
+   */
+  getChainPhaseName(chainSlug: string, chainPhase: number): string | null {
+    return this.chains.get(chainSlug)?.manifest?.[chainPhase - 1]?.name ?? null;
+  }
+
   listWorkerRuns(projectPath: string): { runs: WorkerRun[]; chains: Record<string, ChainSnapshot> } {
     const normalizedPath = normalizeProjectPath(projectPath);
     const rows = sessionsDb.listWorkerSessions(normalizedPath, 10);

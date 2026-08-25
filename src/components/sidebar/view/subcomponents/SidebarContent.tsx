@@ -7,7 +7,7 @@ import { Loader } from '../../../../shared/view/beui/Loader';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import type { LLMProvider, Project } from '../../../../types/app';
 import type { ConversationSearchResults, SearchProgress } from '../../hooks/useSidebarController';
-import type { ArchivedProjectListItem, ArchivedSessionListItem, RecentConversationListItem, SidebarSearchMode } from '../../types/types';
+import type { ActiveSessionRow, ArchivedProjectListItem, ArchivedSessionListItem, RecentConversationListItem, SidebarSearchMode } from '../../types/types';
 import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
 import { formatCompactAge, getAllSessions } from '../../utils/utils';
 
@@ -95,7 +95,8 @@ type SidebarContentProps = {
   runningSessionsCount: number;
   plannerRunningCount: number;
   workerRunningCount: number;
-  onJumpToRunning?: (kind: 'planner' | 'worker') => void;
+  activeSessionRows: ActiveSessionRow[];
+  onOpenActiveSession: (row: ActiveSessionRow) => void;
   archivedProjects: ArchivedProjectListItem[];
   archivedSessions: ArchivedSessionListItem[];
   archivedSessionsCount: number;
@@ -151,7 +152,8 @@ export default function SidebarContent({
   runningSessionsCount,
   plannerRunningCount,
   workerRunningCount,
-  onJumpToRunning,
+  activeSessionRows,
+  onOpenActiveSession,
   archivedProjects,
   archivedSessions,
   archivedSessionsCount,
@@ -738,7 +740,8 @@ export default function SidebarContent({
           onShowSettings={onShowSettings}
           plannerRunningCount={plannerRunningCount}
           workerRunningCount={workerRunningCount}
-          onJumpToRunning={onJumpToRunning}
+          activeSessionRows={activeSessionRows}
+          onOpenActiveSession={onOpenActiveSession}
           isMobile={isMobile}
           t={t}
         />

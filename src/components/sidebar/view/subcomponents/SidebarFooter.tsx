@@ -5,8 +5,10 @@ import type { TFunction } from 'i18next';
 import { NumberTicker } from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 import { authenticatedFetch } from '../../../../utils/api';
+import type { ActiveSessionRow } from '../../types/types';
 
 import AccountsPanel from './AccountsPanel';
+import ActiveSessionsDrawer from './ActiveSessionsDrawer';
 
 type SidebarFooterProps = {
   restartRequired: boolean;
@@ -15,9 +17,11 @@ type SidebarFooterProps = {
   plannerRunningCount: number;
   /** Live worker-origin runs (direct, dispatch, external). */
   workerRunningCount: number;
-  /** Opens the first running session of the clicked column's kind. */
-  onJumpToRunning?: (kind: 'planner' | 'worker') => void;
-  /** Phone: the accounts drawer renders as a full-width bottom sheet. */
+  /** Labeled active-session rows the counter drawers list (ui11 phase 12). */
+  activeSessionRows: ActiveSessionRow[];
+  /** Opens a drawer row's session in the pane. */
+  onOpenActiveSession: (row: ActiveSessionRow) => void;
+  /** Phone: the footer drawers render as full-width bottom sheets. */
   isMobile: boolean;
   t: TFunction;
 };
@@ -26,39 +30,38 @@ type SidebarFooterProps = {
  * One column of the bottom activity bar (ui8 phase 3): icon, label, rolling
  * count on the planner/worker colorway. The column breathes (opacity/filter
  * swell) while its count is nonzero; the whole bar hides when both are zero.
+ * A click opens that kind's drawer (ui11 phase 12) — also at count zero, so
+ * the behavior never special-cases into a jump.
  */
 function ActivityCounterColumn({
   kind,
   count,
   label,
-  onJump,
+  onOpen,
 }: {
   kind: 'planner' | 'worker';
   count: number;
   label: string;
-  onJump?: (kind: 'planner' | 'worker') => void;
+  onOpen: () => void;
 }) {
   const Icon = kind === 'planner' ? Compass : Hammer;
   const active = count > 0;
-  const jumpable = active && Boolean(onJump);
 
   return (
     <button
       type="button"
       data-slot={`${kind}-counter`}
       data-count={count}
-      disabled={!jumpable}
-      onClick={jumpable ? () => onJump?.(kind) : undefined}
+      onClick={onOpen}
       className={cn(
-        'flex min-w-0 items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-        jumpable ? 'cursor-pointer hover:bg-accent/60' : 'cursor-default',
+        'flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-medium outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
         active
           ? kind === 'planner'
             ? 'animate-counter-breathe text-primary'
             : 'animate-counter-breathe text-emerald-700 dark:text-emerald-300'
           : 'text-muted-foreground',
       )}
-      title={jumpable ? `${label}: ${count}. Open running session` : `${label}: ${count}`}
+      title={`${label}: ${count}`}
     >
       <Icon className="h-3.5 w-3.5 flex-shrink-0" />
       <span className="truncate">{label}</span>
@@ -72,15 +75,19 @@ export default function SidebarFooter({
   onShowSettings,
   plannerRunningCount,
   workerRunningCount,
-  onJumpToRunning,
+  activeSessionRows,
+  onOpenActiveSession,
   isMobile,
   t,
 }: SidebarFooterProps) {
   const showCounterBar = plannerRunningCount > 0 || workerRunningCount > 0;
 
-  // Account switcher (ui8 phase 6): the row above Settings shows the active
-  // Claude account and opens the accounts panel.
-  const [accountsOpen, setAccountsOpen] = useState(false);
+  // One footer drawer at a time: the account switcher (ui8 phase 6, drawer in
+  // ui11 phase 5) or a counter drawer (ui11 phase 12). All three rise from
+  // the same anchor block above Settings.
+  const [openDrawer, setOpenDrawer] = useState<'accounts' | 'planner' | 'worker' | null>(null);
+  const toggleDrawer = (drawer: 'accounts' | 'planner' | 'worker') =>
+    setOpenDrawer((current) => (current === drawer ? null : drawer));
   const [activeAccountEmail, setActiveAccountEmail] = useState<string | null>(null);
   const accountsAnchorRef = useRef<HTMLDivElement>(null);
 
@@ -136,13 +143,13 @@ export default function SidebarFooter({
                 kind="planner"
                 count={plannerRunningCount}
                 label={t('running.plannerCounter', 'Planner')}
-                onJump={onJumpToRunning}
+                onOpen={() => toggleDrawer('planner')}
               />
               <ActivityCounterColumn
                 kind="worker"
                 count={workerRunningCount}
                 label={t('running.workerCounter', 'Worker')}
-                onJump={onJumpToRunning}
+                onOpen={() => toggleDrawer('worker')}
               />
             </div>
           </div>
@@ -158,9 +165,9 @@ export default function SidebarFooter({
         <div className="space-y-0.5 px-2 py-1.5">
           <button
             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-            onClick={() => setAccountsOpen((open) => !open)}
+            onClick={() => toggleDrawer('accounts')}
             title={activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
-            aria-expanded={accountsOpen}
+            aria-expanded={openDrawer === 'accounts'}
             data-slot="account-switcher-trigger"
           >
             <AtSign className="h-3.5 w-3.5 flex-shrink-0" />
@@ -178,13 +185,30 @@ export default function SidebarFooter({
         </div>
 
         <AccountsPanel
-          open={accountsOpen}
-          onOpenChange={setAccountsOpen}
+          open={openDrawer === 'accounts'}
+          onOpenChange={(open) => setOpenDrawer(open ? 'accounts' : null)}
           onActiveChange={setActiveAccountEmail}
           isMobile={isMobile}
           anchorRef={accountsAnchorRef}
           t={t}
         />
+
+        {(['planner', 'worker'] as const).map((kind) => (
+          <ActiveSessionsDrawer
+            key={kind}
+            kind={kind}
+            open={openDrawer === kind}
+            onClose={() => setOpenDrawer(null)}
+            rows={activeSessionRows}
+            onSelect={(row) => {
+              setOpenDrawer(null);
+              onOpenActiveSession(row);
+            }}
+            isMobile={isMobile}
+            anchorRef={accountsAnchorRef}
+            t={t}
+          />
+        ))}
       </div>
     </div>
   );

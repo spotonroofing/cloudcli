@@ -47,8 +47,33 @@ export type SessionDeleteConfirmation = {
 /** One live run from the server's run registry, joined with origin and owning project. */
 export type RunningRunInfo = {
   sessionId: string;
+  provider: LLMProvider;
   origin: 'planner' | 'direct' | 'dispatch' | 'external' | 'maintenance' | null;
   projectId: string | null;
+  /** Owning project's display name; null for project-less (scratch) chats. */
+  projectDisplayName: string | null;
+  /** Session title (custom name); null while still on a placeholder. */
+  title: string | null;
+  chainSlug: string | null;
+  chainPhase: number | null;
+  /** Manifest name of the chain unit, when the chain is known to the watchdog. */
+  chainPhaseName: string | null;
+};
+
+/**
+ * One row of the counter drawers (ui11 phase 12): an active session of one
+ * kind, labeled and grouped for the drawer list.
+ */
+export type ActiveSessionRow = {
+  sessionId: string;
+  kind: 'planner' | 'worker';
+  /** Planner rows: the session title. Worker rows: the run switcher's label. */
+  label: string;
+  projectId: string | null;
+  /** Grouping header; null groups under the project-less bucket. */
+  projectDisplayName: string | null;
+  state: 'working' | 'attention' | 'idle';
+  provider: LLMProvider;
 };
 
 export type SidebarProps = {

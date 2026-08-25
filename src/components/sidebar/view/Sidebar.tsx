@@ -9,7 +9,7 @@ import { useSidebarController } from '../hooks/useSidebarController';
 import { useTaskMaster } from '../../../contexts/TaskMasterContext';
 import { usePaletteOps } from '../../../contexts/PaletteOpsContext';
 import type { Project, LLMProvider } from '../../../types/app';
-import type { SidebarProps } from '../types/types';
+import type { ActiveSessionRow, RunningRunInfo, SidebarProps } from '../types/types';
 
 import SidebarCollapsed from './subcomponents/SidebarCollapsed';
 import SidebarContent from './subcomponents/SidebarContent';
@@ -163,21 +163,42 @@ function Sidebar({
   }, [selectedProject]);
 
   // Planner/worker split and per-project activity for the counters and the
-  // border-beam shimmer. Live-run origin/project come from the enriched run
-  // registry poll; sessions the UI already loaded fill the gap between polls
+  // border-beam shimmer, plus the labeled row list the counter drawers show
+  // (ui11 phase 12). Live-run identity comes from the enriched run registry
+  // poll; sessions the UI already loaded fill the gap between polls
   // (activeSessions flips instantly on websocket events).
-  const { plannerRunningCount, workerRunningCount, runningByProject, runningJumpTargets } = useMemo(() => {
-    const infoBySession = new Map<string, { origin: string | null; projectId: string | null }>();
+  const { plannerRunningCount, workerRunningCount, runningByProject, activeSessionRows } = useMemo(() => {
+    type SessionInfo = {
+      origin: string | null;
+      projectId: string | null;
+      projectDisplayName: string | null;
+      title: string | null;
+      provider: LLMProvider;
+      run: RunningRunInfo | null;
+    };
+    const infoBySession = new Map<string, SessionInfo>();
     for (const project of projects) {
       for (const session of project.sessions ?? []) {
         infoBySession.set(String(session.id), {
           origin: (session.origin as string | null) ?? null,
           projectId: project.projectId,
+          projectDisplayName: project.displayName ?? null,
+          title: (session.summary || session.title || session.name || null) as string | null,
+          provider: session.__provider ?? session.provider ?? 'claude',
+          run: null,
         });
       }
     }
     for (const run of runningRuns) {
-      infoBySession.set(run.sessionId, { origin: run.origin, projectId: run.projectId });
+      const loaded = infoBySession.get(run.sessionId);
+      infoBySession.set(run.sessionId, {
+        origin: run.origin,
+        projectId: run.projectId,
+        projectDisplayName: run.projectDisplayName ?? loaded?.projectDisplayName ?? null,
+        title: run.title ?? loaded?.title ?? null,
+        provider: run.provider,
+        run,
+      });
     }
 
     const runningIds = new Set<string>(runningRuns.map((run) => run.sessionId));
@@ -188,12 +209,7 @@ function Sidebar({
     let planner = 0;
     let worker = 0;
     const byProject = new Map<string, number>();
-    // Jump-to-running affordance: the counter columns open the first running
-    // session of their kind that the sidebar has actually loaded.
-    const jumpTargets: { planner: { sessionId: string; projectId: string } | null; worker: { sessionId: string; projectId: string } | null } = {
-      planner: null,
-      worker: null,
-    };
+    const rows: ActiveSessionRow[] = [];
     for (const sessionId of runningIds) {
       const info = infoBySession.get(sessionId);
       const origin = info?.origin ?? null;
@@ -203,29 +219,66 @@ function Sidebar({
       else worker += 1;
       if (info?.projectId) {
         byProject.set(info.projectId, (byProject.get(info.projectId) ?? 0) + 1);
-        if (!jumpTargets[kind]) jumpTargets[kind] = { sessionId, projectId: info.projectId };
       }
+
+      // Worker rows carry the run switcher's label; planner rows the session
+      // title. A running session is working; one the registry still lists but
+      // no stream marks processing is idle; unseen activity is attention.
+      const run = info?.run ?? null;
+      let label: string;
+      if (kind === 'worker') {
+        if (origin === 'maintenance') {
+          label = 'Maintenance: Monday self-check';
+        } else if (run?.chainSlug) {
+          label = run.chainPhase
+            ? `${run.chainSlug} Phase ${run.chainPhase}${run.chainPhaseName ? ` - ${run.chainPhaseName}` : ''}`
+            : run.chainSlug;
+        } else {
+          label = info?.title || `run ${sessionId.slice(0, 8)}`;
+        }
+      } else {
+        label = info?.title || t('running.untitledSession', 'New session');
+      }
+      rows.push({
+        sessionId,
+        kind,
+        label,
+        projectId: info?.projectId ?? null,
+        projectDisplayName: info?.projectDisplayName ?? null,
+        state: activeSessions.has(sessionId)
+          ? 'working'
+          : attentionSessionIds.has(sessionId)
+            ? 'attention'
+            : 'idle',
+        provider: info?.provider ?? 'claude',
+      });
     }
 
     return {
       plannerRunningCount: planner,
       workerRunningCount: worker,
       runningByProject: byProject,
-      runningJumpTargets: jumpTargets,
+      activeSessionRows: rows,
     };
-  }, [projects, runningRuns, activeSessions]);
+  }, [projects, runningRuns, activeSessions, attentionSessionIds, t]);
 
-  const handleJumpToRunning = useCallback(
-    (kind: 'planner' | 'worker') => {
-      const target = runningJumpTargets[kind];
-      if (!target) return;
-      const project = projects.find((p) => p.projectId === target.projectId);
-      const session = project?.sessions?.find((s) => String(s.id) === target.sessionId);
-      if (session) {
-        handleSessionClick({ ...session, __provider: session.__provider ?? 'claude' }, target.projectId);
+  // Opens a drawer row's session. Sessions the sidebar has not loaded open
+  // through a constructed session object, the same way conversation search
+  // hits do — the old counter jump silently no-opped on unloaded sessions.
+  const handleOpenActiveSession = useCallback(
+    (row: ActiveSessionRow) => {
+      const project = row.projectId ? projects.find((p) => p.projectId === row.projectId) : null;
+      const loaded = project?.sessions?.find((s) => String(s.id) === row.sessionId);
+      if (loaded) {
+        handleSessionClick({ ...loaded, __provider: loaded.__provider ?? 'claude' }, row.projectId ?? '');
+        return;
       }
+      handleSessionClick(
+        { id: row.sessionId, __provider: row.provider, __projectId: row.projectId ?? undefined },
+        row.projectId ?? '',
+      );
     },
-    [runningJumpTargets, projects, handleSessionClick],
+    [projects, handleSessionClick],
   );
 
   const handleProjectCreated = () => {
@@ -340,7 +393,8 @@ function Sidebar({
             runningSessionsCount={runningSessionsCount}
             plannerRunningCount={plannerRunningCount}
             workerRunningCount={workerRunningCount}
-            onJumpToRunning={handleJumpToRunning}
+            activeSessionRows={activeSessionRows}
+            onOpenActiveSession={handleOpenActiveSession}
             archivedProjects={archivedProjects}
             archivedSessions={archivedSessions}
             archivedSessionsCount={archivedSessionsCount}

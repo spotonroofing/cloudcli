@@ -157,9 +157,14 @@ export const sessionsService = {
     lastSeq: number;
     origin: 'planner' | 'direct' | 'dispatch' | 'external' | 'maintenance' | null;
     projectId: string | null;
+    projectDisplayName: string | null;
+    title: string | null;
+    chainSlug: string | null;
+    chainPhase: number | null;
   }> {
-    // Origin and owning project are joined from the DB so the sidebar can
-    // split planner vs worker activity and shimmer project rows without
+    // Origin, owning project, title, and chain identity are joined from the
+    // DB so the sidebar can split planner vs worker activity, shimmer project
+    // rows, and label the counter-drawer rows (ui11 phase 12) without
     // attaching to any chat stream.
     return chatRunRegistry.listRunningRuns().map((run) => {
       const row = sessionsDb.getSessionById(run.sessionId);
@@ -170,10 +175,24 @@ export const sessionsService = {
       const origin = row?.origin === 'planner' || row?.origin === 'direct' || row?.origin === 'dispatch' || row?.origin === 'external' || row?.origin === 'maintenance'
         ? row.origin
         : null;
+      // Same placeholder filtering as the worker run switcher's labels, plus
+      // the empty-message title fallback.
+      const title = row?.custom_name?.trim()
+        && row.custom_name !== NEW_SESSION_PLACEHOLDER_TITLE
+        && row.custom_name !== 'Untitled Claude Session'
+        && row.custom_name !== 'Untitled Session'
+        ? row.custom_name
+        : null;
       return {
         ...run,
         origin,
         projectId: project?.project_id ?? null,
+        projectDisplayName: projectPath
+          ? resolveProjectDisplayName(projectPath, project?.custom_project_name)
+          : null,
+        title,
+        chainSlug: row?.chain_slug ?? null,
+        chainPhase: row?.chain_phase ?? null,
       };
     });
   },

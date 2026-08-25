@@ -723,7 +723,15 @@ router.post(
 router.get(
   '/sessions/running',
   asyncHandler(async (_req: Request, res: Response) => {
-    const sessions = sessionsService.listRunningSessions();
+    // Chain phase names come from the watchdog's chain registry here (not in
+    // sessionsService) because the watchdog already imports the providers
+    // barrel; the reverse import would be a cycle.
+    const sessions = sessionsService.listRunningSessions().map((session) => ({
+      ...session,
+      chainPhaseName: session.chainSlug && session.chainPhase
+        ? watchdogService.getChainPhaseName(session.chainSlug, session.chainPhase)
+        : null,
+    }));
     res.json(createApiSuccessResponse({ sessions }));
   }),
 );
