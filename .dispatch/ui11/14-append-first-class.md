@@ -1,6 +1,7 @@
 <!-- browser -->
 <!-- name: Appended phases first-class -->
-<!-- tasks: Append pipeline carries name and tasks from prompt headers | Backfill ui11 manifest entries 9-14 | Retro-fit headers on queued append files -->
+<!-- tasks: Append pipeline carries name and tasks from prompt headers | Phase total updates when appends announce | Backfill ui11 manifest entries 9-14 | Retro-fit headers on queued append files -->
+<!-- anchor: Phase 14 -->
 Execute Phase 14 of PUNCHLIST_ui11.md in this repo (appended phases are first-class in the navigator): the goal is that a phase appended onto a running chain renders exactly like a dispatched one (Phase N - Title, task drawer, icons, counter), fed by name and tasks comment headers in the appended prompt file, with this run's manifest entries 9-14 backfilled so the current navigator stops showing filename slugs. Read PUNCHLIST_ui11.md in the repo root and the recent git log; your items are exactly Phase 14's checkboxes; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when Phase 14's done check passes against the dev instance.
 
 

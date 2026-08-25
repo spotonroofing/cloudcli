@@ -1,4 +1,7 @@
 <!-- browser -->
+<!-- name: Edit in place -->
+<!-- tasks: Pencil turns the bubble into an inline editor | Save resends via versioning, Cancel restores | Phone-ready editor -->
+<!-- anchor: Phase 13 -->
 Execute Phase 13 of PUNCHLIST_ui11.md in this repo (edit a sent message in place): the goal is that clicking the pencil on a user message turns that bubble into an inline editor in the transcript with Cancel and Save below it, the way claude.ai does it, resending through the existing versioning on Save and never touching the prompt bar. Read PUNCHLIST_ui11.md in the repo root and the recent git log; your items are exactly Phase 13's checkboxes; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when Phase 13's done check passes against the dev instance.
 
 

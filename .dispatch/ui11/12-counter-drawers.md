@@ -1,4 +1,7 @@
 <!-- browser -->
+<!-- name: Counter drawers -->
+<!-- tasks: Counter clicks open active-session drawers | One or zero sessions still opens the drawer | Record the old jump behavior -->
+<!-- anchor: Phase 12 -->
 Execute Phase 12 of PUNCHLIST_ui11.md in this repo (planner and worker counters open a drawer): the goal is that clicking the planner or worker counter at the bottom of the sidebar opens a drawer listing every active session of that kind, grouped by project with live state, and Willem picks one, instead of the click jumping to an arbitrary session. Reuse the drawer phase 5 built for the account switcher. Read PUNCHLIST_ui11.md in the repo root and the recent git log; your items are exactly Phase 12's checkboxes; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when Phase 12's done check passes against the dev instance.
 
 

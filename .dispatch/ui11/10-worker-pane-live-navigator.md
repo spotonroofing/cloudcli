@@ -1,4 +1,7 @@
 <!-- browser -->
+<!-- name: Worker pane live and navigator drawers -->
+<!-- tasks: No status badge in any state | Dispatched runs render live without refresh | All phases list as collapsible task drawers with counters | dispatch append carries tasks from prompt headers | Check/working/idle icons on task rows -->
+<!-- anchor: Phase 10 -->
 Execute Phase 10 of PUNCHLIST_ui11.md in this repo (worker pane: no badge in any state, live updates, navigator drawers): the goal is a worker pane with no status badge in any state, dispatched runs rendering live without a refresh, and a phase navigator that lists every phase at once as collapsible task drawers with check/working/idle icons per task, extending phase 6's counter work. Read PUNCHLIST_ui11.md in the repo root and the recent git log; your items are exactly Phase 10's checkboxes; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when Phase 10's done check passes against the dev instance.
 
 

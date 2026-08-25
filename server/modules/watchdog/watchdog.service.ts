@@ -273,6 +273,12 @@ class WatchdogService {
       return false;
     }
     chain.manifest = [...(chain.manifest ?? []), ...entries];
+    // The phase total counts every unit the runner will execute, so wake and
+    // event messages read "phase 11 of 14" the moment an append is announced,
+    // never the stale dispatch-time total (ui11 phase 14).
+    if (chain.phases != null) {
+      chain.phases += entries.length;
+    }
     chain.lastEventAt = Date.now();
     this.persistChain(chain);
     this.broadcastChainProgress(chain);

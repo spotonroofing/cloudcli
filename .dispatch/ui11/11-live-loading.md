@@ -1,4 +1,7 @@
 <!-- browser -->
+<!-- name: Live loading and skeletons -->
+<!-- tasks: Context rings update in real time | Messages load and land scrolled without refresh | One app-wide skeleton treatment -->
+<!-- anchor: Phase 11 -->
 Execute Phase 11 of PUNCHLIST_ui11.md in this repo (everything loads live, loading looks deliberate): the goal is that nothing in Command Center needs a refresh to be current (the worker pane's context ring updates live, messages load and land scrolled to the bottom on open, switch, new tab, and reconnect) and that one shared skeleton treatment covers every surface still loading, app-wide. Read PUNCHLIST_ui11.md in the repo root and the recent git log; your items are exactly Phase 11's checkboxes; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when Phase 11's done check passes against the dev instance.
 
 

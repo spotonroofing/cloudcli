@@ -1,4 +1,7 @@
 <!-- browser -->
+<!-- name: Numbers on the line -->
+<!-- tasks: Fix the mono-number baseline once in the shared style, then sweep call sites | Record the cause in DESIGN.md under typography -->
+<!-- anchor: Phase 9 -->
 Execute Phase 9 of PUNCHLIST_ui11.md in this repo (numbers sit on the line): the goal is that every mono or tabular number rendered inline with text sits vertically centered with that text, app-wide, fixed once in the shared number style rather than per site. Read PUNCHLIST_ui11.md in the repo root and the recent git log; your items are exactly Phase 9's checkboxes; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when Phase 9's done check passes against the dev instance.
 
 
