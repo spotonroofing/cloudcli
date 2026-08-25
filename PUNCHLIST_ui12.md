@@ -55,8 +55,8 @@ Done check: on dev via agent-browser: the scroll container's bounding box reache
 
 Goal: status carries color even in a monochromatic theme, and every job row shows its own counter. Files: the navigator/job row components, status icon components, theme tokens, DESIGN.md; the counter data path from ui11 phase 6/10 if it is not rendering. Dependencies: none.
 
-- [ ] Status icons get semantic colors from new theme tokens: done checks are green, the working indicator uses the accent, idle stays muted ink; applies to task rows, job rows, and the top-bar counter (green when complete, like "5/5"). Document the semantic-color exception to the monochromatic law in DESIGN.md.
-- [ ] Every job row shows its own done/total task counter on the right (the top bar already does); find why per-job counters did not render for the ui11r run (manifest tasks present but counters absent on Willem's screen) and fix the path so counters appear for any chain with a manifest, including appended jobs.
+- [x] Status icons get semantic colors from new theme tokens: done checks are green, the working indicator uses the accent, idle stays muted ink; applies to task rows, job rows, and the top-bar counter (green when complete, like "5/5"). Document the semantic-color exception to the monochromatic law in DESIGN.md.
+- [x] Every job row shows its own done/total task counter on the right (the top bar already does); find why per-job counters did not render for the ui11r run (manifest tasks present but counters absent on Willem's screen) and fix the path so counters appear for any chain with a manifest, including appended jobs.
 
 Done check: on dev with a stub chain: task check icons computed-style green, working icon accent, idle muted; each job row shows n/N on the right, green at completion; ui11r's stored record renders counters in the history view. Phone viewport holds. Fresh-context subagent verification. Commit.
 

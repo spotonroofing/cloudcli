@@ -77,7 +77,7 @@ function TodoHeaderIcon({ complete }: { complete: boolean }) {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
             transition={reduce ? { duration: 0 } : SPRING_SWAP}
-            className="absolute size-[1.375rem] overflow-visible text-emerald-500"
+            className="absolute size-[1.375rem] overflow-visible text-status-done"
           >
             <circle cx="12" cy="12" r="9" fill="currentColor" />
             <motion.path
@@ -128,8 +128,11 @@ export function TodoStatusIcon({
       viewBox="0 0 24 24"
       initial={false}
       className={cn(
-        'mx-0.5 size-5 shrink-0 overflow-visible text-muted-foreground',
-        status === 'in-progress' && 'text-foreground',
+        // Semantic status inks (ui12 phase 4): done green, working accent,
+        // idle muted — the sanctioned exception to monochromatic icons.
+        'mx-0.5 size-5 shrink-0 overflow-visible text-status-idle',
+        status === 'in-progress' && 'text-status-working',
+        status === 'completed' && 'text-status-done',
         status === 'cancelled' && 'text-rose-600 dark:text-rose-400',
       )}
     >
@@ -287,7 +290,7 @@ export function TodoList({
         <span
           className={cn(
             'shrink-0 text-xs font-medium tabular-nums text-muted-foreground',
-            allComplete && 'text-emerald-600 dark:text-emerald-400',
+            allComplete && 'text-status-done',
           )}
         >
           <span className="sr-only">

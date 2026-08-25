@@ -73,6 +73,15 @@
        neutral silver, graphite-leaning in light — never the accent. */
     --beam-ink: 211 10% 42%;
 
+    /* Semantic status inks (ui12 phase 4): the one sanctioned color family for
+       status icons and counters — done green, working accent, idle muted ink.
+       working/idle alias the live accent/ink tokens via var(), so every named
+       theme and the custom accent flow through without per-theme overrides;
+       only the green needs its own light/dark pair. */
+    --status-done: 161 94% 30%;
+    --status-working: var(--primary);
+    --status-idle: var(--muted-foreground);
+
     /* Typography tokens — see DESIGN.md. Same self-hosted family, two cuts:
        UI chrome sits at the default optical size; message content gets the
        same family (kept separate so the cuts can diverge independently). */
@@ -146,6 +155,10 @@
 
     /* Activity-shimmer beam ink — pale silver on the dark surface. */
     --beam-ink: 211 16% 78%;
+
+    /* Status done green lifts for dark surfaces; working/idle follow the
+       theme's accent/ink via the :root var() aliases. */
+    --status-done: 158 64% 52%;
 
     /* Nav design tokens — dark overrides */
     --nav-glass-bg: 0 0% 12% / 0.55;

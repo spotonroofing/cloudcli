@@ -66,6 +66,17 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
 }
 
 /**
+ * Displayed done count (ui12 phase 4): the punch-list count when the server
+ * could read one, else derived from unit status — a finished uncountable
+ * unit reads all done, anything else zero. Real planner dispatches carry no
+ * punch-list anchors, so the server count is null for them; deriving here is
+ * what makes counters render for any chain with a manifest.
+ */
+function displayedDone(unit: Unit): number {
+  return unit.done ?? (unit.status === 'completed' ? unit.tasks.length : 0);
+}
+
+/**
  * Per-task status icons (ui11 phase 10): the punch list checks off in order,
  * so the done count maps onto the task list as a prefix — the first `done`
  * tasks read done, the next task of the active unit reads working, the rest
@@ -75,7 +86,7 @@ function taskStatus(unit: Unit, taskIndex: number): TodoListItemStatus {
   // Honesty over tidiness: a finished unit with countable check-offs shows
   // its unchecked tasks idle, not silently checked. Only an uncountable
   // finished unit assumes all done.
-  const done = unit.done ?? (unit.status === 'completed' ? unit.tasks.length : 0);
+  const done = displayedDone(unit);
   if (taskIndex < done) {
     return 'completed';
   }
@@ -211,7 +222,7 @@ export default function PhaseNavigator({ chain, run }: PhaseNavigatorProps) {
           data-slot="phase-navigator-counts"
           className={cn(
             'flex-shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground',
-            allComplete && 'text-emerald-600 dark:text-emerald-400',
+            allComplete && 'text-status-done',
           )}
         >
           <SwapText value={String(doneCount)}>{doneCount}</SwapText>
@@ -294,12 +305,15 @@ export default function PhaseNavigator({ chain, run }: PhaseNavigatorProps) {
                     >
                       {unit.name}
                     </span>
-                    {unit.done != null && unit.tasks.length > 0 && (
+                    {unit.tasks.length > 0 && (
                       <span
                         data-slot="phase-navigator-row-count"
-                        className="flex-shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground"
+                        className={cn(
+                          'flex-shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground',
+                          displayedDone(unit) === unit.tasks.length && 'text-status-done',
+                        )}
                       >
-                        <SwapText value={String(unit.done)}>{unit.done}</SwapText>
+                        <SwapText value={String(displayedDone(unit))}>{displayedDone(unit)}</SwapText>
                         <span>/</span>
                         <span>{unit.tasks.length}</span>
                       </span>
