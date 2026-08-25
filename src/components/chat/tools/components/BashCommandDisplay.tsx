@@ -5,8 +5,8 @@ import { motion, useReducedMotion } from 'motion/react';
 import { cn } from '../../../../lib/utils';
 import { copyTextToClipboard } from '../../../../utils/clipboard';
 import { AgentDisclosure, SPRING_SWAP } from '../../../../shared/view/beui';
-import { ToolStatusBadge } from './ToolStatusBadge';
-import type { ToolStatus } from './ToolStatusBadge';
+import { ToolRowStatusIcon, firstErrorLine } from './ToolRowStatus';
+import type { ToolStatus } from './ToolRowStatus';
 
 interface BashCommandDisplayProps {
   command: string;
@@ -40,14 +40,15 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
   const hasOutput = trimmedOutput.length > 0;
   const outputLineCount = hasOutput ? trimmedOutput.split('\n').length : 0;
   const isRunning = status === 'running';
+  const errorLine = status === 'error' || status === 'denied' ? firstErrorLine(trimmedOutput) : '';
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Output often arrives after this component first mounts, so apply the
   // auto-open intent once when there is finally something to show. After that
   // the user is in control of the toggle. Errors intentionally do NOT
-  // auto-expand — the status badge already signals the failure, and the
-  // output stays one click away.
+  // auto-expand — the leading status icon and error line already signal the
+  // failure, and the output stays one click away.
   const autoAppliedRef = useRef(false);
   useEffect(() => {
     if (!autoAppliedRef.current && hasOutput && defaultOpen) {
@@ -89,8 +90,11 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
           hasOutput && 'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring',
         )}
       >
+        {/* Leading-icon status (ui12 job 10): the `$` glyph gives way to the
+            ramped spinner while running and the red/amber status glyph on
+            error/denial — same size-4 slot, no layout shift. */}
         <span className="grid size-4 shrink-0 select-none place-items-center font-mono text-xs font-semibold text-muted-foreground">
-          $
+          {status ? <ToolRowStatusIcon status={status} /> : '$'}
         </span>
         {/* Not a <code> tag: the global `.chat-message code` rule forces
             `white-space: pre-wrap !important`, which would defeat `truncate`
@@ -104,10 +108,6 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
           {command}
         </span>
 
-        {isRunning && (
-          <span className="h-2.5 w-2.5 flex-shrink-0 animate-spin rounded-full border-[1.5px] border-muted-foreground/30 border-t-primary" />
-        )}
-        {status && status !== 'running' && <ToolStatusBadge status={status} className="flex-shrink-0" />}
         {!open && hasOutput && !isRunning && (
           <span className="flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
             {outputLineCount} {outputLineCount === 1 ? 'line' : 'lines'}
@@ -140,9 +140,13 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
         </span>
       </div>
 
-      {description && !open && (
+      {(errorLine || description) && !open && (
         <div className="flex items-center gap-2 pl-6 text-[11px] text-muted-foreground/70">
-          <span className="min-w-0 truncate italic">{description}</span>
+          {errorLine ? (
+            <span className="min-w-0 truncate text-rose-600 dark:text-rose-400" title={errorLine}>{errorLine}</span>
+          ) : (
+            <span className="min-w-0 truncate italic">{description}</span>
+          )}
           {timestamp && (
             <span className="touch:opacity-100 ml-auto flex-shrink-0 tabular-nums opacity-0 transition-opacity duration-200 group-hover/cmd:opacity-100">
               {timestamp}

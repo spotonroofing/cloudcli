@@ -6,8 +6,8 @@ import type { SubagentChildTool } from '../types/types';
 import { getToolConfig } from './configs/toolConfigs';
 import { OneLineDisplay, BashCommandDisplay, CollapsibleDisplay, ToolDiffViewer, MarkdownContent, FileListContent, TodoListContent, TaskListContent, TextContent, QuestionAnswerContent, SubagentContainer } from './components';
 import { PlanDisplay } from './components/PlanDisplay';
-import { ToolStatusBadge } from './components/ToolStatusBadge';
-import type { ToolStatus } from './components/ToolStatusBadge';
+import { ToolRowStatusIcon } from './components/ToolRowStatus';
+import type { ToolStatus } from './components/ToolRowStatus';
 
 type DiffLine = {
   type: string;
@@ -141,8 +141,8 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
         output={output}
         isError={Boolean(toolResult?.isError)}
         status={toolStatus !== 'completed' ? toolStatus : undefined}
-        // Commands stay collapsed by default — including failures; the status
-        // badge marks errors and the output expands via the chevron.
+        // Commands stay collapsed by default — including failures; the leading
+        // status icon marks errors and the output expands via the chevron.
         defaultOpen={false}
       />
     );
@@ -297,7 +297,7 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
         })
       : undefined;
 
-    const badgeElement = toolStatus && toolStatus !== 'completed' ? <ToolStatusBadge status={toolStatus} /> : undefined;
+    const statusIcon = toolStatus && toolStatus !== 'completed' ? <ToolRowStatusIcon status={toolStatus} /> : undefined;
 
     return (
       <CollapsibleDisplay
@@ -306,7 +306,7 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
         title={title}
         defaultOpen={defaultOpen}
         onTitleClick={handleTitleClick}
-        badge={badgeElement}
+        statusIcon={statusIcon}
         showRawParameters={mode === 'input' && showRawParameters}
         rawContent={rawToolInput}
       >

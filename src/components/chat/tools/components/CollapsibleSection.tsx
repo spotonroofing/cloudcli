@@ -10,7 +10,8 @@ interface CollapsibleSectionProps {
   toolName?: string;
   open?: boolean;
   action?: React.ReactNode;
-  badge?: React.ReactNode;
+  /** Leading status icon (ui12 job 10): ramped spinner / error glyph at row start. */
+  statusIcon?: React.ReactNode;
   onTitleClick?: () => void;
   children: React.ReactNode;
   className?: string;
@@ -18,17 +19,17 @@ interface CollapsibleSectionProps {
 
 /**
  * Tool-row disclosure in the beUI tool-result treatment (beui.dev/components/
- * agents/tool-result): a min-height header row — tool name, mono title, badge —
- * with a spring-rotated chevron on the right, revealing the content through
- * AgentDisclosure with a left indent. When there's a clickable title
- * (Edit/Write), only the row toggles and the title opens the file.
+ * agents/tool-result): a min-height header row — leading status icon, tool
+ * name, mono title — with a spring-rotated chevron on the right, revealing the
+ * content through AgentDisclosure with a left indent. When there's a clickable
+ * title (Edit/Write), only the row toggles and the title opens the file.
  */
 export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   title,
   toolName,
   open = false,
   action,
-  badge,
+  statusIcon,
   onTitleClick,
   children,
   className = '',
@@ -53,6 +54,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
     <div className={cn('w-full text-sm', className)}>
       {onTitleClick ? (
         <div className="group/section flex min-h-7 w-full select-none items-center gap-2 py-0.5 text-xs">
+          {statusIcon}
           {toolName && (
             <span className="shrink-0 font-medium text-foreground/90">{toolName}</span>
           )}
@@ -63,7 +65,6 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           >
             {title}
           </button>
-          {badge && <span className="shrink-0">{badge}</span>}
           {action && <span className="shrink-0">{action}</span>}
           <button
             type="button"
@@ -81,11 +82,11 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           onClick={() => setIsOpen((current) => !current)}
           className="group/section flex min-h-7 w-full select-none items-center gap-2 rounded-md py-0.5 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
+          {statusIcon}
           {toolName && (
             <span className="shrink-0 font-medium text-foreground/90">{toolName}</span>
           )}
           <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70">{title}</span>
-          {badge && <span className="shrink-0">{badge}</span>}
           {action && <span className="shrink-0">{action}</span>}
           {chevron}
         </button>

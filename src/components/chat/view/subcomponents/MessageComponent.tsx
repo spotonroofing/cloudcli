@@ -12,9 +12,8 @@ import type {
 } from '../../types/types';
 import { extractExternalLinks, formatUsageLimitText, stripProposedPlanEnvelope } from '../../utils/chatFormatting';
 import type { Project } from '../../../../types/app';
-import { ToolRenderer, ToolErrorDisplay, shouldHideToolResult } from '../../tools';
+import { ToolRenderer, ToolErrorDisplay, ResearchDisplay, shouldHideToolResult } from '../../tools';
 import { AgentDisclosure, MESSAGE_POP_UP, StreamingResponse, Thinking, useStreamedReveal } from '../../../../shared/view/beui';
-import type { ThinkingRow } from '../../../../shared/view/beui';
 import { Citations } from '../../../../shared/view/beui/Citations';
 import { Button } from '../../../../shared/view/ui';
 
@@ -118,84 +117,6 @@ function StreamingAssistantText({ content }: { content: string }) {
         {content.slice(0, cursor)}
       </Markdown>
     </StreamingResponse>
-  );
-}
-
-const parseToolInputObject = (toolInput: unknown): Record<string, any> => {
-  if (typeof toolInput !== 'string') return (toolInput as Record<string, any>) || {};
-  try {
-    return JSON.parse(toolInput);
-  } catch {
-    return {};
-  }
-};
-
-const domainOf = (url: string): string | null => {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return null;
-  }
-};
-
-const SEARCH_TRACE_MAX_ROWS = 6;
-
-/**
- * WebSearch / WebFetch turns render as the beautifului Thinking trace in its
- * search mode: the query line, then favicon rows for the sources read.
- */
-function SearchToolThinking({ message }: { message: ChatMessage }) {
-  const input = useMemo(() => parseToolInputObject(message.toolInput), [message.toolInput]);
-  const isFetch = message.toolName === 'WebFetch';
-  const working = !message.toolResult;
-  const failed = Boolean(message.toolResult?.isError);
-  const query = isFetch ? String(input.url || '') : String(input.query || '');
-
-  const { rows, extraCount } = useMemo(() => {
-    if (working || failed) return { rows: [] as ThinkingRow[], extraCount: 0 };
-    if (isFetch) {
-      const url = String(input.url || '');
-      const domain = domainOf(url);
-      if (!domain) return { rows: [] as ThinkingRow[], extraCount: 0 };
-      return {
-        rows: [{ key: url, primary: domain, href: url, faviconUrl: url } satisfies ThinkingRow],
-        extraCount: 0,
-      };
-    }
-    // WebSearch results carry their links as a `Links: [...]` JSON block.
-    const content = String(message.toolResult?.content || '');
-    const linksMatch = /Links:\s*(\[[\s\S]*?\])\s*(?:\n|$)/.exec(content);
-    if (!linksMatch) return { rows: [] as ThinkingRow[], extraCount: 0 };
-    try {
-      const links = JSON.parse(linksMatch[1]) as Array<{ title?: string; url?: string }>;
-      const usable = links.filter((link) => typeof link.url === 'string' && domainOf(link.url));
-      const rows = usable.slice(0, SEARCH_TRACE_MAX_ROWS).map((link) => ({
-        key: link.url as string,
-        primary: link.title || domainOf(link.url as string),
-        secondary: domainOf(link.url as string),
-        href: link.url,
-        faviconUrl: link.url,
-      } satisfies ThinkingRow));
-      return { rows, extraCount: Math.max(0, usable.length - rows.length) };
-    } catch {
-      return { rows: [] as ThinkingRow[], extraCount: 0 };
-    }
-  }, [working, failed, isFetch, input.url, message.toolResult]);
-
-  return (
-    <Thinking
-      mode="search"
-      working={working}
-      activeLabel={isFetch ? 'Reading the page' : 'Searching the web'}
-      doneLabel={failed
-        ? (isFetch ? 'Page fetch failed' : 'Search failed')
-        : (isFetch ? 'Read the page' : 'Searched the web')}
-      query={query}
-      rows={rows}
-      footer={extraCount > 0 ? (
-        <span className="px-1.5 text-[12px] text-muted-foreground/70">+{extraCount} more</span>
-      ) : undefined}
-    />
   );
 }
 
@@ -531,8 +452,12 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
           <div className="w-full">
 
             {message.isToolUse && (message.toolName === 'WebSearch' || message.toolName === 'WebFetch') ? (
-              /* Web reads render as the beautifului Thinking trace (search mode) */
-              <SearchToolThinking message={message} />
+              /* Web reads render as the Research tool row with real sources */
+              <ResearchDisplay
+                toolName={message.toolName}
+                toolInput={message.toolInput}
+                toolResult={message.toolResult}
+              />
             ) : message.isToolUse ? (
               <>
                 <div className="flex flex-col">

@@ -8,7 +8,7 @@ export { BorderBeam, BorderBeamOverlay, useBeamPresence } from './BorderBeam';
 export { BounceIndicator } from './BounceIndicator';
 export { BrailleLoader } from './BrailleLoader';
 export { MarqueeLabel } from './MarqueeLabel';
-export { Citations } from './Citations';
+export { Citations, CitationList, type CitationItem } from './Citations';
 export { Loader } from './Loader';
 export { NumberTicker } from './NumberTicker';
 export { TodoList } from './TodoList';
