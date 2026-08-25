@@ -103,6 +103,15 @@ export function NumberTicker({
     >
       <span className="sr-only">{readableText}</span>
       <span aria-hidden="true" className="inline-flex items-center">
+        {/* Zero-width baseline anchor. The digit columns are overflow-hidden
+            inline-blocks, whose CSS baseline is their bottom edge — when a
+            digit is the first flex item the whole ticker aligns its bottom
+            edge to the surrounding text baseline and the digits float high.
+            A real text glyph first gives the ticker the true 1.1em-box
+            baseline, so it sits on the line like plain text. */}
+        <span className="inline-block w-0" style={GLYPH_BOX_STYLE}>
+          {'\u200B'}
+        </span>
         {prefix ? <span className="inline-block" style={GLYPH_BOX_STYLE}>{prefix}</span> : null}
         {glyphs.map(({ char, id }, i) => {
           const isDigit = /\d/.test(char);

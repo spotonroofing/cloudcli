@@ -1,6 +1,28 @@
 @import '@fontsource-variable/schibsted-grotesk';
 @import '@fontsource-variable/schibsted-grotesk/wght-italic.css';
 
+/* Mono cut with the sans's vertical metrics (see DESIGN.md, typography).
+   The system mono fonts carry smaller ascent/descent boxes than Schibsted
+   Grotesk (SF Mono 0.90/0.25, Menlo 0.93/0.24 vs 0.98/0.26), so a mono
+   number flex-centered next to sans text sat off the text's baseline.
+   Overriding every local candidate to the sans's exact metrics makes mono
+   and sans line boxes congruent: centering a mono box IS baseline-sharing. */
+@font-face {
+  font-family: 'CloudCLI Mono';
+  src:
+    local('SF Mono'),
+    local('SFMono-Regular'),
+    local('Menlo'),
+    local('Monaco'),
+    local('Consolas'),
+    local('Liberation Mono'),
+    local('Courier New');
+  font-weight: 100 900;
+  ascent-override: 98%;
+  descent-override: 26%;
+  line-gap-override: 0%;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -56,6 +78,10 @@
        same family (kept separate so the cuts can diverge independently). */
     --font-ui: 'Schibsted Grotesk Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     --font-message: 'Schibsted Grotesk Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    /* The metric-corrected mono face (declared above) leads the stack so every
+       font-mono number shares the sans baseline; raw system monos are the
+       emergency fallback only. */
+    --font-mono: 'CloudCLI Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
     /* Nav design tokens */
     --nav-glass-bg: 44 22% 96% / 0.7;

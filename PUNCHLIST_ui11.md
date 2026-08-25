@@ -111,8 +111,8 @@ Done check: the dev DB shows no "proj" project and no throwaway; a project-less 
 
 Goal: wherever a mono or tabular number renders inline with text, it sits vertically centered with that text, everywhere in the app. Files: the shared mono/number class or component and the theme typography tokens; every call site the sweep finds (the "Thinking 3m18.9s" timing, token and line counts, durations, the context ring label, phase counters). Dependencies: phase 4 (row components settled).
 
-- [ ] Fix the cause once, in the shared number/mono style (font metrics, line-height, vertical-align, or a font-feature and baseline correction), not per site; then sweep the app for inline numbers and apply the shared class so no site carries its own alignment hack.
-- [ ] Record the cause in one line in DESIGN.md under typography so it is not re-broken.
+- [x] Fix the cause once, in the shared number/mono style (font metrics, line-height, vertical-align, or a font-feature and baseline correction), not per site; then sweep the app for inline numbers and apply the shared class so no site carries its own alignment hack.
+- [x] Record the cause in one line in DESIGN.md under typography so it is not re-broken.
 
 Done check: on dev, for the Thinking timing row and at least three other inline-number sites, DOM measurements show the number glyph box's vertical center within 1px of the adjacent text's; holds at a phone viewport. Fresh-context subagent verification. Commit.
 

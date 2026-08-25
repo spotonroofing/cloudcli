@@ -20,8 +20,9 @@ Self-hosted Schibsted Grotesk Variable (weights 400–900, normal + italic) via 
 
 - `--font-ui` — UI chrome. Tailwind `font-sans` (the body default).
 - `--font-message` — chat message content. Tailwind `font-serif` (legacy utility name kept so existing call sites resolve to the message cut; do not add real serifs).
+- `--font-mono` — inline numbers, commands, code. Tailwind `font-mono`, resolving to the `'CloudCLI Mono'` @font-face in `src/index.css`: the local system monos wrapped with `ascent-override: 98% / descent-override: 26% / line-gap-override: 0%` — Schibsted's exact vertical metrics. Numbers sat off the line because the raw system monos carry smaller boxes (SF Mono 0.90/0.25), so flex-centering a mono span missed the sans baseline; with congruent metrics, centering IS baseline-sharing (ui11 phase 9). Never point `font-mono` at a raw system stack, and never per-site pixel-nudge a number — fix metrics here.
 
-Both currently point at the same family; keep them separate so the cuts can diverge.
+Both sans cuts currently point at the same family; keep them separate so the cuts can diverge.
 
 ### Radius
 

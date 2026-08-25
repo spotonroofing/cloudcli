@@ -20,6 +20,9 @@ export default {
         // resolves to the message cut of the app sans.
         sans: 'var(--font-ui)',
         serif: 'var(--font-message)',
+        // Metric-corrected mono (ascent/descent overridden to match the sans
+        // in src/index.css) so inline numbers sit on the line — see DESIGN.md.
+        mono: 'var(--font-mono)',
       },
       colors: {
         border: "hsl(var(--border))",
