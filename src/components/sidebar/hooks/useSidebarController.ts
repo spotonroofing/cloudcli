@@ -151,8 +151,6 @@ export function useSidebarController({
   const [initialSessionsLoaded, setInitialSessionsLoaded] = useState<Set<string>>(new Set());
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [editingSession, setEditingSession] = useState<string | null>(null);
-  const [editingSessionName, setEditingSessionName] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
   const [deletingProjects, setDeletingProjects] = useState<Set<string>>(new Set());
   const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteProjectConfirmation | null>(null);
@@ -1102,11 +1100,7 @@ export function useSidebarController({
     // existing sidebar callback signatures; backend rename only needs sessionId.
     async (_projectId: string, sessionId: string, summary: string, _provider: LLMProvider) => {
       const trimmed = summary.trim();
-      if (!trimmed) {
-        setEditingSession(null);
-        setEditingSessionName('');
-        return;
-      }
+      if (!trimmed) return;
       try {
         const response = await api.renameSession(sessionId, trimmed);
         if (response.ok) {
@@ -1119,9 +1113,6 @@ export function useSidebarController({
       } catch (error) {
         console.error('[Sidebar] Error renaming session:', error);
         alert(t('messages.renameSessionError'));
-      } finally {
-        setEditingSession(null);
-        setEditingSessionName('');
       }
     },
     [onRefresh, reloadRecentConversations, t],
@@ -1164,8 +1155,6 @@ export function useSidebarController({
     initialSessionsLoaded,
     currentTime,
     isRefreshing,
-    editingSession,
-    editingSessionName,
     searchFilter,
     deletingProjects,
     loadingMoreProjects,
@@ -1215,8 +1204,6 @@ export function useSidebarController({
     editingPath,
     setEditingPath,
     editingProjectError,
-    setEditingSession,
-    setEditingSessionName,
     searchMode,
     setSearchMode,
     conversationResults,

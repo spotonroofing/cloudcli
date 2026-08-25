@@ -200,9 +200,7 @@ export default function SidebarContent({
   );
   const groupedArchivedSessions = groupArchivedSessionsByProject(archivedSessions);
   const visibleArchivedItemsCount = archivedProjects.length + archivedSessions.length;
-  const isRenamingOnMobile = isMobile && Boolean(
-    projectListProps.editingProject || projectListProps.editingSession,
-  );
+  const isRenamingOnMobile = isMobile && Boolean(projectListProps.editingProject);
   // Desktop is pinned to one project (phase 3), so the header's New Session
   // button always targets the current scoped project.
   const scopedProject = projectListProps.selectedProject;

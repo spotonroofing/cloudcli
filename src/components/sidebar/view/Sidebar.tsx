@@ -63,8 +63,6 @@ function Sidebar({
     initialSessionsLoaded,
     currentTime,
     isRefreshing,
-    editingSession,
-    editingSessionName,
     searchFilter,
     searchMode,
     setSearchMode,
@@ -118,8 +116,6 @@ function Sidebar({
     editingPath,
     setEditingPath,
     editingProjectError,
-    setEditingSession,
-    setEditingSessionName,
     setSearchFilter,
     setDeleteConfirmation,
     setSessionDeleteConfirmation,
@@ -307,8 +303,6 @@ function Sidebar({
     editingProjectError,
     initialSessionsLoaded,
     currentTime,
-    editingSession,
-    editingSessionName,
     deletingProjects,
     getProjectSessions,
     loadingMoreProjects,
@@ -337,15 +331,6 @@ function Sidebar({
     onDeleteSession: showDeleteSessionConfirmation,
     onLoadMoreSessions: loadMoreSessionsForProject,
     onNewSession,
-    onEditingSessionNameChange: setEditingSessionName,
-    onStartEditingSession: (sessionId, initialName) => {
-      setEditingSession(sessionId);
-      setEditingSessionName(initialName);
-    },
-    onCancelEditingSession: () => {
-      setEditingSession(null);
-      setEditingSessionName('');
-    },
     onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => {
       void updateSessionSummary(projectName, sessionId, summary, provider);
     },

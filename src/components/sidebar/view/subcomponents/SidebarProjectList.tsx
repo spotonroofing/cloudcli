@@ -25,8 +25,6 @@ export type SidebarProjectListProps = {
   editingProjectError: string | null;
   initialSessionsLoaded: Set<string>;
   currentTime: Date;
-  editingSession: string | null;
-  editingSessionName: string;
   deletingProjects: Set<string>;
   getProjectSessions: (project: Project) => SessionWithProvider[];
   onLoadMoreSessions: (projectId: string) => void;
@@ -60,10 +58,7 @@ export type SidebarProjectListProps = {
     provider: LLMProvider,
   ) => void;
   onNewSession: (project: Project) => void;
-  onEditingSessionNameChange: (value: string) => void;
-  onStartEditingSession: (sessionId: string, initialName: string) => void;
   onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
-  onCancelEditingSession: () => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
   t: TFunction;
 };
@@ -83,8 +78,6 @@ export default function SidebarProjectList({
   editingProjectError,
   initialSessionsLoaded,
   currentTime,
-  editingSession,
-  editingSessionName,
   deletingProjects,
   getProjectSessions,
   onLoadMoreSessions,
@@ -109,10 +102,7 @@ export default function SidebarProjectList({
   onArchiveSession,
   onDeleteSession,
   onNewSession,
-  onEditingSessionNameChange,
-  onStartEditingSession,
   onMoveSessionToProject,
-  onCancelEditingSession,
   onSaveEditingSession,
   t,
 }: SidebarProjectListProps) {
@@ -163,8 +153,6 @@ export default function SidebarProjectList({
               initialSessionsLoaded={initialSessionsLoaded.has(project.projectId)}
               isLoadingMoreSessions={loadingMoreProjects.has(project.projectId)}
               currentTime={currentTime}
-              editingSession={editingSession}
-              editingSessionName={editingSessionName}
               onEditingNameChange={onEditingNameChange}
               onEditingPlannerNameChange={onEditingPlannerNameChange}
               onEditingPathChange={onEditingPathChange}
@@ -190,10 +178,7 @@ export default function SidebarProjectList({
               )}
               onCloseWorkspaceProject={onCloseWorkspaceProject}
               onNewSession={onNewSession}
-              onEditingSessionNameChange={onEditingSessionNameChange}
-              onStartEditingSession={onStartEditingSession}
               onMoveSessionToProject={onMoveSessionToProject}
-              onCancelEditingSession={onCancelEditingSession}
               onSaveEditingSession={onSaveEditingSession}
               t={t}
             />

@@ -53,11 +53,11 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
   const animationRef = useRef<ReturnType<typeof animate> | null>(null);
   activeKeyRef.current = activeKey;
 
-  const measure = useCallback((key: string): number | null => {
+  const measure = useCallback((key: string): { x: number; y: number } | null => {
     const container = containerRef.current;
     if (!container) return null;
-    // A key can be stamped on both the mobile and desktop variant of a row
-    // (one is display:none per breakpoint); measure the visible one.
+    // Guard against a key stamped on a hidden duplicate (display:none per
+    // breakpoint); measure the visible element.
     const rows = container.querySelectorAll<HTMLElement>(`[data-bounce-key="${CSS.escape(key)}"]`);
     let row: HTMLElement | null = null;
     for (const candidate of rows) {
@@ -69,15 +69,21 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
     if (!row) return null;
     const containerRect = container.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
-    return rowRect.top - containerRect.top + (rowRect.height - DOT_SIZE) / 2;
+    // The x offset seats the dot against the destination row's own left
+    // edge, not the container's, so indented rows (a chat nested under a
+    // project) keep the dot inside their padding instead of at the pane edge.
+    return {
+      x: rowRect.left - containerRect.left,
+      y: rowRect.top - containerRect.top + (rowRect.height - DOT_SIZE) / 2,
+    };
   }, [containerRef]);
 
   /** Re-seat the dot with no travel (layout shifted around it). */
   const snapIndicator = useCallback(() => {
     const key = activeKeyRef.current;
     if (!key) return;
-    const destinationY = measure(key);
-    if (destinationY === null) {
+    const destination = measure(key);
+    if (destination === null) {
       // Destination row left the layout (collapsed group, filtered list):
       // fade out rather than hover stale or vanish in a hard cut; the next
       // resize with the row back re-seats the dot.
@@ -89,12 +95,12 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
     animationRef.current?.stop();
     if (!hasPositionRef.current) {
       // Reappearing (project re-expanded): seat silently, then fade in.
-      x.set(0);
-      y.set(destinationY);
+      x.set(destination.x);
+      y.set(destination.y);
       animate(opacity, 1, FADE);
     } else {
-      x.set(0);
-      y.set(destinationY);
+      x.set(destination.x);
+      y.set(destination.y);
       opacity.set(1);
     }
     hasPositionRef.current = true;
@@ -108,8 +114,8 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
       return;
     }
 
-    const destinationY = measure(activeKey);
-    if (destinationY === null) {
+    const destination = measure(activeKey);
+    if (destination === null) {
       animate(opacity, 0, FADE);
       hasPositionRef.current = false;
       return;
@@ -119,23 +125,27 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
     opacity.set(1);
 
     if (!hasPositionRef.current || reduce) {
-      x.set(0);
-      y.set(destinationY);
+      x.set(destination.x);
+      y.set(destination.y);
       hasPositionRef.current = true;
       return;
     }
 
+    const startX = x.get();
     const startY = y.get();
-    const distance = destinationY - startY;
+    const distance = destination.y - startY;
     const travel = Math.abs(distance);
     if (travel < 1) {
-      y.set(destinationY);
+      x.set(destination.x);
+      y.set(destination.y);
       return;
     }
     const longJumpProgress = Math.min(1, Math.max(0, (travel - 48) / 120));
-    const controlX = -Math.min(40, Math.max(8, travel * 0.25));
-    const midpointY = (startY + destinationY) / 2;
-    const controlY = destinationY + (midpointY - destinationY) * longJumpProgress;
+    // The sideways bulge rides on the straight-line x travel between the two
+    // rows' left edges (zero travel when both rows share an indent).
+    const controlX = (startX + destination.x) / 2 - Math.min(40, Math.max(8, travel * 0.25));
+    const midpointY = (startY + destination.y) / 2;
+    const controlY = destination.y + (midpointY - destination.y) * longJumpProgress;
 
     animationRef.current = animate(0, 1, {
       ...BOUNCE_SPRING,
@@ -143,12 +153,12 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
       damping: BOUNCE_SPRING.damping + longJumpProgress,
       mass: BOUNCE_SPRING.mass + 0.15 * longJumpProgress,
       onUpdate: (progress) => {
-        x.set(quadraticBezier(0, controlX, 0, progress));
-        y.set(quadraticBezier(startY, controlY, destinationY, progress));
+        x.set(quadraticBezier(startX, controlX, destination.x, progress));
+        y.set(quadraticBezier(startY, controlY, destination.y, progress));
       },
       onComplete: () => {
-        x.set(0);
-        y.set(destinationY);
+        x.set(destination.x);
+        y.set(destination.y);
       },
     });
   }, [activeKey, measure, opacity, reduce, x, y]);

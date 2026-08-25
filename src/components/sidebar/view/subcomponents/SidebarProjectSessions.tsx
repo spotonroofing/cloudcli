@@ -23,12 +23,7 @@ type SidebarProjectSessionsProps = {
   activeSessions: SessionActivityMap;
   attentionSessionIds: ReadonlySet<string>;
   currentTime: Date;
-  editingSession: string | null;
-  editingSessionName: string;
-  onEditingSessionNameChange: (value: string) => void;
-  onStartEditingSession: (sessionId: string, initialName: string) => void;
   onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
-  onCancelEditingSession: () => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
   onProjectSelect: (project: Project) => void;
   onSessionSelect: (session: SessionWithProvider, projectName: string) => void;
@@ -74,12 +69,7 @@ export default function SidebarProjectSessions({
   activeSessions,
   attentionSessionIds,
   currentTime,
-  editingSession,
-  editingSessionName,
-  onEditingSessionNameChange,
-  onStartEditingSession,
   onMoveSessionToProject,
-  onCancelEditingSession,
   onSaveEditingSession,
   onProjectSelect,
   onSessionSelect,
@@ -136,12 +126,7 @@ export default function SidebarProjectSessions({
               isProcessing={activeSessions.has(session.id)}
               needsAttention={attentionSessionIds.has(session.id)}
               currentTime={currentTime}
-              editingSession={editingSession}
-              editingSessionName={editingSessionName}
-              onEditingSessionNameChange={onEditingSessionNameChange}
-              onStartEditingSession={onStartEditingSession}
               onMoveSessionToProject={onMoveSessionToProject}
-              onCancelEditingSession={onCancelEditingSession}
               onSaveEditingSession={onSaveEditingSession}
               onProjectSelect={onProjectSelect}
               onSessionSelect={onSessionSelect}

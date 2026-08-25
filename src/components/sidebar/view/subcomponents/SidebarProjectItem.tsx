@@ -35,8 +35,6 @@ type SidebarProjectItemProps = {
   initialSessionsLoaded: boolean;
   isLoadingMoreSessions: boolean;
   currentTime: Date;
-  editingSession: string | null;
-  editingSessionName: string;
   /** Live runs inside this project; the row shimmers while nonzero and collapsed. */
   runningSessionCount: number;
   /** True when the project is open as a multi-project workspace row. */
@@ -64,10 +62,7 @@ type SidebarProjectItemProps = {
   activeSessions: SessionActivityMap;
   attentionSessionIds: ReadonlySet<string>;
   onNewSession: (project: Project) => void;
-  onEditingSessionNameChange: (value: string) => void;
-  onStartEditingSession: (sessionId: string, initialName: string) => void;
   onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
-  onCancelEditingSession: () => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
   t: TFunction;
 };
@@ -112,8 +107,6 @@ export default function SidebarProjectItem({
   initialSessionsLoaded,
   isLoadingMoreSessions,
   currentTime,
-  editingSession,
-  editingSessionName,
   runningSessionCount,
   onEditingNameChange,
   onEditingPlannerNameChange,
@@ -133,10 +126,7 @@ export default function SidebarProjectItem({
   isInWorkspace,
   onCloseWorkspaceProject,
   onNewSession,
-  onEditingSessionNameChange,
-  onStartEditingSession,
   onMoveSessionToProject,
-  onCancelEditingSession,
   onSaveEditingSession,
   t,
 }: SidebarProjectItemProps) {
@@ -351,12 +341,7 @@ export default function SidebarProjectItem({
         activeSessions={activeSessions}
         attentionSessionIds={attentionSessionIds}
         currentTime={currentTime}
-        editingSession={editingSession}
-        editingSessionName={editingSessionName}
-        onEditingSessionNameChange={onEditingSessionNameChange}
-        onStartEditingSession={onStartEditingSession}
         onMoveSessionToProject={onMoveSessionToProject}
-        onCancelEditingSession={onCancelEditingSession}
         onSaveEditingSession={onSaveEditingSession}
         onProjectSelect={onProjectSelect}
         onSessionSelect={onSessionSelect}
