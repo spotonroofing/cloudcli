@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuth } from '../components/auth/context/AuthContext';
+import { stashUndeliverableChatSend } from '../components/chat/utils/chatStorage';
 import { IS_PLATFORM } from '../shared/utils';
 import { expireAuthSession, isAuthTokenExpired } from '../utils/api';
 
@@ -53,10 +54,14 @@ export const useWebSocket = () => {
   return context;
 };
 
-// User-intent frames survive a dead socket by queueing for the next open.
-// Subscription frames are deliberately excluded: the reconnect flow re-sends
-// them with a fresh lastSeq, and replaying a stale one would duplicate rows.
-const QUEUEABLE_TYPES = ['chat.send', 'chat.abort', 'chat.permission-response'];
+// Control frames survive a dead socket by queueing for the next open.
+// chat.send is deliberately excluded (ui12 phase 1): a stale tab replaying a
+// message send on reconnect is a ghost send — an undeliverable send is
+// stashed in the server-side queued-message store instead (see sendMessage),
+// never in client memory. Subscription frames are excluded too: the
+// reconnect flow re-sends them with a fresh lastSeq, and replaying a stale
+// one would duplicate rows.
+const QUEUEABLE_TYPES = ['chat.abort', 'chat.permission-response'];
 
 const buildWebSocketUrl = (token: string | null) => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -80,10 +85,10 @@ const useWebSocketProviderState = (): WebSocketContextType => {
    */
   const listenersRef = useRef(new Set<ServerEventListener>());
   /**
-   * Chat frames sent while the socket was down (a backgrounded tab's socket
-   * dies silently; the browser only notices on the next send). Flushed in
-   * order on the next open so a send never silently disappears — the user
-   * sees their turn start as soon as the connection is back.
+   * Control frames (abort, permission response) sent while the socket was
+   * down (a backgrounded tab's socket dies silently; the browser only notices
+   * on the next send). Flushed in order on the next open. Never holds a
+   * chat.send — see QUEUEABLE_TYPES.
    */
   const pendingOutboundRef = useRef<Record<string, unknown>[]>([]);
   const [latestMessage, setLatestMessage] = useState<ServerEvent | null>(null);
@@ -199,7 +204,12 @@ const useWebSocketProviderState = (): WebSocketContextType => {
     }
 
     const record = message as Record<string, unknown> | null;
-    if (record && typeof record.type === 'string' && QUEUEABLE_TYPES.includes(record.type)) {
+    if (record && record.type === 'chat.send') {
+      // Never buffer a send client-side: it lands in the server queue, where
+      // the flush/auto-send machinery delivers it exactly once on reconnect.
+      stashUndeliverableChatSend(record);
+      console.warn('WebSocket not connected; stashed chat.send in the server queue');
+    } else if (record && typeof record.type === 'string' && QUEUEABLE_TYPES.includes(record.type)) {
       pendingOutboundRef.current.push(record);
       console.warn(`WebSocket not connected; queued ${record.type} for reconnect`);
     } else {

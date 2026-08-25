@@ -21,11 +21,13 @@ interface UseQueuedMessageAutoSendArgs {
  * Dispatches queued messages for sessions the user is NOT currently viewing.
  *
  * The composer persists each queued draft (text + send options snapshotted at
- * queue time) under `queued_message_<sessionId>`. When a session's run leaves
- * the processing map — its previous response completed — this hook sends that
- * session's queued message immediately instead of waiting for the user to
- * open the session again. Claiming the server row before sending is what
- * keeps the composer's own flush (on any device) from double-sending.
+ * queue time) in the server-side queued-message store. When a session's run
+ * leaves the processing map — its previous response completed — this hook
+ * sends that session's queued message immediately instead of waiting for the
+ * user to open the session again. Claiming (popping) the server row before
+ * sending is what keeps the composer's own flush (on any device) from
+ * double-sending, and sending the popped copy is what keeps a stale device
+ * from sending outdated content.
  */
 export function useQueuedMessageAutoSend({
   processingSessions,
@@ -58,16 +60,17 @@ export function useQueuedMessageAutoSend({
       }
 
       // The server row is the claim shared with the viewing composer on every
-      // device: only the client whose delete removed it sends.
-      void claimQueuedMessage(sessionId).then((claimed) => {
-        if (!claimed) {
+      // device: only the client whose delete popped it sends, and it sends the
+      // popped server copy, not this tab's cached one.
+      void claimQueuedMessage(sessionId).then((popped) => {
+        if (!popped) {
           return;
         }
         sendMessage({
           type: 'chat.send',
           sessionId,
-          content: queued.content,
-          options: { ...(queued.options ?? {}), attachments: queued.attachments ?? queued.images ?? [] },
+          content: popped.content,
+          options: { ...(popped.options ?? {}), attachments: popped.attachments ?? [] },
         });
         markSessionProcessing(sessionId, { statusText: null, canInterrupt: true });
       });

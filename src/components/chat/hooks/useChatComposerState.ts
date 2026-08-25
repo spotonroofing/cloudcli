@@ -31,6 +31,7 @@ import {
   safeLocalStorage,
   writeQueuedMessage,
   type QueuedSendOptions,
+  type StoredQueuedMessage,
 } from '../utils/chatStorage';
 import type {
   ChatAttachment,
@@ -347,7 +348,7 @@ export function useChatComposerState({
   sessionKeyRef.current = sessionKey;
   processingSessionsRef.current = processingSessions;
 
-  const { subscribe } = useWebSocket();
+  const { subscribe, isConnected } = useWebSocket();
   // One draft per composer surface: the session when one is open, otherwise
   // the project's new-chat composer. Keyed by projectId so drafts survive
   // display-name changes.
@@ -1021,10 +1022,13 @@ export function useChatComposerState({
       const isBootSubmission = bootSubmissionRef.current;
       bootSubmissionRef.current = false;
 
-      // A turn is already in flight: stash this message instead of sending it.
-      // Upload attached files now so the queued record contains durable image
-      // descriptors that can be sent even if another session is open later.
-      if (isLoading) {
+      // A turn is already in flight, or the socket is down and a send frame
+      // would go nowhere: stash this message in the server queue instead of
+      // sending it (a dead socket never buffers a send client-side, ui12
+      // phase 1). Upload attached files now so the queued record contains
+      // durable image descriptors that can be sent even if another session is
+      // open later.
+      if (isLoading || !isConnected) {
         // A run can restart in the tiny gap between scheduling and flushing a
         // queued submission. Put the same durable draft back without uploading
         // its files again.
@@ -1078,22 +1082,25 @@ export function useChatComposerState({
         // The upload is asynchronous. If the user changed sessions while it
         // was running, persist/send against the session where Queue was
         // pressed rather than putting the draft into the newly opened chat.
+        // Claim only while connected — a dead socket cannot deliver, so the
+        // row stays queued for the flush/auto-send after reconnect.
         if (queuedSessionKey && sessionKeyRef.current !== queuedSessionKey) {
           if (
-            processingSessionsRef.current
+            isConnected
+            && processingSessionsRef.current
             && !processingSessionsRef.current.has(queuedSessionKey)
           ) {
-            void claimQueuedMessage(queuedSessionKey).then((claimed) => {
-              if (!claimed) {
+            void claimQueuedMessage(queuedSessionKey).then((popped) => {
+              if (!popped) {
                 return;
               }
               sendMessage({
                 type: 'chat.send',
                 sessionId: queuedSessionKey,
-                content: durableDraft.content,
+                content: popped.content,
                 options: {
-                  ...(durableDraft.options ?? {}),
-                  attachments: durableDraft.uploadedAttachments ?? [],
+                  ...(popped.options ?? {}),
+                  attachments: popped.attachments ?? [],
                 },
               });
               onSessionProcessing?.(queuedSessionKey, { statusText: null, canInterrupt: true });
@@ -1353,6 +1360,7 @@ export function useChatComposerState({
       buildSendOptions,
       currentSessionId,
       executeCommand,
+      isConnected,
       isLoading,
       onSessionProcessing,
       onSessionEstablished,
@@ -1400,6 +1408,13 @@ export function useChatComposerState({
       return;
     }
 
+    // A dead socket cannot deliver a send. The message stays in the server
+    // queue and this effect re-runs when `isConnected` flips true — client
+    // memory never replays a send on its own (ui12 phase 1).
+    if (!isConnected) {
+      return;
+    }
+
     // Turn just ended in this session: flush immediately. Otherwise this is a
     // saved draft restored into an apparently idle session — hold it briefly
     // so the `chat_subscribed` ack can flip `isLoading` if a run is actually
@@ -1409,40 +1424,52 @@ export function useChatComposerState({
     const timer = setTimeout(() => {
       // The server row is the claim ticket shared with the app-level auto-send
       // and with this session's composer on every other device: only the
-      // client whose delete removed it sends, so the message never goes twice.
-      void (sessionKey ? claimQueuedMessage(sessionKey) : Promise.resolve(true)).then((claimed) => {
+      // client whose delete popped it sends — and it sends the popped server
+      // copy, so a stale device can never send outdated content. A brand-new
+      // chat has no server row yet; its in-memory draft stands in for the pop.
+      const claim: Promise<StoredQueuedMessage | null> = sessionKey
+        ? claimQueuedMessage(sessionKey)
+        : Promise.resolve({
+            content: queuedDraft.content,
+            options: queuedDraft.options,
+            attachments: queuedDraft.uploadedAttachments,
+          });
+      void claim.then((popped) => {
         if (cancelled) {
           // The effect re-ran while the claim was in flight (a run turned out
-          // to be live, or the session changed): put the message back rather
-          // than lose it, and let the next idle moment claim again.
-          if (claimed && sessionKey) {
-            writeQueuedMessage(sessionKey, {
-              content: queuedDraft.content,
-              options: queuedDraft.options,
-              attachments: queuedDraft.uploadedAttachments,
-            });
+          // to be live, or the session changed): put the popped copy back
+          // rather than lose it, and let the next idle moment claim again.
+          if (popped && sessionKey) {
+            writeQueuedMessage(sessionKey, popped);
           }
           return;
         }
         setQueuedDraft(null);
-        if (!claimed) {
+        if (!popped) {
           return;
         }
+        const submission: QueuedDraft = {
+          content: popped.content,
+          attachments: queuedDraft.attachments,
+          uploadedAttachments: popped.attachments,
+          options: popped.options,
+          preserveComposer: queuedDraft.preserveComposer,
+        };
         // A preserveComposer draft (inline edit save, rerun) never lived in
         // the composer; restoring it here would clobber the typed draft.
-        if (!queuedDraft.preserveComposer) {
-          setInput(queuedDraft.content);
-          inputValueRef.current = queuedDraft.content;
-          setAttachedFilesSync(queuedDraft.attachments);
+        if (!submission.preserveComposer) {
+          setInput(submission.content);
+          inputValueRef.current = submission.content;
+          setAttachedFilesSync(submission.attachments);
         }
-        handleSubmitRef.current?.(createFakeSubmitEvent(), queuedDraft);
+        handleSubmitRef.current?.(createFakeSubmitEvent(), submission);
       });
     }, delay);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [isLoading, queuedDraft, sessionKey, setInput, setAttachedFilesSync]);
+  }, [isLoading, isConnected, queuedDraft, sessionKey, setInput, setAttachedFilesSync]);
 
   const editQueuedDraft = useCallback(() => {
     if (!queuedDraft) {

@@ -80,6 +80,15 @@ export const queuedClientId =
 const cache = new Map<string, StoredQueuedMessage>();
 const listeners = new Set<(sessionId: string) => void>();
 const tails = new Map<string, Promise<unknown>>();
+/**
+ * Sessions whose latest local write has not been acknowledged by the server
+ * (the PUT failed, e.g. across a dev-server restart). Hydration preserves and
+ * re-pushes these instead of wiping them to server state — they are a live
+ * tab's own in-flight write, not a stale remnant, and dropping them would
+ * lose the message. The set is in-memory only, so nothing here survives a
+ * shutdown to ghost-send later.
+ */
+const pendingWrites = new Set<string>();
 
 const notify = (sessionId: string) => {
   listeners.forEach((listener) => listener(sessionId));
@@ -118,6 +127,20 @@ export function readQueuedMessage(sessionId: string): StoredQueuedMessage | null
   return message.content.trim() || (message.attachments?.length ?? 0) > 0 ? message : null;
 }
 
+const pushQueuedMessage = (sessionId: string, message: StoredQueuedMessage): Promise<unknown> =>
+  enqueue(sessionId, () =>
+    authenticatedFetch(endpoint(sessionId), {
+      method: 'PUT',
+      body: JSON.stringify({ ...message, clientId: queuedClientId }),
+    }).then((response) => {
+      if (response.ok) {
+        pendingWrites.delete(sessionId);
+      }
+    }).catch(() => {
+      // Stays in pendingWrites; the next hydrate re-pushes it.
+    }),
+  );
+
 export function writeQueuedMessage(sessionId: string, message: StoredQueuedMessage): void {
   const normalized = normalize(message);
   const previous = cache.get(sessionId);
@@ -125,14 +148,30 @@ export function writeQueuedMessage(sessionId: string, message: StoredQueuedMessa
     return;
   }
   cache.set(sessionId, normalized);
-  void enqueue(sessionId, () =>
-    authenticatedFetch(endpoint(sessionId), {
-      method: 'PUT',
-      body: JSON.stringify({ ...normalized, clientId: queuedClientId }),
-    }).catch(() => {
-      // Transient network failure; the next hydrate reconciles.
-    }),
-  );
+  pendingWrites.add(sessionId);
+  void pushQueuedMessage(sessionId, normalized);
+}
+
+/**
+ * A chat.send frame that found the socket dead lands back in the server queue
+ * instead of a client-memory buffer (ui12 phase 1): the composer flush and
+ * app-level auto-send deliver it exactly once after reconnect, and nothing
+ * client-side ever replays a send on its own. Notifies subscribers so the
+ * viewing composer shows the message as queued.
+ */
+export function stashUndeliverableChatSend(frame: Record<string, unknown>): void {
+  const sessionId = typeof frame.sessionId === 'string' ? frame.sessionId : null;
+  const content = typeof frame.content === 'string' ? frame.content : '';
+  const options = frame.options && typeof frame.options === 'object' && !Array.isArray(frame.options)
+    ? { ...(frame.options as Record<string, unknown>) }
+    : {};
+  const attachments = Array.isArray(options.attachments) ? options.attachments : [];
+  delete options.attachments;
+  if (!sessionId || (!content.trim() && attachments.length === 0)) {
+    return;
+  }
+  writeQueuedMessage(sessionId, { content, options, attachments });
+  notify(sessionId);
 }
 
 export function clearQueuedMessage(sessionId: string): void {
@@ -140,6 +179,7 @@ export function clearQueuedMessage(sessionId: string): void {
     return;
   }
   cache.delete(sessionId);
+  pendingWrites.delete(sessionId);
   void enqueue(sessionId, () =>
     authenticatedFetch(endpoint(sessionId), {
       method: 'DELETE',
@@ -151,13 +191,16 @@ export function clearQueuedMessage(sessionId: string): void {
 }
 
 /**
- * Removes the session's queued message and resolves true only for the one
- * client whose delete removed the server row. Every sender (the viewing
- * composer on any device, the app-level auto-send) claims before sending, so
- * a message queued on one device and visible on three is sent exactly once.
+ * Atomically pops the session's queued message: resolves the removed server
+ * row for the one client whose delete claimed it, null for everyone else.
+ * Every sender (the viewing composer on any device, the app-level auto-send)
+ * claims before sending and sends the popped copy, so a message queued on one
+ * device and visible on three is sent exactly once — and always with the
+ * server's content, never a stale local copy (ui12 phase 1).
  */
-export function claimQueuedMessage(sessionId: string): Promise<boolean> {
+export function claimQueuedMessage(sessionId: string): Promise<StoredQueuedMessage | null> {
   cache.delete(sessionId);
+  pendingWrites.delete(sessionId);
   return enqueue(sessionId, async () => {
     try {
       const response = await authenticatedFetch(endpoint(sessionId), {
@@ -165,12 +208,15 @@ export function claimQueuedMessage(sessionId: string): Promise<boolean> {
         body: JSON.stringify({ clientId: queuedClientId }),
       });
       if (!response.ok) {
-        return false;
+        return null;
       }
       const body = await response.json();
-      return body?.data?.claimed === true;
+      const message = body?.data?.message as StoredQueuedMessage | null | undefined;
+      return body?.data?.claimed === true && message && typeof message.content === 'string'
+        ? normalize(message)
+        : null;
     } catch {
-      return false;
+      return null;
     }
   });
 }
@@ -186,32 +232,22 @@ export function applyRemoteQueuedMessage(sessionId: string, message: StoredQueue
 
 const LEGACY_KEY_PREFIX = 'queued_message_';
 
-/** Messages queued by the pre-sync build sit in localStorage; move them up once. */
-const migrateLegacyQueuedMessages = (): void => {
+/**
+ * Messages queued by the pre-sync build sit in localStorage. They are stale by
+ * definition — the server queue has been the sole truth since ui11 phase 1 —
+ * so they purge without ever reaching the server or a send path: a machine
+ * powered back on must never fire an old local message (ui12 phase 1).
+ */
+const purgeLegacyQueuedMessages = (): void => {
   for (const key of Object.keys(localStorage)) {
-    if (!key.startsWith(LEGACY_KEY_PREFIX)) {
-      continue;
-    }
-    const sessionId = key.slice(LEGACY_KEY_PREFIX.length);
-    const raw = localStorage.getItem(key) ?? '';
-    localStorage.removeItem(key);
-    if (cache.has(sessionId)) {
-      continue;
-    }
-    let message: StoredQueuedMessage | null = null;
-    try {
-      const parsed = JSON.parse(raw) as StoredQueuedMessage;
-      message = parsed && typeof parsed.content === 'string' ? parsed : null;
-    } catch {
-      message = raw.trim() ? { content: raw } : null;
-    }
-    if (message && (message.content.trim() || (message.attachments ?? message.images ?? []).length > 0)) {
-      writeQueuedMessage(sessionId, message);
+    if (key.startsWith(LEGACY_KEY_PREFIX)) {
+      localStorage.removeItem(key);
     }
   }
 };
 
 export async function hydrateQueuedMessages(): Promise<void> {
+  purgeLegacyQueuedMessages();
   let messages: Record<string, StoredQueuedMessage>;
   try {
     const response = await authenticatedFetch('/api/queued-messages');
@@ -224,13 +260,26 @@ export async function hydrateQueuedMessages(): Promise<void> {
     return;
   }
   const touched = new Set([...cache.keys(), ...Object.keys(messages)]);
+  // A local write the server never acknowledged is this tab's own in-flight
+  // message, not a stale remnant: keep it and re-push instead of adopting the
+  // server's (missing) copy, or the message would silently evaporate.
+  const unacknowledged = new Map<string, StoredQueuedMessage>();
+  for (const sessionId of pendingWrites) {
+    const local = cache.get(sessionId);
+    if (local) {
+      unacknowledged.set(sessionId, local);
+    }
+  }
   cache.clear();
   for (const [sessionId, message] of Object.entries(messages)) {
     if (message && typeof message.content === 'string') {
       cache.set(sessionId, normalize(message));
     }
   }
-  migrateLegacyQueuedMessages();
+  for (const [sessionId, message] of unacknowledged) {
+    cache.set(sessionId, message);
+    void pushQueuedMessage(sessionId, message);
+  }
   touched.forEach(notify);
 }
 

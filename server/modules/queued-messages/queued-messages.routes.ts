@@ -13,8 +13,10 @@ import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils
  * GETs the full set at app load, and each write or claim broadcasts
  * `queued_message_updated` (message null on clear) so the card appears or
  * disappears everywhere live. `clientId` is echoed so the writing tab can
- * ignore its own update. DELETE returns `claimed`: only the client whose delete
- * removed the row sends the message, so two devices never double-send.
+ * ignore its own update. DELETE is an atomic pop: it returns `claimed` plus
+ * the popped row, and only the client whose delete removed the row sends —
+ * always the popped server copy, so two devices never double-send and a stale
+ * device never sends an outdated local copy (ui12 phase 1).
  *
  * Attachments are validated here, at the boundary, because the Claude runtime
  * later reads the row straight into the running turn (ui11 phase 2) without a
@@ -76,12 +78,13 @@ export function createQueuedMessagesRouter(): express.Router {
       const sessionId = String(req.params.sessionId);
       const body = (req.body ?? {}) as Record<string, unknown>;
       const clientId = typeof body.clientId === 'string' ? body.clientId : null;
-      const claimed = queuedMessagesDb.remove(sessionId);
+      const row = queuedMessagesDb.get(sessionId);
+      const claimed = row !== null && queuedMessagesDb.remove(sessionId);
       if (claimed) {
         broadcastQueuedMessageUpdated(sessionId, null, clientId);
         emitQueuedMessageChanged(sessionId);
       }
-      res.json(createApiSuccessResponse({ sessionId, claimed }));
+      res.json(createApiSuccessResponse({ sessionId, claimed, message: claimed && row ? parseQueuedMessageRow(row) : null }));
     }),
   );
 
