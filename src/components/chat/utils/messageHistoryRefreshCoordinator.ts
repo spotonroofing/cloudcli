@@ -1,3 +1,21 @@
+/**
+ * The session id whose persisted transcript should refresh when a
+ * `session_upserted` frame arrives (ui11 phase 10). Externally-driven runs
+ * (dispatched chains, headless CLI sessions) never stream through the chat
+ * run registry — the filesystem watcher's `session_upserted` broadcast is
+ * their only live signal — so the viewed session refetches its tail on that
+ * frame. Returns null for other sessions' upserts or id-less frames.
+ */
+export function sessionUpsertRefreshTarget(
+  event: { kind?: string; sessionId?: unknown },
+  activeViewSessionId: string | null,
+): string | null {
+  if (event.kind !== 'session_upserted' || !activeViewSessionId) {
+    return null;
+  }
+  return event.sessionId === activeViewSessionId ? activeViewSessionId : null;
+}
+
 export type MessageHistoryRefreshExecutor = (sessionId: string) => Promise<boolean | void>;
 export type CanRefreshMessageHistory = (sessionId: string) => boolean;
 

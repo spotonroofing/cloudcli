@@ -65,6 +65,26 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
   });
 }
 
+/**
+ * Per-task status icons (ui11 phase 10): the punch list checks off in order,
+ * so the done count maps onto the task list as a prefix — the first `done`
+ * tasks read done, the next task of the active unit reads working, the rest
+ * idle. A finished unit checks everything; a cancelled one freezes at done.
+ */
+function taskStatus(unit: Unit, taskIndex: number): TodoListItemStatus {
+  // Honesty over tidiness: a finished unit with countable check-offs shows
+  // its unchecked tasks idle, not silently checked. Only an uncountable
+  // finished unit assumes all done.
+  const done = unit.done ?? (unit.status === 'completed' ? unit.tasks.length : 0);
+  if (taskIndex < done) {
+    return 'completed';
+  }
+  if (taskIndex === done && unit.status === 'in-progress') {
+    return 'in-progress';
+  }
+  return 'pending';
+}
+
 const runStateStatus: Record<'running' | 'finished' | 'stopped', TodoListItemStatus> = {
   running: 'in-progress',
   finished: 'completed',
@@ -76,28 +96,18 @@ type PhaseNavigatorProps = {
   chain: ChainSnapshot | null;
   /** Single-prompt fallback: the run itself renders as phase 1 of 1. */
   run: { label: string; state: 'running' | 'finished' | 'stopped' } | null;
-  /** Unit index of the session open in the pane; null when outside the chain. */
-  selectedPhase: number | null;
-  /** True when a session exists for the unit (it started); gates row clicks. */
-  hasSessionForPhase: (unitIndex: number) => boolean;
-  /** Opens that phase's session in the pane — same behavior as the switcher. */
-  onSelectPhase: (unitIndex: number) => void;
 };
 
 /**
- * The worker pane's phase navigator (ui9 B4): the task-rows element across
- * the top of the pane, molded to a dispatched chain's phases. Collapsed shows
- * "Phase N of M" with counts; expanded shows each phase and its tasks with
- * live states; breathes while running; entries stagger in as a manifest (or
- * an append) lands. The primary status surface for a dispatched run.
+ * The worker pane's phase navigator (ui9 B4, reshaped in ui11 phase 10): the
+ * primary status surface for a dispatched run. Collapsed shows "Phase N of M"
+ * with counts; expanded lists every phase at once as collapsible task drawers
+ * — the active phase's drawer opens by default, the others start collapsed,
+ * all toggleable. Task rows carry check/working/idle status icons, the phase
+ * row's ring advances with its done/total counter, and entries stagger in as
+ * a manifest (or an append) lands.
  */
-export default function PhaseNavigator({
-  chain,
-  run,
-  selectedPhase,
-  hasSessionForPhase,
-  onSelectPhase,
-}: PhaseNavigatorProps) {
+export default function PhaseNavigator({ chain, run }: PhaseNavigatorProps) {
   const reduce = useReducedMotion() ?? false;
   const baseId = useId();
   const triggerId = `${baseId}-trigger`;
@@ -125,6 +135,10 @@ export default function PhaseNavigator({
   // Starts true so mounting on an already-finished run stays open (every run
   // defaults open); only a live transition into fully-complete collapses.
   const previousComplete = useRef(true);
+  // Per-phase drawer overrides: unset rows follow the default (only the
+  // active phase's drawer open), so advancing to the next phase opens its
+  // drawer and lets the finished one fall closed without bookkeeping.
+  const [drawerOverrides, setDrawerOverrides] = useState<Record<number, boolean>>({});
   // Every run defaults open: switching runs resets a user collapse instead of
   // carrying it over. Seeding previousComplete true keeps the auto-collapse
   // below from immediately re-collapsing an already-finished run.
@@ -135,6 +149,7 @@ export default function PhaseNavigator({
       previousRunKey.current = runKey;
       previousComplete.current = true;
       setOpen(true);
+      setDrawerOverrides({});
     }
   }, [runKey]);
   // Auto-collapse once the chain lands, TodoList-style; reopen if work grows.
@@ -184,7 +199,8 @@ export default function PhaseNavigator({
         >
           <Milestone className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
           <span className="flex-shrink-0 text-xs font-medium tabular-nums text-foreground">
-            Phase <SwapText value={String(currentOrdinal)}>{currentOrdinal}</SwapText> of {phaseTotal}
+            Phase <SwapText value={String(currentOrdinal)}>{currentOrdinal}</SwapText> of{' '}
+            <SwapText value={String(phaseTotal)}>{phaseTotal}</SwapText>
           </span>
           {currentName && (
             <span className="min-w-0 truncate text-xs text-muted-foreground">{currentName}</span>
@@ -216,8 +232,9 @@ export default function PhaseNavigator({
         <ol className="max-h-56 overflow-y-auto px-2 pb-2">
           <AnimatePresence initial={false}>
             {units.map((unit, i) => {
-              const selectable = Boolean(chain) && hasSessionForPhase(unit.index);
-              const selected = Boolean(chain) && selectedPhase === unit.index;
+              const hasDrawer = unit.tasks.length > 0;
+              const drawerOpen = hasDrawer
+                && (drawerOverrides[unit.index] ?? unit.index === currentUnit);
               return (
                 <motion.li
                   key={`${unit.index}-${unit.name}`}
@@ -235,21 +252,34 @@ export default function PhaseNavigator({
                 >
                   <button
                     type="button"
-                    disabled={!selectable}
-                    onClick={() => onSelectPhase(unit.index)}
+                    disabled={!hasDrawer}
+                    aria-expanded={hasDrawer ? drawerOpen : undefined}
+                    onClick={() =>
+                      setDrawerOverrides((previous) => ({ ...previous, [unit.index]: !drawerOpen }))
+                    }
                     data-slot="phase-navigator-row"
                     data-phase={unit.index}
                     data-kind={unit.kind}
                     data-status={unit.status}
+                    data-drawer={hasDrawer ? (drawerOpen ? 'open' : 'closed') : undefined}
                     className={cn(
-                      'flex w-full items-center gap-2 rounded-md px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                      'group/row flex w-full items-center gap-2 rounded-md px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                       unit.kind === 'task' ? 'min-h-7 pl-4' : 'min-h-8',
-                      selectable && 'cursor-pointer',
+                      hasDrawer && 'cursor-pointer',
                       unit.status === 'in-progress' && !reduce && 'animate-counter-breathe',
                     )}
                   >
                     <span className={cn(unit.kind === 'task' && 'scale-90')}>
-                      <TodoStatusIcon status={unit.status} />
+                      <TodoStatusIcon
+                        status={unit.status}
+                        // The phase ring advances with the counter; without
+                        // counts the active ring stays indeterminate.
+                        progress={
+                          unit.status === 'in-progress' && unit.done != null && unit.tasks.length > 0
+                            ? Math.min(100, (unit.done / unit.tasks.length) * 100)
+                            : undefined
+                        }
+                      />
                     </span>
                     <span
                       className={cn(
@@ -259,8 +289,7 @@ export default function PhaseNavigator({
                         unit.status === 'in-progress' && 'text-foreground',
                         unit.status === 'completed' && 'text-muted-foreground/60',
                         unit.status === 'cancelled' && 'text-muted-foreground/55',
-                        selectable && 'group-hover:text-foreground hover:text-foreground',
-                        selected && 'font-medium text-foreground',
+                        hasDrawer && 'group-hover/row:text-foreground',
                       )}
                     >
                       {unit.name}
@@ -275,33 +304,43 @@ export default function PhaseNavigator({
                         <span>{unit.tasks.length}</span>
                       </span>
                     )}
+                    {hasDrawer && (
+                      <motion.span
+                        aria-hidden="true"
+                        animate={{ rotate: drawerOpen ? 180 : 0 }}
+                        transition={reduce ? { duration: 0 } : SPRING_SWAP}
+                        className="flex-shrink-0 text-muted-foreground/50 transition-colors group-hover/row:text-muted-foreground"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </motion.span>
+                    )}
                   </button>
-                  {unit.tasks.length > 0 && (
-                    <ul className="pb-0.5 pl-9">
-                      {unit.tasks.map((task, taskIndex) => (
-                        <li
-                          key={`${unit.index}-${taskIndex}`}
-                          data-slot="phase-navigator-task"
-                          className={cn(
-                            'flex min-h-5 items-center gap-1.5 text-[11px] leading-4',
-                            unit.status === 'completed'
-                              ? 'text-muted-foreground/45 line-through'
-                              : unit.status === 'in-progress'
-                                ? 'text-muted-foreground'
-                                : 'text-muted-foreground/50',
-                          )}
-                        >
-                          <span
-                            aria-hidden="true"
-                            className={cn(
-                              'h-1 w-1 flex-shrink-0 rounded-full',
-                              unit.status === 'in-progress' ? 'bg-foreground/60' : 'bg-muted-foreground/40',
-                            )}
-                          />
-                          <span className="min-w-0 truncate">{task}</span>
-                        </li>
-                      ))}
-                    </ul>
+                  {hasDrawer && (
+                    <AgentDisclosure open={drawerOpen} data-slot="phase-navigator-drawer">
+                      <ul className="pb-0.5 pl-9">
+                        {unit.tasks.map((task, taskIndex) => {
+                          const status = taskStatus(unit, taskIndex);
+                          return (
+                            <li
+                              key={`${unit.index}-${taskIndex}`}
+                              data-slot="phase-navigator-task"
+                              data-status={status}
+                              className={cn(
+                                'flex min-h-5 items-center gap-1.5 text-[11px] leading-4',
+                                status === 'completed' && 'text-muted-foreground/45 line-through',
+                                status === 'in-progress' && 'text-foreground',
+                                status === 'pending' && 'text-muted-foreground/50',
+                              )}
+                            >
+                              <span className="flex-shrink-0 scale-[0.7]">
+                                <TodoStatusIcon status={status} />
+                              </span>
+                              <span className="min-w-0 truncate">{task}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </AgentDisclosure>
                   )}
                 </motion.li>
               );

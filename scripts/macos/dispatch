@@ -68,14 +68,25 @@ if [[ "$1" == "append" ]]; then
   trap 'rm -f "$HEADER_FILE"' EXIT
 
   # Announce first: a dead or finished chain refuses the append, and nothing
-  # gets queued for a runner that will never pick it up.
+  # gets queued for a runner that will never pick it up. Appended prompt files
+  # carry display metadata in comment headers at the top (ui11 phase 10):
+  #   <!-- name: Worker pane live -->
+  #   <!-- tasks: task one | task two | task three -->
+  #   <!-- anchor: Phase 10 -->
+  # so the navigator announces real task rows and punch-list counters for
+  # appended units; the filename is the fallback when headers are absent.
   ENTRIES=$(python3 - "$KIND" "${APPEND_FILES[@]}" <<'PYEOF'
-import json, os, sys
+import json, os, re, sys
 kind = sys.argv[1]
 entries = []
 for path in sys.argv[2:]:
-    name = os.path.splitext(os.path.basename(path))[0]
-    entries.append({'name': name, 'kind': kind, 'tasks': []})
+    head = open(path, encoding='utf-8', errors='replace').read(4096)
+    meta = dict(re.findall(r'<!--\s*(name|tasks|anchor):\s*(.*?)\s*-->', head))
+    entry = {'name': meta.get('name') or os.path.splitext(os.path.basename(path))[0], 'kind': kind}
+    entry['tasks'] = [t.strip() for t in meta.get('tasks', '').split('|') if t.strip()]
+    if meta.get('anchor'):
+        entry['anchor'] = meta['anchor']
+    entries.append(entry)
 print(json.dumps({'entries': entries}))
 PYEOF
 )

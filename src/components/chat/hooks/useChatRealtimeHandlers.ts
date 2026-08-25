@@ -8,6 +8,7 @@ import type { MarkSessionIdle, MarkSessionProcessing } from '../../../hooks/useS
 import type { PendingPermissionRequest } from '../types/types';
 import type { ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionStore, NormalizedMessage } from '../../../stores/useSessionStore';
+import { sessionUpsertRefreshTarget } from '../utils/messageHistoryRefreshCoordinator';
 
 const isActionablePermissionRequest = (request: { toolName?: unknown } | null | undefined): boolean => {
   return request?.toolName !== 'ExitPlanMode' && request?.toolName !== 'exit_plan_mode';
@@ -165,8 +166,18 @@ export function useChatRealtimeHandlers({
           return;
         }
 
-        // Sidebar/global events — owned by useProjectsState.
-        case 'session_upserted':
+        // Sidebar/global events — owned by useProjectsState. The viewed
+        // session additionally refetches its persisted tail here (ui11 phase
+        // 10): externally-driven runs (dispatched chains) only ever surface
+        // through the filesystem watcher's upsert, so without this the pane
+        // stays blank until a manual reload. The coordinator coalesces bursts.
+        case 'session_upserted': {
+          const refreshSid = sessionUpsertRefreshTarget(msg, activeViewSessionId);
+          if (refreshSid) {
+            void requestLatestMessages(refreshSid, isActiveRef.current);
+          }
+          return;
+        }
         case 'loading_progress':
           return;
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createMessageHistoryRefreshCoordinator } from './messageHistoryRefreshCoordinator';
+import { createMessageHistoryRefreshCoordinator, sessionUpsertRefreshTarget } from './messageHistoryRefreshCoordinator';
 
 test('hidden refresh signals make no requests and flush once on activation', async () => {
   let activeSessionId: string | null = null;
@@ -144,4 +144,24 @@ test('a refresh deferred after visibility changes remains pending', async () => 
   await coordinator.flushPending('session-1');
   assert.equal(callCount, 2);
   assert.equal(coordinator.hasPending('session-1'), false);
+});
+
+// Regression (ui11 phase 10): a dispatched run's transcript only surfaces via
+// the watcher's session_upserted frames; the viewed session must refetch on
+// its own upsert and ignore everyone else's.
+test('session_upserted refresh targets only the viewed session', () => {
+  assert.equal(
+    sessionUpsertRefreshTarget({ kind: 'session_upserted', sessionId: 'run-1' }, 'run-1'),
+    'run-1',
+  );
+  assert.equal(
+    sessionUpsertRefreshTarget({ kind: 'session_upserted', sessionId: 'run-2' }, 'run-1'),
+    null,
+  );
+  assert.equal(sessionUpsertRefreshTarget({ kind: 'session_upserted' }, 'run-1'), null);
+  assert.equal(
+    sessionUpsertRefreshTarget({ kind: 'session_upserted', sessionId: 'run-1' }, null),
+    null,
+  );
+  assert.equal(sessionUpsertRefreshTarget({ kind: 'complete', sessionId: 'run-1' }, 'run-1'), null);
 });

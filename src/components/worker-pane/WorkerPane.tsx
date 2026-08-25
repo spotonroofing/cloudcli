@@ -256,19 +256,6 @@ export default function WorkerPane({
   const selectedRun = runs.find((run) => run.sessionId === paneSession?.id) ?? null;
   const selectedChain = selectedRun?.chainSlug ? (chains[selectedRun.chainSlug] ?? null) : null;
 
-  // Same behavior as the switcher: a past phase's row opens that phase's
-  // session in the pane.
-  const handleSelectPhase = (unitIndex: number) => {
-    const slug = selectedRun?.chainSlug;
-    if (!slug) {
-      return;
-    }
-    const target = runs.find((run) => run.chainSlug === slug && run.chainPhase === unitIndex);
-    if (target) {
-      handleSelectRun(target);
-    }
-  };
-
   return (
     <div className="flex h-full min-w-0 flex-col">
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
@@ -297,18 +284,9 @@ export default function WorkerPane({
             }))}
           />
         )}
-        {/* No finished tag in the header (ui11 phase 6): done state lives in
-            the phase navigator and the run switcher. */}
-        {selectedRun && selectedRun.state !== 'finished' && (
-          <Badge
-            status={selectedRun.state === 'running' ? 'loading' : 'neutral'}
-            size="sm"
-            contentKey={selectedRun.state}
-            className="flex-shrink-0"
-          >
-            {selectedRun.state}
-          </Badge>
-        )}
+        {/* No status badge in any run state (ui11 phase 10): state lives in
+            the phase navigator and the run switcher. The two badges below are
+            wiring fail-safes, not run status. */}
         {streamMismatch && (
           <Badge status="danger" size="sm" className="flex-shrink-0">
             stream mismatch
@@ -363,11 +341,6 @@ export default function WorkerPane({
         <PhaseNavigator
           chain={selectedChain}
           run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
-          selectedPhase={selectedRun.chainPhase}
-          hasSessionForPhase={(unitIndex) =>
-            runs.some((run) => run.chainSlug === selectedRun.chainSlug && run.chainPhase === unitIndex)
-          }
-          onSelectPhase={handleSelectPhase}
         />
       )}
 
