@@ -38,7 +38,7 @@ CLAUDE_BIN=$(command -v claude)
 # Session-limit resilience (ui10 phase 1): a limit-exit never trips the commit
 # gate. CSWAP_PATH override mirrors server/modules/accounts.
 CSWAP_BIN="${CSWAP_PATH:-$HOME/.local/bin/cswap}"
-LIMIT_PATTERN='hit your session limit|session limit reached|usage limit reached'
+LIMIT_PATTERN='hit your session limit|session limit reached|usage limit reached|reached your .* limit'
 
 # API key from server config; keep it out of argv (curl reads a header file).
 API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
