@@ -274,7 +274,7 @@ class WatchdogService {
     }
     chain.manifest = [...(chain.manifest ?? []), ...entries];
     // The phase total counts every unit the runner will execute, so wake and
-    // event messages read "phase 11 of 14" the moment an append is announced,
+    // event messages read "job 11 of 14" the moment an append is announced,
     // never the stale dispatch-time total (ui11 phase 14).
     if (chain.phases != null) {
       chain.phases += entries.length;
@@ -346,7 +346,7 @@ class WatchdogService {
       const tail = chain.lastSummaryTail ? `\n\nRecovery detail:\n${chain.lastSummaryTail}` : '';
       this.queueWake(
         chain.projectPath,
-        `Watchdog: dispatched chain "${slug}" hit the session limit${chain.phases ? ` (phase ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''} `
+        `Watchdog: dispatched chain "${slug}" hit the session limit${chain.phases ? ` (job ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''} `
         + `and is auto-recovering (account switch or reset wait, then retry). This is not a failure; no action needed.${tail}`,
       );
       return true;
@@ -364,7 +364,7 @@ class WatchdogService {
       const tail = chain.lastSummaryTail ? `\n\nFinal summary tail:\n${chain.lastSummaryTail}` : '';
       this.queueWake(
         chain.projectPath,
-        `Watchdog: dispatched chain "${slug}" ${flag}${chain.phases ? ` (phase ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''}. `
+        `Watchdog: dispatched chain "${slug}" ${flag}${chain.phases ? ` (job ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''}. `
         + `Verify the result against git log and the punch list before declaring anything done.${tail}`,
       );
     } else {

@@ -227,7 +227,7 @@ function Sidebar({
           label = 'Maintenance: Monday self-check';
         } else if (run?.chainSlug) {
           label = run.chainPhase
-            ? `${run.chainSlug} Phase ${run.chainPhase}${run.chainPhaseName ? ` - ${run.chainPhaseName}` : ''}`
+            ? `${run.chainSlug} Job ${run.chainPhase}${run.chainPhaseName ? ` - ${run.chainPhaseName}` : ''}`
             : run.chainSlug;
         } else {
           label = info?.title || `run ${sessionId.slice(0, 8)}`;

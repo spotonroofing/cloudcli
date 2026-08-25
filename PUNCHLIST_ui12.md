@@ -64,9 +64,9 @@ Done check: on dev with a stub chain: task check icons computed-style green, wor
 
 Goal: jobs move out of the worker pane's top strip into a right-hand sidebar sized like the left sidebar: a full scrollable history, newest at the top, progressing bottom-to-top, with tasks nested under each job. Files: the worker pane layout, the navigator components (relocated), watchdog history endpoints as needed, DESIGN.md. Dependencies: phase 4 (colors and counters land first).
 
-- [ ] A right sidebar (same width treatment as the left one, collapsible the same way) hosts the job list for the selected run: every job as a drawer row with its tasks, counters, and status icons; the top strip in the worker pane is removed.
-- [ ] Order is bottom-to-top: job 1 sits at the bottom, later jobs stack upward, the newest (or queued) at the top; appended jobs push the stack down as they arrive. Completed runs keep their full job and task history scrollable in the same sidebar so Willem can review what each job completed.
-- [ ] All user-facing copy says Job (Job 5 of 5, appended job, job counters); wake and notification copy that renders in the UI follows; internal names stay.
+- [x] A right sidebar (same width treatment as the left one, collapsible the same way) hosts the job list for the selected run: every job as a drawer row with its tasks, counters, and status icons; the top strip in the worker pane is removed.
+- [x] Order is bottom-to-top: job 1 sits at the bottom, later jobs stack upward, the newest (or queued) at the top; appended jobs push the stack down as they arrive. Completed runs keep their full job and task history scrollable in the same sidebar so Willem can review what each job completed.
+- [x] All user-facing copy says Job (Job 5 of 5, appended job, job counters); wake and notification copy that renders in the UI follows; internal names stay.
 
 Done check: on dev with a stub chain and the ui11r history: the sidebar renders on the right at the left sidebar's width, jobs ordered oldest-at-bottom, tasks expand per job, history scrolls for a completed run, no top-strip navigator remains, and the word "phase" is absent from the worker pane UI copy (DOM text sweep). Phone: the jobs sidebar becomes a full-width sheet consistent with the app's sheet law. Fresh-context subagent verification. Commit.
 

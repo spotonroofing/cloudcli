@@ -1,18 +1,21 @@
-import { FileDiff, Hammer, Plus, X } from 'lucide-react';
+import { FileDiff, Hammer, Milestone, PanelRightOpen, Plus, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import ChatInterface from '../chat/view/ChatInterface';
 import ErrorBoundary from '../main-content/view/ErrorBoundary';
 import { useWebSocket } from '../../contexts/WebSocketContext';
+import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
 import { modelDisplayLabel } from '../../utils/modelLabels';
+import { onSettingChange, writeSetting } from '../../utils/cloudSettings';
 import { formatCompactAge } from '../sidebar/utils/utils';
+import SidebarFooterDrawer from '../sidebar/view/subcomponents/SidebarFooterDrawer';
 import { ActionMenu, Badge, Button, Skeleton, Tooltip } from '../../shared/view/ui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 
-import PhaseNavigator, { type ChainSnapshot } from './PhaseNavigator';
+import JobsSidebar, { type ChainSnapshot } from './JobsSidebar';
 
 type WorkerRun = {
   sessionId: string;
@@ -30,7 +33,7 @@ type WorkerRun = {
 };
 
 /**
- * Chain runs read "slug Phase N - name" from the dispatch manifest (never the
+ * Chain runs read "slug Job N - name" from the dispatch manifest (never the
  * bare slug repeated); then the session title, then a short honest id — never
  * a provider placeholder.
  */
@@ -43,8 +46,8 @@ const runLabel = (run: WorkerRun, chains: Record<string, ChainSnapshot>): string
     if (run.chainPhase) {
       const name = chains[run.chainSlug]?.manifest?.[run.chainPhase - 1]?.name;
       return name
-        ? `${run.chainSlug} Phase ${run.chainPhase} - ${name}`
-        : `${run.chainSlug} Phase ${run.chainPhase}`;
+        ? `${run.chainSlug} Job ${run.chainPhase} - ${name}`
+        : `${run.chainSlug} Job ${run.chainPhase}`;
     }
     return run.chainSlug;
   }
@@ -91,6 +94,31 @@ export default function WorkerPane({
   const { subscribe, isConnected } = useWebSocket();
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
+  const { isMobile } = useDeviceSettings({ trackPWA: false });
+
+  // Jobs sidebar (ui12 phase 5): desktop collapse persists like the pane
+  // toggles; phones open the same job list as a full-width bottom sheet.
+  const [jobsSidebarOpen, setJobsSidebarOpen] = useState(() => {
+    try {
+      return localStorage.getItem('jobs-sidebar-open') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const toggleJobsSidebar = useCallback((open: boolean) => {
+    setJobsSidebarOpen(open);
+    try {
+      writeSetting('jobs-sidebar-open', open ? '1' : '0');
+    } catch {
+      // localStorage unavailable
+    }
+  }, []);
+  useEffect(() => onSettingChange(['jobs-sidebar-open'], (_key, value) => {
+    setJobsSidebarOpen(value !== '0');
+  }), []);
+  const [jobsSheetOpen, setJobsSheetOpen] = useState(false);
+  // The sheet shell requires a desktop anchor ref; the phone branch never reads it.
+  const jobsSheetAnchorRef = useRef<HTMLDivElement>(null);
 
   const [paneSession, setPaneSession] = useState<ProjectSession | null>(null);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
@@ -292,7 +320,7 @@ export default function WorkerPane({
           />
         )}
         {/* No status badge in any run state (ui11 phase 10): state lives in
-            the phase navigator and the run switcher. The two badges below are
+            the jobs sidebar and the run switcher. The two badges below are
             wiring fail-safes, not run status. */}
         {streamMismatch && (
           <Badge status="danger" size="sm" className="flex-shrink-0">
@@ -305,6 +333,19 @@ export default function WorkerPane({
           </Badge>
         )}
         <span className="min-w-0 flex-1" />
+        {isMobile && runsLoaded && selectedRun && (
+          <Tooltip content="Run jobs" position="bottom">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+              onClick={() => setJobsSheetOpen(true)}
+              aria-label="Run jobs"
+            >
+              <Milestone className="h-3.5 w-3.5" />
+            </Button>
+          </Tooltip>
+        )}
         <Tooltip content="Files touched since the run's base commit" position="bottom">
           <Button
             variant="ghost"
@@ -344,23 +385,6 @@ export default function WorkerPane({
         )}
       </div>
 
-      {!runsLoaded ? (
-        <div
-          data-slot="phase-navigator-skeleton"
-          aria-busy="true"
-          className="flex h-9 flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/20 px-3"
-        >
-          <Skeleton className="h-3.5 w-3.5 rounded-sm" />
-          <Skeleton className="h-3 w-24 rounded-sm" />
-          <Skeleton className="h-3 w-40 rounded-sm" />
-        </div>
-      ) : selectedRun && (
-        <PhaseNavigator
-          chain={selectedChain}
-          run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
-        />
-      )}
-
       {touchedFiles !== null && (
         <div className="max-h-40 flex-shrink-0 overflow-y-auto border-b border-border/60 bg-muted/20 px-3 py-2">
           {touchedFiles.length === 0 ? (
@@ -384,7 +408,8 @@ export default function WorkerPane({
         </div>
       )}
 
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1">
+        <div className="min-h-0 min-w-0 flex-1">
         <ErrorBoundary showDetails>
           <ChatInterface
             isActive={isActive}
@@ -426,7 +451,65 @@ export default function WorkerPane({
             onShowAllTasks={null}
           />
         </ErrorBoundary>
+        </div>
+
+        {/* Jobs sidebar (ui12 phase 5): the run's job history on the right at
+            the left sidebar's width; collapsible to a rail the same way. */}
+        {!isMobile && (!runsLoaded ? (
+          <div
+            data-slot="jobs-sidebar-skeleton"
+            aria-busy="true"
+            className="w-72 flex-shrink-0 space-y-2 border-l border-border/60 bg-muted/20 p-3"
+          >
+            <Skeleton className="h-3.5 w-24 rounded-sm" />
+            <Skeleton className="h-3 w-40 rounded-sm" />
+            <Skeleton className="h-3 w-32 rounded-sm" />
+          </div>
+        ) : selectedRun && (
+          jobsSidebarOpen ? (
+            <div className="w-72 flex-shrink-0 border-l border-border/60">
+              <JobsSidebar
+                chain={selectedChain}
+                run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
+                onCollapse={() => toggleJobsSidebar(false)}
+              />
+            </div>
+          ) : (
+            <div
+              data-slot="jobs-sidebar-rail"
+              className="flex w-12 flex-shrink-0 flex-col items-center border-l border-border/60 bg-muted/20 py-3"
+            >
+              <button
+                type="button"
+                onClick={() => toggleJobsSidebar(true)}
+                className="group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"
+                aria-label="Show jobs sidebar"
+                title="Show jobs sidebar"
+              >
+                <PanelRightOpen className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+              </button>
+            </div>
+          )
+        ))}
       </div>
+
+      {isMobile && selectedRun && (
+        <SidebarFooterDrawer
+          open={jobsSheetOpen}
+          onClose={() => setJobsSheetOpen(false)}
+          isMobile
+          anchorRef={jobsSheetAnchorRef}
+          ariaLabel="Run jobs"
+          dataSlot="jobs-sheet"
+        >
+          <div className="h-[60dvh]">
+            <JobsSidebar
+              chain={selectedChain}
+              run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
+            />
+          </div>
+        </SidebarFooterDrawer>
+      )}
     </div>
   );
 }
