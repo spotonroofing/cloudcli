@@ -107,3 +107,23 @@ Goal: digits sit on one line, everywhere, for real this time, and the thinking d
 
 Done check: on dev, DOM glyph-box measurements on the composer character counter and the thinking timer: all digits share top and bottom bounds within 1px; computed font-variant-numeric shows lining-nums; the duration renders in the adopted format with the space decision recorded in the summary. Phone viewport holds. Fresh-context subagent verification. Commit.
 
+## Job 10 — Research rows with sources, and tool rows lose the tags (appended 2026-08-25)
+
+Goal: research looks like research and tool rows stop wearing tag chips. When a session uses web search or fetch tools, the transcript shows a research row like the Bash and Read rows, expandable to the list of sources; sessions that answered from model knowledge show nothing, so a missing sources row is itself the honest signal. And the Running/Error tag chips on tool rows go away in favor of quieter status. Files: the tool-call row components, the renderer mapping for WebSearch/WebFetch-family tool calls, the shared ring spinner, DESIGN.md. Dependencies: phase 4 (semantic colors).
+
+- [ ] Web search and web fetch tool calls (any provider's search/fetch tool names the renderer sees) render as a Research row: a "Research" label with the query or domain as the description line, collapsed by default, expanding to the sources (title and URL per result where the tool result carries them, clickable, opening in a new tab). Sources come only from actual tool results; nothing is synthesized.
+- [ ] The Running and Error tag chips on tool rows are removed: a running row shows the ramped spinner as its leading icon, an errored row shows a red status icon and its first error line in the description (semantic colors per phase 4); the chevron and row layout stay per ui11's alignment work.
+- [ ] Find why the ring spinner does not animate anywhere in the app (Willem sees static rings in Brave; check whether the CSS animation is being stripped, an SVG animation is unsupported, or a reduced-motion query misfires) and fix it at the shared component so every spinner in the app rotates; verify in a Chromium profile with default settings.
+
+Done check: on dev, a stub transcript containing a web-search tool call renders the Research row with its real sources expandable; no Running/Error chips remain in tool-row DOM; the shared spinner's computed animation-play-state is running and its transform changes across frames. Phone viewport holds. Fresh-context subagent verification. Commit.
+
+## Job 11 — The transcript opens full and pinned to the bottom (appended 2026-08-25)
+
+Goal: opening or refreshing any chat or worker pane never shows a partial window: the pane fills with the most recent messages, the newest sits just above the composer, and the "Showing X of Y messages, scroll up to load more" banner is gone for good. ui11 phase 11 claimed the bottom landing; Willem hit the banner again on a refresh of a running worker session, so the fix did not cover the paged path. Files: the message pagination and initial-load path (useChatSessionState, the session store fetch, SESSION_MESSAGES_PAGE_SIZE interactions per lesson boot-prologue-page-window), ChatMessagesPane, DESIGN.md. Dependencies: phase 3 (scroll geometry settles first).
+
+- [ ] Initial load fetches enough pages to at least fill the viewport (keep fetching until the container is scrollable or the transcript is exhausted), then pins to the bottom with the newest message above the composer at the standard padding; the same holds on refresh, session switch, and a worker pane following a live run.
+- [ ] The "Showing X of Y messages" banner and its scroll-up prompt are deleted; older messages load automatically as the user scrolls up (skeleton rows per phase 7 of ui11 while a page loads), silently.
+- [ ] Reproduce Willem's case first (refresh a worker session mid-run with a long transcript), fix, and add a regression test for the fill-then-pin behavior.
+
+Done check: on dev against a long stub transcript (70+ messages): fresh open and hard refresh both land with the last message fully visible above the composer, the container scrollable, no banner text anywhere in the DOM; scrolling up loads older pages without any prompt; a worker pane on a running stub chain behaves the same. Phone viewport holds. Fresh-context subagent verification. Commit.
+
