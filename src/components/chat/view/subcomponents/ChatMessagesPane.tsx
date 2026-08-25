@@ -16,7 +16,6 @@ import ActivityIndicator from './ActivityIndicator';
 import MessageComponent, { InterruptedMarker } from './MessageComponent';
 import MessageVersionNavigator from './MessageVersionNavigator';
 import ToolGroupContainer from './ToolGroupContainer';
-import LoadAllMessagesOverlay from './LoadAllMessagesOverlay';
 import ChatExportMenu from './ChatExportMenu';
 
 interface ChatMessagesPaneProps {
@@ -37,17 +36,7 @@ interface ChatMessagesPaneProps {
   selectedSession: ProjectSession | null;
   provider: LLMProvider;
   isLoadingMoreMessages: boolean;
-  hasMoreMessages: boolean;
-  totalMessages: number;
-  sessionMessagesCount: number;
-  visibleMessageCount: number;
   visibleMessages: ChatMessage[];
-  loadEarlierMessages: () => void;
-  loadAllMessages: () => void;
-  allMessagesLoaded: boolean;
-  isLoadingAllMessages: boolean;
-  loadAllJustFinished: boolean;
-  showLoadAllOverlay: boolean;
   createDiff: any;
   onFileOpen?: (filePath: string, diffInfo?: unknown) => void;
   onShowSettings?: () => void;
@@ -83,17 +72,7 @@ function ChatMessagesPane({
   selectedSession,
   provider,
   isLoadingMoreMessages,
-  hasMoreMessages,
-  totalMessages,
-  sessionMessagesCount,
-  visibleMessageCount,
   visibleMessages,
-  loadEarlierMessages,
-  loadAllMessages,
-  allMessagesLoaded,
-  isLoadingAllMessages,
-  loadAllJustFinished,
-  showLoadAllOverlay,
   createDiff,
   onFileOpen,
   onShowSettings,
@@ -288,50 +267,17 @@ function ChatMessagesPane({
         </div>
       ) : chatMessages.length === 0 ? null : (
         <>
-          {/* Loading indicator for older messages (hide when load-all is active) */}
-          {isLoadingMoreMessages && !isLoadingAllMessages && !allMessagesLoaded && (
-            <div className="py-3 text-center text-gray-500 dark:text-gray-400">
-              <div className="flex items-center justify-center space-x-2">
-                <Loader variant="dot-matrix" size={16} className="shrink-0 text-muted-foreground" />
-                <p className="text-sm">{t('session.loading.olderMessages')}</p>
+          {/* Older pages load silently on scroll-up (ui12 job 11): skeleton
+              rows hold the incoming page's space, never a banner or prompt. */}
+          {isLoadingMoreMessages && (
+            <div data-slot="older-page-skeleton" className="space-y-3 pb-3" aria-busy="true">
+              <div className="flex justify-end">
+                <Skeleton className="h-10 w-2/5 rounded-lg" />
               </div>
-            </div>
-          )}
-
-          {/* Indicator showing there are more messages to load (hide when all loaded) */}
-          {hasMoreMessages && !isLoadingMoreMessages && !allMessagesLoaded && (
-            <div className="border-b border-gray-200 py-2 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-              {totalMessages > 0 && (
-                <span>
-                  {t('session.messages.showingOf', { shown: sessionMessagesCount, total: totalMessages })}{' '}
-                  <span className="text-xs">{t('session.messages.scrollToLoad')}</span>
-                </span>
-              )}
-            </div>
-          )}
-
-          <LoadAllMessagesOverlay
-            showLoadAllOverlay={showLoadAllOverlay}
-            isLoadingAllMessages={isLoadingAllMessages}
-            loadAllJustFinished={loadAllJustFinished}
-            totalMessages={totalMessages}
-            onLoadAllMessages={loadAllMessages}
-          />
-
-          {/* Legacy message count indicator (for non-paginated view) */}
-          {!hasMoreMessages && chatMessages.length > visibleMessageCount && (
-            <div className="border-b border-gray-200 py-2 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-              {t('session.messages.showingLast', { count: visibleMessageCount, total: chatMessages.length })} |
-              <button className="ml-1 text-primary underline hover:text-primary/80" onClick={loadEarlierMessages}>
-                {t('session.messages.loadEarlier')}
-              </button>
-              {' | '}
-              <button
-                className="text-primary underline hover:text-primary/80"
-                onClick={loadAllMessages}
-              >
-                {t('session.messages.loadAll')}
-              </button>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-4 w-3/5" />
+              </div>
             </div>
           )}
 
