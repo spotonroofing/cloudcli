@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Windows -->
-<!-- tasks: Windowing layer over the pane grid, no freeform | Files and source control as selector-opened windows | Run name as the top-bar run switcher | Jobs become a per-project pane view, sidebar retires | Even pane squish and deterministic widths | Stacking, rails, and attach behavior end to end -->
+<!-- tasks: Windowing layer over the pane grid, no freeform | Files and source control as selector-opened windows | Run name as the top-bar run switcher | Jobs become a per-project pane view, sidebar retires | Even pane squish and deterministic widths | Hairline dividers that grow on hover | Stacking, rails, and attach behavior end to end -->
 Execute Job 10 of PUNCHLIST_ui13.md in this repo (windows) — the heaviest job of the round; the goal is a windowing layer extending the existing pane stacking, with files and source control as its first windows. The goal and items are Job 10's section and checkboxes in PUNCHLIST_ui13.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
