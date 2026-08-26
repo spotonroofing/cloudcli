@@ -157,6 +157,13 @@ export default function SidebarFooter({
   // time, the rest dim.
   const anyOpen = openDrawer !== null || settingsOpen || memoryOpen;
 
+  // Footer drawers and full-sidebar surfaces are mutually exclusive (ui14
+  // job 4): a surface opening ramps any open drawer closed, the mirror of
+  // onDrawerOpened closing the surfaces.
+  useEffect(() => {
+    if (settingsOpen || memoryOpen) setOpenDrawer(null);
+  }, [settingsOpen, memoryOpen]);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -240,7 +247,15 @@ export default function SidebarFooter({
         </>
       )}
 
-      <div className="nav-divider" />
+      {/* The divider above the drawer region fades out while a desktop drawer
+          is open (ui14 job 4): the open drawer's own top padding separates it
+          from the list, no bar. */}
+      <div
+        className={cn(
+          'nav-divider transition-opacity duration-300',
+          !isMobile && openDrawer !== null && 'opacity-0',
+        )}
+      />
 
       {/* Footer drawers unfold here, between the divider and the taskbar, on
           the sidebar's own background (ui13 job 4): opening grows the footer

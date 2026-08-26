@@ -1,10 +1,9 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 
-import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
+import { asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
 import {
-  addAccountToken,
   assertAccountTarget,
   disableAccount,
   enableAccount,
@@ -16,9 +15,8 @@ import {
 
 /**
  * Claude account switcher endpoints (ui8 phase 6), wrapping cswap. Mounted
- * behind authenticateToken. Add-account accepts the token in the request body
- * and forwards it to cswap over stdin; it is never echoed back, logged, or
- * persisted.
+ * behind authenticateToken. There is no add endpoint: accounts are added by
+ * logging in and running `cswap add` in a shell (ui14 job 4).
  */
 export function createAccountsRouter(): express.Router {
   const router = express.Router();
@@ -72,29 +70,6 @@ export function createAccountsRouter(): express.Router {
       const b = assertAccountTarget(body.b);
       await swapAccounts(a, b);
       res.json(createApiSuccessResponse({ a, b }));
-    }),
-  );
-
-  router.post(
-    '/add',
-    asyncHandler(async (req: Request, res: Response) => {
-      const body = (req.body ?? {}) as Record<string, unknown>;
-      const token = typeof body.token === 'string' ? body.token.trim() : '';
-      if (!token || /[\r\n]/.test(token)) {
-        throw new AppError('token must be a single-line string.', {
-          code: 'INVALID_ACCOUNT_TOKEN',
-          statusCode: 400,
-        });
-      }
-      const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null;
-      if (email && !/^\S+@\S+\.\S+$/.test(email)) {
-        throw new AppError('email is not a valid address.', {
-          code: 'INVALID_ACCOUNT_EMAIL',
-          statusCode: 400,
-        });
-      }
-      await addAccountToken(token, email);
-      res.json(createApiSuccessResponse({ added: true }));
     }),
   );
 

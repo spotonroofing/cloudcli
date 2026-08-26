@@ -16,9 +16,6 @@ import { AppError } from '@/shared/utils.js';
  * CLAUDE_CONFIG_DIR (dev on 4748) instead gets the freshly switched credential
  * mirrored into its config-dir-scoped Keychain service after a switch — the
  * same mirror scripts/macos/cloudcli-dev-start.sh performs at boot.
- *
- * Tokens (add-account) travel to cswap over stdin only — never argv, never
- * logs, never the database.
  */
 
 const CSWAP_BIN = process.env.CSWAP_PATH || path.join(os.homedir(), '.local', 'bin', 'cswap');
@@ -47,11 +44,11 @@ const serialize = <T>(fn: () => Promise<T>): Promise<T> => {
   return run;
 };
 
-const runCswap = (args: string[], input?: string): Promise<CswapResult> =>
+const runCswap = (args: string[]): Promise<CswapResult> =>
   serialize(
     () =>
       new Promise<CswapResult>((resolve, reject) => {
-        const child = execFile(
+        execFile(
           CSWAP_BIN,
           args,
           { env: cswapEnv(), timeout: CSWAP_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 },
@@ -76,10 +73,6 @@ const runCswap = (args: string[], input?: string): Promise<CswapResult> =>
             resolve({ stdout, stderr });
           },
         );
-        if (input !== undefined && child.stdin) {
-          child.stdin.write(input);
-          child.stdin.end();
-        }
       }),
   );
 
@@ -131,15 +124,6 @@ export const enableAccount = async (target: string): Promise<void> => {
 
 export const swapAccounts = async (a: string, b: string): Promise<void> => {
   await runCswap(['swap', a, b]);
-};
-
-export const addAccountToken = async (token: string, email: string | null): Promise<void> => {
-  const args = ['add-token', '-'];
-  if (email) {
-    args.push('--email', email);
-  }
-  // `add-token -` reads exactly one stdin line; the token never touches argv.
-  await runCswap(args, `${token}\n`);
 };
 
 const runSecurity = (args: string[], input?: string): Promise<string> =>

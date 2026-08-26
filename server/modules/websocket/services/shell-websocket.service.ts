@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -325,9 +326,12 @@ export function handleShellConnection(
             initialCommand.includes('cursor-agent login') ||
             initialCommand.includes('auth login'));
 
+        // Key plain-shell PTYs by a hash of the whole command: a prefix of
+        // the command would make two commands that share an opening (an env
+        // wrapper) reattach to each other's terminal.
         const commandSuffix =
           isPlainShell && initialCommand
-            ? `_cmd_${Buffer.from(initialCommand).toString('base64').slice(0, 16)}`
+            ? `_cmd_${crypto.createHash('sha256').update(initialCommand).digest('hex').slice(0, 16)}`
             : '';
         ptySessionKey = `${projectPath}_${sessionId ?? 'default'}${commandSuffix}`;
 
