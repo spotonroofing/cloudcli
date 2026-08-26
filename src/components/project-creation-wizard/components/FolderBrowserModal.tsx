@@ -98,8 +98,8 @@ export default function FolderBrowserModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[80dvh] w-full max-w-2xl flex-col rounded-lg border border-border bg-popover shadow-lg">
+    <div className="overlay-enter fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="popout-enter popout-enter-center flex max-h-[80dvh] w-full max-w-2xl flex-col rounded-lg border border-border bg-popover shadow-lg">
         <div className="flex items-center justify-between border-b border-border p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15">

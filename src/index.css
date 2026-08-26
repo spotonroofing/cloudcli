@@ -1241,10 +1241,103 @@
     animation: status-sweep 0.85s both;
   }
 
+  /* Working-segment glow (ui13 job 7): the active job's ring segment for the
+     task being worked pulses with a white glow, on the same 2.4s beat as
+     row-breathe so ring and title swell together. Resting state (and reduced
+     motion) is the full foreground ink, no filter. */
+  @keyframes segment-glow {
+    0%,
+    100% {
+      opacity: 0.45;
+      filter: none;
+    }
+    50% {
+      opacity: 1;
+      filter: drop-shadow(0 0 2.5px rgb(255 255 255 / 0.85));
+    }
+  }
+
+  .animate-segment-glow {
+    animation: segment-glow 2.4s ease-in-out infinite;
+    will-change: opacity, filter;
+  }
+
+  /* Popout entrance (ui13 job 7): the one growing entrance for dropdown
+     menus, popovers, tooltips and hand-rolled modals — the beUI
+     AgentDisclosure clip wipe (top-edge inset + 4px lift + fade) on the
+     vendored EASE_OUT ramp. CSS-driven so it covers non-motion sites and
+     inherits the global reduced-motion collapse. */
+  @keyframes popout-in {
+    from {
+      opacity: 0;
+      clip-path: inset(0 0 40% 0 round 8px);
+    }
+    to {
+      opacity: 1;
+      clip-path: inset(0 0 0 0 round 8px);
+    }
+  }
+
+  /* No transform (sites position via inline transform) and no fill (arrows
+     and other overflow must not stay clipped after the entrance). */
+  .popout-enter {
+    animation: popout-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Upward popouts (openers above their trigger) grow from the bottom edge. */
+  .popout-enter-up {
+    animation-name: popout-in-up;
+  }
+
+  @keyframes popout-in-up {
+    from {
+      opacity: 0;
+      clip-path: inset(40% 0 0 0 round 8px);
+    }
+    to {
+      opacity: 1;
+      clip-path: inset(0 0 0 0 round 8px);
+    }
+  }
+
+  /* Centered surfaces (modals, flex-centered — no inline transform) grow in
+     place instead of wiping an edge. */
+  .popout-enter-center {
+    animation-name: popout-in-center;
+  }
+
+  @keyframes popout-in-center {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Modal scrims fade on the same ramp. */
+  .overlay-enter {
+    animation: overlay-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-counter-breathe,
     .animate-spinner-ramp,
-    .animate-row-breathe {
+    .animate-row-breathe,
+    .animate-segment-glow,
+    .popout-enter,
+    .overlay-enter {
       animation: none;
     }
 

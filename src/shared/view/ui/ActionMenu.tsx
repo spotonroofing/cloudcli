@@ -189,7 +189,7 @@ export default function ActionMenu({
       className={cn(
         portal ? 'fixed z-[70]' : 'absolute top-full z-50 mt-2',
         'min-w-[220px] rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg',
-        'animate-in fade-in-0 zoom-in-95',
+        'popout-enter',
         !portal && (align === 'right' ? 'right-0' : 'left-0'),
         menuClassName,
       )}
@@ -230,7 +230,7 @@ export default function ActionMenu({
                 )}
               </span>
               {item.trailing && (
-                <span className="flex-shrink-0 text-[10px] leading-5 tabular-nums text-muted-foreground">
+                <span className="flex-shrink-0 text-[10px] tabular-nums leading-5 text-muted-foreground">
                   {item.trailing}
                 </span>
               )}

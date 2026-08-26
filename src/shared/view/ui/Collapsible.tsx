@@ -85,7 +85,7 @@ const CollapsibleContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes
         ref={ref}
         data-state={open ? 'open' : 'closed'}
         className={cn(
-          'grid transition-[grid-template-rows] duration-200 ease-out',
+          'grid transition-[grid-template-rows] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]',
           open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
           className
         )}

@@ -279,8 +279,8 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
 
       {/* Delete Confirmation Dialog */}
       {operations.deleteConfirmation.isOpen && operations.deleteConfirmation.item && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-          <div className="mx-4 max-w-sm rounded-lg border border-border bg-background p-4 shadow-lg">
+        <div className="overlay-enter fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
+          <div className="popout-enter popout-enter-center mx-4 max-w-sm rounded-lg border border-border bg-background p-4 shadow-lg">
             <div className="mb-4 flex items-center gap-3">
               <div className="rounded-full bg-muted p-2">
                 <AlertTriangle className="h-5 w-5 text-foreground" />
@@ -327,7 +327,7 @@ export default function FileTree({ selectedProject, onFileOpen }: FileTreeProps)
         <div
           className={cn(
             'fixed bottom-4 right-4 z-[9999] flex items-center gap-2 rounded-lg border border-border bg-popover px-4 py-2 text-popover-foreground shadow-lg',
-            'animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none',
+            'popout-enter popout-enter-up motion-reduce:animate-none',
           )}
         >
           {toast.type === 'success' ? (

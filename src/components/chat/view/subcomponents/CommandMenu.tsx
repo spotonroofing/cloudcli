@@ -44,7 +44,6 @@ const menuBaseStyle: CSSProperties = {
   borderRadius: 'var(--radius)',
   zIndex: 1000,
   padding: '6px',
-  transition: 'opacity 150ms ease-in-out, transform 150ms ease-in-out',
   backdropFilter: 'blur(12px)',
 };
 
@@ -217,14 +216,12 @@ export default function CommandMenu({
     return renderInPortal(
       <div
         ref={menuRef}
-        className="command-menu command-menu-empty border border-border bg-popover/95 text-sm text-muted-foreground shadow-lg"
+        className="command-menu command-menu-empty popout-enter popout-enter-up border border-border bg-popover/95 text-sm text-muted-foreground shadow-lg"
         style={{
           ...menuBaseStyle,
           ...menuPosition,
           overflowY: 'hidden',
           padding: '20px',
-          opacity: 1,
-          transform: 'translateY(0)',
           textAlign: 'center',
         }}
       >
@@ -238,8 +235,8 @@ export default function CommandMenu({
       ref={menuRef}
       role="listbox"
       aria-label="Available commands"
-      className="command-menu border border-border bg-popover/95 text-popover-foreground shadow-lg"
-      style={{ ...menuBaseStyle, ...menuPosition, opacity: 1, transform: 'translateY(0)' }}
+      className="command-menu popout-enter popout-enter-up border border-border bg-popover/95 text-popover-foreground shadow-lg"
+      style={{ ...menuBaseStyle, ...menuPosition }}
     >
       {orderedNamespaces.map((namespace) => (
         <div key={namespace} className="command-group">

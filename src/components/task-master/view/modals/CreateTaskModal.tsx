@@ -11,8 +11,8 @@ export default function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProp
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-lg border border-border bg-popover shadow-lg">
+    <div className="overlay-enter fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="popout-enter popout-enter-center w-full max-w-md rounded-lg border border-border bg-popover shadow-lg">
         <div className="flex items-center justify-between border-b border-border p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">

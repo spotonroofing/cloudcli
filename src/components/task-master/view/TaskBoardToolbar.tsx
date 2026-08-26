@@ -185,7 +185,7 @@ export default function TaskBoardToolbar({
                     </button>
 
                     {isPrdDropdownOpen && (
-                      <div className="absolute right-0 top-full z-30 mt-2 w-56 rounded-lg border border-border bg-popover shadow-lg">
+                      <div className="popout-enter absolute right-0 top-full z-30 mt-2 w-56 rounded-lg border border-border bg-popover shadow-lg">
                         <div className="p-2">
                           <button
                             onClick={() => {

@@ -73,7 +73,7 @@ export default function QuickSettingsPanelView() {
       />
 
       <div
-        className={`fixed right-0 top-0 z-[9999] h-dvh w-64 transform border-l border-border bg-background shadow-xl transition-transform duration-150 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed right-0 top-0 z-[9999] h-dvh w-64 transform border-l border-border bg-background shadow-xl transition-transform duration-[320ms] ease-[cubic-bezier(0.77,0,0.175,1)] ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="flex h-full flex-col">
           <QuickSettingsPanelHeader />

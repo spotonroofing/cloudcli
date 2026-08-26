@@ -47,7 +47,7 @@ export default function ChatExportMenu({ messages, sessionTitle }: ChatExportMen
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-border/50 bg-card shadow-lg">
+        <div className="popout-enter absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-border/50 bg-card shadow-lg">
           <div className="p-2">
             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Export as:</div>
             {EXPORT_FORMATS.map((fmt) => (

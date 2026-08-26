@@ -170,10 +170,10 @@ export default function McpServers({ selectedProvider, currentProjects }: McpSer
       <div className="space-y-2">
         <div className="min-h-4">
           {saveStatus === 'success' && (
-            <span className="animate-in fade-in text-xs text-muted-foreground">{t('saveStatus.success')}</span>
+            <span className="text-xs text-muted-foreground">{t('saveStatus.success')}</span>
           )}
           {isLoadingProjectScopes && (
-            <span className="animate-in fade-in text-xs text-muted-foreground">Refreshing project scopes...</span>
+            <span className="text-xs text-muted-foreground">Refreshing project scopes...</span>
           )}
         </div>
       </div>

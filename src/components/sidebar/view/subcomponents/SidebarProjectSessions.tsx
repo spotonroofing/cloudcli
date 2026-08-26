@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { TFunction } from 'i18next';
 
 import { Button } from '../../../../shared/view/ui';
@@ -80,6 +80,7 @@ export default function SidebarProjectSessions({
   t,
 }: SidebarProjectSessionsProps) {
   const hasSessions = sessions.length > 0;
+  const reduce = useReducedMotion() ?? false;
 
   // beUI ai-sidebar reveal: the session block unfolds and folds with the same
   // eased height/opacity motion in both directions; indent is depth padding,
@@ -92,7 +93,7 @@ export default function SidebarProjectSessions({
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.18, ease: EASE_OUT }}
+          transition={reduce ? { duration: 0 } : { duration: 0.18, ease: EASE_OUT }}
           className="overflow-hidden"
         >
           <div className="space-y-1 py-1.5 pl-5">

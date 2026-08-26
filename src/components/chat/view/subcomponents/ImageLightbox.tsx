@@ -72,7 +72,7 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm"
+      className="overlay-enter fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label={alt}
@@ -104,7 +104,7 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
             src={src}
             alt={alt}
             draggable={false}
-            className="max-h-[90dvh] max-w-[92vw] select-none rounded-lg object-contain shadow-2xl"
+            className="popout-enter popout-enter-center max-h-[90dvh] max-w-[92vw] select-none rounded-lg object-contain shadow-2xl"
             style={{ cursor: scale > 1 ? 'grab' : 'zoom-in' }}
           />
         </TransformComponent>

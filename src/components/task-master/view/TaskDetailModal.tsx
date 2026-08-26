@@ -146,10 +146,10 @@ export default function TaskDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 md:p-4">
+    <div className="overlay-enter fixed inset-0 z-[100] flex items-center justify-center bg-black/50 md:p-4">
       <div
         className={cn(
-          'w-full md:max-w-4xl h-full md:h-[90dvh] bg-popover border border-border md:rounded-lg shadow-lg flex flex-col',
+          'popout-enter popout-enter-center w-full md:max-w-4xl h-full md:h-[90dvh] bg-popover border border-border md:rounded-lg shadow-lg flex flex-col',
           className,
         )}
       >

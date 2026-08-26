@@ -21,9 +21,9 @@ export default function OverwriteConfirmModal({
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50" onClick={onCancel} />
+      <div className="overlay-enter fixed inset-0 bg-black/50" onClick={onCancel} />
 
-      <div className="relative w-full max-w-md rounded-lg border border-border bg-popover shadow-lg">
+      <div className="popout-enter popout-enter-center relative w-full max-w-md rounded-lg border border-border bg-popover shadow-lg">
         <div className="p-6">
           <div className="mb-4 flex items-center">
             <div className="mr-3 rounded-full bg-muted p-2">

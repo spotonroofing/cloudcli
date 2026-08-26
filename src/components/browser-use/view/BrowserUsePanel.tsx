@@ -505,8 +505,8 @@ export default function BrowserUsePanel({ isVisible }: BrowserUsePanelProps) {
       </div>
 
       {isFullscreen && selectedSession && (
-        <div className="fixed inset-0 z-50 bg-black/90 p-6">
-          <div className="flex h-full flex-col rounded-md border border-white/10 bg-black">
+        <div className="overlay-enter fixed inset-0 z-50 bg-black/90 p-6">
+          <div className="popout-enter popout-enter-center flex h-full flex-col rounded-md border border-white/10 bg-black">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/80">
               <div className="min-w-0 truncate">{selectedSession.title || selectedSession.url || 'Browser session'}</div>
               <Button variant="outline" size="sm" onClick={() => setIsFullscreen(false)}>

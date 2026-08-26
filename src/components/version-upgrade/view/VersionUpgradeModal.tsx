@@ -133,13 +133,13 @@ export function VersionUpgradeModal({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Backdrop */}
             <button
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+                className="overlay-enter fixed inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={onClose}
                 aria-label={t('versionUpdate.ariaLabels.closeModal')}
             />
 
             {/* Modal */}
-            <div className="relative mx-4 max-h-[90dvh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+            <div className="popout-enter popout-enter-center relative mx-4 max-h-[90dvh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-lg border border-gray-200 bg-white p-6 shadow-lg dark:border-gray-700 dark:bg-gray-800">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">

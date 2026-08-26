@@ -25,7 +25,7 @@ const MessageSpeakControl = ({ content }: { content: string }) => {
         : 'transition-opacity duration-200 opacity-0 group-hover:opacity-100 touch:opacity-100'
     }`}>
       {error && (
-        <span className="absolute bottom-full left-1/2 z-10 mb-1 max-w-[240px] -translate-x-1/2 whitespace-normal rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-center text-xs text-destructive shadow-lg">
+        <span className="popout-enter popout-enter-up absolute bottom-full left-1/2 z-10 mb-1 max-w-[240px] -translate-x-1/2 whitespace-normal rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-center text-xs text-destructive shadow-lg">
           {error}
         </span>
       )}

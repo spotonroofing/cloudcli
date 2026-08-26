@@ -30,7 +30,7 @@ export default function VoiceInputButton({ state, onToggle, errorMsg, className 
   return (
     <span className="relative inline-flex">
       {errorMsg && (
-        <span className="absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-red-600 px-2 py-1 text-xs text-white shadow-lg">
+        <span className="popout-enter popout-enter-up absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-red-600 px-2 py-1 text-xs text-white shadow-lg">
           {errorMsg}
         </span>
       )}

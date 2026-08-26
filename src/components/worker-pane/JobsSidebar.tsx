@@ -6,7 +6,7 @@ import { cn } from '../../lib/utils';
 import { AgentDisclosure } from '../../shared/view/beui/AgentDisclosure';
 import { MarqueeLabel } from '../../shared/view/beui/MarqueeLabel';
 import { SwapText } from '../../shared/view/beui/SwapText';
-import { TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
+import { JobRingSegments, TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
 import { EASE_OUT, SPRING_SWAP } from '../../shared/view/beui/ease';
 import { Button, Tooltip } from '../../shared/view/ui';
 
@@ -343,11 +343,15 @@ export default function JobsSidebar({
                         // row's check and ring render in the foreground ink;
                         // green stays on task icons and the counters.
                         tone="mono"
-                        // The job ring is a static circle segmented per task,
-                        // filling as check-offs land; a job with no
-                        // manifest tasks keeps the plain ramped spinner.
+                        // The job ring is a static circle segmented per task
+                        // from the start (ui13 job 7): idle jobs show the
+                        // same ring muted and motionless; the active job's
+                        // fills as check-offs land, its working segment
+                        // glowing. A manifest-less job keeps a plain circle
+                        // (ramped spinner while working).
                         segments={
-                          unit.status === 'in-progress' && unit.tasks.length > 0
+                          (unit.status === 'in-progress' || unit.status === 'pending')
+                          && unit.tasks.length > 0
                             ? { done: displayedDone(unit), total: unit.tasks.length }
                             : undefined
                         }
@@ -517,9 +521,11 @@ export default function JobsSidebar({
 /**
  * Collapsed rail (ui13 job 1): a compact vertical list of the run's job
  * rings — one ring per job, its done/total count inside, statuses in the
- * monochromatic job treatment (solid ring done, ramped spinner working,
- * dashed idle). Same bottom-to-top order as the expanded list; clicking a
- * ring expands the sidebar with that job's drawer open.
+ * monochromatic job treatment (solid ring done; the same segmented ring as
+ * the row icons from the start, muted static idle, fills + working-segment
+ * glow while active, ui13 job 7; manifest-less jobs a plain circle with the
+ * ramped spinner while working). Same bottom-to-top order as the expanded
+ * list; clicking a ring expands the sidebar with that job's drawer open.
  */
 export function JobsRail({
   chain,
@@ -530,6 +536,7 @@ export function JobsRail({
   run: { label: string; state: 'running' | 'finished' | 'stopped' } | null;
   onOpenJob: (jobIndex: number) => void;
 }) {
+  const reduce = useReducedMotion() ?? false;
   const units: Unit[] = chain
     ? chainUnits(chain)
     : run
@@ -545,6 +552,8 @@ export function JobsRail({
       {stacked.map((unit) => {
         const done = displayedDone(unit);
         const total = unit.tasks.length;
+        const segmented =
+          (unit.status === 'in-progress' || unit.status === 'pending') && total > 0;
         return (
           <li key={`${unit.index}-${unit.name}`}>
             <button
@@ -566,18 +575,19 @@ export function JobsRail({
                   unit.status === 'cancelled' && 'text-rose-600 dark:text-rose-400',
                 )}
               >
-                <circle
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeDasharray={unit.status === 'pending' ? '2 3' : undefined}
-                  strokeLinecap="round"
-                  className={cn(unit.status === 'in-progress' && 'opacity-20')}
-                />
-                {unit.status === 'in-progress' && (
+                {!segmented && (
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    className={cn(unit.status === 'in-progress' && 'opacity-20')}
+                  />
+                )}
+                {!segmented && unit.status === 'in-progress' && (
                   <g
                     className="animate-spinner-ramp"
                     style={{ transformOrigin: '12px 12px', transform: 'rotate(-90deg)' }}
@@ -594,6 +604,16 @@ export function JobsRail({
                       strokeDasharray="0.68 0.32"
                     />
                   </g>
+                )}
+                {segmented && (
+                  <JobRingSegments
+                    segments={{ done, total }}
+                    status={unit.status}
+                    tone="mono"
+                    r={10}
+                    strokeWidth={2}
+                    reduce={reduce}
+                  />
                 )}
               </svg>
               {total > 0 && (

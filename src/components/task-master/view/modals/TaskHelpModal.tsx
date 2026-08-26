@@ -49,8 +49,8 @@ export default function TaskHelpModal({ isOpen, onClose, onCreatePrd }: TaskHelp
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="max-h-[90dvh] w-full max-w-4xl overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
+    <div className="overlay-enter fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="popout-enter popout-enter-center max-h-[90dvh] w-full max-w-4xl overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
         <div className="flex items-center justify-between border-b border-border p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">

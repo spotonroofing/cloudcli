@@ -51,13 +51,13 @@ export default function PrdEditorWorkspace({
   return (
     <div
       className={cn(
-        'fixed inset-0 z-[200] md:bg-black/50 md:flex md:items-center md:justify-center',
+        'overlay-enter fixed inset-0 z-[200] md:bg-black/50 md:flex md:items-center md:justify-center',
         isFullscreen ? 'md:p-0' : 'md:p-4',
       )}
     >
       <div
         className={cn(
-          'bg-popover border border-border shadow-lg flex flex-col',
+          'popout-enter popout-enter-center bg-popover border border-border shadow-lg flex flex-col',
           'w-full h-full md:rounded-lg md:shadow-lg',
           isFullscreen
             ? 'md:w-full md:h-full md:rounded-none'

@@ -71,9 +71,9 @@ export default function MergeWorktreeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="overlay-enter fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="relative w-full max-w-md overflow-hidden rounded-lg border border-border bg-card shadow-lg"
+        className="popout-enter popout-enter-center relative w-full max-w-md overflow-hidden rounded-lg border border-border bg-card shadow-lg"
         role="dialog"
         aria-modal="true"
         aria-labelledby="merge-worktree-title"

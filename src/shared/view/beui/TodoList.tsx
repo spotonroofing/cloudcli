@@ -141,8 +141,13 @@ export function TodoStatusIcon({
   const reduce = useReducedMotion() ?? false;
   const normalizedProgress =
     progress === undefined ? 0.68 : Math.min(100, Math.max(0, progress)) / 100;
+  // Idle rings segmented and static (ui13 job 7): a job with a manifest shows
+  // its segmented ring from the start — muted and motionless while pending,
+  // alive (fills, working-segment glow) once in progress.
   const hasSegments =
-    status === 'in-progress' && segments !== undefined && segments.total > 0;
+    (status === 'in-progress' || status === 'pending')
+    && segments !== undefined
+    && segments.total > 0;
 
   // Completion sweep arming: only a completed status that arrives while this
   // icon is mounted in another state sweeps — loaded history renders settled.
@@ -190,7 +195,9 @@ export function TodoStatusIcon({
           fill="currentColor"
           stroke="currentColor"
           strokeWidth="1.5"
-          strokeDasharray={status === 'pending' ? '2 3' : undefined}
+          // Mono pending (ui13 job 7): a manifest-less job keeps a plain
+          // static circle; the dashed placeholder stays task-level only.
+          strokeDasharray={status === 'pending' && tone !== 'mono' ? '2 3' : undefined}
           strokeLinecap="round"
           initial={false}
           animate={{ fillOpacity: status === 'completed' ? 0.06 : 0 }}
@@ -230,35 +237,14 @@ export function TodoStatusIcon({
         </g>
       )}
       {hasSegments && (
-        <g style={{ transformOrigin: '12px 12px', transform: 'rotate(-90deg)' }}>
-          {Array.from({ length: segments.total }, (_, i) => {
-            const frac = 1 / segments.total;
-            const gap = Math.min(0.05, frac / 3);
-            const done = i < segments.done;
-            return (
-              <circle
-                key={i}
-                data-slot="job-ring-segment"
-                data-done={done}
-                cx="12"
-                cy="12"
-                r="9"
-                pathLength="1"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeDasharray={`${frac - gap} ${1 - frac + gap}`}
-                strokeDashoffset={-(i * frac + gap / 2)}
-                className={cn(
-                  'transition-[color,opacity] duration-300',
-                  done
-                    ? tone === 'mono' ? 'text-foreground' : 'text-status-done'
-                    : 'text-status-idle opacity-40',
-                )}
-              />
-            );
-          })}
-        </g>
+        <JobRingSegments
+          segments={segments}
+          status={status}
+          tone={tone}
+          r={9}
+          strokeWidth={2}
+          reduce={reduce}
+        />
       )}
       {sweeping && status === 'completed' && (
         // CSS-animated, not motion: the parent svg's initial={false}
@@ -312,6 +298,69 @@ export function TodoStatusIcon({
         transition={reduce ? { duration: 0 } : { duration: 0.2, ease: EASE_OUT }}
       />
     </motion.svg>
+  );
+}
+
+/**
+ * The segmented job ring (ui12 job 8, shared with the rail in ui13 job 7):
+ * one arc per task with small gaps inside a viewBox-24 svg. Pending renders
+ * every segment muted and static; in-progress fills the first `done`
+ * segments, and the segment being worked pulses with the white glow
+ * (`animate-segment-glow`, on the row-breathe beat; static full-ink under
+ * reduced motion).
+ */
+export function JobRingSegments({
+  segments,
+  status,
+  tone = 'semantic',
+  r,
+  strokeWidth,
+  reduce,
+}: {
+  segments: { done: number; total: number };
+  status: TodoListItemStatus;
+  tone?: 'semantic' | 'mono';
+  r: number;
+  strokeWidth: number;
+  reduce: boolean;
+}) {
+  return (
+    <g style={{ transformOrigin: '12px 12px', transform: 'rotate(-90deg)' }}>
+      {Array.from({ length: segments.total }, (_, i) => {
+        const frac = 1 / segments.total;
+        const gap = Math.min(0.05, frac / 3);
+        const done = status === 'in-progress' && i < segments.done;
+        const working =
+          status === 'in-progress' && i === segments.done && segments.done < segments.total;
+        return (
+          <circle
+            key={i}
+            data-slot="job-ring-segment"
+            data-done={done}
+            data-working={working || undefined}
+            cx="12"
+            cy="12"
+            r={r}
+            pathLength="1"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${frac - gap} ${1 - frac + gap}`}
+            strokeDashoffset={-(i * frac + gap / 2)}
+            className={cn(
+              'transition-[color,opacity] duration-300',
+              done && (tone === 'mono' ? 'text-foreground' : 'text-status-done'),
+              working
+                && cn(
+                  tone === 'mono' ? 'text-foreground' : 'text-status-working',
+                  !reduce && 'animate-segment-glow',
+                ),
+              !done && !working && 'text-status-idle opacity-40',
+            )}
+          />
+        );
+      })}
+    </g>
   );
 }
 

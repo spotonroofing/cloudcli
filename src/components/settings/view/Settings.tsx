@@ -115,7 +115,7 @@ function Settings({ isOpen, initialTab = 'appearance' }: SettingsProps) {
       <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-medium text-foreground">{t('title')}</h2>
         {saveStatus === 'success' && (
-          <span className="animate-in fade-in text-xs text-muted-foreground">{t('saveStatus.success')}</span>
+          <span className="text-xs text-muted-foreground">{t('saveStatus.success')}</span>
         )}
       </div>
 
