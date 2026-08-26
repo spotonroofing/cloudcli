@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+
 import { cn } from '../../../lib/utils';
 
 type SettingsCardProps = {
@@ -11,8 +12,8 @@ export default function SettingsCard({ children, className, divided }: SettingsC
   return (
     <div
       className={cn(
-        'rounded-lg border border-border bg-card/50',
-        divided && 'divide-y divide-border',
+        'rounded-lg border border-border/60 bg-card/40',
+        divided && 'divide-y divide-border/60',
         className,
       )}
     >

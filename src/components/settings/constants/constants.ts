@@ -1,9 +1,5 @@
 import type { ComponentType } from 'react';
-import {
-  Bell,
-  Info,
-  Palette,
-} from 'lucide-react';
+import { Bell, Palette } from 'lucide-react';
 
 import type {
   CodeEditorSettingsState,
@@ -21,7 +17,6 @@ export type SettingsMainTabMeta = {
 export const SETTINGS_MAIN_TABS: SettingsMainTabMeta[] = [
   { id: 'appearance', label: 'Appearance', keywords: 'appearance theme dark light language', icon: Palette },
   { id: 'notifications', label: 'Notifications', keywords: 'notifications alerts push', icon: Bell },
-  { id: 'about', label: 'About', keywords: 'about version info', icon: Info },
 ];
 
 export const DEFAULT_SAVE_STATUS = null;

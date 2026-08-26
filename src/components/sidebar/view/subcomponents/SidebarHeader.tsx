@@ -1,10 +1,8 @@
 import { Archive, Folder, FolderPlus, MessageSquare, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
-import { motion } from 'motion/react';
 import type { TFunction } from 'i18next';
 
-import { Button, Input } from '../../../../shared/view/ui';
-import { TABS_INDICATOR_SPRING } from '../../../../shared/view/beui';
-import { cn } from '../../../../lib/utils';
+import { Button, IconTabs, Input } from '../../../../shared/view/ui';
+import type { IconTab } from '../../../../shared/view/ui';
 import type { SidebarSearchMode } from '../../types/types';
 
 type SidebarHeaderProps = {
@@ -56,22 +54,11 @@ export default function SidebarHeader({
       ? t('search.archivedPlaceholder', 'Search archived sessions...')
       : t('projects.searchPlaceholder');
 
-  const segmentClass = (mode: SidebarSearchMode) => cn(
-    'touch-hit relative flex h-7 w-9 items-center justify-center rounded-md transition-colors',
-    searchMode === mode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-  );
-
-  // The active-segment plate glides between triggers on the shared tabs
-  // spring (ui9 B5) instead of jumping; labels sit above it.
-  const segmentIndicator = (mode: SidebarSearchMode) => searchMode === mode && (
-    <motion.span
-      layoutId="sidebar-segment-indicator"
-      data-slot="sidebar-segment-indicator"
-      transition={TABS_INDICATOR_SPRING}
-      className="absolute inset-0 rounded-md bg-background shadow-sm"
-      aria-hidden="true"
-    />
-  );
+  const modeTabs: IconTab<SidebarSearchMode>[] = [
+    { id: 'projects', label: t('search.modeProjects', 'Projects'), icon: Folder },
+    { id: 'conversations', label: t('search.modeConversations'), icon: MessageSquare },
+    { id: 'archived', label: t('archived.title', 'Archive'), icon: Archive },
+  ];
 
   return (
     <div className="flex-shrink-0">
@@ -83,38 +70,12 @@ export default function SidebarHeader({
           {/* Left-aligned icon tabs (ui13 job 5): folder, chat bubble, archive
               box — icon-only controls, so tooltips are allowed here. */}
           {showSearchTools && (
-            <div className="flex w-fit flex-shrink-0 rounded-lg bg-muted/50 p-0.5">
-              <button
-                onClick={() => onSearchModeChange('projects')}
-                aria-pressed={searchMode === 'projects'}
-                aria-label={t('search.modeProjects', 'Projects')}
-                title={t('search.modeProjects', 'Projects')}
-                className={segmentClass('projects')}
-              >
-                {segmentIndicator('projects')}
-                <Folder className="relative h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={() => onSearchModeChange('conversations')}
-                aria-pressed={searchMode === 'conversations'}
-                aria-label={t('search.modeConversations')}
-                title={t('search.modeConversations')}
-                className={segmentClass('conversations')}
-              >
-                {segmentIndicator('conversations')}
-                <MessageSquare className="relative h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={() => onSearchModeChange('archived')}
-                aria-pressed={searchMode === 'archived'}
-                aria-label={t('archived.title', 'Archive')}
-                title={t('archived.title', 'Archive')}
-                className={segmentClass('archived')}
-              >
-                {segmentIndicator('archived')}
-                <Archive className="relative h-3.5 w-3.5" />
-              </button>
-            </div>
+            <IconTabs
+              tabs={modeTabs}
+              value={searchMode}
+              onChange={onSearchModeChange}
+              layoutId="sidebar-segment-indicator"
+            />
           )}
           <div className="ml-auto flex flex-shrink-0 items-center gap-0.5">
             {/* Refresh is desktop-only; mobile refreshes by pulling the list down */}

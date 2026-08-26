@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import SettingsSidebar from '../view/SettingsSidebar';
 import AppearanceSettingsTab from '../view/tabs/AppearanceSettingsTab';
 import NotificationsSettingsTab from '../view/tabs/NotificationsSettingsTab';
-import AboutTab from '../view/tabs/AboutTab';
 import { useSettingsController } from '../hooks/useSettingsController';
 import { useWebPush } from '../../../hooks/useWebPush';
 import type { SettingsProps } from '../types/types';
@@ -109,7 +108,7 @@ function Settings({ isOpen, initialTab = 'appearance' }: SettingsProps) {
 
   // Full-sidebar surface content (ui13 job 5): no modal chrome, no close
   // button — the shell's taskbar icon and Escape close it. One column
-  // reflowed for the sidebar width: title, pill-bar nav, scrolling content.
+  // reflowed for the sidebar width: title, icon-tab strip, scrolling content.
   return (
     <div className="flex h-full min-h-0 flex-col" data-slot="settings-surface-content">
       <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-4 py-3">
@@ -122,7 +121,7 @@ function Settings({ isOpen, initialTab = 'appearance' }: SettingsProps) {
       <SettingsSidebar activeTab={activeTab} onChange={setActiveTab} />
 
       <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-        <div key={activeTab} className="settings-content-enter min-w-0 space-y-6 overflow-x-hidden p-4 pb-safe-area-inset-bottom">
+        <div key={activeTab} className="settings-content-enter min-w-0 overflow-x-hidden px-3 py-3 pb-safe-area-inset-bottom">
           {activeTab === 'appearance' && (
             <AppearanceSettingsTab
               codeEditorSettings={codeEditorSettings}
@@ -148,8 +147,6 @@ function Settings({ isOpen, initialTab = 'appearance' }: SettingsProps) {
               onDisableDesktopNotifications={handleDisableDesktopNotifications}
             />
           )}
-
-          {activeTab === 'about' && <AboutTab />}
         </div>
       </main>
     </div>

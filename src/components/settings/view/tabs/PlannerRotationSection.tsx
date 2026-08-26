@@ -1,8 +1,11 @@
-import { RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { authenticatedFetch } from '../../../../utils/api';
 import { Skeleton } from '../../../../shared/view/ui';
+import SettingsCard from '../SettingsCard';
+import SettingsRow from '../SettingsRow';
+import SettingsSection from '../SettingsSection';
+import SettingsToggle from '../SettingsToggle';
 
 type RotationSettings = {
   enabled: boolean;
@@ -63,13 +66,12 @@ export default function PlannerRotationSection() {
     // Section content still arriving: skeleton rows hold its space instead of
     // the section blinking in after the fetch (ui11 phase 11).
     return (
-      <div className="space-y-3 border-t border-border/60 pt-4" aria-busy="true">
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-4 w-4 rounded-sm" />
-          <Skeleton className="h-4 w-40 rounded-sm" />
+      <div className="space-y-1.5" aria-busy="true">
+        <Skeleton className="ml-1 h-3 w-32 rounded-sm" />
+        <div className="space-y-2 rounded-lg border border-border/60 px-3 py-2">
+          <Skeleton className="h-4 w-3/5 rounded-sm" />
+          <Skeleton className="h-4 w-2/5 rounded-sm" />
         </div>
-        <Skeleton className="h-3 w-4/5 rounded-sm" />
-        <Skeleton className="h-3 w-3/5 rounded-sm" />
       </div>
     );
   }
@@ -79,46 +81,41 @@ export default function PlannerRotationSection() {
   }
 
   return (
-    <div className="space-y-3 border-t border-border/60 pt-4">
-      <div className="flex items-center gap-2">
-        <RefreshCw className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-medium text-foreground">Planner auto-rotation</h3>
-        {saving && <span className="text-[10px] text-muted-foreground">saving...</span>}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        When a planner session's context usage crosses the threshold, the watchdog has it run /handoff
-        and boots a fresh planner from STATE.md. The percentage applies against the session model's
-        real context window.
-      </p>
-      <label className="flex items-center gap-2 text-sm text-foreground">
-        <input
-          type="checkbox"
-          checked={settings.enabled}
-          onChange={(event) => {
-            void save({ ...settings, enabled: event.target.checked });
-          }}
-          className="h-4 w-4"
-        />
-        Rotate planners automatically
-      </label>
-      <label className="flex items-center gap-2 text-sm text-foreground">
-        Threshold
-        <input
-          type="number"
-          min={5}
-          max={95}
-          value={settings.thresholdPercent}
-          disabled={!settings.enabled}
-          onChange={(event) => {
-            const value = Number(event.target.value);
-            if (Number.isFinite(value)) {
-              void save({ ...settings, thresholdPercent: value });
-            }
-          }}
-          className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm"
-        />
-        <span className="text-xs text-muted-foreground">% of the model's context window (default 60)</span>
-      </label>
-    </div>
+    <SettingsSection title="Planner auto-rotation">
+      <SettingsCard divided>
+        <SettingsRow
+          label="Rotate planners automatically"
+          description="Runs /handoff at the threshold and boots a fresh planner from STATE.md."
+        >
+          <div className="flex items-center gap-2">
+            {saving && <span className="text-[10px] text-muted-foreground">saving...</span>}
+            <SettingsToggle
+              checked={settings.enabled}
+              onChange={(value) => {
+                void save({ ...settings, enabled: value });
+              }}
+              ariaLabel="Rotate planners automatically"
+            />
+          </div>
+        </SettingsRow>
+        <SettingsRow label="Threshold" description="% of the model's context window (default 60)">
+          <input
+            type="number"
+            min={5}
+            max={95}
+            value={settings.thresholdPercent}
+            disabled={!settings.enabled}
+            aria-label="Threshold"
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              if (Number.isFinite(value)) {
+                void save({ ...settings, thresholdPercent: value });
+              }
+            }}
+            className="h-7 w-16 rounded-md border border-input bg-background px-2 text-xs tabular-nums text-foreground disabled:opacity-50"
+          />
+        </SettingsRow>
+      </SettingsCard>
+    </SettingsSection>
   );
 }

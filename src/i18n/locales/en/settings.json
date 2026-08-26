@@ -68,8 +68,7 @@
     "tasks": "Tasks",
     "browser": "Browser",
     "notifications": "Notifications",
-    "plugins": "Plugins",
-    "about": "About"
+    "plugins": "Plugins"
   },
   "notifications": {
     "title": "Notifications",

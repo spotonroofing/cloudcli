@@ -45,7 +45,7 @@ export default function AppearanceSettingsTab({
     customAccent ?? hslTokenToHex(themeAccent.replace(/^hsl\(|\)$/g, '')) ?? '#000000';
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <SettingsSection title={t('appearanceSettings.theme.label')}>
         <SettingsCard divided>
           <SettingsRow
@@ -55,9 +55,9 @@ export default function AppearanceSettingsTab({
             <Select
               value={colorTheme}
               onValueChange={setColorTheme}
-              className="w-full sm:w-44"
+              className="w-36"
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-7 px-2 py-0 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -76,18 +76,18 @@ export default function AppearanceSettingsTab({
             label={t('appearanceSettings.accent.label')}
             description={t('appearanceSettings.accent.description')}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {customAccent ? (
                 <button
                   type="button"
                   onClick={() => setCustomAccent(null)}
-                  className="touch-manipulation text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  className="touch-manipulation text-xs text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {t('appearanceSettings.accent.reset')}
                 </button>
               ) : null}
               <label
-                className="relative block h-9 w-14 cursor-pointer rounded-lg border border-input transition-colors hover:border-muted-foreground/40"
+                className="relative block h-7 w-10 cursor-pointer rounded-md border border-input transition-colors hover:border-muted-foreground/40"
                 style={{ backgroundColor: 'hsl(var(--primary))' }}
               >
                 <input
@@ -185,9 +185,9 @@ export default function AppearanceSettingsTab({
             <Select
               value={codeEditorSettings.fontSize}
               onValueChange={onCodeEditorFontSizeChange}
-              className="w-full sm:w-28"
+              className="w-20"
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-7 px-2 py-0 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent listClassName="max-h-64 overflow-y-auto">

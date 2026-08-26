@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 
-export type SettingsMainTab = 'appearance' | 'notifications' | 'about';
+export type SettingsMainTab = 'appearance' | 'notifications';
 export type SaveStatus = 'success' | 'error' | null;
 export type CodexPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
 

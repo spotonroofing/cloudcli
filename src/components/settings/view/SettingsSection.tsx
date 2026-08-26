@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+
 import { cn } from '../../../lib/utils';
 
 type SettingsSectionProps = {
@@ -10,13 +11,13 @@ type SettingsSectionProps = {
 
 export default function SettingsSection({ title, description, children, className }: SettingsSectionProps) {
   return (
-    <div className={cn('space-y-3', className)}>
-      <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className={cn('space-y-1.5', className)} data-slot="settings-section">
+      <div className="px-1">
+        <h3 className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           {title}
         </h3>
         {description && (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
         )}
       </div>
       {children}

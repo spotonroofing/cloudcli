@@ -72,8 +72,8 @@ Done check: on dev: opening Memory while account is open closes account (DOM); t
 
 Goal: settings stop looking like a foreign panel. Files: the settings surface, its tab strip, DESIGN.md. Dependencies: job 4.
 
-- [ ] Remove the About tab. The remaining tabs use the same left-aligned icon-tab pattern as Projects/Chats/Archive (Appearance, Notifications, plus System if the former system settings still exist or were removed in the bloat sweep by mistake; restore them if so, state what happened).
-- [ ] Reflow the settings content for the sidebar width without redesigning the controls: consistent section spacing, no oversized cards, same control scale as the rest of the app.
+- [x] Remove the About tab. The remaining tabs use the same left-aligned icon-tab pattern as Projects/Chats/Archive (Appearance, Notifications, plus System if the former system settings still exist or were removed in the bloat sweep by mistake; restore them if so, state what happened). *(No System tab ever existed: before the ui6 purge (bfe2cae) the tabs were Agents, Appearance, Git, API Tokens, Tasks, Browser, Notifications, Plugins, About; nothing to restore. The strip is the shared `IconTabs` the sidebar header now uses too.)*
+- [x] Reflow the settings content for the sidebar width without redesigning the controls: consistent section spacing, no oversized cards, same control scale as the rest of the app.
 
 Done check: on dev: no About tab; the tab strip's DOM matches the sidebar icon-tab component; sections reflow without overflow at sidebar width and on phone. Fresh-context subagent verification. Commit.
 

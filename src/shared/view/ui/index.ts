@@ -17,3 +17,5 @@ export { Skeleton } from './Skeleton';
 export { default as Tooltip } from './Tooltip';
 export { PromptInput, PromptInputHeader, PromptInputBody, PromptInputTextarea, PromptInputFooter, PromptInputTools, PromptInputButton, PromptInputSubmit } from './PromptInput';
 export { PillBar, Pill } from './PillBar';
+export { IconTabs } from './IconTabs';
+export type { IconTab } from './IconTabs';
