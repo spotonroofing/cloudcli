@@ -95,6 +95,7 @@ Goal: the memory surface shows Willem his memory, not the plumbing, and it behav
 - [ ] The "Memory updated" indicator row matches the transcript's meta-row anatomy exactly (the "Thought for a few seconds" row family): same icon slot, size, alignment, text style, expand behavior; correct memory icon.
 - [ ] The memory viewer's primary view is the curated memory: planner/_global/WILLEM.md, a single self-maintained document of things Willem said, his preferences, and how he likes to work — rendered cleanly, most recent changes visible. The technical layers (lessons, PROJECT.md, STATE.md, sessions) move to a secondary "internals" view. The Global/project split stays underneath.
 - [ ] Editing follows the Claude model, not the ChatGPT chip model: Willem edits by telling the planner (the viewer has no delete-x chips), and the file carries a short header line saying so. Create the file with a seed section if the planner has not yet (check first; the planner may have committed it already).
+- [ ] The thinking/turn timer space regression: Willem sees "2m5s" with no space after the minutes in the live app, despite ui12 job 9 verifying "1m 21.1s" with a regular space. Reproduce on dev (a real held turn past one minute), find which surface renders the duration without the space (the ticker's digit columns, a second duration site, or a regression), fix it so every duration renders "2m 5s" with a regular space, and state in the summary why the ui12 check passed while the live app disagreed.
 - [ ] End-to-end test of the whole memory surface: indicator fires on a real write, viewer opens from the taskbar, primary view renders WILLEM.md, internals view still reachable.
 
 Done check: on dev: the indicator row's computed styles match the thought-row family (side-by-side DOM comparison); the viewer defaults to the curated view rendering WILLEM.md; internals reachable; end-to-end pass recorded. Fresh-context subagent verification. Commit.
@@ -118,4 +119,14 @@ Goal: files and source control become windows in a real windowing layer that ext
 - [ ] The selector and rails tie into the project stacking system end to end: multiple projects open, each with its own window set, collapse/attach behavior verified across project switches and reloads.
 
 Done check: on dev: opening Files and Source Control from the selector tiles them into the grid with working resize; closing collapses to rails that attach to the project's open pane; two projects with different window sets survive switching and reload; mobile presents windows as full-pane views behind the same selector. Fresh-context subagent verification. Commit.
+
+## Job 11 — Bloat sweep: remove what we never use (appended 2026-08-25)
+
+Goal: the codebase stops carrying surfaces and code Willem never uses. This app is a fork of claudecodeui and has accumulated rounds of rework; find pages, menus, components, routes, i18n bundles, dependencies, and assets that nothing reachable uses anymore, and surgically remove them without breaking anything. Files: whole repo. Dependencies: job 10 (the windowing rework settles what is reachable). Deliberately last.
+
+- [ ] Inventory first, remove second: map every route, page, menu entry, and major component to how it is reached in today's UI (desktop and mobile); anything unreachable or superseded (old popup shells, retired menus, dead provider settings surfaces, orphaned components, unused i18n namespaces, dependencies with zero imports, stale assets) goes on a removal list with one line of evidence each. Anything Willem might plausibly still want (source control, files — now windows) is NOT bloat; when genuinely unsure, keep it and list it as a question in the summary.
+- [ ] Remove the list surgically: delete code, styles, locales, and dependencies together; typecheck, lint, full client and server test suites, and a fresh dev build must pass after each removal batch; grep proves no dangling imports or dead routes remain.
+- [ ] Walk the app end to end on dev (desktop and phone) after the sweep: every surface from this round and the last two still works; record the removal list and the size delta (bundle and dependency count) in the summary.
+
+Done check: on dev after a fresh build: tsc, eslint, client and server suites pass; the e2e walk finds no broken surface; the summary carries the full removal list with evidence and the measured size delta. Fresh-context subagent verification. Commit.
 
