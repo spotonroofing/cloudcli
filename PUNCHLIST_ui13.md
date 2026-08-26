@@ -24,8 +24,8 @@ Willem's refinement round on the ui12 jobs sidebar. Job-level iconography goes m
 
 Goal: the job rows read monochromatic while their tasks keep semantic color, and the collapsed sidebar still tells the story. Files: the jobs sidebar components from ui12 phase 5/job 8, the status icon components, DESIGN.md. Dependencies: none.
 
-- [ ] Job-level icons go monochromatic: a completed job's checkmark is white/ink (no green at the job row level); the job ring keeps its segment fills but in the monochromatic treatment. Task-level check icons stay green and each job's done/total counter stays green; document the split (jobs mono, tasks semantic) in DESIGN.md.
-- [ ] Collapsed sidebar is a compact rail: a vertical list of the run's job rings, one per job, each ring carrying its own compact "n/N" count inside, statuses readable (done, working with the ramped spinner, idle) at rail size. Clicking a ring expands the sidebar with that job's drawer open and scrolled into view.
+- [x] Job-level icons go monochromatic: a completed job's checkmark is white/ink (no green at the job row level); the job ring keeps its segment fills but in the monochromatic treatment. Task-level check icons stay green and each job's done/total counter stays green; document the split (jobs mono, tasks semantic) in DESIGN.md.
+- [x] Collapsed sidebar is a compact rail: a vertical list of the run's job rings, one per job, each ring carrying its own compact "n/N" count inside, statuses readable (done, working with the ramped spinner, idle) at rail size. Clicking a ring expands the sidebar with that job's drawer open and scrolled into view.
 
 Done check: on dev with a stub chain and the ui12 history: computed color of a completed job's check is the ink token (not green) while its tasks' checks are green and the counter green; collapsing the sidebar shows one ring per job with the n/N count rendered inside; clicking the second ring expands the sidebar with job 2's drawer open. Phone viewport holds. Fresh-context subagent verification. Commit.
 

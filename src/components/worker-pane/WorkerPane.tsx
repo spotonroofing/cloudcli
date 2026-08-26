@@ -15,7 +15,7 @@ import { ActionMenu, Badge, Button, Skeleton, Tooltip } from '../../shared/view/
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 
-import JobsSidebar, { type ChainSnapshot } from './JobsSidebar';
+import JobsSidebar, { JobsRail, type ChainSnapshot } from './JobsSidebar';
 
 type WorkerRun = {
   sessionId: string;
@@ -117,6 +117,9 @@ export default function WorkerPane({
     setJobsSidebarOpen(value !== '0');
   }), []);
   const [jobsSheetOpen, setJobsSheetOpen] = useState(false);
+  // Rail ring hand-off (ui13 job 1): the job whose drawer the sidebar opens
+  // with on the next expand; null for a plain expand.
+  const [railFocusJob, setRailFocusJob] = useState<number | null>(null);
   // The sheet shell requires a desktop anchor ref; the phone branch never reads it.
   const jobsSheetAnchorRef = useRef<HTMLDivElement>(null);
 
@@ -472,22 +475,36 @@ export default function WorkerPane({
                 chain={selectedChain}
                 run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
                 onCollapse={() => toggleJobsSidebar(false)}
+                focusJob={railFocusJob}
               />
             </div>
           ) : (
             <div
               data-slot="jobs-sidebar-rail"
-              className="flex w-12 flex-shrink-0 flex-col items-center border-l border-border/60 bg-muted/20 py-3"
+              className="flex w-12 flex-shrink-0 flex-col items-center gap-1 border-l border-border/60 bg-muted/20 py-3"
             >
               <button
                 type="button"
-                onClick={() => toggleJobsSidebar(true)}
+                onClick={() => {
+                  setRailFocusJob(null);
+                  toggleJobsSidebar(true);
+                }}
                 className="group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"
                 aria-label="Show jobs sidebar"
                 title="Show jobs sidebar"
               >
                 <PanelRightOpen className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
               </button>
+              {/* Compact rail (ui13 job 1): one count ring per job; clicking
+                  expands the sidebar with that job's drawer open. */}
+              <JobsRail
+                chain={selectedChain}
+                run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
+                onOpenJob={(jobIndex) => {
+                  setRailFocusJob(jobIndex);
+                  toggleJobsSidebar(true);
+                }}
+              />
             </div>
           )
         ))}

@@ -116,6 +116,7 @@ export function TodoStatusIcon({
   progress,
   segments,
   sweepOnComplete = false,
+  tone = 'semantic',
 }: {
   status: TodoListItemStatus;
   progress?: number;
@@ -130,6 +131,12 @@ export function TodoStatusIcon({
    * drawn check.
    */
   sweepOnComplete?: boolean;
+  /**
+   * Ink family (ui13 job 1): 'semantic' keeps the status tokens (task
+   * level); 'mono' renders completed/working — check, ring, filled
+   * segments — in the foreground ink (job level).
+   */
+  tone?: 'semantic' | 'mono';
 }) {
   const reduce = useReducedMotion() ?? false;
   const normalizedProgress =
@@ -167,9 +174,11 @@ export function TodoStatusIcon({
       className={cn(
         // Semantic status inks (ui12 phase 4): done green, working accent,
         // idle muted — the sanctioned exception to monochromatic icons.
+        // Mono tone (ui13 job 1, job level): completed/working carry the
+        // foreground ink instead; idle and cancelled read the same.
         'mx-0.5 size-5 shrink-0 overflow-visible text-status-idle',
-        status === 'in-progress' && 'text-status-working',
-        status === 'completed' && 'text-status-done',
+        status === 'in-progress' && (tone === 'mono' ? 'text-foreground' : 'text-status-working'),
+        status === 'completed' && (tone === 'mono' ? 'text-foreground' : 'text-status-done'),
         status === 'cancelled' && 'text-rose-600 dark:text-rose-400',
       )}
     >
@@ -242,7 +251,9 @@ export function TodoStatusIcon({
                 strokeDashoffset={-(i * frac + gap / 2)}
                 className={cn(
                   'transition-[color,opacity] duration-300',
-                  done ? 'text-status-done' : 'text-status-idle opacity-40',
+                  done
+                    ? tone === 'mono' ? 'text-foreground' : 'text-status-done'
+                    : 'text-status-idle opacity-40',
                 )}
               />
             );
