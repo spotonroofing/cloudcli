@@ -3,6 +3,7 @@
 #
 #   dispatch <project> <slug> [phase-file ...]
 #   dispatch append <project> <slug> <file ...> [--phase]
+#   dispatch amend <project> <slug> <unit> --tasks "a | b | c" [--name N] [--anchor A]
 #
 # <project> is a folder name under ~/Projects or an absolute repo path.
 # Phase prompt files: explicit paths, or by convention every file matching
@@ -26,6 +27,10 @@
 # runner picks them up after the current phase's commit gate. Appended units
 # are "tasks" (lighter navigator rows) unless --phase marks a full compiled
 # unit.
+#
+# `dispatch amend` rewrites a not-yet-started unit's stored task list (ui14
+# job 8) so a fold-in the planner made to the prompt file and punch list also
+# reaches the jobs view; the executing or finished unit is refused.
 set -u
 
 PROJECTS_ROOT="$HOME/Projects"
@@ -35,9 +40,59 @@ DB_PATH="${DISPATCH_DB_PATH:-$HOME/.cloudcli/auth.db}"
 usage() {
   print -u2 "usage: dispatch <project> <slug> [phase-file ...]"
   print -u2 "       dispatch append <project> <slug> <file ...> [--phase]"
+  print -u2 "       dispatch amend <project> <slug> <unit> --tasks \"a | b | c\" [--name N] [--anchor A]"
   exit 64
 }
 [[ $# -ge 2 ]] || usage
+
+# ----- amend: replace a queued unit's task list on an active chain -----
+if [[ "$1" == "amend" ]]; then
+  shift
+  [[ $# -ge 4 ]] || usage
+  PROJECT_ARG="$1"; SLUG="$2"; UNIT="$3"; shift 3
+  [[ "$UNIT" == <1-> ]] || { print -u2 "dispatch: unit must be a 1-based index"; exit 64; }
+
+  AMEND_TASKS=""; AMEND_NAME=""; AMEND_ANCHOR=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --tasks) AMEND_TASKS="${2:-}"; shift 2 2>/dev/null || usage ;;
+      --name) AMEND_NAME="${2:-}"; shift 2 2>/dev/null || usage ;;
+      --anchor) AMEND_ANCHOR="${2:-}"; shift 2 2>/dev/null || usage ;;
+      *) usage ;;
+    esac
+  done
+  [[ -n "$AMEND_TASKS$AMEND_NAME$AMEND_ANCHOR" ]] || usage
+
+  API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
+  [[ -n "$API_KEY" ]] || { print -u2 "dispatch: no active API key in server config"; exit 78; }
+  HEADER_FILE=$(mktemp)
+  chmod 600 "$HEADER_FILE"
+  print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
+  trap 'rm -f "$HEADER_FILE"' EXIT
+
+  BODY=$(AMEND_TASKS="$AMEND_TASKS" AMEND_NAME="$AMEND_NAME" AMEND_ANCHOR="$AMEND_ANCHOR" python3 - <<'PYEOF'
+import json, os
+body = {}
+tasks = [t.strip() for t in os.environ['AMEND_TASKS'].split('|') if t.strip()]
+if tasks:
+    body['tasks'] = tasks
+if os.environ['AMEND_NAME']:
+    body['name'] = os.environ['AMEND_NAME']
+if os.environ['AMEND_ANCHOR']:
+    body['anchor'] = os.environ['AMEND_ANCHOR']
+print(json.dumps(body))
+PYEOF
+)
+  RESPONSE=$(curl -s -K "$HEADER_FILE" -m 30 -X POST "$SERVER_URL/api/watchdog/chains/$SLUG/phases/$UNIT/tasks" \
+      -H 'Content-Type: application/json' -d "$BODY" -w '\n%{http_code}' 2>/dev/null)
+  STATUS="${RESPONSE##*$'\n'}"
+  if [[ "$STATUS" != "200" ]]; then
+    print -u2 "dispatch: chain $SLUG refused the amend of unit $UNIT (HTTP ${STATUS:-000}: ${RESPONSE%$'\n'*})"
+    exit 69
+  fi
+  print -r -- "dispatch: unit $UNIT of chain $SLUG amended; the jobs view shows it now and the runner reads the prompt file at job start"
+  exit 0
+fi
 
 # ----- append: queue additional work onto an active chain -----
 if [[ "$1" == "append" ]]; then

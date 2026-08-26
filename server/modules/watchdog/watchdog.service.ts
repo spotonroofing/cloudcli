@@ -136,6 +136,8 @@ const WAKE_RETRY_MS = 60 * 1000;
 const WAKE_MAX_FAILURES = 3;
 /** A live phase with no runner event and no journal/transcript writes this long is wedged. */
 const CHAIN_WEDGE_MS = Number(process.env.WATCHDOG_CHAIN_WEDGE_MS || 3 * 60 * 60 * 1000);
+/** Debounce for punch-list writes (ui14 job 8): editors save in bursts. */
+const PUNCHLIST_DEBOUNCE_MS = 250;
 const RESOURCE_ALERT_THROTTLE_MS = 24 * 60 * 60 * 1000;
 const MIN_FREE_DISK_GB = Number(process.env.WATCHDOG_MIN_FREE_DISK_GB || 10);
 const MIN_FREE_MEM_PCT = Number(process.env.WATCHDOG_MIN_FREE_MEM_PCT || 10);
@@ -158,6 +160,8 @@ class WatchdogService {
   private resourceAlertAt = new Map<string, number>();
   private sweeper: ReturnType<typeof setInterval> | null = null;
   private selfTestTimer: ReturnType<typeof setTimeout> | null = null;
+  /** One directory watcher per running chain with a punch list (ui14 job 8). */
+  private punchlistWatchers = new Map<string, { watcher: fs.FSWatcher; timer: ReturnType<typeof setTimeout> | null; mtimeMs: number }>();
 
   start(): void {
     if (this.sweeper) {
@@ -214,6 +218,9 @@ class WatchdogService {
       }
       if (this.chains.size || this.dispatchRuns.size) {
         log(`hydrated from DB: ${this.chains.size} chain(s), ${this.dispatchRuns.size} dispatched run(s)`);
+      }
+      for (const chain of this.chains.values()) {
+        this.syncPunchlistWatcher(chain);
       }
       // A terminal wake that was queued but never delivered before the last
       // restart (the queue is in-memory) is re-derived from the chain record.
@@ -303,6 +310,7 @@ class WatchdogService {
     this.chains.set(input.slug, chain);
     this.persistChain(chain);
     this.broadcastChainProgress(chain);
+    this.syncPunchlistWatcher(chain);
     log(`chain registered: ${input.slug}`, { projectPath: input.projectPath, phases: input.phases ?? null });
   }
 
@@ -364,6 +372,107 @@ class WatchdogService {
     this.broadcastChainProgress(chain);
     log(`chain ${slug}: ${entries.length} unit(s) appended`, { manifestLength: chain.manifest.length });
     return true;
+  }
+
+  /**
+   * Amends a not-yet-started unit's manifest entry in place (ui14 job 8):
+   * the planner folds a small same-files addition into a queued job as an
+   * extra task, and the jobs view must show the new row and denominator
+   * before the job starts. Only a unit strictly after the current one on a
+   * running chain qualifies — the executing or finished unit's counters stay
+   * honest. Adds no unit, so `phases` is untouched.
+   */
+  amendChainPhase(
+    slug: string,
+    phaseIndex: number,
+    patch: { tasks?: string[]; name?: string; anchor?: string },
+  ): 'ok' | 'unknown' | 'not-queued' {
+    const chain = this.chains.get(slug);
+    if (!chain || !chain.manifest) {
+      return 'unknown';
+    }
+    const entry = chain.manifest[phaseIndex - 1];
+    if (!entry || chain.status !== 'running' || phaseIndex <= (chain.currentPhase ?? 0)) {
+      return 'not-queued';
+    }
+    if (patch.tasks) {
+      entry.tasks = patch.tasks;
+    }
+    if (patch.name) {
+      entry.name = patch.name;
+    }
+    if (patch.anchor) {
+      entry.anchor = patch.anchor;
+    }
+    chain.lastEventAt = Date.now();
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    log(`chain ${slug}: unit ${phaseIndex} amended`, { tasks: entry.tasks.length });
+    return 'ok';
+  }
+
+  /**
+   * Live task check-offs (ui14 job 8): a running chain's punch list file is
+   * watched so a box ticked mid-job broadcasts fresh done counts within the
+   * debounce, not only at the next event or 20s poll. The parent directory
+   * is watched (editors and sed -i replace the file, which orphans a
+   * file-level watch); a terminal chain drops its watcher.
+   */
+  private syncPunchlistWatcher(chain: ChainRecord): void {
+    const active = this.punchlistWatchers.get(chain.slug);
+    if (chain.status !== 'running' || !chain.punchlist) {
+      if (active) {
+        active.watcher.close();
+        if (active.timer) {
+          clearTimeout(active.timer);
+        }
+        this.punchlistWatchers.delete(chain.slug);
+      }
+      return;
+    }
+    if (active) {
+      return;
+    }
+    const file = chain.punchlist;
+    const mtimeOf = (): number => {
+      try {
+        return fs.statSync(file).mtimeMs;
+      } catch {
+        return 0;
+      }
+    };
+    try {
+      const watcher = fs.watch(path.dirname(file), { persistent: false }, (_eventType, filename) => {
+        if (filename && filename.toString() !== path.basename(file)) {
+          return;
+        }
+        const state = this.punchlistWatchers.get(chain.slug);
+        if (!state) {
+          return;
+        }
+        if (state.timer) {
+          clearTimeout(state.timer);
+        }
+        state.timer = setTimeout(() => {
+          state.timer = null;
+          const mtimeMs = mtimeOf();
+          if (mtimeMs === state.mtimeMs) {
+            return;
+          }
+          state.mtimeMs = mtimeMs;
+          const current = this.chains.get(chain.slug);
+          if (current) {
+            this.broadcastChainProgress(current);
+          }
+        }, PUNCHLIST_DEBOUNCE_MS);
+      });
+      watcher.on('error', (error) => {
+        log(`chain ${chain.slug}: punch list watch error: ${error.message}`);
+      });
+      this.punchlistWatchers.set(chain.slug, { watcher, timer: null, mtimeMs: mtimeOf() });
+    } catch (error) {
+      log(`chain ${chain.slug}: cannot watch punch list ${file}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**
@@ -484,6 +593,7 @@ class WatchdogService {
       chain.wakePending = true;
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
+      this.syncPunchlistWatcher(chain);
       this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: slug });
     } else {
       this.persistChain(chain);
@@ -1069,6 +1179,7 @@ class WatchdogService {
     chain.wakePending = true;
     this.persistChain(chain);
     this.broadcastChainProgress(chain);
+    this.syncPunchlistWatcher(chain);
     log(`chain ${chain.slug}: stopped by the liveness sweep`, { reason });
     this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: chain.slug });
   }

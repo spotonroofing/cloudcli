@@ -208,6 +208,50 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
+  // Amend a queued unit's task list (ui14 job 8): the planner folds a small
+  // addition into a not-yet-started job as an extra task and the jobs view
+  // shows the row at once. The executing or finished unit is refused.
+  router.post(
+    '/chains/:slug/phases/:phase/tasks',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const tasks = Array.isArray(body.tasks)
+        ? body.tasks.filter((task): task is string => typeof task === 'string' && task.trim() !== '').map((task) => task.trim())
+        : null;
+      const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : undefined;
+      const anchor = typeof body.anchor === 'string' && body.anchor.trim() ? body.anchor.trim() : undefined;
+      if (!tasks?.length && !name && !anchor) {
+        throw new AppError('tasks (non-empty string array), name, or anchor is required.', {
+          code: 'WATCHDOG_AMEND_FIELDS_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const phase = Number(req.params.phase);
+      if (!Number.isInteger(phase) || phase < 1) {
+        throw new AppError('phase must be a 1-based unit index.', {
+          code: 'WATCHDOG_AMEND_PHASE_INVALID',
+          statusCode: 400,
+        });
+      }
+      const slug = String(req.params.slug);
+      const result = watchdogService.amendChainPhase(slug, phase, { tasks: tasks?.length ? tasks : undefined, name, anchor });
+      if (result === 'unknown') {
+        throw new AppError(`Chain "${slug}" is not registered or has no manifest.`, {
+          code: 'WATCHDOG_CHAIN_UNKNOWN',
+          statusCode: 404,
+        });
+      }
+      if (result === 'not-queued') {
+        throw new AppError(`Unit ${phase} of chain "${slug}" is not a queued unit (already started, finished, or out of range).`, {
+          code: 'WATCHDOG_AMEND_NOT_QUEUED',
+          statusCode: 409,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, phase, tasks: tasks?.length ?? undefined }));
+    }),
+  );
+
   // The two fleet notification kinds; the planner's verified-done endpoint.
   router.post(
     '/notify',
