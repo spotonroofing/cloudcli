@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Mobile pass 2 -->
-<!-- tasks: One switcher, no scrolling header | Composer rides the iOS keyboard | Top and bottom padding right on iPhone 16 | Shell bound to the pane session, pre-trusted -->
+<!-- tasks: One switcher, no scrolling header | Sidebar fills the phone screen | Composer rides the iOS keyboard | Top and bottom padding right on iPhone 16 | Shell bound to the pane session, pre-trusted -->
 Execute Job 11 of PUNCHLIST_ui14.md in this repo (mobile pass 2: one switcher, keyboard-attached composer, bound shell). The goal and items are that job's section and checkboxes in PUNCHLIST_ui14.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
