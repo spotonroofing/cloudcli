@@ -139,3 +139,13 @@ Goal: mobile stops feeling like a different app. Willem is on an iPhone 16. File
 
 Done check: on dev at the iPhone 16 viewport (WebKit): no top strip in the DOM, the header does not scroll horizontally, the composer's bottom edge sits at the safe-area inset with no keyboard and at the visual viewport's bottom with the keyboard up (visualViewport-driven check), refocus leaves scrollTop unchanged, the shell view for a planner session shows that session's conversation without a trust prompt. Fresh-context subagent verification. Commit.
 
+## Job 12 — Sidebar rows: no orange dot, honest timestamps, marquee stops on leave (appended 2026-08-26)
+
+Goal: three sidebar row defects Willem hit today. Files: ChatRow and the sidebar row indicators, the session updated-time path (sessions watcher, label pass, watchdog touches), MarqueeLabel, DESIGN.md. Dependencies: none. Verify: yes (the timestamp item is wiring).
+
+- [ ] Remove the orange "session started without me" dot entirely; Willem is the only session creator, so the indicator has no meaning. Keep only the active-session bounce dot.
+- [ ] Row timestamps lie: chats untouched for days all read "1hr". Find what re-stamps their updated time (the sessions watcher re-indexing, watchdog wakes or rotation checks, a label pass writing the row) and make the timestamp reflect the last real message in that chat only; regression test.
+- [ ] Marquee hover: the rolling title scan runs only while the pointer is on the row; on leave it stops immediately and slides back to the start with a short ramped return, never a blink or a continued scroll after the mouse is gone.
+
+Done check: on dev: no orange indicator element exists on any row; a chat with an old last message keeps its real age after a watcher cycle, a watchdog sweep, and a label pass; pointer-leave on a scrolling title returns it to rest within the ramp duration (computed transform back to 0). Phone holds. Fresh-context subagent verification. Commit.
+
