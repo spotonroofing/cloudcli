@@ -15,6 +15,8 @@ export type WatchdogChainRow = {
   phase_active: number;
   /** Absolute path to the run's punch list file (ui11 phase 6); NULL when absent. */
   punchlist: string | null;
+  /** Per-job commit/timing metadata as JSON (ui13 job 14); NULL when none. */
+  job_meta: string | null;
 };
 
 export type WatchdogDispatchRunRow = {
@@ -39,8 +41,8 @@ export const watchdogDb = {
   upsertChain(row: WatchdogChainRow): void {
     const db = getConnection();
     db.prepare(`
-      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, manifest, phase_active, punchlist)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, manifest, phase_active, punchlist, job_meta)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(slug) DO UPDATE SET
         project_path = excluded.project_path,
         phases = excluded.phases,
@@ -51,7 +53,8 @@ export const watchdogDb = {
         last_summary_tail = excluded.last_summary_tail,
         manifest = excluded.manifest,
         phase_active = excluded.phase_active,
-        punchlist = excluded.punchlist
+        punchlist = excluded.punchlist,
+        job_meta = excluded.job_meta
     `).run(
       row.slug,
       row.project_path,
@@ -64,6 +67,7 @@ export const watchdogDb = {
       row.manifest,
       row.phase_active,
       row.punchlist,
+      row.job_meta,
     );
   },
 

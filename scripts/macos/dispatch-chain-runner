@@ -80,15 +80,18 @@ api_post() {
 # Every event carries projectPath and phases so a restarted server can
 # re-register the chain it lost with the event itself.
 event_body() {
-  # $1 event, $2 phase (or empty), $3 summaryTail json string (or empty)
-  python3 - "$1" "$2" "$3" "$REPO" "$TOTAL" <<'PYEOF'
+  # $1 event, $2 phase (or empty), $3 summaryTail json string (or empty),
+  # $4 commit short hash (or empty), $5 commit subject (or empty)
+  python3 - "$1" "$2" "$3" "$REPO" "$TOTAL" "${4:-}" "${5:-}" <<'PYEOF'
 import json, sys
-event, phase, tail, repo, total = sys.argv[1:6]
+event, phase, tail, repo, total, commit_hash, commit_subject = sys.argv[1:8]
 body = {'event': event, 'projectPath': repo, 'phases': int(total)}
 if phase:
     body['phase'] = int(phase)
 if tail:
     body['summaryTail'] = json.loads(tail)
+if commit_hash:
+    body['commit'] = {'hash': commit_hash, 'subject': commit_subject}
 print(json.dumps(body))
 PYEOF
 }
@@ -320,7 +323,10 @@ PYEOF
   fi
 
   journal "phase $PHASE_NUM/$TOTAL" "end" "$(git -C "$REPO" log -1 --format=%h\ %s)"
-  api_post "/api/watchdog/chains/$SLUG/events" "$(event_body phase-end $PHASE_NUM '')" 3
+  # The phase-end event carries the job's commit (ui13 job 14) so the jobs
+  # view can show what each job shipped.
+  api_post "/api/watchdog/chains/$SLUG/events" \
+    "$(event_body phase-end $PHASE_NUM '' "$(git -C "$REPO" log -1 --format=%h)" "$(git -C "$REPO" log -1 --format=%s)")" 3
   pickup_appends
 done
 

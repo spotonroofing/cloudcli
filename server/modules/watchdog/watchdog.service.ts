@@ -29,6 +29,20 @@ export type ChainManifestEntry = {
   anchor?: string;
 };
 
+/**
+ * Per-job commit and timing metadata (ui13 job 14), keyed by 1-based unit
+ * index on the chain record. Timestamps are epoch ms. `taskTimes[i]` is when
+ * the watchdog observed task i checked off in the punch list; null marks a
+ * check-off whose time is unknown (observed while the unit was not live).
+ */
+export type ChainJobMeta = {
+  startedAt?: number;
+  endedAt?: number;
+  commitHash?: string;
+  commitSubject?: string;
+  taskTimes?: (number | null)[];
+};
+
 type ChainRecord = {
   slug: string;
   projectPath: string;
@@ -44,6 +58,8 @@ type ChainRecord = {
   phaseActive: boolean;
   /** Absolute path to the run's punch list file; null when not supplied. */
   punchlist: string | null;
+  /** Per-job commit/timing metadata by 1-based unit index (ui13 job 14). */
+  jobs: Record<number, ChainJobMeta>;
 };
 
 type DispatchRunRecord = {
@@ -86,8 +102,9 @@ type ChainSnapshot = {
   phases: number | null;
   currentPhase: number | null;
   phaseActive: boolean;
-  /** Manifest entries with the punch-list `done` count folded in per unit. */
-  manifest: (ChainManifestEntry & { done: number | null })[] | null;
+  /** Manifest entries with the punch-list `done` count and the unit's commit
+   *  and timing metadata (ui13 job 14) folded in per unit. */
+  manifest: (ChainManifestEntry & { done: number | null } & ChainJobMeta)[] | null;
   startedAt: number;
   lastEventAt: number;
 };
@@ -165,6 +182,7 @@ class WatchdogService {
           manifest: parseManifest(row.manifest),
           phaseActive: Boolean(row.phase_active),
           punchlist: row.punchlist,
+          jobs: parseJobMeta(row.job_meta),
         });
       }
       for (const row of watchdogDb.listDispatchRuns()) {
@@ -202,6 +220,7 @@ class WatchdogService {
         manifest: chain.manifest ? JSON.stringify(chain.manifest) : null,
         phase_active: chain.phaseActive ? 1 : 0,
         punchlist: chain.punchlist,
+        job_meta: Object.keys(chain.jobs).length ? JSON.stringify(chain.jobs) : null,
       });
     } catch (error) {
       log(`chain persist failed for ${chain.slug}: ${error instanceof Error ? error.message : String(error)}`);
@@ -255,6 +274,7 @@ class WatchdogService {
       manifest: input.manifest ?? existing?.manifest ?? null,
       phaseActive: false,
       punchlist,
+      jobs: existing?.jobs ?? {},
     };
     this.chains.set(input.slug, chain);
     this.persistChain(chain);
@@ -276,6 +296,25 @@ class WatchdogService {
     this.persistChain(chain);
     this.broadcastChainProgress(chain);
     log(`chain ${slug}: manifest updated in place (${manifest.length} entries)`);
+    return true;
+  }
+
+  /**
+   * Merges per-job commit/timing metadata into a chain (ui13 job 14): the
+   * backfill path for jobs whose phase-end event predates the commit-carrying
+   * runner. Supplied fields overwrite per job; untouched jobs keep theirs.
+   */
+  updateChainJobs(slug: string, jobs: Record<number, ChainJobMeta>): boolean {
+    const chain = this.chains.get(slug);
+    if (!chain) {
+      return false;
+    }
+    for (const [index, meta] of Object.entries(jobs)) {
+      chain.jobs[Number(index)] = { ...chain.jobs[Number(index)], ...meta };
+    }
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    log(`chain ${slug}: job metadata updated for ${Object.keys(jobs).length} job(s)`);
     return true;
   }
 
@@ -303,11 +342,43 @@ class WatchdogService {
     return true;
   }
 
+  /**
+   * Task boundaries from check-off detection (ui13 job 14): when a unit's
+   * punch-list done count has advanced past its recorded task times, stamp
+   * the newly checked tasks. Only the live unit (running, phaseActive,
+   * currentPhase) gets a real timestamp — a count that moved while the unit
+   * was not observably live records null, never an invented time. Units
+   * whose phase-start the watchdog never saw have no taskTimes array and
+   * are left alone entirely.
+   */
+  private observeTaskCheckoffs(chain: ChainRecord, doneCounts: (number | null)[] | null): void {
+    if (!doneCounts) {
+      return;
+    }
+    let changed = false;
+    for (let i = 0; i < doneCounts.length; i++) {
+      const count = doneCounts[i];
+      const meta = chain.jobs[i + 1];
+      if (count == null || !meta?.taskTimes) {
+        continue;
+      }
+      const live = chain.status === 'running' && chain.phaseActive && chain.currentPhase === i + 1;
+      while (meta.taskTimes.length < count) {
+        meta.taskTimes.push(live ? Date.now() : null);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.persistChain(chain);
+    }
+  }
+
   private chainSnapshot(chain: ChainRecord): ChainSnapshot {
     // Per-unit done counts come from the punch list file, re-read here on
     // every snapshot — so each chain event's broadcast and each worker-runs
     // fetch (the 20s poll catches mid-phase commits) carries fresh counts.
     const doneCounts = punchlistDoneCounts(chain.punchlist, chain.manifest);
+    this.observeTaskCheckoffs(chain, doneCounts);
     return {
       slug: chain.slug,
       projectPath: chain.projectPath,
@@ -316,7 +387,7 @@ class WatchdogService {
       currentPhase: chain.currentPhase,
       phaseActive: chain.phaseActive,
       manifest: chain.manifest
-        ? chain.manifest.map((entry, i) => ({ ...entry, done: doneCounts?.[i] ?? null }))
+        ? chain.manifest.map((entry, i) => ({ ...entry, done: doneCounts?.[i] ?? null, ...(chain.jobs[i + 1] ?? {}) }))
         : null,
       startedAt: chain.startedAt,
       lastEventAt: chain.lastEventAt,
@@ -336,7 +407,7 @@ class WatchdogService {
   chainEvent(
     slug: string,
     event: 'phase-start' | 'phase-end' | 'limit' | 'completed' | 'stopped' | 'failed',
-    detail?: { phase?: number; summaryTail?: string },
+    detail?: { phase?: number; summaryTail?: string; commit?: { hash: string; subject: string } },
   ): boolean {
     const chain = this.chains.get(slug);
     if (!chain) {
@@ -345,6 +416,21 @@ class WatchdogService {
     chain.lastEventAt = Date.now();
     if (typeof detail?.phase === 'number') {
       chain.currentPhase = detail.phase;
+      // Per-job boundaries (ui13 job 14): phase-start anchors the job's
+      // duration and its task-timing observations; phase-end closes it and
+      // records the job's commit from the runner. A limit-retry's fresh
+      // phase-start re-anchors — the successful attempt is what's timed.
+      const meta = chain.jobs[detail.phase] ?? (chain.jobs[detail.phase] = {});
+      if (event === 'phase-start') {
+        meta.startedAt = Date.now();
+        meta.taskTimes = [];
+      } else if (event === 'phase-end') {
+        meta.endedAt = Date.now();
+        if (detail.commit) {
+          meta.commitHash = detail.commit.hash;
+          meta.commitSubject = detail.commit.subject;
+        }
+      }
     }
     if (detail?.summaryTail) {
       chain.lastSummaryTail = detail.summaryTail.slice(-2000);
@@ -1127,6 +1213,52 @@ export function parseManifest(value: unknown): ChainManifestEntry[] | null {
     entries.push({ name, tasks, kind: entry?.kind === 'task' ? 'task' : 'phase', ...(anchor ? { anchor } : {}) });
   }
   return entries.length ? entries : null;
+}
+
+/**
+ * Normalizes an untrusted job-meta value (DB JSON or request body) into a
+ * clean 1-based index → metadata map, dropping anything malformed.
+ */
+export function parseJobMeta(value: unknown): Record<number, ChainJobMeta> {
+  let raw = value;
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+  const jobs: Record<number, ChainJobMeta> = {};
+  for (const [key, item] of Object.entries(raw as Record<string, unknown>)) {
+    const index = Number(key);
+    if (!Number.isInteger(index) || index < 1 || !item || typeof item !== 'object') {
+      continue;
+    }
+    const entry = item as Record<string, unknown>;
+    const meta: ChainJobMeta = {};
+    if (Number.isFinite(Number(entry.startedAt))) {
+      meta.startedAt = Number(entry.startedAt);
+    }
+    if (Number.isFinite(Number(entry.endedAt))) {
+      meta.endedAt = Number(entry.endedAt);
+    }
+    if (typeof entry.commitHash === 'string' && entry.commitHash.trim()) {
+      meta.commitHash = entry.commitHash.trim();
+    }
+    if (typeof entry.commitSubject === 'string' && entry.commitSubject.trim()) {
+      meta.commitSubject = entry.commitSubject.trim();
+    }
+    if (Array.isArray(entry.taskTimes)) {
+      meta.taskTimes = entry.taskTimes.map((t) => (Number.isFinite(Number(t)) && t !== null ? Number(t) : null));
+    }
+    if (Object.keys(meta).length) {
+      jobs[index] = meta;
+    }
+  }
+  return jobs;
 }
 
 /**

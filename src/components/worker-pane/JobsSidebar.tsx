@@ -1,4 +1,4 @@
-import { ChevronDown, MessageSquare, Milestone } from 'lucide-react';
+import { ChevronDown, GitCommitHorizontal, MessageSquare, Milestone } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -18,6 +18,13 @@ export type ChainManifestEntry = {
   anchor?: string;
   /** Tasks checked off in the run's punch list; null when uncountable. */
   done?: number | null;
+  /** Job boundaries, commit, and task check-off times (ui13 job 14); absent
+   *  where the watchdog never observed them (historical runs). */
+  startedAt?: number;
+  endedAt?: number;
+  commitHash?: string;
+  commitSubject?: string;
+  taskTimes?: (number | null)[];
 };
 
 /** The watchdog's live chain snapshot (worker-runs response / chain_progress). */
@@ -42,6 +49,12 @@ type Unit = {
   status: TodoListItemStatus;
   /** Punch-list done count; null hides the row counter (no manifest counts). */
   done: number | null;
+  /** Commit and timing metadata for the drawer footer (ui13 job 14). */
+  startedAt?: number;
+  endedAt?: number;
+  commitHash?: string;
+  commitSubject?: string;
+  taskTimes?: (number | null)[];
 };
 
 function chainUnits(chain: ChainSnapshot): Unit[] {
@@ -62,8 +75,105 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
     } else if (index === current) {
       status = chain.status === 'running' ? 'in-progress' : 'cancelled';
     }
-    return { index, name: entry.name, tasks: entry.tasks, kind: entry.kind, status, done: entry.done ?? null };
+    return {
+      index,
+      name: entry.name,
+      tasks: entry.tasks,
+      kind: entry.kind,
+      status,
+      done: entry.done ?? null,
+      startedAt: entry.startedAt,
+      endedAt: entry.endedAt,
+      commitHash: entry.commitHash,
+      commitSubject: entry.commitSubject,
+      taskTimes: entry.taskTimes,
+    };
   });
+}
+
+/** The footer's "1m 50s" duration format; hour-long jobs read "1h 4m". */
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  if (minutes < 60) {
+    const seconds = totalSeconds % 60;
+    return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+/**
+ * A completed task's duration from the watchdog's check-off times (ui13 job
+ * 14): task i runs from the previous check-off (job start for the first) to
+ * its own. Null where the data genuinely does not exist — historical runs, or
+ * check-offs the watchdog only observed after the fact.
+ */
+function taskDurationMs(unit: Unit, taskIndex: number): number | null {
+  const end = unit.taskTimes?.[taskIndex];
+  if (end == null) {
+    return null;
+  }
+  const start = taskIndex === 0 ? unit.startedAt : unit.taskTimes?.[taskIndex - 1];
+  if (start == null) {
+    return null;
+  }
+  return end - start;
+}
+
+/** Live elapsed counter for a running job's footer: ticks from its start event. */
+function LiveElapsed({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return <>{formatDuration(now - startedAt)}</>;
+}
+
+/**
+ * Commit footer on a job's drawer (ui13 job 14), directly after its last task
+ * row: what the job shipped — short hash + commit subject (marquee when long)
+ * — with the job's total duration right-aligned in the tasks' meta style, all
+ * monochromatic. A running job shows the footer with a live elapsed counter
+ * that settles into the final duration at completion; idle jobs show none.
+ */
+function JobFooter({ unit }: { unit: Unit }) {
+  const [hovered, setHovered] = useState(false);
+  // A just-ended job reads in-progress until the next phase starts; endedAt
+  // is what settles the ticking counter into the final duration.
+  const running = unit.status === 'in-progress';
+  const showCommit = Boolean(unit.commitHash);
+  const showElapsed = running && unit.startedAt != null && unit.endedAt == null;
+  if (!showCommit && !showElapsed) {
+    return null;
+  }
+  const duration = unit.startedAt != null && unit.endedAt != null ? unit.endedAt - unit.startedAt : null;
+  return (
+    <li
+      data-slot="jobs-sidebar-job-footer"
+      data-live={showElapsed ? 'true' : undefined}
+      data-commit={unit.commitHash}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="flex min-h-5 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground/60"
+    >
+      <GitCommitHorizontal className="h-3 w-3 flex-shrink-0 scale-[0.9]" aria-hidden="true" />
+      {showCommit && (
+        <>
+          <span className="flex-shrink-0 font-mono text-[10px] tabular-nums">{unit.commitHash}</span>
+          <MarqueeLabel active={hovered} className="flex-1">
+            {unit.commitSubject ?? ''}
+          </MarqueeLabel>
+        </>
+      )}
+      <span className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/50">
+        {showElapsed ? <LiveElapsed startedAt={unit.startedAt!} /> : duration != null ? formatDuration(duration) : null}
+      </span>
+    </li>
+  );
 }
 
 /**
@@ -434,6 +544,9 @@ export default function JobsSidebar({
                     <ul className="pb-0.5 pl-9">
                       {unit.tasks.map((task, taskIndex) => {
                         const status = taskStatus(unit, taskIndex);
+                        // Per-task duration (ui13 job 14): completed tasks
+                        // only, and only where the timing honestly exists.
+                        const duration = status === 'completed' ? taskDurationMs(unit, taskIndex) : null;
                         return (
                           <li
                             key={`${unit.index}-${taskIndex}`}
@@ -441,7 +554,7 @@ export default function JobsSidebar({
                             data-status={status}
                             className={cn(
                               'flex min-h-5 items-center gap-1.5 text-[11px] leading-4',
-                              status === 'completed' && 'text-muted-foreground/45 line-through',
+                              status === 'completed' && 'text-muted-foreground/45',
                               status === 'in-progress' && 'text-foreground',
                               status === 'pending' && 'text-muted-foreground/50',
                               // The working task row breathes (ui12 job 8).
@@ -451,10 +564,23 @@ export default function JobsSidebar({
                             <span className="flex-shrink-0 scale-[0.7]">
                               <TodoStatusIcon status={status} />
                             </span>
-                            <span className="min-w-0 truncate">{task}</span>
+                            {/* Strike the task text only — the trailing
+                                duration meta stays unstruck. */}
+                            <span className={cn('min-w-0 truncate', status === 'completed' && 'line-through')}>
+                              {task}
+                            </span>
+                            {duration != null && (
+                              <span
+                                data-slot="jobs-sidebar-task-duration"
+                                className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/45"
+                              >
+                                {formatDuration(duration)}
+                              </span>
+                            )}
                           </li>
                         );
                       })}
+                      <JobFooter unit={unit} />
                     </ul>
                   </AgentDisclosure>
                 )}

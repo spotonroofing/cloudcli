@@ -214,6 +214,10 @@ CREATE TABLE IF NOT EXISTS watchdog_chains (
     -- Absolute path to the run's punch list file (ui11 phase 6); per-phase
     -- done counts are read from its checked-off boxes. NULL when not supplied.
     punchlist TEXT,
+    -- Per-job metadata keyed by 1-based unit index (ui13 job 14): JSON object
+    -- of {startedAt, endedAt, commitHash, commitSubject, taskTimes[]} — the
+    -- jobs view's commit footer and duration data. NULL when none recorded.
+    job_meta TEXT,
     -- 1 while a phase session is actually running (between phase-start and
     -- phase-end/terminal), so run state never reads from a stale session row.
     phase_active INTEGER NOT NULL DEFAULT 0

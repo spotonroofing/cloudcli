@@ -4,7 +4,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { apiKeysDb, sessionsDb } from '@/modules/database/index.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
-import { parseManifest, watchdogService } from './watchdog.service.js';
+import { parseJobMeta, parseManifest, watchdogService } from './watchdog.service.js';
 
 /**
  * Watchdog surface (spec B3/B4): the dispatch CLI registers chains and posts
@@ -69,9 +69,15 @@ export function createWatchdogRouter(): express.Router {
         });
       }
       const slug = String(req.params.slug);
+      // phase-end carries the job's commit since ui13 job 14.
+      const commitBody = body.commit as { hash?: unknown; subject?: unknown } | undefined;
+      const commit = commitBody && typeof commitBody.hash === 'string' && commitBody.hash.trim()
+        ? { hash: commitBody.hash.trim(), subject: typeof commitBody.subject === 'string' ? commitBody.subject.trim() : '' }
+        : undefined;
       const detail = {
         phase: Number.isFinite(Number(body.phase)) ? Number(body.phase) : undefined,
         summaryTail: typeof body.summaryTail === 'string' ? body.summaryTail : undefined,
+        commit,
       };
       const eventName = event as 'phase-start' | 'phase-end' | 'limit' | 'completed' | 'stopped' | 'failed';
       let known = watchdogService.chainEvent(slug, eventName, detail);
@@ -148,6 +154,31 @@ export function createWatchdogRouter(): express.Router {
         });
       }
       res.json(createApiSuccessResponse({ slug, entries: entries.length }));
+    }),
+  );
+
+  // Per-job commit/timing backfill (ui13 job 14): merges metadata for jobs
+  // whose phase-end event passed before the runner carried commits.
+  router.patch(
+    '/chains/:slug/jobs',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const jobs = parseJobMeta(body.jobs);
+      if (!Object.keys(jobs).length) {
+        throw new AppError('jobs must map 1-based indexes to {startedAt?, endedAt?, commitHash?, commitSubject?, taskTimes?}.', {
+          code: 'WATCHDOG_JOB_META_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const slug = String(req.params.slug);
+      if (!watchdogService.updateChainJobs(slug, jobs)) {
+        throw new AppError(`Chain "${slug}" is not registered.`, {
+          code: 'WATCHDOG_CHAIN_UNKNOWN',
+          statusCode: 404,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, jobs: Object.keys(jobs).length }));
     }),
   );
 

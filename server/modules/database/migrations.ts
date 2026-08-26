@@ -482,6 +482,7 @@ const addWatchdogChainManifestColumns = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'manifest', 'TEXT');
   addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'phase_active', 'INTEGER NOT NULL DEFAULT 0');
   addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'punchlist', 'TEXT');
+  addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'job_meta', 'TEXT');
 };
 
 /**
