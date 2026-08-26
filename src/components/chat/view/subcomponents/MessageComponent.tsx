@@ -13,7 +13,7 @@ import type {
 import { extractExternalLinks, formatUsageLimitText, stripProposedPlanEnvelope } from '../../utils/chatFormatting';
 import type { Project } from '../../../../types/app';
 import { ToolRenderer, ToolErrorDisplay, ResearchDisplay, shouldHideToolResult } from '../../tools';
-import { AgentDisclosure, MESSAGE_POP_UP, StreamingResponse, Thinking, useStreamedReveal } from '../../../../shared/view/beui';
+import { AgentDisclosure, MESSAGE_POP_UP, SPRING_SWAP, StreamingResponse, Thinking, useStreamedReveal } from '../../../../shared/view/beui';
 import { Citations } from '../../../../shared/view/beui/Citations';
 import { Button } from '../../../../shared/view/ui';
 
@@ -42,8 +42,9 @@ type MessageComponentProps = {
   showThinking?: boolean;
   selectedProject?: Project | null;
   provider: Provider | string;
-  /** The user prompt that produced this assistant turn; enables the rerun action. */
-  rerunContent?: string;
+  /** True when this is the turn's final assistant text — the only assistant row that carries copy + timestamp. */
+  isTurnFinal?: boolean;
+  /** Rerun on user rows: resends that row's own prompt through the submit path. */
   onRerun?: (content: string, event: ReactMouseEvent) => void;
   /** Pencil on user turns: opens the inline transcript editor on that bubble. */
   onEditMessage?: (message: ChatMessage) => void;
@@ -77,8 +78,10 @@ export const META_REVEAL_CLASS = 'transition-opacity duration-200 opacity-0 grou
 export function InterruptedMarker() {
   const { t } = useTranslation('chat');
   return (
-    <div data-slot="interrupted-marker" className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground/80">
-      <Ban className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+    <div data-slot="interrupted-marker" className="flex min-h-7 items-center gap-2 py-0.5 text-[11px] text-muted-foreground/80">
+      <span className="grid size-4 shrink-0 place-items-center" aria-hidden="true">
+        <Ban className="size-3.5" />
+      </span>
       <span>{t('interrupted', { defaultValue: 'Interrupted' })}</span>
     </div>
   );
@@ -98,7 +101,7 @@ export function MemoryUpdatedMarker({ files }: { files: string[] }) {
       <Thinking
         mode="coding"
         working={false}
-        icon={<BookMarked aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
+        icon={<BookMarked aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />}
         activeLabel={t('memoryUpdated', { defaultValue: 'Memory updated' })}
         doneLabel={t('memoryUpdated', { defaultValue: 'Memory updated' })}
         rows={files.map((file) => ({ key: file, primary: file }))}
@@ -152,36 +155,53 @@ function AssistantCitations({ content }: { content: string }) {
  * default. Identical for live optimistic echoes and reloaded transcripts.
  */
 function UserCommandBubble({ message }: { message: ChatMessage }) {
-  const { t } = useTranslation('chat');
+  const reduce = useReducedMotion() ?? false;
   const [expanded, setExpanded] = useState(false);
   const body = String(message.commandBody || '');
   const description = String(message.commandMessage || '').trim();
+  const hasBody = body.trim().length > 0;
+  const toggle = () => {
+    if (hasBody) setExpanded((previous) => !previous);
+  };
 
   return (
     <div
       data-slot="command-bubble"
       className="max-w-full rounded-lg bg-secondary px-3 py-2 text-secondary-foreground sm:px-4"
     >
-      <div className="flex min-w-0 items-center gap-2">
+      {/* Whole header toggles, like every expandable row (Bash reference);
+          the chevron sits in the shared size-4 trailing slot. */}
+      <div
+        role={hasBody ? 'button' : undefined}
+        tabIndex={hasBody ? 0 : undefined}
+        aria-expanded={hasBody ? expanded : undefined}
+        onClick={toggle}
+        onKeyDown={(event) => {
+          if (hasBody && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            toggle();
+          }
+        }}
+        className={`flex min-w-0 items-center gap-2 outline-none ${hasBody ? 'cursor-pointer rounded-md focus-visible:ring-2 focus-visible:ring-ring' : ''}`}
+      >
         <span className="whitespace-nowrap font-mono text-sm">{message.content}</span>
         {description && (
           <span className="min-w-0 truncate text-xs text-muted-foreground">{description}</span>
         )}
-        {body.trim() && (
-          <button
-            type="button"
-            onClick={() => setExpanded((previous) => !previous)}
-            aria-expanded={expanded}
-            aria-label={t('commandBubble.toggle', { defaultValue: 'Show command text' })}
-            className="touch-hit relative -mr-1 ml-auto flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronDown
-              className={`h-3.5 w-3.5 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-            />
-          </button>
+        {hasBody && (
+          <span className="touch-hit relative ml-auto grid size-4 flex-shrink-0 place-items-center">
+            <motion.span
+              aria-hidden="true"
+              animate={{ rotate: expanded ? 180 : 0 }}
+              transition={reduce ? { duration: 0 } : SPRING_SWAP}
+              className="text-muted-foreground/50"
+            >
+              <ChevronDown className="size-3.5" />
+            </motion.span>
+          </span>
         )}
       </div>
-      {body.trim() && (
+      {hasBody && (
         <AgentDisclosure open={expanded}>
           <div className="mt-2 max-h-[280px] overflow-y-auto rounded-lg bg-muted/80 p-2">
             <pre className="whitespace-pre-wrap break-words font-mono text-xs text-foreground">{body}</pre>
@@ -268,7 +288,7 @@ function UserMessageEditor({ initialText, onCancel, onSave }: {
   );
 }
 
-const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, rerunContent, onRerun, onEditMessage, editingMessageId, onSaveEditMessage, onCancelEditMessage }: MessageComponentProps) => {
+const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, isTurnFinal, onRerun, onEditMessage, editingMessageId, onSaveEditMessage, onCancelEditMessage }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   const reduceMotion = useReducedMotion() ?? false;
   // Evaluated once per mount: a row that pops in must not replay on re-render.
@@ -379,8 +399,8 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                 onSave={(text) => onSaveEditMessage?.(message, text)}
               />
             ) : userCopyContent.trim().length > 0 || (!message.images?.length && !message.files?.length) ? (
-              /* Meta (copy + timestamp) sits below the bubble, outside it; the
-                 hover fades key off the row-level `group` on the message root */
+              /* Meta (edit pencil, copy, rerun) sits below the bubble, outside it;
+                 the hover fades key off the row-level `group` on the message root */
               <>
                 {message.isLocalCommand ? (
                   <UserCommandBubble message={message} />
@@ -413,15 +433,23 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                   {shouldShowUserCopyControl && (
                     <MessageCopyControl content={userCopyContent} messageType="user" />
                   )}
-                  <span className={META_REVEAL_CLASS}>{formattedTime}</span>
+                  {shouldShowUserCopyControl && !message.isLocalCommand && onRerun && (
+                    /* Rerun this prompt: resend it through the submit path (ui13 job 13) */
+                    <div className={`relative flex items-center ${META_REVEAL_CLASS}`}>
+                      <button
+                        type="button"
+                        onClick={(event) => onRerun(userCopyContent, event)}
+                        title={t('rerunMessage', { defaultValue: 'Rerun' })}
+                        aria-label={t('rerunMessage', { defaultValue: 'Rerun' })}
+                        className="inline-flex items-center rounded px-1 py-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
-            ) : (
-              /* Attachment-only turn: no text bubble, but the timestamp still shows on hover */
-              <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
-                <span className={META_REVEAL_CLASS}>{formattedTime}</span>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
       ) : message.isTaskNotification ? (
@@ -477,7 +505,6 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                     toolInput={message.toolInput}
                     toolResult={message.toolResult}
                     toolId={message.toolId}
-                    timestamp={formattedTime}
                     mode="input"
                     onFileOpen={onFileOpen}
                     createDiff={createDiff}
@@ -609,9 +636,6 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                 <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
                   {message.content}
                 </Markdown>
-                <div className="mt-2 flex items-center text-[11px]">
-                  <MessageCopyControl content={String(message.content || '')} messageType="assistant" />
-                </div>
               </Thinking>
             ) : (
               <div dir="auto" className="text-sm text-gray-700 dark:text-gray-300">
@@ -684,36 +708,17 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
               </div>
             )}
 
-            {/* Tool rows never render the meta line — the timestamp lives on the
-                tool row itself (Bash description line) and a lone timestamp row
-                would break the tight tool-row packing. */}
-            {!message.isToolUse && (shouldShowAssistantCopyControl || !isGrouped) && (
+            {/* Action-button law (ui13 job 13): only the turn's FINAL assistant
+                text carries a meta line — copy and timestamp, hover-revealed.
+                Intermediate assistant texts, error rows, and every tool row
+                carry nothing; assistant rows never get rerun. */}
+            {!message.isToolUse && isTurnFinal && shouldShowAssistantCopyControl && (
               <div className="mt-1 flex w-full items-center gap-2 text-[11px] text-gray-400 dark:text-gray-500">
-                {shouldShowAssistantCopyControl && (
-                  <MessageCopyControl content={assistantCopyContent} messageType="assistant" />
-                )}
-                {shouldShowAssistantCopyControl && (
-                  <MessageSpeakControl content={assistantCopyContent} />
-                )}
-                {shouldShowAssistantCopyControl && !message.isStreaming && onRerun && rerunContent && (
-                  /* Rerun: send the prompt that produced this turn again (beautifului action row) */
-                  <div className={`relative flex items-center ${META_REVEAL_CLASS}`}>
-                    <button
-                      type="button"
-                      onClick={(event) => onRerun(rerunContent, event)}
-                      title={t('rerunMessage', { defaultValue: 'Rerun' })}
-                      aria-label={t('rerunMessage', { defaultValue: 'Rerun' })}
-                      className="inline-flex items-center rounded px-1 py-0.5 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                )}
-                {!isGrouped && (
-                  <span className={`ml-auto ${META_REVEAL_CLASS}`}>
-                    {formattedTime}
-                  </span>
-                )}
+                <MessageCopyControl content={assistantCopyContent} messageType="assistant" />
+                <MessageSpeakControl content={assistantCopyContent} />
+                <span className={`ml-auto ${META_REVEAL_CLASS}`}>
+                  {formattedTime}
+                </span>
               </div>
             )}
           </div>

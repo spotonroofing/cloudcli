@@ -120,7 +120,7 @@ export default function ToolGroupContainer({
     >
       <button
         type="button"
-        className="group flex min-h-9 w-full items-center gap-2 rounded-md py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group flex min-h-7 w-full items-center gap-2 rounded-md py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() => setIsExpanded((current) => !current)}
         aria-expanded={isExpanded}
       >
@@ -143,7 +143,9 @@ export default function ToolGroupContainer({
         ) : (
           <span className="min-w-0 shrink-0 text-xs font-medium text-foreground/90">{label}</span>
         )}
-        <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        {/* Plain count, never a chip (DESIGN.md tool-row law) — same meta cut
+            as the Bash row's line count. */}
+        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
           x{group.messages.length}
         </span>
         {preview && (

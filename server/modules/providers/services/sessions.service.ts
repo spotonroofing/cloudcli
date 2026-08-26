@@ -150,11 +150,13 @@ export const sessionsService = {
    * This is intentionally status-only: callers that only need sidebar activity
    * indicators should not attach to chat streams or request replayed messages.
    */
-  listRunningSessions(): Array<{
+  listRunningSessions(extraRuns: Array<{ sessionId: string; provider: string; startedAt: number }> = []): Array<{
     sessionId: string;
     provider: LLMProvider;
     startedAt: number;
     lastSeq: number;
+    /** False for externally-driven runs the composer's stop button cannot abort. */
+    canInterrupt?: boolean;
     origin: 'planner' | 'direct' | 'dispatch' | 'external' | 'maintenance' | null;
     projectId: string | null;
     projectDisplayName: string | null;
@@ -166,7 +168,18 @@ export const sessionsService = {
     // DB so the sidebar can split planner vs worker activity, shimmer project
     // rows, and label the counter-drawer rows (ui11 phase 12) without
     // attaching to any chat stream.
-    return chatRunRegistry.listRunningRuns().map((run) => {
+    const registryRuns = chatRunRegistry.listRunningRuns();
+    // Externally-driven runs (dispatched chains, ui13 job 13) merge in behind
+    // the registry so the worker pane's activity indicator covers them too;
+    // they cannot be aborted from the composer, hence canInterrupt false.
+    const registryIds = new Set(registryRuns.map((run: { sessionId: string }) => run.sessionId));
+    const merged = [
+      ...registryRuns,
+      ...extraRuns
+        .filter((run) => !registryIds.has(run.sessionId))
+        .map((run) => ({ ...run, provider: run.provider as LLMProvider, lastSeq: 0, canInterrupt: false })),
+    ];
+    return merged.map((run) => {
       const row = sessionsDb.getSessionById(run.sessionId);
       const projectPath = row?.project_path && !isScratchProjectPath(row.project_path)
         ? row.project_path

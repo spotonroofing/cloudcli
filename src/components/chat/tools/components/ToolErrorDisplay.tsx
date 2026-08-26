@@ -49,26 +49,28 @@ export const ToolErrorDisplay: React.FC<ToolErrorDisplayProps> = ({ content, lab
           hasContent && 'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring',
         )}
       >
-        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-rose-600 dark:text-rose-400">
-          <CircleX className="size-3" />
-          {label}
+        <span className="grid size-4 shrink-0 place-items-center text-rose-600 dark:text-rose-400">
+          <CircleX className="size-3.5" />
         </span>
+        <span className="shrink-0 text-xs font-medium text-rose-600 dark:text-rose-400">{label}</span>
         {!open && hasContent && (
           /* Not a <code>/<pre> tag: the global `.chat-message code` rule forces
              `white-space: pre-wrap !important`, which would defeat `truncate`. */
-          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70">
             {trimmedContent}
           </span>
         )}
         {hasContent && (
-          <motion.span
-            aria-hidden="true"
-            animate={{ rotate: open ? 180 : 0 }}
-            transition={reduce ? { duration: 0 } : SPRING_SWAP}
-            className="ml-auto shrink-0 text-muted-foreground/50"
-          >
-            <ChevronDown className="size-3.5" />
-          </motion.span>
+          <span className="ml-auto grid size-4 shrink-0 place-items-center">
+            <motion.span
+              aria-hidden="true"
+              animate={{ rotate: open ? 180 : 0 }}
+              transition={reduce ? { duration: 0 } : SPRING_SWAP}
+              className="text-muted-foreground/50"
+            >
+              <ChevronDown className="size-3.5" />
+            </motion.span>
+          </span>
         )}
       </div>
 

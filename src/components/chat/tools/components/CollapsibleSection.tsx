@@ -19,10 +19,11 @@ interface CollapsibleSectionProps {
 
 /**
  * Tool-row disclosure in the beUI tool-result treatment (beui.dev/components/
- * agents/tool-result): a min-height header row — leading status icon, tool
+ * agents/tool-result): a min-height header row — leading status slot, tool
  * name, mono title — with a spring-rotated chevron on the right, revealing the
- * content through AgentDisclosure with a left indent. When there's a clickable
- * title (Edit/Write), only the row toggles and the title opens the file.
+ * content through AgentDisclosure with a left indent. The whole row toggles
+ * (Bash reference anatomy, ui13 job 13); a clickable title (Edit/Write) opens
+ * the file without toggling.
  */
 export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   title,
@@ -50,29 +51,43 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
     </motion.span>
   );
 
+  // Leading slot mirrors the Bash row's `$` slot: always reserved so the
+  // label column never shifts with status changes.
+  const statusSlot = (
+    <span className="grid size-4 shrink-0 place-items-center">{statusIcon}</span>
+  );
+
   return (
     <div className={cn('w-full text-sm', className)}>
       {onTitleClick ? (
-        <div className="group/section flex min-h-7 w-full select-none items-center gap-2 py-0.5 text-xs">
-          {statusIcon}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={isOpen}
+          onClick={() => setIsOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setIsOpen((current) => !current);
+            }
+          }}
+          className="group/section flex min-h-7 w-full cursor-pointer select-none items-center gap-2 rounded-md py-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {statusSlot}
           {toolName && (
             <span className="shrink-0 font-medium text-foreground/90">{toolName}</span>
           )}
           <button
-            onClick={onTitleClick}
+            onClick={(event) => {
+              event.stopPropagation();
+              onTitleClick();
+            }}
             className="min-w-0 truncate text-left font-mono text-[11px] text-primary transition-colors hover:text-primary/80 hover:underline"
           >
             {title}
           </button>
           {action && <span className="shrink-0">{action}</span>}
-          <button
-            type="button"
-            aria-expanded={isOpen}
-            onClick={() => setIsOpen((current) => !current)}
-            className="ml-auto flex shrink-0 items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {chevron}
-          </button>
+          <span className="ml-auto flex shrink-0 items-center">{chevron}</span>
         </div>
       ) : (
         <button
@@ -81,7 +96,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           onClick={() => setIsOpen((current) => !current)}
           className="group/section flex min-h-7 w-full select-none items-center gap-2 rounded-md py-0.5 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {statusIcon}
+          {statusSlot}
           {toolName && (
             <span className="shrink-0 font-medium text-foreground/90">{toolName}</span>
           )}

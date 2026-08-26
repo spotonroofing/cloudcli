@@ -96,7 +96,7 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
   const resultText = isComplete && toolResult ? extractResultText(toolResult.content) : null;
 
   return (
-    <div className="my-1 py-0.5">
+    <div className="my-0.5">
       <Thinking
         mode="steps"
         working={!isComplete}

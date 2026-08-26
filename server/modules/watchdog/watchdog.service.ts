@@ -263,6 +263,23 @@ class WatchdogService {
   }
 
   /**
+   * Replaces a chain's manifest in place (ui13 job 13): label edits mid-run
+   * must not go through registerChain, which resets currentPhase/startedAt/
+   * phaseActive. Everything except the manifest is left untouched.
+   */
+  updateChainManifest(slug: string, manifest: ChainManifestEntry[]): boolean {
+    const chain = this.chains.get(slug);
+    if (!chain) {
+      return false;
+    }
+    chain.manifest = manifest;
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    log(`chain ${slug}: manifest updated in place (${manifest.length} entries)`);
+    return true;
+  }
+
+  /**
    * Queues additional work onto an active chain (ui9 B4 append): the manifest
    * grows immediately so the navigator updates live, ahead of the runner
    * picking the queued files up at the current phase's commit gate.
@@ -538,6 +555,20 @@ class WatchdogService {
     }
 
     return { runs: [...liveOnly, ...fromRows], chains };
+  }
+
+  /**
+   * Live dispatched runs for the running-sessions poll (ui13 job 13): these
+   * are external processes absent from chatRunRegistry, so without this the
+   * worker pane shows no activity indicator during a dispatched run. Runs
+   * silent past the stuck threshold are excluded — a dead runner that never
+   * reported its end must not read as processing forever.
+   */
+  listActiveDispatchRuns(): Array<{ sessionId: string; provider: string; startedAt: number }> {
+    const now = Date.now();
+    return [...this.dispatchRuns.values()]
+      .filter((run) => !run.ended && now - run.lastEventAt < STUCK_SILENCE_MS)
+      .map((run) => ({ sessionId: run.sessionId, provider: run.provider, startedAt: run.startedAt }));
   }
 
   permissionEvent(sessionId: string, kind: 'permission_request' | 'interactive_prompt', detail?: string): void {

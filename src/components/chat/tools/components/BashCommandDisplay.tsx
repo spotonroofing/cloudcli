@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Copy, Check } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import { cn } from '../../../../lib/utils';
-import { copyTextToClipboard } from '../../../../utils/clipboard';
 import { AgentDisclosure, SPRING_SWAP } from '../../../../shared/view/beui';
 import { ToolRowStatusIcon, firstErrorLine } from './ToolRowStatus';
 import type { ToolStatus } from './ToolRowStatus';
@@ -16,8 +15,6 @@ interface BashCommandDisplayProps {
   isError?: boolean;
   status?: ToolStatus;
   defaultOpen?: boolean;
-  /** Formatted send time; sits at the right end of the description line. */
-  timestamp?: string;
 }
 
 /**
@@ -33,7 +30,6 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
   isError = false,
   status,
   defaultOpen = false,
-  timestamp,
 }) => {
   const reduce = useReducedMotion() ?? false;
   const trimmedOutput = (output || '').replace(/\s+$/, '');
@@ -42,7 +38,6 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
   const isRunning = status === 'running';
   const errorLine = status === 'error' || status === 'denied' ? firstErrorLine(trimmedOutput) : '';
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // Output often arrives after this component first mounts, so apply the
   // auto-open intent once when there is finally something to show. After that
@@ -61,14 +56,6 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
     if (hasOutput) {
       setOpen((prev) => !prev);
     }
-  };
-
-  const handleCopy = async (event: React.MouseEvent) => {
-    event.stopPropagation();
-    const didCopy = await copyTextToClipboard(command);
-    if (!didCopy) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -114,16 +101,6 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
           </span>
         )}
 
-        <button
-          onClick={handleCopy}
-          onKeyDown={(event) => event.stopPropagation()}
-          className="touch:opacity-100 grid size-5 flex-shrink-0 place-items-center rounded text-muted-foreground/60 opacity-0 transition-all hover:bg-foreground/10 hover:text-foreground focus:opacity-100 group-hover/cmd:opacity-100"
-          title="Copy command"
-          aria-label="Copy command"
-        >
-          {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-        </button>
-
         {/* Fixed chevron slot: every tool row ends in this size-4 slot so the
             chevrons share one right-edge column regardless of content. */}
         <span className="grid size-4 flex-shrink-0 place-items-center">
@@ -146,11 +123,6 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
             <span className="min-w-0 truncate text-rose-600 dark:text-rose-400">{errorLine}</span>
           ) : (
             <span className="min-w-0 truncate italic">{description}</span>
-          )}
-          {timestamp && (
-            <span className="touch:opacity-100 ml-auto flex-shrink-0 tabular-nums opacity-0 transition-opacity duration-200 group-hover/cmd:opacity-100">
-              {timestamp}
-            </span>
           )}
         </div>
       )}

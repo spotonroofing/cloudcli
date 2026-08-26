@@ -207,6 +207,34 @@ function ChatMessagesPane({
     [messageKeyMap],
   );
 
+  // Action-button law (ui13 job 13): only the turn's FINAL assistant text —
+  // the last plain assistant message before the next user turn or the
+  // transcript tail — carries copy + timestamp. Intermediate assistant texts
+  // and every tool row carry nothing.
+  const turnFinalMessages = useMemo(() => {
+    const finals = new WeakSet<ChatMessage>();
+    let candidate: ChatMessage | null = null;
+    for (const message of visibleMessages) {
+      if (message.type === 'user') {
+        if (candidate) finals.add(candidate);
+        candidate = null;
+      } else if (
+        message.type === 'assistant'
+        && !message.isToolUse
+        && !message.isThinking
+        && !message.isInterruptMarker
+        && !message.isMemoryUpdate
+        && !message.isTaskNotification
+        && !message.isInteractivePrompt
+        && String(message.content || '').trim().length > 0
+      ) {
+        candidate = message;
+      }
+    }
+    if (candidate) finals.add(candidate);
+    return finals;
+  }, [visibleMessages]);
+
   return (
     <MessageScroller
       className="relative min-h-0 flex-1"
@@ -283,9 +311,6 @@ function ChatMessagesPane({
 
           {(() => {
             let prevMessage: ChatMessage | null = null;
-            // The most recent user prompt seen while walking the transcript in
-            // order — the content an assistant row's rerun action resends.
-            let lastUserContent: string | null = null;
 
             return groupedVisibleMessages.map((item) => {
               if (isToolGroupItem(item)) {
@@ -320,10 +345,6 @@ function ChatMessagesPane({
 
               const messagePrevMessage = prevMessage;
               prevMessage = item;
-              const rerunContent = item.type === 'assistant' ? lastUserContent : null;
-              if (item.type === 'user' && typeof item.content === 'string' && item.content.trim()) {
-                lastUserContent = item.content;
-              }
 
               const messageNav = onSelectVersion
                 ? (item.versionNav as MessageVersionNav | undefined)
@@ -343,7 +364,7 @@ function ChatMessagesPane({
                     showThinking={showThinking}
                     selectedProject={selectedProject}
                     provider={provider}
-                    rerunContent={rerunContent ?? undefined}
+                    isTurnFinal={turnFinalMessages.has(item)}
                     onRerun={onRerun}
                     onEditMessage={onEditMessage}
                     editingMessageId={editingMessageId}

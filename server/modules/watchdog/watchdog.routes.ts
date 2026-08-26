@@ -126,6 +126,31 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
+  // In-place manifest edit (ui13 job 13): replaces a chain's labels without
+  // resetting its phase state the way re-registration does.
+  router.patch(
+    '/chains/:slug/manifest',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const entries = parseManifest(body.entries);
+      if (!entries) {
+        throw new AppError('entries must be a non-empty array of {name, tasks?, kind?, anchor?}.', {
+          code: 'WATCHDOG_MANIFEST_ENTRIES_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const slug = String(req.params.slug);
+      if (!watchdogService.updateChainManifest(slug, entries)) {
+        throw new AppError(`Chain "${slug}" is not registered.`, {
+          code: 'WATCHDOG_CHAIN_UNKNOWN',
+          statusCode: 404,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, entries: entries.length }));
+    }),
+  );
+
   // Queue additional work onto an active chain (ui9 B4 append): the manifest
   // grows here immediately so the navigator updates live; the runner picks the
   // queued prompt files up at the current phase's commit gate.

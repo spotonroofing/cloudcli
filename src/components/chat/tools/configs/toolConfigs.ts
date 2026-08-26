@@ -13,7 +13,7 @@ export interface ToolDisplayConfig {
     label?: string;
     getValue?: (input: any) => string;
     getSecondary?: (input: any) => string | undefined;
-    action?: 'copy' | 'open-file' | 'jump-to-results' | 'none';
+    action?: 'open-file' | 'jump-to-results' | 'none';
     style?: string;
     wrapText?: boolean;
     colorScheme?: {
@@ -54,8 +54,6 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
       icon: 'terminal',
       getValue: (input) => input.command,
       getSecondary: (input) => input.description,
-      action: 'copy',
-      style: 'terminal',
       wrapText: true,
       colorScheme: {
         primary: 'text-green-400 font-mono',

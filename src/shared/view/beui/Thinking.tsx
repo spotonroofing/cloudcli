@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Globe, Search } from 'lucide-react';
+import { ChevronDown, Globe, Search } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 
 import { cn } from '../../../lib/utils';
 
+import { SPRING_SWAP } from './ease';
 import { TEXT_SHIMMER_CLASS_NAME, TEXT_SHIMMER_KEYFRAMES, textShimmerStyle } from './textShimmer';
 import { useFavicon } from './useFavicon';
 
@@ -87,7 +89,7 @@ export interface ThinkingProps {
   mode: ThinkingMode;
   /** True while the traced work is still in flight. */
   working?: boolean;
-  /** Replaces the star glyph in the header's icon slot (16px, caller-colored). */
+  /** Replaces the star glyph in the header's size-4 icon slot (size-3.5 glyph, caller-colored). */
   icon?: ReactNode;
   /** Shimmering header label while working. */
   activeLabel: string;
@@ -118,6 +120,7 @@ export function Thinking({
   footer,
   className,
 }: ThinkingProps) {
+  const reduceMotion = useReducedMotion() ?? false;
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
   // Auto behavior: open while working, close shortly after settling. A trace
   // that mounts already settled (loaded history) starts closed.
@@ -144,54 +147,54 @@ export function Thinking({
   return (
     <div className={cn('not-prose flex w-full flex-col', className)} data-slot="thinking-trace" data-mode={mode}>
       <style>{TEXT_SHIMMER_KEYFRAMES}</style>
+      {/* Header in the shared row anatomy (ui13 job 13, Bash reference):
+          size-4 leading icon slot, text-xs medium label, spring-rotated
+          size-3.5 chevron in a size-4 slot, min-h-7 rhythm. */}
       <button
         type="button"
         aria-expanded={expanded}
         onClick={() => setManualExpanded((current) => !(current ?? autoExpanded))}
-        className="-mx-1.5 flex w-fit items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors duration-100 hover:bg-muted/60"
+        className="-mx-1.5 flex min-h-7 w-fit items-center gap-2 rounded-md px-1.5 py-0.5 text-left transition-colors duration-100 hover:bg-muted/60"
       >
-        {icon ?? (
-          <svg
-            aria-hidden="true"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            className={working ? 'shrink-0 text-muted-foreground' : 'shrink-0 text-muted-foreground/60'}
-          >
-            <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
-          </svg>
-        )}
+        <span className="grid size-4 shrink-0 place-items-center">
+          {icon ?? (
+            <svg
+              aria-hidden="true"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className={working ? 'shrink-0 text-muted-foreground' : 'shrink-0 text-muted-foreground/60'}
+            >
+              <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
+            </svg>
+          )}
+        </span>
         {working ? (
           <span
-            className={`whitespace-nowrap text-[13px] font-medium ${TEXT_SHIMMER_CLASS_NAME}`}
+            className={`whitespace-nowrap text-xs font-medium ${TEXT_SHIMMER_CLASS_NAME}`}
             style={textShimmerStyle(1.4)}
           >
             {activeLabel}
           </span>
         ) : (
           <span
-            className="whitespace-nowrap text-[13px] font-medium text-muted-foreground"
+            className="whitespace-nowrap text-xs font-medium text-muted-foreground"
             style={{ animation: 'bui-fade-in 350ms ease-out both' }}
           >
             {doneLabel}
           </span>
         )}
-        <svg
-          aria-hidden="true"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="shrink-0 text-muted-foreground/60 transition-transform duration-300"
-          style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0)' }}
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        <span className="grid size-4 shrink-0 place-items-center">
+          <motion.span
+            aria-hidden="true"
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={reduceMotion ? { duration: 0 } : SPRING_SWAP}
+            className="text-muted-foreground/50"
+          >
+            <ChevronDown className="size-3.5" />
+          </motion.span>
+        </span>
       </button>
 
       <div
@@ -203,16 +206,16 @@ export function Thinking({
         }}
       >
         <div className="overflow-hidden">
-          <div className="relative ml-[5px] mt-1 pl-4">
-            <span aria-hidden="true" className="absolute bottom-1 left-[3px] top-0 w-px bg-border" />
+          {/* pl-6 indent, no left rule — the tool-row disclosure law. */}
+          <div className="mt-1 pl-6">
             <div className="flex flex-col gap-1 py-1">
               {intro && (
-                <div className="px-1.5 py-0.5 text-[12px] leading-relaxed text-muted-foreground/80">{intro}</div>
+                <div className="px-1.5 py-0.5 text-xs leading-relaxed text-muted-foreground/80">{intro}</div>
               )}
               {query && (
                 <div className="flex min-h-6 items-center gap-2 px-1.5">
                   <Search aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 truncate text-[12.5px] text-muted-foreground">{query}</span>
+                  <span className="min-w-0 truncate text-xs text-muted-foreground">{query}</span>
                 </div>
               )}
               {rows.map((row, index) => {
@@ -227,13 +230,13 @@ export function Thinking({
                   <>
                     {mode === 'search' && <SourceFavicon url={row.faviconUrl ?? row.href} />}
                     {mode === 'steps' && <StepStateIcon state={row.state} />}
-                    <span className="min-w-0 truncate text-[12.5px] font-medium text-foreground">
+                    <span className="min-w-0 truncate text-xs font-medium text-foreground">
                       {row.primary}
                     </span>
                     {row.secondary !== undefined && (
                       <span
                         className={cn(
-                          'shrink-0 text-[11.5px]',
+                          'shrink-0 text-[11px]',
                           row.isError ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground/70',
                           row.mono && 'font-mono',
                         )}

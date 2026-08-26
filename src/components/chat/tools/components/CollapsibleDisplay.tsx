@@ -29,7 +29,7 @@ export const CollapsibleDisplay: React.FC<CollapsibleDisplayProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`my-1 py-0.5 ${className}`}>
+    <div className={`my-0.5 ${className}`}>
       <CollapsibleSection
         title={title}
         toolName={toolName}

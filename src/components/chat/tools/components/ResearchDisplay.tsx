@@ -100,7 +100,10 @@ export const ResearchDisplay: React.FC<ResearchDisplayProps> = ({ toolName, tool
           expandable && 'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring',
         )}
       >
-        {(running || failed) && <ToolRowStatusIcon status={running ? 'running' : 'error'} />}
+        {/* Leading status slot, always reserved (Bash reference anatomy). */}
+        <span className="grid size-4 shrink-0 place-items-center">
+          {(running || failed) && <ToolRowStatusIcon status={running ? 'running' : 'error'} />}
+        </span>
         <span className="shrink-0 font-medium text-foreground/90">Research</span>
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70">
           {query}

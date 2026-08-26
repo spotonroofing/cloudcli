@@ -725,8 +725,10 @@ router.get(
   asyncHandler(async (_req: Request, res: Response) => {
     // Chain phase names come from the watchdog's chain registry here (not in
     // sessionsService) because the watchdog already imports the providers
-    // barrel; the reverse import would be a cycle.
-    const sessions = sessionsService.listRunningSessions().map((session) => ({
+    // barrel; the reverse import would be a cycle. Live dispatched runs merge
+    // in for the same reason (ui13 job 13) — without them the worker pane
+    // shows a silent gap for the whole dispatched run.
+    const sessions = sessionsService.listRunningSessions(watchdogService.listActiveDispatchRuns()).map((session) => ({
       ...session,
       chainPhaseName: session.chainSlug && session.chainPhase
         ? watchdogService.getChainPhaseName(session.chainSlug, session.chainPhase)
