@@ -1,4 +1,4 @@
-import { Activity, Archive, Folder, FolderPlus, MessageSquare, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
+import { Archive, Folder, FolderPlus, MessageSquare, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { TFunction } from 'i18next';
 
@@ -54,10 +54,7 @@ export default function SidebarHeader({
     ? t('search.conversationsPlaceholder')
     : searchMode === 'archived'
       ? t('search.archivedPlaceholder', 'Search archived sessions...')
-      : searchMode === 'running'
-        ? t('search.runningPlaceholder', 'Search running sessions...')
-        : t('projects.searchPlaceholder');
-  const runningBadgeText = runningSessionsCount > 99 ? '99+' : String(runningSessionsCount);
+      : t('projects.searchPlaceholder');
 
   const segmentClass = (mode: SidebarSearchMode) => cn(
     'touch-hit relative flex h-7 w-9 items-center justify-center rounded-md transition-colors',
@@ -107,24 +104,6 @@ export default function SidebarHeader({
                 {segmentIndicator('conversations')}
                 <MessageSquare className="relative h-3.5 w-3.5" />
               </button>
-              {/* Running view is a mobile-only control; desktop is chat-scoped */}
-              {isMobile && (
-                <button
-                  onClick={() => onSearchModeChange('running')}
-                  aria-pressed={searchMode === 'running'}
-                  aria-label={t('search.modeRunning', 'Running')}
-                  title={t('search.modeRunning', 'Running')}
-                  className={segmentClass('running')}
-                >
-                  {segmentIndicator('running')}
-                  <Activity className="relative h-3.5 w-3.5" />
-                  {runningSessionsCount > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-0.5 text-[8px] font-semibold leading-none text-emerald-600 dark:text-emerald-400">
-                      {runningBadgeText}
-                    </span>
-                  )}
-                </button>
-              )}
               <button
                 onClick={() => onSearchModeChange('archived')}
                 aria-pressed={searchMode === 'archived'}

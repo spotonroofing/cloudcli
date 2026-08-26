@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import { Languages } from 'lucide-react';
 
 import { languages } from '../../../i18n/languages';
 import {
@@ -10,20 +9,13 @@ import {
   SelectValue,
 } from '../beui/BeuiSelect';
 
-type LanguageSelectorProps = {
-  compact?: boolean;
-};
-
 /**
  * Language Selector Component
  *
  * A dropdown component for selecting the application language.
  * Automatically updates the i18n language and persists to localStorage.
- *
- * Props:
- * @param {boolean} compact - If true, uses compact style (default: false)
  */
-export default function LanguageSelector({ compact = false }: LanguageSelectorProps) {
+export default function LanguageSelector() {
   const { i18n, t } = useTranslation('settings');
 
   const handleLanguageChange = (newLanguage: string) => {
@@ -34,7 +26,7 @@ export default function LanguageSelector({ compact = false }: LanguageSelectorPr
     <Select
       value={i18n.language}
       onValueChange={handleLanguageChange}
-      className={compact ? 'w-40' : 'w-44'}
+      className="w-44"
     >
       <SelectTrigger>
         <SelectValue />
@@ -48,19 +40,6 @@ export default function LanguageSelector({ compact = false }: LanguageSelectorPr
       </SelectContent>
     </Select>
   );
-
-  // Compact style for QuickSettingsPanel
-  if (compact) {
-    return (
-      <div className="flex items-center justify-between rounded-lg border border-transparent bg-muted/50 p-3 transition-colors hover:border-border hover:bg-accent">
-        <span className="flex items-center gap-2 text-sm text-foreground">
-          <Languages className="h-4 w-4 text-muted-foreground" />
-          {t('account.language')}
-        </span>
-        {select}
-      </div>
-    );
-  }
 
   // Full style for Settings page
   return (

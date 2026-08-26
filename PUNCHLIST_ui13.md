@@ -108,9 +108,9 @@ Done check: on dev: the indicator row's computed styles match the thought-row fa
 
 Goal: mobile is the same product, sized for a phone. Files: mobile-specific sidebar and pane chrome, the mobile tools menu, DESIGN.md. Dependencies: jobs 4-5 (the new sidebar chrome exists to mirror).
 
-- [ ] Remove the leftover quick-settings button on the right edge of mobile; the sidebar's bottom padding shrinks so the footer taskbar sits at the natural bottom (safe-area padded, not floating high).
-- [ ] The mobile sidebar mirrors the desktop structure exactly (icon tabs, taskbar, drawers as sheets), sized per the mobile laws; kill any mobile-only variants that drifted (Willem will screenshot remaining nits next round).
-- [ ] Planner and worker panes on mobile get a top-bar toggle between chat and shell/terminal views; the current mobile shell view stops showing an unrelated session and binds to the pane's own session; the stale files/source-control entries leave this menu (they become windows in job 10).
+- [x] Remove the leftover quick-settings button on the right edge of mobile; the sidebar's bottom padding shrinks so the footer taskbar sits at the natural bottom (safe-area padded, not floating high).
+- [x] The mobile sidebar mirrors the desktop structure exactly (icon tabs, taskbar, drawers as sheets), sized per the mobile laws; kill any mobile-only variants that drifted (Willem will screenshot remaining nits next round).
+- [x] Planner and worker panes on mobile get a top-bar toggle between chat and shell/terminal views; the current mobile shell view stops showing an unrelated session and binds to the pane's own session; the stale files/source-control entries leave this menu (they become windows in job 10).
 
 Done check: on dev at 390x844: no quick-settings button in the DOM, footer taskbar within the safe-area bottom, tab icons and drawers match desktop structure, the chat/shell toggle switches views on both panes and the shell shows the pane's session cwd. Fresh-context subagent verification. Commit.
 

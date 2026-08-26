@@ -6,7 +6,6 @@ import Sidebar from '../sidebar/view/Sidebar';
 import type { RunningRunInfo } from '../sidebar/types/types';
 import type { LLMProvider } from '../../types/app';
 import CommandPalette from '../command-palette/CommandPalette';
-import { QuickSettingsPanel } from '../quick-settings-panel';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
@@ -407,8 +406,6 @@ function AppContentInner() {
         // Desktop is chat-only (phase 2 chrome strip): no tab navigation from the palette.
         onShowTab={isMobile ? setActiveTab : undefined}
       />
-
-      <QuickSettingsPanel />
     </div>
   );
 }

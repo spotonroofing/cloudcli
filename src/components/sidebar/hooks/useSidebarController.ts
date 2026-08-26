@@ -155,9 +155,8 @@ export function useSidebarController({
   const [deletingProjects, setDeletingProjects] = useState<Set<string>>(new Set());
   const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteProjectConfirmation | null>(null);
   const [sessionDeleteConfirmation, setSessionDeleteConfirmation] = useState<SessionDeleteConfirmation | null>(null);
-  // Desktop has no Projects/Running tabs (phase 2 chrome strip); mobile keeps all four.
-  // The active tab persists per device so a refresh restores where the user
-  // was ('running' is transient live state and is not restored).
+  // The same three tabs on both form factors (ui13 job 9). The active tab
+  // persists per device so a refresh restores where the user was.
   const [searchMode, setSearchMode] = useState<SidebarSearchMode>(() => {
     const stored = localStorage.getItem(SIDEBAR_TAB_STORAGE_KEY);
     if (stored === 'projects' || stored === 'conversations' || stored === 'archived') {
@@ -194,17 +193,8 @@ export function useSidebarController({
   // (claude.ai model): no project narrowing anywhere.
   const conversationsProjectId = null;
 
-  // If a resize lands desktop in a mode whose tab was removed, snap back to Conversations.
   useEffect(() => {
-    if (!isMobile && searchMode === 'running') {
-      setSearchMode('conversations');
-    }
-  }, [isMobile, searchMode]);
-
-  useEffect(() => {
-    if (searchMode !== 'running') {
-      writeSetting(SIDEBAR_TAB_STORAGE_KEY, searchMode);
-    }
+    writeSetting(SIDEBAR_TAB_STORAGE_KEY, searchMode);
   }, [searchMode]);
 
   // Another tab or device switched sidebar tabs: follow it when this device
@@ -748,35 +738,9 @@ export function useSidebarController({
     [projectsWithResolvedStarState],
   );
 
-  const runningProjects = useMemo(() => {
-    if (activeSessionIds.size === 0) {
-      return [];
-    }
-
-    return sortedProjects.reduce<Project[]>((acc, project) => {
-      const sessions = (project.sessions ?? []).filter((session) => activeSessionIds.has(String(session.id)));
-      const runningCount = sessions.length;
-
-      if (runningCount === 0) {
-        return acc;
-      }
-
-      acc.push({
-        ...project,
-        sessions,
-        sessionMeta: {
-          ...project.sessionMeta,
-          total: runningCount,
-          hasMore: false,
-        },
-      });
-      return acc;
-    }, []);
-  }, [activeSessionIds, sortedProjects]);
-
   const filteredProjects = useMemo(
-    () => filterProjects(searchMode === 'running' ? runningProjects : sortedProjects, debouncedSearchQuery),
-    [debouncedSearchQuery, runningProjects, searchMode, sortedProjects],
+    () => filterProjects(sortedProjects, debouncedSearchQuery),
+    [debouncedSearchQuery, sortedProjects],
   );
 
   const filteredArchivedSessions = useMemo(() => {

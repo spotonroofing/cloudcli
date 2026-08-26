@@ -1,7 +1,8 @@
-import { FileDiff, Hammer, Milestone, PanelRightOpen, Plus, X } from 'lucide-react';
+import { FileDiff, Hammer, MessageSquare, Milestone, PanelRightOpen, Plus, Terminal, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import ChatInterface from '../chat/view/ChatInterface';
+import StandaloneShell from '../standalone-shell/view/StandaloneShell';
 import ErrorBoundary from '../main-content/view/ErrorBoundary';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
@@ -11,6 +12,7 @@ import { onSettingChange, writeSetting } from '../../utils/cloudSettings';
 import { formatCompactAge } from '../sidebar/utils/utils';
 import SidebarFooterDrawer from '../sidebar/view/subcomponents/SidebarFooterDrawer';
 import { Badge, Button, Skeleton, Tooltip } from '../../shared/view/ui';
+import { ActionSwapIcon } from '../../shared/view/beui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 
@@ -116,6 +118,9 @@ export default function WorkerPane({
     setJobsSidebarOpen(value !== '0');
   }), []);
   const [jobsSheetOpen, setJobsSheetOpen] = useState(false);
+  // Mobile chat/shell toggle (ui13 job 9): swaps the pane's transcript for a
+  // terminal bound to the pane's own session, mirroring the planner pane.
+  const [shellOpen, setShellOpen] = useState(false);
   // Rail ring hand-off (ui13 job 1): the job whose drawer the sidebar opens
   // with on the next expand; null for a plain expand.
   const [railFocusJob, setRailFocusJob] = useState<number | null>(null);
@@ -360,6 +365,24 @@ export default function WorkerPane({
           </Badge>
         )}
         <span className="min-w-0 flex-1" />
+        {isMobile && (
+          <Tooltip content={shellOpen ? 'Show chat' : 'Show shell'} position="bottom">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+              onClick={() => setShellOpen((open) => !open)}
+              aria-label={shellOpen ? 'Show chat' : 'Show shell'}
+              data-slot="pane-view-toggle"
+            >
+              <ActionSwapIcon value={shellOpen ? 'chat' : 'shell'}>
+                {shellOpen
+                  ? <MessageSquare className="h-3.5 w-3.5" />
+                  : <Terminal className="h-3.5 w-3.5" />}
+              </ActionSwapIcon>
+            </Button>
+          </Tooltip>
+        )}
         {isMobile && runsLoaded && selectedRun && (
           <Tooltip content="Run jobs" position="bottom">
             <Button
@@ -435,7 +458,7 @@ export default function WorkerPane({
       )}
 
       <div className="flex min-h-0 flex-1">
-        <div className="min-h-0 min-w-0 flex-1">
+        <div className={`min-h-0 min-w-0 flex-1 ${isMobile && shellOpen ? 'hidden' : ''}`}>
         <ErrorBoundary showDetails>
           <ChatInterface
             isActive={isActive}
@@ -478,6 +501,17 @@ export default function WorkerPane({
           />
         </ErrorBoundary>
         </div>
+
+        {isMobile && shellOpen && (
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden" data-slot="pane-shell">
+            <StandaloneShell
+              project={selectedProject}
+              session={paneSession}
+              showHeader={false}
+              isActive
+            />
+          </div>
+        )}
 
         {/* Jobs sidebar (ui12 phase 5): the run's job history on the right at
             the left sidebar's width; collapsible to a rail the same way. */}

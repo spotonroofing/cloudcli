@@ -1,4 +1,4 @@
-import { Compass, Hammer, X } from 'lucide-react';
+import { Compass, Hammer, MessageSquare, Terminal, X } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
@@ -21,7 +21,8 @@ import EditorSidebar from '../../code-editor/view/EditorSidebar';
 import type { Project } from '../../../types/app';
 import { STANDALONE_PROJECT_ID } from '../../../types/app';
 import { TaskMasterPanel } from '../../task-master';
-import { Badge, Button } from '../../../shared/view/ui';
+import { Badge, Button, Tooltip } from '../../../shared/view/ui';
+import { ActionSwapIcon } from '../../../shared/view/beui';
 import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
@@ -137,6 +138,10 @@ function MainContent({
   const handleSplitPointerEnd = () => {
     splitDragRef.current = false;
   };
+  // Mobile chat/shell toggle (ui13 job 9): the planner pane's top bar swaps
+  // the transcript for a terminal bound to the pane's own session. Not
+  // persisted — a fresh open always lands on chat.
+  const [plannerShellOpen, setPlannerShellOpen] = useState(false);
   // The Planner header mirrors the worker pane's header bar; the title is the
   // open session's stored name.
   const sessionTitle = (selectedSession?.summary || selectedSession?.title || '').trim();
@@ -318,6 +323,24 @@ function MainContent({
                   </Badge>
                 )}
                 <span className="min-w-0 flex-1" />
+                {isMobile && (
+                  <Tooltip content={plannerShellOpen ? 'Show chat' : 'Show shell'} position="bottom">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => setPlannerShellOpen((open) => !open)}
+                      aria-label={plannerShellOpen ? 'Show chat' : 'Show shell'}
+                      data-slot="pane-view-toggle"
+                    >
+                      <ActionSwapIcon value={plannerShellOpen ? 'chat' : 'shell'}>
+                        {plannerShellOpen
+                          ? <MessageSquare className="h-3.5 w-3.5" />
+                          : <Terminal className="h-3.5 w-3.5" />}
+                      </ActionSwapIcon>
+                    </Button>
+                  </Tooltip>
+                )}
                 {!isMobile && (
                   <Button
                     variant="ghost"
@@ -331,7 +354,7 @@ function MainContent({
                 )}
               </div>
             )}
-            <div className="min-h-0 flex-1">
+            <div className={`min-h-0 flex-1 ${isMobile && plannerShellOpen ? 'hidden' : ''}`}>
               <ErrorBoundary showDetails>
                 <ChatInterface
                   isActive={activeTab === 'chat'}
@@ -358,6 +381,16 @@ function MainContent({
                 />
               </ErrorBoundary>
             </div>
+            {isMobile && plannerShellOpen && (
+              <div className="min-h-0 flex-1 overflow-hidden" data-slot="pane-shell">
+                <StandaloneShell
+                  project={selectedProject}
+                  session={selectedSession}
+                  showHeader={false}
+                  isActive
+                />
+              </div>
+            )}
           </div>
 
           {isMobile && workerPaneAvailable && (
@@ -380,17 +413,6 @@ function MainContent({
           {activeTab === 'files' && (
             <div className="h-full overflow-hidden">
               <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
-            </div>
-          )}
-
-          {activeTab === 'shell' && (
-            <div className="h-full w-full overflow-hidden">
-              <StandaloneShell
-                project={selectedProject}
-                session={selectedSession}
-                showHeader={false}
-                isActive={activeTab === 'shell'}
-              />
             </div>
           )}
 

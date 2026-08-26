@@ -1,4 +1,4 @@
-import { MessageSquare, Terminal, Folder, GitBranch, ClipboardCheck, Hammer, MonitorPlay, type LucideIcon } from 'lucide-react';
+import { MessageSquare, ClipboardCheck, Hammer, MonitorPlay, type LucideIcon } from 'lucide-react';
 import { Fragment } from 'react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,12 +33,11 @@ type PluginTab = {
 
 type TabDefinition = BuiltInTab | PluginTab;
 
+// Chat and Worker only (ui13 job 9): the shell lives behind each pane's own
+// chat/shell toggle, and files/source control become windows (job 10).
 const BASE_TABS: BuiltInTab[] = [
   { kind: 'builtin', id: 'chat',  labelKey: 'tabs.chat',  icon: MessageSquare },
   { kind: 'builtin', id: 'worker', labelKey: 'tabs.worker', icon: Hammer },
-  { kind: 'builtin', id: 'shell', labelKey: 'tabs.shell', icon: Terminal },
-  { kind: 'builtin', id: 'files', labelKey: 'tabs.files', icon: Folder },
-  { kind: 'builtin', id: 'git',   labelKey: 'tabs.git',   icon: GitBranch },
 ];
 
 const BROWSER_TAB: BuiltInTab = {

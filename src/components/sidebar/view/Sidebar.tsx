@@ -321,7 +321,6 @@ function Sidebar({
     workspaceProjectIds,
     onCloseWorkspaceProject,
     selectedSessionId: selectedSession ? String(selectedSession.id) : null,
-    forceExpanded: searchMode === 'running',
     onEditingNameChange: setEditingName,
     onEditingPlannerNameChange: setEditingPlannerName,
     onEditingPathChange: setEditingPath,

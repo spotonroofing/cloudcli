@@ -39,7 +39,6 @@ export type SidebarProjectListProps = {
   onCloseWorkspaceProject?: (project: Project) => void;
   /** Bounce-dot destination: the selected session's row, when it is in this list. */
   selectedSessionId: string | null;
-  forceExpanded?: boolean;
   onEditingNameChange: (value: string) => void;
   onEditingPlannerNameChange: (value: string) => void;
   onEditingPathChange: (value: string) => void;
@@ -88,7 +87,6 @@ export default function SidebarProjectList({
   workspaceProjectIds,
   onCloseWorkspaceProject,
   selectedSessionId,
-  forceExpanded = false,
   onEditingNameChange,
   onEditingPlannerNameChange,
   onEditingPathChange,
@@ -125,7 +123,7 @@ export default function SidebarProjectList({
   const showProjects = !isLoading && projects.length > 0 && filteredProjects.length > 0;
 
   return (
-    <div ref={listRef} className="relative pb-safe-area-inset-bottom md:space-y-1">
+    <div ref={listRef} className="relative md:space-y-1">
       {/* beUI bounce-sidebar behavior: the active dot arcs to the selected
           session's row on a curved spring path. */}
       {showProjects && (
@@ -142,7 +140,7 @@ export default function SidebarProjectList({
               projects={projects}
               selectedProject={selectedProject}
               selectedSession={selectedSession}
-              isExpanded={forceExpanded || expandedProjects.has(project.projectId)}
+              isExpanded={expandedProjects.has(project.projectId)}
               isDeleting={deletingProjects.has(project.projectId)}
               editingProject={editingProject}
               editingName={editingName}
