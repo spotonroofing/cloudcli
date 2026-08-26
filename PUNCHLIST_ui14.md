@@ -40,6 +40,7 @@ Goal: the worker pane's top bar matches the planner's, the session-title dropdow
 - [ ] Top bar left: the worker icon and the word "Worker" exactly like the planner pane's "Planner", followed by the active session's small title text in the planner's style (e.g. "Continuing previous work from handoff"). No dropdown on the title: clicking it does nothing; the previous-sessions dropdown is removed outright.
 - [ ] Navigation between worker sessions is the job list: hovering a job row swaps its chevron for the chat icon, clicking it opens that job's session in the pane (ui13 specified this; verify it works end to end and fix whatever made Willem see a dropdown instead).
 - [ ] Top bar right: a plus button for a new worker session sits immediately left of the Hide worker button, then the job sign toggle per job 1.
+- [ ] Repopulate job history: the continuous list shows the completed jobs of every stored run for the project (ui11, ui11r, ui12, ui13, ui13r) with their names, tasks, counters, commit footers, and durations where the journals or chain records carry them (backfill from ~/forge-logs/<slug>/JOURNAL.md and the punch lists; live DB is where chain records live per the ui11-chain-state-lives-on-live lesson); the list should look like real history, not a single run.
 - [ ] Tooltips are collision-aware: near a screen edge the arrow stays anchored to the control and the box slides inward so no text is clipped; fix at the Tooltip primitive so every tooltip benefits.
 
 Done check: on dev: header DOM shows icon + "Worker" + session title with no dropdown trigger; hovering a job row shows the chat icon and clicking navigates (URL/title change); the plus button creates a new worker session; the Hide worker tooltip at the right edge renders fully inside the viewport (rect check). Phone holds. Fresh-context subagent verification. Commit.
@@ -77,6 +78,7 @@ Done check: on dev: no About tab; the tab strip's DOM matches the sidebar icon-t
 
 Goal: opening a pasted-text preview lets Willem edit the text in place. Files: the PASTED chip preview, composer attachment state, DESIGN.md. Dependencies: none.
 
+- [ ] Character counter moves to the left end of the row under the prompt bar, flush with the enclosure's left edge (mirroring the usage ring on the right); it shows a static "0" before typing (never blank), lining tabular digits.
 - [ ] The pasted-text preview becomes an editor: the text is editable in the preview, saves back to the attachment on close or Save, cancel restores; works for previews opened from the composer and from a sent bubble (sent bubbles stay read-only, state that).
 
 Done check: on dev: edit text in a composer preview, close, send; the sent message carries the edited text; sent-bubble preview is read-only. Phone holds. Fresh-context subagent verification. Commit.

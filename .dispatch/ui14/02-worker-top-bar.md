@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Worker top bar restored -->
-<!-- tasks: Worker label, icon, session title, no dropdown | Job rows navigate via hover chat icon | Plus button beside Hide worker | Edge-aware tooltips -->
+<!-- tasks: Worker label, icon, session title, no dropdown | Job rows navigate via hover chat icon | Plus button beside Hide worker | Job history backfilled from ui11-ui13r | Edge-aware tooltips -->
 Execute Job 2 of PUNCHLIST_ui14.md in this repo (worker top bar restored). The goal and items are that job's section and checkboxes in PUNCHLIST_ui14.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 

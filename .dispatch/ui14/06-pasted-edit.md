@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Editable pasted text -->
-<!-- tasks: Preview edits save back to the attachment -->
+<!-- tasks: Preview edits save back to the attachment | Counter flush left under the bar, static 0 -->
 Execute Job 6 of PUNCHLIST_ui14.md in this repo (editable pasted text). The goal and items are that job's section and checkboxes in PUNCHLIST_ui14.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
