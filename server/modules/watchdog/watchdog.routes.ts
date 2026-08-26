@@ -4,7 +4,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { apiKeysDb, sessionsDb } from '@/modules/database/index.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
-import { parseJobMeta, parseManifest, watchdogService } from './watchdog.service.js';
+import { CHAIN_EVENT_NAMES, parseJobMeta, parseManifest, watchdogService } from './watchdog.service.js';
 
 /**
  * Watchdog surface (spec B3/B4): the dispatch CLI registers chains and posts
@@ -62,8 +62,8 @@ export function createWatchdogRouter(): express.Router {
     asyncHandler(async (req: Request, res: Response) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const event = typeof body.event === 'string' ? body.event : '';
-      if (!['phase-start', 'phase-end', 'limit', 'completed', 'stopped', 'failed'].includes(event)) {
-        throw new AppError('event must be phase-start|phase-end|limit|completed|stopped|failed.', {
+      if (!(CHAIN_EVENT_NAMES as string[]).includes(event)) {
+        throw new AppError(`event must be ${CHAIN_EVENT_NAMES.join('|')}.`, {
           code: 'WATCHDOG_EVENT_INVALID',
           statusCode: 400,
         });
@@ -79,7 +79,7 @@ export function createWatchdogRouter(): express.Router {
         summaryTail: typeof body.summaryTail === 'string' ? body.summaryTail : undefined,
         commit,
       };
-      const eventName = event as 'phase-start' | 'phase-end' | 'limit' | 'completed' | 'stopped' | 'failed';
+      const eventName = event as (typeof CHAIN_EVENT_NAMES)[number];
       let known = watchdogService.chainEvent(slug, eventName, detail);
       // Chains run out-of-process and outlive server restarts; a restart
       // empties the in-memory registry. Events carry projectPath so the chain
@@ -128,6 +128,11 @@ export function createWatchdogRouter(): express.Router {
       const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : null;
       const phase = Number.isFinite(Number(body.phase)) ? Number(body.phase) : null;
       sessionsDb.setSessionOrigin(sessionId, 'dispatch', baseCommit, slug, model, { provider, projectPath }, phase);
+      // The verify stage's session (ui14 job 10) is the same row shape, tagged
+      // on the chain's job metadata so the UI can tell it from the build.
+      if (body.stage === 'verify' && phase != null) {
+        watchdogService.setChainVerifySession(slug, phase, sessionId);
+      }
       res.status(201).json(createApiSuccessResponse({ slug, sessionId }));
     }),
   );

@@ -25,6 +25,8 @@ type WorkerRun = {
   chainSlug: string | null;
   /** 1-based unit index inside the dispatch chain; null outside chains. */
   chainPhase: number | null;
+  /** Set on a unit's verifier session (ui14 job 10); absent on build sessions. */
+  chainStage?: 'verify';
   title: string | null;
   state: 'running' | 'finished' | 'stopped';
   model: string | null;
@@ -44,9 +46,10 @@ const runLabel = (run: WorkerRun, chains: Record<string, ChainSnapshot>): string
   if (run.chainSlug) {
     if (run.chainPhase) {
       const name = chains[run.chainSlug]?.manifest?.[run.chainPhase - 1]?.name;
+      const stage = run.chainStage === 'verify' ? ' verify' : '';
       return name
-        ? `${run.chainSlug} Job ${run.chainPhase} - ${name}`
-        : `${run.chainSlug} Job ${run.chainPhase}`;
+        ? `${run.chainSlug} Job ${run.chainPhase}${stage} - ${name}`
+        : `${run.chainSlug} Job ${run.chainPhase}${stage}`;
     }
     return run.chainSlug;
   }
@@ -274,8 +277,10 @@ export default function WorkerPane({
   const jobGroups: JobGroup[] = [
     ...Object.values(chains).map((chain) => {
       const sessions: Record<number, string> = {};
+      // The job row opens the build session; the verify session (ui14 job
+      // 10) is reached from the drawer's verify row instead.
       for (const run of runs) {
-        if (run.chainSlug === chain.slug && run.chainPhase != null) {
+        if (run.chainSlug === chain.slug && run.chainPhase != null && run.chainStage !== 'verify') {
           sessions[run.chainPhase] = run.sessionId;
         }
       }

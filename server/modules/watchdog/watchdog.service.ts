@@ -44,7 +44,31 @@ export type ChainJobMeta = {
   commitHash?: string;
   commitSubject?: string;
   taskTimes?: (number | null)[];
+  /**
+   * Verify stage (ui14 job 10): the runner's fresh-context verifier runs
+   * against the job's commit while the next job builds. Absent on units the
+   * runner never verified (older chains, `verify: no` prompts).
+   */
+  verify?: 'running' | 'passed' | 'failed' | 'stopped';
+  verifyStartedAt?: number;
+  verifyEndedAt?: number;
+  /** The verifier's session id, pre-announced by the runner. */
+  verifySessionId?: string;
 };
+
+/**
+ * A chain reaching a terminal state (event, or the liveness sweep) settles
+ * any verify still in flight as stopped: the verifier is dead or orphaned
+ * with the runner, and a live counter must not tick on forever.
+ */
+function settleRunningVerifies(chain: ChainRecord): void {
+  for (const meta of Object.values(chain.jobs)) {
+    if (meta.verify === 'running') {
+      meta.verify = 'stopped';
+      meta.verifyEndedAt = Date.now();
+    }
+  }
+}
 
 type ChainRecord = {
   slug: string;
@@ -97,11 +121,36 @@ type WorkerRun = {
   chainSlug: string | null;
   /** 1-based unit index inside the dispatch chain; null outside chains. */
   chainPhase: number | null;
+  /** Set on a unit's verifier session (ui14 job 10); absent on build sessions. */
+  chainStage?: 'verify';
   title: string | null;
   state: 'running' | 'finished' | 'stopped';
   model: string | null;
   lastActivity: string | null;
 };
+
+type ChainEventName =
+  | 'phase-start'
+  | 'phase-end'
+  | 'verify-start'
+  | 'verify-end'
+  | 'verify-failed'
+  | 'limit'
+  | 'completed'
+  | 'stopped'
+  | 'failed';
+
+export const CHAIN_EVENT_NAMES: ChainEventName[] = [
+  'phase-start',
+  'phase-end',
+  'verify-start',
+  'verify-end',
+  'verify-failed',
+  'limit',
+  'completed',
+  'stopped',
+  'failed',
+];
 
 /** Chain snapshot the worker pane's phase navigator renders from. */
 type ChainSnapshot = {
@@ -322,6 +371,22 @@ class WatchdogService {
    * must not go through registerChain, which resets currentPhase/startedAt/
    * phaseActive. Everything except the manifest is left untouched.
    */
+  /**
+   * Records a unit's verifier session (ui14 job 10) from the runner's
+   * pre-announce, so the jobs view can open the verify transcript and the
+   * run switcher can tell the verify row from the build row.
+   */
+  setChainVerifySession(slug: string, phase: number, sessionId: string): boolean {
+    const chain = this.chains.get(slug);
+    if (!chain) {
+      return false;
+    }
+    const meta = chain.jobs[phase] ?? (chain.jobs[phase] = {});
+    meta.verifySessionId = sessionId;
+    this.persistChain(chain);
+    return true;
+  }
+
   updateChainManifest(slug: string, manifest: ChainManifestEntry[]): boolean {
     const chain = this.chains.get(slug);
     if (!chain) {
@@ -542,7 +607,7 @@ class WatchdogService {
 
   chainEvent(
     slug: string,
-    event: 'phase-start' | 'phase-end' | 'limit' | 'completed' | 'stopped' | 'failed',
+    event: ChainEventName,
     detail?: { phase?: number; summaryTail?: string; commit?: { hash: string; subject: string } },
   ): boolean {
     const chain = this.chains.get(slug);
@@ -550,6 +615,40 @@ class WatchdogService {
       return false;
     }
     chain.lastEventAt = Date.now();
+    // Verify-stage events (ui14 job 10) belong to a unit whose build already
+    // ended; they never move currentPhase or phaseActive, which track the
+    // build in flight. verify-failed is terminal: the runner has rewound and
+    // its summaryTail is the resume point the wake carries.
+    if (event === 'verify-start' || event === 'verify-end' || event === 'verify-failed') {
+      if (typeof detail?.phase === 'number') {
+        const meta = chain.jobs[detail.phase] ?? (chain.jobs[detail.phase] = {});
+        if (event === 'verify-start') {
+          meta.verify = 'running';
+          meta.verifyStartedAt = Date.now();
+          delete meta.verifyEndedAt;
+        } else {
+          meta.verify = event === 'verify-end' ? 'passed' : 'failed';
+          meta.verifyEndedAt = Date.now();
+        }
+      }
+      if (detail?.summaryTail) {
+        chain.lastSummaryTail = detail.summaryTail.slice(-2000);
+      }
+      log(`chain ${slug}: ${event}`, { phase: detail?.phase ?? null, status: chain.status });
+      if (event === 'verify-failed') {
+        chain.status = 'failed';
+        chain.phaseActive = false;
+        chain.wakePending = true;
+        this.persistChain(chain);
+        this.broadcastChainProgress(chain);
+        this.syncPunchlistWatcher(chain);
+        this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: slug });
+      } else {
+        this.persistChain(chain);
+        this.broadcastChainProgress(chain);
+      }
+      return true;
+    }
     if (typeof detail?.phase === 'number') {
       chain.currentPhase = detail.phase;
       // Per-job boundaries (ui13 job 14): phase-start anchors the job's
@@ -593,6 +692,7 @@ class WatchdogService {
 
     if (event === 'completed' || event === 'stopped' || event === 'failed') {
       chain.status = event === 'completed' ? 'completed' : event === 'stopped' ? 'stopped' : 'failed';
+      settleRunningVerifies(chain);
       chain.wakePending = true;
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
@@ -713,13 +813,19 @@ class WatchdogService {
       // chain registry — its session row goes quiet between transcript syncs,
       // so the row alone would misreport an active phase as finished.
       const chain = chainSlug ? this.chains.get(chainSlug) : undefined;
-      const chainActive = Boolean(
-        chain
-        && chain.status === 'running'
-        && chain.phaseActive
-        && row.chain_phase != null
-        && chain.currentPhase === row.chain_phase,
-      );
+      // A verify-stage session (ui14 job 10) is live while its unit's verify
+      // runs, independent of the build the chain has moved on to.
+      const verifyMeta = chain && row.chain_phase != null ? chain.jobs[row.chain_phase] : undefined;
+      const isVerify = Boolean(verifyMeta?.verifySessionId && verifyMeta.verifySessionId === row.session_id);
+      const chainActive = isVerify
+        ? Boolean(chain && chain.status === 'running' && verifyMeta?.verify === 'running')
+        : Boolean(
+          chain
+          && chain.status === 'running'
+          && chain.phaseActive
+          && row.chain_phase != null
+          && chain.currentPhase === row.chain_phase,
+        );
       const running = (live ? !live.ended : false)
         || chatRunRegistry.isProcessing(row.session_id)
         || chainActive;
@@ -745,6 +851,7 @@ class WatchdogService {
         booted: Boolean(row.booted),
         chainSlug,
         chainPhase: row.chain_phase,
+        ...(isVerify ? { chainStage: 'verify' as const } : {}),
         title,
         state,
         model: row.model ?? live?.model ?? null,
@@ -1202,6 +1309,7 @@ class WatchdogService {
   private stopChainFromSweep(chain: ChainRecord, reason: string): void {
     chain.status = 'stopped';
     chain.phaseActive = false;
+    settleRunningVerifies(chain);
     chain.lastEventAt = Date.now();
     chain.lastSummaryTail = reason;
     chain.wakePending = true;
@@ -1503,6 +1611,18 @@ export function parseJobMeta(value: unknown): Record<number, ChainJobMeta> {
     if (Array.isArray(entry.taskTimes)) {
       meta.taskTimes = entry.taskTimes.map((t) => (Number.isFinite(Number(t)) && t !== null ? Number(t) : null));
     }
+    if (entry.verify === 'running' || entry.verify === 'passed' || entry.verify === 'failed' || entry.verify === 'stopped') {
+      meta.verify = entry.verify;
+    }
+    if (Number.isFinite(Number(entry.verifyStartedAt))) {
+      meta.verifyStartedAt = Number(entry.verifyStartedAt);
+    }
+    if (Number.isFinite(Number(entry.verifyEndedAt))) {
+      meta.verifyEndedAt = Number(entry.verifyEndedAt);
+    }
+    if (typeof entry.verifySessionId === 'string' && entry.verifySessionId.trim()) {
+      meta.verifySessionId = entry.verifySessionId.trim();
+    }
     if (Object.keys(meta).length) {
       jobs[index] = meta;
     }
@@ -1567,12 +1687,23 @@ function punchlistDoneCounts(
  * the record (never stored) so hydrate can re-derive it after a restart.
  */
 function terminalWakePrompt(chain: ChainRecord): string {
+  const tail = chain.lastSummaryTail ? `\n\nFinal summary tail:\n${chain.lastSummaryTail}` : '';
+  // A verify-stage failure (ui14 job 10): the build committed but the
+  // fresh-context verifier rejected it and the runner rewound. The tail is
+  // the runner's resume point (failing commit, parked branch, next unit).
+  const failedVerify = Object.entries(chain.jobs).find(([, meta]) => meta.verify === 'failed');
+  if (chain.status === 'failed' && failedVerify) {
+    const [unit, meta] = failedVerify;
+    return `Watchdog: dispatched chain "${chain.slug}" FAILED VERIFY at job ${unit}${chain.phases ? ` of ${chain.phases}` : ''}`
+      + `${meta.commitHash ? ` (commit ${meta.commitHash})` : ''}: the build committed but the fresh-context verifier rejected it, `
+      + 'and the runner stopped the chain and rewound. Read the resume point below, fix the job from its commit, and re-dispatch '
+      + `from the unit it names.${tail}`;
+  }
   const flag = chain.status === 'completed'
     ? 'ended'
     : chain.status === 'stopped'
       ? 'STOPPED'
       : 'FAILED';
-  const tail = chain.lastSummaryTail ? `\n\nFinal summary tail:\n${chain.lastSummaryTail}` : '';
   return `Watchdog: dispatched chain "${chain.slug}" ${flag}${chain.phases ? ` (job ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''}. `
     + `Verify the result against git log and the punch list before declaring anything done.${tail}`;
 }

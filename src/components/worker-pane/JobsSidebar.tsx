@@ -25,6 +25,12 @@ export type ChainManifestEntry = {
   commitHash?: string;
   commitSubject?: string;
   taskTimes?: (number | null)[];
+  /** Verify stage (ui14 job 10): the runner's fresh-context verifier ran
+   *  against the job's commit; absent where the runner never verified. */
+  verify?: 'running' | 'passed' | 'failed' | 'stopped';
+  verifyStartedAt?: number;
+  verifyEndedAt?: number;
+  verifySessionId?: string;
 };
 
 /** The watchdog's live chain snapshot (worker-runs response / chain_progress). */
@@ -61,6 +67,11 @@ type Unit = {
   commitHash?: string;
   commitSubject?: string;
   taskTimes?: (number | null)[];
+  /** Verify stage state for the drawer's verify row (ui14 job 10). */
+  verify?: 'running' | 'passed' | 'failed' | 'stopped';
+  verifyStartedAt?: number;
+  verifyEndedAt?: number;
+  verifySessionId?: string;
 };
 
 function chainUnits(chain: ChainSnapshot): Unit[] {
@@ -95,6 +106,10 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
       commitHash: entry.commitHash,
       commitSubject: entry.commitSubject,
       taskTimes: entry.taskTimes,
+      verify: entry.verify,
+      verifyStartedAt: entry.verifyStartedAt,
+      verifyEndedAt: entry.verifyEndedAt,
+      verifySessionId: entry.verifySessionId,
     };
   });
 }
@@ -179,6 +194,67 @@ function JobFooter({ unit }: { unit: Unit }) {
       )}
       <span className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/50">
         {showElapsed ? <LiveElapsed startedAt={unit.startedAt!} /> : duration != null ? formatDuration(duration) : null}
+      </span>
+    </li>
+  );
+}
+
+type VerifyState = 'running' | 'passed' | 'failed' | 'stopped';
+
+const verifyRowStatus: Record<VerifyState, TodoListItemStatus> = {
+  running: 'in-progress',
+  passed: 'completed',
+  failed: 'cancelled',
+  stopped: 'cancelled',
+};
+
+const verifyRowLabel: Record<VerifyState, string> = {
+  running: 'Verifying',
+  passed: 'Verified',
+  failed: 'Verify failed',
+  stopped: 'Verify stopped',
+};
+
+/**
+ * Verify row on a job's drawer (ui14 job 10), after the commit footer: the
+ * runner's fresh-context verify stage, which runs against the job's commit
+ * while the next job builds. Task-style status icon (working ring, check,
+ * X on failure), the stage label, and its duration right-aligned in the meta
+ * style (live while running). Clicking opens the verifier's session when
+ * one exists. Absent on jobs the runner never verified.
+ */
+function VerifyRow({ unit, onOpenSession }: { unit: Unit; onOpenSession: (sessionId: string) => void }) {
+  if (!unit.verify) {
+    return null;
+  }
+  const status = verifyRowStatus[unit.verify];
+  const running = unit.verify === 'running';
+  const duration = unit.verifyStartedAt != null && unit.verifyEndedAt != null
+    ? unit.verifyEndedAt - unit.verifyStartedAt
+    : null;
+  const sessionId = unit.verifySessionId;
+  return (
+    <li
+      data-slot="jobs-sidebar-verify"
+      data-status={status}
+      data-live={running ? 'true' : undefined}
+      onClick={sessionId ? () => onOpenSession(sessionId) : undefined}
+      className={cn(
+        'flex min-h-5 items-center gap-1.5 text-[11px] leading-4',
+        status === 'completed' && 'text-muted-foreground/45',
+        status === 'in-progress' && 'text-foreground',
+        status === 'cancelled' && 'text-muted-foreground/60',
+        sessionId && 'cursor-pointer hover:text-foreground',
+      )}
+    >
+      <span className="flex-shrink-0 scale-[0.7]">
+        <TodoStatusIcon status={status} />
+      </span>
+      <span className="min-w-0 truncate">{verifyRowLabel[unit.verify]}</span>
+      <span className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/45">
+        {running && unit.verifyStartedAt != null
+          ? <LiveElapsed startedAt={unit.verifyStartedAt} />
+          : duration != null ? formatDuration(duration) : null}
       </span>
     </li>
   );
@@ -550,6 +626,7 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
                         );
                       })}
                       <JobFooter unit={unit} />
+                      <VerifyRow unit={unit} onOpenSession={onOpenSession} />
                     </ul>
                   </AgentDisclosure>
                 )}

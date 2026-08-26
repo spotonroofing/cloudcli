@@ -23,6 +23,14 @@
 # project's planner at the end. The planner invokes this once and goes idle;
 # it never polls.
 #
+# Every unit is two stages since ui14 job 10: the build (the phase prompt,
+# ending at its commit) and a verify (a second fresh-context session that
+# checks the commit against the unit's done check and answers `VERIFY: PASS`
+# or `VERIFY: FAIL: <reason>` on its last line). The verify runs while the
+# next unit builds; a phase file carrying `<!-- verify: no -->` skips its
+# verify stage. A failed verify stops the chain, parks the interrupted
+# build's work on a branch, and wakes the planner with the resume point.
+#
 # `dispatch append` queues additional prompt files onto an active chain; the
 # runner picks them up after the current phase's commit gate. Appended units
 # are "tasks" (lighter navigator rows) unless --phase marks a full compiled

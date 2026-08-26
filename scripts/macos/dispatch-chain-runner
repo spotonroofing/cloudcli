@@ -10,6 +10,17 @@
 # Phase transcripts land in ~/.claude/projects and surface in the worker
 # pane through external-session discovery.
 #
+# Pipelined verification (ui14 job 10): every unit is two stages. The build
+# stage is the phase prompt itself, ending at the commit gate. The verify
+# stage is a second fresh-context `claude -p` session that checks the
+# committed job against its done check and answers `VERIFY: PASS` or
+# `VERIFY: FAIL: <reason>` on its last line; it runs in the background while
+# the next unit's build starts, so the verify tail leaves the critical path.
+# A phase file that carries `<!-- verify: no -->` in its header skips its
+# verify stage. A failing verify rewinds: the in-flight build is killed, its
+# work is parked as a WIP commit on a branch (main is never rewritten), and
+# the terminal verify-failed event carries the exact resume point.
+#
 # Watchdog events carry projectPath and phases so a server that restarted
 # mid-chain (and lost its in-memory chain registry) re-registers the chain
 # from the event itself; terminal events (completed/stopped/failed) retry
@@ -104,6 +115,8 @@ print(json.dumps(body))
 PYEOF
 }
 
+json_string() { python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'; }
+
 # Chrome-cap queueing hook: browser-phase chains wait for a Chrome slot
 # instead of launching a fourth instance. The wait is bounded (ui14 job 7):
 # past chrome-slot-wait's ceiling the chain stops with a journal line and a
@@ -114,7 +127,7 @@ wait_for_chrome_slot() {
   "$helper" && return 0
   journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "chrome-slot-wait hit its ceiling with no free Chrome slot before $PHASE_NAME"
   api_post "/api/watchdog/chains/$SLUG/events" \
-    "$(event_body stopped $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) never got a Chrome slot: chrome-slot-wait hit its ceiling." | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" 80
+    "$(event_body stopped $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) never got a Chrome slot: chrome-slot-wait hit its ceiling." | json_string)")" 80
   exit 2
 }
 
@@ -202,15 +215,15 @@ park_spend_capped() {
   current=$(CSWAP_LISTING="$listing" python3 -c 'import json,os
 d=json.loads(os.environ["CSWAP_LISTING"] or "{}"); n=d.get("activeAccountNumber")
 print("" if n is None else n)' 2>/dev/null)
-  [[ -n "$current" ]] || { journal "phase $PHASE_NUM/$TOTAL" "park" "spend limit hit but cswap cannot name the active account; not parked"; return 1; }
+  [[ -n "$current" ]] || { journal "$1" "park" "spend limit hit but cswap cannot name the active account; not parked"; return 1; }
   email=$(CSWAP_LISTING="$listing" python3 -c 'import json,os
 d=json.loads(os.environ["CSWAP_LISTING"]); print(next((a.get("email","") for a in d.get("accounts",[]) if a.get("number")==d.get("activeAccountNumber")),""))' 2>/dev/null)
   if env -u CLAUDE_CONFIG_DIR "$CSWAP_BIN" disable "$current" >/dev/null 2>&1; then
     mkdir -p "$PARK_DIR"
     print -r -- "$(date +%Y-%m) $email" > "$PARK_DIR/$current"
-    journal "phase $PHASE_NUM/$TOTAL" "park" "monthly spend limit on account $current ($email); parked via cswap disable until $(date +%Y-%m) ends"
+    journal "$1" "park" "monthly spend limit on account $current ($email); parked via cswap disable until $(date +%Y-%m) ends"
   else
-    journal "phase $PHASE_NUM/$TOTAL" "park" "cswap disable $current failed; recovery may bounce back to the capped account"
+    journal "$1" "park" "cswap disable $current failed; recovery may bounce back to the capped account"
     return 1
   fi
 }
@@ -232,6 +245,270 @@ LIMIT_STREAK=0
 WAIT_CYCLES=0
 WAIT_TOTAL=0
 PARK_ESCALATED=0
+
+# Account recovery after a limit exit, shared by both stages: $1 is the
+# journal label ("phase N/T" or "verify N/T"), $2 the unit number, $3 its
+# name, $4 the stage log, $5 the stage (build|verify). Parks a spend-capped
+# account, then switches, stays, or sleeps out the reset; the `limit`
+# watchdog event keeps the chain running and wakes the planner with
+# "auto-recovering", not "FAILED". A verify-stage limit event carries no
+# phase, so it never moves the chain's current job. Exits the chain only when
+# cswap is missing. The caller re-runs the stage afterwards.
+recover_from_limit() {
+  local label="$1" unit="$2" name="$3" log="$4" stage="${5:-build}"
+  local event_phase="$unit" what="Phase $unit ($name)"
+  if [[ "$stage" == verify ]]; then
+    event_phase=""
+    what="The verify of job $unit ($name)"
+  fi
+  LIMIT_STREAK=$((LIMIT_STREAK + 1))
+  journal "$label" "limit" "claude exited on the session limit (attempt $LIMIT_STREAK); auto-recovering"
+  if [[ ! -x "$CSWAP_BIN" ]]; then
+    journal "$label" "FAILED" "limit hit but cswap missing at $CSWAP_BIN; cannot auto-recover"
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body failed $unit "$(print -rn -- "Phase $unit ($name) hit the session limit and auto-recovery is unavailable (cswap missing at $CSWAP_BIN)." | json_string)")" 80
+    exit 1
+  fi
+  if grep -qiE "$SPEND_PATTERN" "$log"; then
+    park_spend_capped "$label"
+  fi
+  local force_wait=""
+  [[ $LIMIT_STREAK -gt 3 ]] && force_wait=1
+  RECOVERY=$(pick_recovery "$force_wait")
+  case "${RECOVERY%% *}" in
+    switch)
+      local target
+      target=$(print -r -- "$RECOVERY" | awk '{print $2}')
+      if env -u CLAUDE_CONFIG_DIR "$CSWAP_BIN" switch "$target" --json >/dev/null 2>&1; then
+        journal "$label" "switch" "switched account: ${RECOVERY#switch }"
+      else
+        journal "$label" "switch" "cswap switch $target failed; retrying on current account"
+      fi
+      mirror_keychain \
+        && journal "$label" "mirror" "scoped Keychain + .credentials.json refreshed for ${CLAUDE_CONFIG_DIR:-default profile (no-op)}" \
+        || journal "$label" "mirror" "keychain mirror failed; scoped instances may lag one account behind"
+      ;;
+    stay)
+      journal "$label" "switch" "current account already has 5h headroom; retrying without a switch"
+      ;;
+    wait)
+      WAIT_SECS=$(print -r -- "$RECOVERY" | awk '{print $2}')
+      WAIT_UNTIL=$(print -r -- "$RECOVERY" | awk '{print $3}')
+      WAIT_CYCLES=$((WAIT_CYCLES + 1))
+      WAIT_TOTAL=$((WAIT_TOTAL + WAIT_SECS))
+      journal "$label" "wait" "no account with 5h headroom; sleeping ${WAIT_SECS}s until $WAIT_UNTIL (wait cycle $WAIT_CYCLES)"
+      if [[ $WAIT_CYCLES -ge $PARK_ESCALATE_CYCLES && $PARK_ESCALATED -eq 0 ]]; then
+        PARK_ESCALATED=1
+        journal "$label" "parked" "chain parked $WAIT_CYCLES wait cycles (${WAIT_TOTAL}s) with no account headroom; decision-needed sent"
+        api_post "/api/watchdog/notify" "$(python3 - "$SLUG" "$unit" "$TOTAL" "$name" "$WAIT_CYCLES" "$WAIT_TOTAL" "$WAIT_UNTIL" <<'PYEOF'
+import json, sys
+slug, phase, total, name, cycles, waited, until = sys.argv[1:8]
+hours = round(int(waited) / 3600, 1)
+print(json.dumps({
+    'kind': 'decision-needed',
+    'title': f'Chain {slug} parked waiting for an account reset',
+    'body': f'Job {phase} of {total} ({name}) has waited {cycles} cycles (about {hours} h) with no account under 90% of its 5h window; next retry after {until}. Raise a cap, enable an account, or stop the chain.',
+}))
+PYEOF
+)" 3
+      fi
+      ;;
+  esac
+  api_post "/api/watchdog/chains/$SLUG/events" \
+    "$(event_body limit "$event_phase" "$(print -rn -- "$what hit the session limit; recovery: $RECOVERY." | json_string)")" 3
+  if [[ "${RECOVERY%% *}" == "wait" ]]; then
+    sleep "$WAIT_SECS"
+    LIMIT_STREAK=0
+  fi
+}
+
+# One headless claude session: $1 prompt file, $2 log, $3 session id. exec'd
+# so a caller running it in the background holds claude's own pid (killable
+# on a rewind). The two CLAUDE_CODE_ lines are load-bearing (runner
+# doctrine): the first forces subagents synchronous so a turn cannot end
+# while work runs, the second makes anything that slips through be waited on
+# uncapped. Empty ANTHROPIC_API_KEY pins subscription auth. Fable phases
+# carry the Opus 4.8 capacity fallback; a chain pinned to 4.8 carries none.
+run_claude() {
+  typeset -a fallback_args
+  fallback_args=()
+  [[ "$MODEL" != "$FALLBACK_MODEL" ]] && fallback_args=(--fallback-model "$FALLBACK_MODEL")
+  # setsid puts the session in its own process group (pid == pgid, since the
+  # exec keeps the pid) so a rewind can kill claude and everything it spawned.
+  ANTHROPIC_API_KEY="" \
+  CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 \
+  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
+    exec python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' \
+    "$CLAUDE_BIN" -p --model "$MODEL" --effort "$EFFORT" "${fallback_args[@]}" \
+    --session-id "$3" \
+    --dangerously-skip-permissions \
+    < "$1" > "$2" 2>&1
+}
+
+# Pre-tag a stage session: the id is chosen here and announced to the server
+# before claude starts, so the row exists tagged origin=dispatch (with the
+# chain slug and unit) before transcript discovery can index it untagged.
+# $1 session id, $2 base commit, $3 unit, $4 stage (build|verify).
+announce_session() {
+  api_post "/api/watchdog/chains/$SLUG/sessions" "$(python3 - "$1" "$REPO" "$2" "$MODEL" "$3" "$4" <<'PYEOF'
+import json, sys
+sid, repo, base, model, phase, stage = sys.argv[1:7]
+print(json.dumps({'sessionId': sid, 'projectPath': repo, 'baseCommit': base, 'model': model, 'phase': int(phase), 'stage': stage}))
+PYEOF
+)" 3
+}
+
+# ----- verify stage (ui14 job 10) ------------------------------------------
+BUILD_PID=""
+VERIFY_PID=""
+VERIFY_NUM=0
+VERIFY_NAME=""
+VERIFY_FILE=""
+VERIFY_COMMIT=""
+VERIFY_SUBJECT=""
+VERIFY_RETRY=0
+
+verify_wanted() { ! grep -qiE '<!--[[:space:]]*verify:[[:space:]]*no' "$1" 2>/dev/null; }
+
+# The verify prompt wraps the builder's brief: the verifier reads the job's
+# items and done check from it but builds nothing, and answers on its last
+# line so the runner can read the verdict off the log.
+write_verify_prompt() {
+  local out="$JOURNAL_DIR/verify$VERIFY_NUM.prompt.md"
+  {
+    print -r -- "<!-- name: Verify $VERIFY_NAME -->"
+    print -r -- "You are the fresh-context verifier for job $VERIFY_NUM of $TOTAL in this repo ($REPO). A builder session already did the work and committed it as $VERIFY_COMMIT ($VERIFY_SUBJECT). The chain has moved on: the next job's build may be editing the working tree and rebuilding the dev instance while you check. You build nothing. Do not edit, commit, stash, reset, or push anything; do not check boxes in the punch list; do not write journal lines."
+    print -r -- ""
+    print -r -- "The builder's brief follows between the markers. Its instructions were for the builder, not for you; read it only for the job's items, the punch list section it names, and that section's done check."
+    print -r -- "----- builder brief -----"
+    cat "$VERIFY_FILE"
+    print -r -- "----- end builder brief -----"
+    print -r -- ""
+    print -r -- "Verify the job against its done check and every item it names, with concrete evidence: run the checks the done check calls for against the dev instance, and read the change through the commit (git show $VERIFY_COMMIT, and git show $VERIFY_COMMIT:<path> for any file the working tree may have moved past). Report what passed and what failed, each with the evidence you saw."
+    print -r -- ""
+    print -r -- "Your last line must be exactly one of: VERIFY: PASS or VERIFY: FAIL: <one-line reason>."
+  } > "$out"
+  print -r -- "$out"
+}
+
+# Launches the verify stage for the unit whose build just committed, in the
+# background; the caller goes straight on to the next build.
+start_verify() {
+  local prompt session
+  prompt=$(write_verify_prompt)
+  session=$(uuidgen | tr '[:upper:]' '[:lower:]')
+  announce_session "$session" "$VERIFY_COMMIT" "$VERIFY_NUM" verify
+  journal "verify $VERIFY_NUM/$TOTAL" "start" "$VERIFY_NAME against $VERIFY_COMMIT"
+  api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-start $VERIFY_NUM '')" 3
+  run_claude "$prompt" "$JOURNAL_DIR/verify$VERIFY_NUM.log" "$session" &
+  VERIFY_PID=$!
+}
+
+# Reads a finished verifier's verdict off its log. PASS clears the stage; a
+# limit exit without a verdict marks the stage for a re-run once no build is
+# in flight (reconcile_verify); anything else is a FAIL and rewinds.
+settle_verify() {
+  local rc log="$JOURNAL_DIR/verify$VERIFY_NUM.log" verdict
+  wait $VERIFY_PID
+  rc=$?
+  VERIFY_PID=""
+  # The verdict is the last VERIFY: line, wherever markdown wrapped it
+  # (`**VERIFY: PASS**`, a backticked or indented line all count).
+  verdict=$(grep -oE 'VERIFY: (PASS|FAIL[^`*]*)' "$log" 2>/dev/null | tail -1 | sed 's/[[:space:]]*$//')
+  if [[ $rc -ne 0 && -z "$verdict" ]] && grep -qiE "$LIMIT_PATTERN" "$log"; then
+    journal "verify $VERIFY_NUM/$TOTAL" "limit" "verifier exited $rc on the session limit; re-running once the build in flight has recovered"
+    VERIFY_RETRY=1
+    return 0
+  fi
+  if [[ "$verdict" == "VERIFY: PASS"* ]]; then
+    journal "verify $VERIFY_NUM/$TOTAL" "end" "PASS for $VERIFY_COMMIT"
+    api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-end $VERIFY_NUM '')" 3
+    VERIFY_NUM=0
+    return 0
+  fi
+  rewind_after_verify_failure "${verdict:-VERIFY: FAIL: verifier exited $rc without a verdict (verify$VERIFY_NUM.log)}"
+}
+
+# A failed verify stops the chain and rewinds: the in-flight build (unit
+# N+1) is killed, whatever it produced is parked as a WIP commit on a branch
+# (main is never rewritten: the failing commit and anything after it may
+# already be pushed), and the verify-failed event carries the resume point.
+rewind_after_verify_failure() {
+  local reason="$1" state head main_branch next_file branch
+  local next=$((VERIFY_NUM + 1))
+  branch="dispatch/$SLUG/job$next-parked"
+  journal "verify $VERIFY_NUM/$TOTAL" "FAILED" "$reason"
+  if [[ -n "$BUILD_PID" ]] && kill -0 $BUILD_PID 2>/dev/null; then
+    # The build is its own process group (run_claude): the whole tree goes.
+    kill -TERM -- -$BUILD_PID 2>/dev/null || kill -TERM $BUILD_PID 2>/dev/null
+    local i=0
+    while kill -0 $BUILD_PID 2>/dev/null && [[ $i -lt 30 ]]; do sleep 1; i=$((i + 1)); done
+    kill -0 $BUILD_PID 2>/dev/null && { kill -KILL -- -$BUILD_PID 2>/dev/null || kill -KILL $BUILD_PID 2>/dev/null; }
+    wait $BUILD_PID 2>/dev/null
+    journal "phase $next/$TOTAL" "killed" "build of $PHASE_NAME stopped mid-run: job $VERIFY_NUM failed verify"
+  fi
+  BUILD_PID=""
+  head=$(git -C "$REPO" rev-parse --short HEAD)
+  main_branch=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
+  local resume_unit=$next
+  if [[ -n "$(git -C "$REPO" status --porcelain)" ]]; then
+    if git -C "$REPO" checkout -q -b "$branch" \
+      && git -C "$REPO" add -A \
+      && git -C "$REPO" commit -q --no-verify -m "wip(dispatch): job $next parked after job $VERIFY_NUM failed verify"; then
+      state="job $next's uncommitted work is parked as a WIP commit on branch $branch; $main_branch is untouched at $head"
+    else
+      state="job $next's uncommitted work could not be parked (git refused the branch or commit); the tree is left as it stands"
+    fi
+    git -C "$REPO" checkout -q "$main_branch" 2>/dev/null
+  elif [[ "$head" != "$VERIFY_COMMIT" ]]; then
+    git -C "$REPO" branch -f "$branch" HEAD
+    state="job $next already committed on $main_branch after the failing commit ($head, built on the unverified job $VERIFY_NUM; review it against the fix); branch $branch marks it"
+    resume_unit=$((next + 1))
+  else
+    state="job $next left no work; $main_branch is at $VERIFY_COMMIT"
+  fi
+  journal "run" "rewind" "$state"
+  next_file="${PHASE_FILES[$resume_unit]:-}"
+  if [[ -n "$next_file" ]]; then
+    next_file="then re-dispatch from unit $resume_unit ($next_file)"
+  else
+    next_file="no unit is left to re-dispatch after job $((resume_unit - 1))"
+  fi
+  RESUME="Job $VERIFY_NUM ($VERIFY_NAME) failed verify at commit $VERIFY_COMMIT: ${reason#VERIFY: FAIL: }. $state. Resume point: fix job $VERIFY_NUM from $VERIFY_COMMIT (verify log $JOURNAL_DIR/verify$VERIFY_NUM.log), $next_file."
+  api_post "/api/watchdog/chains/$SLUG/events" \
+    "$(event_body verify-failed $VERIFY_NUM "$(print -rn -- "$RESUME" | json_string)")" 80
+  exit 3
+}
+
+# Blocks until the in-flight verify (if any) has settled, re-running it after
+# a limit exit now that no build is in flight; a FAIL rewinds and exits.
+reconcile_verify() {
+  while true; do
+    if [[ -n "$VERIFY_PID" ]]; then
+      settle_verify
+    fi
+    if [[ $VERIFY_RETRY -eq 1 ]]; then
+      VERIFY_RETRY=0
+      recover_from_limit "verify $VERIFY_NUM/$TOTAL" "$VERIFY_NUM" "$VERIFY_NAME" "$JOURNAL_DIR/verify$VERIFY_NUM.log" verify
+      journal "verify $VERIFY_NUM/$TOTAL" "retry" "re-running the verify of $VERIFY_NAME after limit recovery"
+      start_verify
+      continue
+    fi
+    break
+  done
+}
+
+# Waits for the build in flight, settling the verify the moment it exits so
+# a FAIL kills the build within seconds instead of after it finishes.
+watch_build() {
+  while kill -0 $BUILD_PID 2>/dev/null; do
+    if [[ -n "$VERIFY_PID" ]] && ! kill -0 $VERIFY_PID 2>/dev/null; then
+      settle_verify
+    fi
+    sleep 5
+  done
+  wait $BUILD_PID
+}
 
 CHAIN_BASE=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
 
@@ -283,99 +560,23 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   journal "phase $PHASE_NUM/$TOTAL" "start" "$PHASE_NAME"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body phase-start $PHASE_NUM '')" 3
 
-  # Pre-tag the phase session: the id is chosen here and announced to the
-  # server before claude starts, so the row exists tagged origin=dispatch
-  # (with the chain slug) before transcript discovery can index it untagged.
   SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-  api_post "/api/watchdog/chains/$SLUG/sessions" "$(python3 - "$SESSION_ID" "$REPO" "$BASE_COMMIT" "$MODEL" "$PHASE_NUM" <<'PYEOF'
-import json, sys
-sid, repo, base, model, phase = sys.argv[1:6]
-print(json.dumps({'sessionId': sid, 'projectPath': repo, 'baseCommit': base, 'model': model, 'phase': int(phase)}))
-PYEOF
-)" 3
+  announce_session "$SESSION_ID" "$BASE_COMMIT" "$PHASE_NUM" build
 
-  # The phase itself: a fresh headless session in the repo. The two
-  # CLAUDE_CODE_ lines are load-bearing (runner doctrine): the first forces
-  # subagents synchronous so a turn cannot end while work runs, the second
-  # makes anything that slips through be waited on uncapped. Empty
-  # ANTHROPIC_API_KEY pins subscription auth. Fable phases carry the Opus 4.8
-  # capacity fallback; a chain pinned to 4.8 carries none.
-  typeset -a FALLBACK_ARGS
-  FALLBACK_ARGS=()
-  [[ "$MODEL" != "$FALLBACK_MODEL" ]] && FALLBACK_ARGS=(--fallback-model "$FALLBACK_MODEL")
-  ANTHROPIC_API_KEY="" \
-  CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 \
-  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
-    "$CLAUDE_BIN" -p --model "$MODEL" --effort "$EFFORT" "${FALLBACK_ARGS[@]}" \
-    --session-id "$SESSION_ID" \
-    --dangerously-skip-permissions \
-    < "$PHASE_FILE" > "$JOURNAL_DIR/phase$PHASE_NUM.log" 2>&1
+  # The build stage: a fresh headless session in the repo, run in the
+  # background so the previous unit's verify can be settled while it works.
+  run_claude "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" &
+  BUILD_PID=$!
+  watch_build
   RC=$?
+  BUILD_PID=""
 
   NEW_COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
 
   # Limit-exit: recover (switch or wait) and retry the phase instead of
-  # tripping the commit gate. The `limit` watchdog event keeps the chain
-  # running and wakes the planner with "auto-recovering", not "FAILED".
+  # tripping the commit gate.
   if [[ $RC -ne 0 ]] && grep -qiE "$LIMIT_PATTERN" "$JOURNAL_DIR/phase$PHASE_NUM.log"; then
-    LIMIT_STREAK=$((LIMIT_STREAK + 1))
-    journal "phase $PHASE_NUM/$TOTAL" "limit" "claude exited $RC on the session limit (attempt $LIMIT_STREAK); auto-recovering"
-    if [[ ! -x "$CSWAP_BIN" ]]; then
-      journal "phase $PHASE_NUM/$TOTAL" "FAILED" "limit hit but cswap missing at $CSWAP_BIN; cannot auto-recover"
-      api_post "/api/watchdog/chains/$SLUG/events" \
-        "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) hit the session limit and auto-recovery is unavailable (cswap missing at $CSWAP_BIN)." | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" 80
-      exit 1
-    fi
-    if grep -qiE "$SPEND_PATTERN" "$JOURNAL_DIR/phase$PHASE_NUM.log"; then
-      park_spend_capped
-    fi
-    FORCE_WAIT=""
-    [[ $LIMIT_STREAK -gt 3 ]] && FORCE_WAIT=1
-    RECOVERY=$(pick_recovery "$FORCE_WAIT")
-    case "${RECOVERY%% *}" in
-      switch)
-        TARGET=$(print -r -- "$RECOVERY" | awk '{print $2}')
-        if env -u CLAUDE_CONFIG_DIR "$CSWAP_BIN" switch "$TARGET" --json >/dev/null 2>&1; then
-          journal "phase $PHASE_NUM/$TOTAL" "switch" "switched account: ${RECOVERY#switch }"
-        else
-          journal "phase $PHASE_NUM/$TOTAL" "switch" "cswap switch $TARGET failed; retrying on current account"
-        fi
-        mirror_keychain \
-          && journal "phase $PHASE_NUM/$TOTAL" "mirror" "scoped Keychain + .credentials.json refreshed for ${CLAUDE_CONFIG_DIR:-default profile (no-op)}" \
-          || journal "phase $PHASE_NUM/$TOTAL" "mirror" "keychain mirror failed; scoped instances may lag one account behind"
-        ;;
-      stay)
-        journal "phase $PHASE_NUM/$TOTAL" "switch" "current account already has 5h headroom; retrying without a switch"
-        ;;
-      wait)
-        WAIT_SECS=$(print -r -- "$RECOVERY" | awk '{print $2}')
-        WAIT_UNTIL=$(print -r -- "$RECOVERY" | awk '{print $3}')
-        WAIT_CYCLES=$((WAIT_CYCLES + 1))
-        WAIT_TOTAL=$((WAIT_TOTAL + WAIT_SECS))
-        journal "phase $PHASE_NUM/$TOTAL" "wait" "no account with 5h headroom; sleeping ${WAIT_SECS}s until $WAIT_UNTIL (wait cycle $WAIT_CYCLES)"
-        if [[ $WAIT_CYCLES -ge $PARK_ESCALATE_CYCLES && $PARK_ESCALATED -eq 0 ]]; then
-          PARK_ESCALATED=1
-          journal "phase $PHASE_NUM/$TOTAL" "parked" "chain parked $WAIT_CYCLES wait cycles (${WAIT_TOTAL}s) with no account headroom; decision-needed sent"
-          api_post "/api/watchdog/notify" "$(python3 - "$SLUG" "$PHASE_NUM" "$TOTAL" "$PHASE_NAME" "$WAIT_CYCLES" "$WAIT_TOTAL" "$WAIT_UNTIL" <<'PYEOF'
-import json, sys
-slug, phase, total, name, cycles, waited, until = sys.argv[1:8]
-hours = round(int(waited) / 3600, 1)
-print(json.dumps({
-    'kind': 'decision-needed',
-    'title': f'Chain {slug} parked waiting for an account reset',
-    'body': f'Job {phase} of {total} ({name}) has waited {cycles} cycles (about {hours} h) with no account under 90% of its 5h window; next retry after {until}. Raise a cap, enable an account, or stop the chain.',
-}))
-PYEOF
-)" 3
-        fi
-        ;;
-    esac
-    api_post "/api/watchdog/chains/$SLUG/events" \
-      "$(event_body limit $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) hit the session limit; recovery: $RECOVERY." | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" 3
-    if [[ "${RECOVERY%% *}" == "wait" ]]; then
-      sleep "$WAIT_SECS"
-      LIMIT_STREAK=0
-    fi
+    recover_from_limit "phase $PHASE_NUM/$TOTAL" "$PHASE_NUM" "$PHASE_NAME" "$JOURNAL_DIR/phase$PHASE_NUM.log"
     journal "phase $PHASE_NUM/$TOTAL" "retry" "re-running $PHASE_NAME after limit recovery"
     PHASE_NUM=$((PHASE_NUM - 1))
     continue
@@ -386,17 +587,19 @@ PYEOF
   PARK_ESCALATED=0
 
   if [[ $RC -ne 0 ]]; then
+    reconcile_verify
     journal "phase $PHASE_NUM/$TOTAL" "FAILED" "claude exited $RC; stopping chain (phase$PHASE_NUM.log)"
     api_post "/api/watchdog/chains/$SLUG/events" \
-      "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) failed: claude exited $RC." | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" 80
+      "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) failed: claude exited $RC." | json_string)")" 80
     exit 1
   fi
 
   # Commit gate: a phase that lands no commit stops the chain right here.
   if [[ "$NEW_COMMIT" == "$BASE_COMMIT" ]]; then
+    reconcile_verify
     journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME"
     api_post "/api/watchdog/chains/$SLUG/events" \
-      "$(event_body stopped $PHASE_NUM "$(print -rn -- "Commit gate stopped the chain: phase $PHASE_NUM ($PHASE_NAME) produced no commit." | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" 80
+      "$(event_body stopped $PHASE_NUM "$(print -rn -- "Commit gate stopped the chain: phase $PHASE_NUM ($PHASE_NAME) produced no commit." | json_string)")" 80
     exit 2
   fi
 
@@ -405,10 +608,23 @@ PYEOF
   # view can show what each job shipped.
   api_post "/api/watchdog/chains/$SLUG/events" \
     "$(event_body phase-end $PHASE_NUM '' "$(git -C "$REPO" log -1 --format=%h)" "$(git -C "$REPO" log -1 --format=%s)")" 3
+
+  # The previous unit's verify must have passed before this unit's starts:
+  # at most one verify is in flight, one build behind it.
+  reconcile_verify
+  if verify_wanted "$PHASE_FILE"; then
+    VERIFY_NUM=$PHASE_NUM
+    VERIFY_NAME="$PHASE_NAME"
+    VERIFY_FILE="$PHASE_FILE"
+    VERIFY_COMMIT=$(git -C "$REPO" log -1 --format=%h)
+    VERIFY_SUBJECT=$(git -C "$REPO" log -1 --format=%s)
+    start_verify
+  fi
   pickup_appends
 done
 
-TAIL=$(git -C "$REPO" log --oneline "$CHAIN_BASE"..HEAD 2>/dev/null | head -20 | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))")
-journal run "end" "all $TOTAL phases committed"
+reconcile_verify
+TAIL=$(git -C "$REPO" log --oneline "$CHAIN_BASE"..HEAD 2>/dev/null | head -20 | json_string)
+journal run "end" "all $TOTAL phases committed and verified"
 api_post "/api/watchdog/chains/$SLUG/events" "$(event_body completed $TOTAL "$TAIL")" 80
 print -r -- "dispatch: chain $SLUG completed ($TOTAL phases)"
