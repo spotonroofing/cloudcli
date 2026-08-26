@@ -1,4 +1,4 @@
-import { Check, MessageSquare, Milestone, Plus, Terminal, X } from 'lucide-react';
+import { Hammer, MessageSquare, Milestone, Plus, Terminal, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import ChatInterface from '../chat/view/ChatInterface';
@@ -8,9 +8,8 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
-import { formatCompactAge } from '../sidebar/utils/utils';
 import { cn } from '../../lib/utils';
-import { ActionMenu, Badge, Button, Skeleton, Tooltip, type ActionMenuItem } from '../../shared/view/ui';
+import { Badge, Button, Skeleton, Tooltip } from '../../shared/view/ui';
 import { ActionSwapIcon } from '../../shared/view/beui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
@@ -79,8 +78,10 @@ type WorkerPaneProps = {
 /**
  * The always-there worker surface (spec B2): a full interactive chat pinned
  * beside the project's chats. It auto-follows the most recent worker session
- * (origin direct or dispatch), and the top bar is just the run's name (the
- * run-list menu) and the job sign (the jobs toggle) — ui13 job 10 / ui14 job 1.
+ * (origin direct or dispatch). The top bar matches the planner pane's: the
+ * Hammer icon, "Worker", and the shown run's title, with no dropdown — the
+ * jobs list is the navigation between runs (ui14 job 2); the right end holds
+ * the new-session plus, the hide X, and the job sign (the jobs toggle).
  */
 export default function WorkerPane({
   selectedProject,
@@ -259,6 +260,12 @@ export default function WorkerPane({
   };
 
   const selectedRun = runs.find((run) => run.sessionId === paneSession?.id) ?? null;
+  // The title after "Worker" (ui14 job 2), in the planner header's style: the
+  // run's own session title, else the chain label ("slug Job N - name"); a
+  // fresh, unsent pane session has none yet.
+  const paneTitle = selectedRun
+    ? (selectedRun.title || runLabel(selectedRun, chains))
+    : (paneSession?.summary ?? '').trim();
 
   // Jobs are the navigation (ui13 job 2) and the list spans every run of the
   // project (ui14 job 1): each chain is a group carrying the sessions its
@@ -291,47 +298,19 @@ export default function WorkerPane({
   };
   const jobsFullPane = jobsTakeover || isMobile;
 
-  // The run list behind the run's name (ui13 job 10): the retired dropdown's
-  // one remaining function — every run of the project, newest first, plus the
-  // New-session flow that left the bar.
-  const runListItems: ActionMenuItem[] = [
-    {
-      key: 'new-session',
-      label: 'New worker session',
-      icon: Plus,
-      onSelect: handleNewWorkerSession,
-    },
-    ...runs.map((run, index) => ({
-      key: run.sessionId,
-      label: runLabel(run, chains),
-      icon: run.sessionId === selectedRun?.sessionId ? Check : MessageSquare,
-      trailing: run.lastActivity ? formatCompactAge(run.lastActivity, new Date()) : undefined,
-      showDividerBefore: index === 0,
-      onSelect: () => handleSelectRun(run),
-    })),
-  ];
-
   return (
     <div className="flex h-full min-w-0 flex-col">
-      {/* Worker top bar (ui13 job 10, Willem-approved): the run's name on the
-          left (opens the run list), the job sign at the far right (toggles
-          the jobs list). No status words; the two badges are wiring fail-safes. */}
-      <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-2 py-1.5">
-        {!runsLoaded && <Skeleton className="h-4 w-36 rounded-sm" />}
-        {runsLoaded && (
-          <div data-slot="worker-run-name" className="min-w-0">
-            <ActionMenu
-              label={selectedRun ? runLabel(selectedRun, chains) : 'Worker'}
-              ariaLabel="Run list"
-              variant="ghost"
-              size="sm"
-              align="left"
-              items={runListItems}
-              className="max-w-full"
-              triggerClassName="h-6 max-w-full min-w-0 justify-start gap-1 px-1.5 text-xs font-medium text-foreground hover:bg-accent/60 [&>span]:min-w-0 [&>span]:truncate [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:flex-shrink-0 [&>svg]:text-muted-foreground"
-              menuClassName="max-w-[320px]"
-            />
-          </div>
+      {/* Worker top bar (ui14 job 2): the planner header's anatomy — icon,
+          "Worker", the shown run's title as plain text (no dropdown; jobs are
+          the navigation). No status words; the two badges are wiring fail-safes. */}
+      <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+        <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        <span className="text-xs font-medium text-foreground">Worker</span>
+        {!runsLoaded && <Skeleton className="h-3 w-36 rounded-sm" />}
+        {runsLoaded && paneTitle && (
+          <span data-slot="worker-run-name" className="min-w-0 truncate text-[11px] text-muted-foreground">
+            {paneTitle}
+          </span>
         )}
         {streamMismatch && (
           <Badge status="danger" size="sm" className="flex-shrink-0">
@@ -362,6 +341,18 @@ export default function WorkerPane({
             </Button>
           </Tooltip>
         )}
+        <Tooltip content="New worker session" position="bottom">
+          <Button
+            variant="ghost"
+            size="sm"
+            data-slot="worker-new-session"
+            className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+            onClick={handleNewWorkerSession}
+            aria-label="New worker session"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </Tooltip>
         {onClose && (
           <Tooltip content={closeLabel ?? 'Hide worker pane'} position="bottom">
             <Button

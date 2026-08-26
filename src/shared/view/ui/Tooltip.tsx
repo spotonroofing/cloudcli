@@ -42,6 +42,9 @@ function Tooltip({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties | null>(null);
+  // Collision shift (ui14 job 2): how far the box slid inward to stay on
+  // screen, so the arrow can slide the other way and stay on the control.
+  const [arrowShift, setArrowShift] = useState(0);
 
   const updateTooltipPosition = useCallback(() => {
     const container = containerRef.current;
@@ -53,33 +56,57 @@ function Tooltip({
       position: 'fixed',
       zIndex: 9999,
     };
+    // Edge-aware: the box is measured (it renders off-screen first), and its
+    // centered position is clamped inside the viewport with a small margin.
+    // The arrow keeps the control's center by shifting back the same amount.
+    const box = tooltipRef.current?.getBoundingClientRect();
+    const margin = 6;
+    const clamp = (center: number, size: number, limit: number): number => {
+      const min = margin + size / 2;
+      const max = limit - margin - size / 2;
+      return Math.max(min, Math.min(max, center));
+    };
+    let shift = 0;
 
     // Calculate tooltip position based on the specified position prop.
     switch (position) {
-      case 'bottom':
-        style.left = rect.left + rect.width / 2;
+      case 'bottom': {
+        const center = rect.left + rect.width / 2;
+        style.left = box ? clamp(center, box.width, window.innerWidth) : center;
         style.top = rect.bottom + spacing;
         style.transform = 'translateX(-50%)';
+        shift = style.left - center;
         break;
-      case 'left':
+      }
+      case 'left': {
+        const center = rect.top + rect.height / 2;
         style.left = rect.left - spacing;
-        style.top = rect.top + rect.height / 2;
+        style.top = box ? clamp(center, box.height, window.innerHeight) : center;
         style.transform = 'translate(-100%, -50%)';
+        shift = style.top - center;
         break;
-      case 'right':
+      }
+      case 'right': {
+        const center = rect.top + rect.height / 2;
         style.left = rect.right + spacing;
-        style.top = rect.top + rect.height / 2;
+        style.top = box ? clamp(center, box.height, window.innerHeight) : center;
         style.transform = 'translateY(-50%)';
+        shift = style.top - center;
         break;
+      }
       case 'top':
-      default:
-        style.left = rect.left + rect.width / 2;
+      default: {
+        const center = rect.left + rect.width / 2;
+        style.left = box ? clamp(center, box.width, window.innerWidth) : center;
         style.top = rect.top - spacing;
         style.transform = 'translate(-50%, -100%)';
+        shift = style.left - center;
         break;
+      }
     }
 
     setTooltipStyle(style);
+    setArrowShift(shift);
   }, [position]);
 
   const clearTooltipTimer = () => {
@@ -188,8 +215,15 @@ function Tooltip({
           )}
         >
           {content}
-          {/* Arrow */}
-          <div className={cn('absolute w-0 h-0 border-4 border-transparent', getArrowClasses(position))} />
+          {/* Arrow: anchored to the control's center even when the box slid inward. */}
+          <div
+            className={cn('absolute w-0 h-0 border-4 border-transparent', getArrowClasses(position))}
+            style={
+              position === 'left' || position === 'right'
+                ? { top: `calc(50% - ${arrowShift}px)` }
+                : { left: `calc(50% - ${arrowShift}px)` }
+            }
+          />
         </div>,
         document.body
       )}

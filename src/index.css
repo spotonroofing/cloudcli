@@ -1211,17 +1211,16 @@
     will-change: transform;
   }
 
-  /* Working-row breathe (ui12 job 8): opacity/scale-only pulse for the active
-     task row and the active job's indicator in the jobs sidebar. */
+  /* Working-row breathe (ui12 job 8; opacity only since ui14 job 2): the
+     active task row and the active job's indicator in the jobs sidebar
+     breathe through the white's opacity alone — never scale or size. */
   @keyframes row-breathe {
     0%,
     100% {
       opacity: 1;
-      transform: scale(1);
     }
     50% {
       opacity: 0.65;
-      transform: scale(0.985);
     }
   }
 
