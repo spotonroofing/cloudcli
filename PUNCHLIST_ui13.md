@@ -120,6 +120,8 @@ Goal: files and source control become windows in a real windowing layer that ext
 
 - [ ] A windowing layer over the workspace: windows open side-by-side or stacked within the existing grid (no freeform floating, no z-order layering), resize via the existing drag handles, close to nothing or collapse to the thin rotated-text rail exactly like planner/worker panes do; when a pane closes, its rail attaches to the nearest open pane of that project, squishing it, consistent with the current multi-project stacking behavior.
 - [ ] Files and source control move out of the old menu into windows; a window selector (a control in the workspace chrome listing available windows per project: Planner, Worker, Files, Source Control, extensible) opens and closes them; neither is open by default.
+- [ ] Jobs surface becomes a per-project switcher view (Willem 2026-08-25, planner's pick between his two options): a control in that project's worker pane header swaps the pane between the transcript and a full-pane jobs list (same rows, drawers, footers) and back; the standalone right jobs sidebar and its collapsed rail retire. Jobs state is strictly per project: opening jobs on one project never opens it on another.
+- [ ] Pane widths behave: opening any auxiliary view squishes that project's planner and worker panes evenly so the two stay equal width; dragging a project into side-by-side never yields random pane widths (deterministic initial split); three projects in column view lay out cleanly with the jobs view contained inside its own project's panes.
 - [ ] Worker top bar (Willem approved 2026-08-25): the left side is the run's name, and clicking it opens the run list (the retired dropdown's one remaining function); the right side keeps the jobs count. No status words, nothing else in the bar.
 - [ ] The selector and rails tie into the project stacking system end to end: multiple projects open, each with its own window set, collapse/attach behavior verified across project switches and reloads.
 
@@ -166,4 +168,14 @@ Goal: an opened job drawer shows what it shipped. Every job already ends in exac
 - [ ] Per-task durations: each completed task row shows how long it took, right-aligned in the muted meta style; source the timing honestly (the watchdog's check-off detections give task boundaries; job start anchors the first task) and skip the figure where the data genuinely does not exist (historical runs), rather than inventing one.
 
 Done check: on dev with a stub chain: after a stub job commits, its drawer footer shows the hash and subject (DOM); jobs still running show none; ui13's completed jobs show theirs after backfill. Phone holds. Fresh-context subagent verification. Commit.
+
+## Job 15 — Column-view wiring bugs (appended 2026-08-26)
+
+Goal: multi-project column view stops misbehaving. Willem hit three bugs running three projects: a chat scrolled itself far up, the Tesla Hunt planner chat took unusually long to load, and after closing everything the selected project showed its worker pane but the planner chat stayed unloaded until he clicked the chat again. Files: the workspace pane restoration and session-selection wiring, the session store fetch paths, scroll pinning. Dependencies: job 10 (layout settles first).
+
+- [ ] Reselecting or reopening a project restores its planner chat alongside the worker pane (whatever combination was open before), never a half-restored state needing a manual chat click; reproduce Willem's close-everything-then-return case and fix the restoration path.
+- [ ] Find the random scroll-up jump (a live session scrolled far up on its own) — likely a pin/fill interaction under multi-pane load — fix it, and add a regression check that a pinned transcript never leaves the bottom without user scroll.
+- [ ] Profile the slow planner-chat load in a three-project column view (Tesla Hunt case): find what serialized or blocked (fetch contention, fill loop, watcher storms), fix the cause, and record the before/after load time in the summary.
+
+Done check: on dev with three projects in column view (stub sessions): close all panes, reselect the project, planner and worker both restore without extra clicks; an hour-long stub transcript stays pinned through background updates (no self-scroll); the profiled load path shows the fix and timings in the summary. Fresh-context subagent verification. Commit.
 
