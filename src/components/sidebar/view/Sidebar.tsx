@@ -7,7 +7,7 @@ import { useVersionCheck } from '../../../hooks/useVersionCheck';
 import { useUiPreferences } from '../../../hooks/useUiPreferences';
 import { useSidebarController } from '../hooks/useSidebarController';
 import { usePaletteOps } from '../../../contexts/PaletteOpsContext';
-import type { Project, LLMProvider } from '../../../types/app';
+import type { LLMProvider } from '../../../types/app';
 import type { ActiveSessionRow, RunningRunInfo, SidebarProps } from '../types/types';
 
 import SidebarCollapsed from './subcomponents/SidebarCollapsed';
@@ -310,7 +310,6 @@ function Sidebar({
     getProjectSessions,
     loadingMoreProjects,
     activeSessions,
-    attentionSessionIds,
     runningByProject,
     workspaceProjectIds,
     onCloseWorkspaceProject,

@@ -2,7 +2,9 @@ import { Folder } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Loader } from '../../../../shared/view/beui/Loader';
+import { PANE_HEADER_CLASS } from '../../../app/workspace/paneHeader';
 import type { MainContentStateViewProps } from '../../types/types';
+
 import MobileMenuButton from './MobileMenuButton';
 
 export default function MainContentStateView({ mode, isMobile, onMenuClick }: MainContentStateViewProps) {
@@ -13,7 +15,7 @@ export default function MainContentStateView({ mode, isMobile, onMenuClick }: Ma
   return (
     <div className="flex h-full flex-col">
       {isMobile && (
-        <div className="mobile-top-bar flex flex-shrink-0 items-center border-b border-border/60 bg-muted/30 px-3 pb-1.5">
+        <div className={PANE_HEADER_CLASS} data-slot="pane-header">
           <MobileMenuButton onMenuClick={onMenuClick} />
         </div>
       )}

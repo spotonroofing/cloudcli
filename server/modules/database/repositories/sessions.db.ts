@@ -149,10 +149,13 @@ export const sessionsDb = {
       .get(providerSessionId, provider) as { session_id: string } | undefined;
 
     if (existing) {
+      // A missing timestamp keeps the row's current value (ui14 job 12): a
+      // re-index that could not read a real timestamp must never restamp an
+      // old chat to "now".
       db.prepare(
         `UPDATE sessions SET
            provider = ?,
-           updated_at = COALESCE(?, CURRENT_TIMESTAMP),
+           updated_at = COALESCE(?, updated_at),
            project_path = ?,
            jsonl_path = ?,
            isArchived = 0,
@@ -184,7 +187,7 @@ export const sessionsDb = {
        ON CONFLICT(session_id) DO UPDATE SET
          provider = excluded.provider,
          provider_session_id = excluded.provider_session_id,
-         updated_at = excluded.updated_at,
+         updated_at = COALESCE(?, sessions.updated_at),
          project_path = excluded.project_path,
          jsonl_path = excluded.jsonl_path,
          isArchived = 0,
@@ -202,6 +205,9 @@ export const sessionsDb = {
       origin,
       jsonlPath ?? null,
       createdAtValue,
+      updatedAtValue,
+      // The conflict path re-binds the timestamp so a null keeps the row's
+      // current updated_at instead of taking the insert's CURRENT_TIMESTAMP.
       updatedAtValue
     );
 
@@ -376,14 +382,16 @@ export const sessionsDb = {
         )
         .get(providerSessionId, providerSessionId, sessionId) as SessionRow | undefined;
 
+      // Identity wiring never touches updated_at (ui14 job 12): a resumed run
+      // re-announcing its provider id is not chat activity, and restamping
+      // here made old chats read as just-updated.
       if (duplicate) {
         db.prepare('DELETE FROM sessions WHERE session_id = ?').run(duplicate.session_id);
         db.prepare(
           `UPDATE sessions SET
              provider_session_id = ?,
              jsonl_path = COALESCE(jsonl_path, ?),
-             custom_name = COALESCE(custom_name, ?),
-             updated_at = CURRENT_TIMESTAMP
+             custom_name = COALESCE(custom_name, ?)
            WHERE session_id = ?`
         ).run(providerSessionId, duplicate.jsonl_path, duplicate.custom_name, sessionId);
         return;
@@ -391,8 +399,7 @@ export const sessionsDb = {
 
       db.prepare(
         `UPDATE sessions SET
-           provider_session_id = ?,
-           updated_at = CURRENT_TIMESTAMP
+           provider_session_id = ?
          WHERE session_id = ?`
       ).run(providerSessionId, sessionId);
     });
@@ -415,10 +422,11 @@ export const sessionsDb = {
       projectsDb.createProjectPath(normalizedProjectPath);
     }
 
+    // Moving a chat between projects keeps its age (ui14 job 12): the
+    // timestamp reflects the last real message only.
     db.prepare(
       `UPDATE sessions
-       SET assigned_project_path = ?,
-           updated_at = CURRENT_TIMESTAMP
+       SET assigned_project_path = ?
        WHERE session_id = ?`
     ).run(normalizedProjectPath, sessionId);
   },

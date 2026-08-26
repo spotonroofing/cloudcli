@@ -18,6 +18,7 @@ import type { SettingsMainTab } from '../../settings/types/types';
 
 import PaneStrip, { type StripPane } from './PaneStrip';
 import WindowPane from './WindowPane';
+import { PANE_HEADER_CLASS } from './paneHeader';
 import WindowSelector, { type WindowSelectorItem } from './WindowSelector';
 import { WINDOW_LABELS, WINDOW_ORDER, useProjectWindows } from './useProjectWindows';
 import type { WorkspaceMode } from './useWorkspace';
@@ -232,7 +233,7 @@ export default function WorkspaceRow({
 
   pushPane('planner', 200, (
     <>
-      <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+      <div className={PANE_HEADER_CLASS} data-slot="pane-header">
         <button
           type="button"
           {...gripHandlers}

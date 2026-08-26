@@ -60,7 +60,6 @@ type SidebarProjectItemProps = {
   ) => void;
   onLoadMoreSessions: (projectId: string) => void;
   activeSessions: SessionActivityMap;
-  attentionSessionIds: ReadonlySet<string>;
   onNewSession: (project: Project) => void;
   onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
@@ -122,7 +121,6 @@ export default function SidebarProjectItem({
   onDeleteSession,
   onLoadMoreSessions,
   activeSessions,
-  attentionSessionIds,
   isInWorkspace,
   onCloseWorkspaceProject,
   onNewSession,
@@ -146,15 +144,10 @@ export default function SidebarProjectItem({
   // the project is open as a workspace row.
   const showOpenHighlight = (isSelected && Boolean(selectedSession) && !isExpanded) || isInWorkspace;
 
+  // Row and chevron clicks are a pure dropdown toggle (ui14 job 12): they
+  // never select the project or touch the workspace — a project opens only
+  // when one of its chats is clicked.
   const toggleProject = () => onToggleProject(project.projectId);
-
-  const selectAndToggleProject = () => {
-    if (selectedProject?.projectId !== project.projectId) {
-      onProjectSelect(project);
-    }
-
-    toggleProject();
-  };
 
   return (
     <div className={cn('md:space-y-0.5', isDeleting && 'opacity-50 pointer-events-none')}>
@@ -238,11 +231,11 @@ export default function SidebarProjectItem({
             event.dataTransfer.setData(PROJECT_DRAG_TYPE, project.projectId);
             event.dataTransfer.effectAllowed = 'move';
           }}
-          onClick={selectAndToggleProject}
+          onClick={toggleProject}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
-              selectAndToggleProject();
+              toggleProject();
             }
           }}
           onMouseEnter={() => setHovered(true)}
@@ -266,10 +259,14 @@ export default function SidebarProjectItem({
             </span>
           </span>
 
+          {/* Hover actions are display-hidden at rest (ui14 job 12): only the
+              count and chevron hold fixed slots, so the name gets the row's
+              free width; on hover the actions appear and the marquee covers
+              any genuine overflow. */}
           <div className="flex flex-shrink-0 items-center gap-1">
             {onCloseWorkspaceProject && isInWorkspace && (
               <div
-                className="touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded opacity-0 transition-all duration-200 hover:bg-accent group-hover/project:opacity-100"
+                className="touch:flex hidden h-6 w-6 cursor-pointer items-center justify-center rounded hover:bg-accent group-hover/project:flex"
                 onClick={(event) => {
                   event.stopPropagation();
                   onCloseWorkspaceProject(project);
@@ -281,7 +278,7 @@ export default function SidebarProjectItem({
               </div>
             )}
             <div
-              className="touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded opacity-0 transition-all duration-200 hover:bg-accent group-hover/project:opacity-100"
+              className="touch:flex hidden h-6 w-6 cursor-pointer items-center justify-center rounded hover:bg-accent group-hover/project:flex"
               onClick={(event) => {
                 event.stopPropagation();
                 onStartEditingProject(project);
@@ -291,7 +288,7 @@ export default function SidebarProjectItem({
               <Edit3 className="h-3 w-3" />
             </div>
             <div
-              className="touch:opacity-100 flex h-6 w-6 cursor-pointer items-center justify-center rounded opacity-0 transition-all duration-200 hover:bg-red-50 group-hover/project:opacity-100 dark:hover:bg-red-900/20"
+              className="touch:flex hidden h-6 w-6 cursor-pointer items-center justify-center rounded hover:bg-red-50 group-hover/project:flex dark:hover:bg-red-900/20"
               onClick={(event) => {
                 event.stopPropagation();
                 onDeleteProject(project);
@@ -338,7 +335,6 @@ export default function SidebarProjectItem({
         hasMoreSessions={Boolean(project.sessionMeta?.hasMore)}
         isLoadingMoreSessions={isLoadingMoreSessions}
         activeSessions={activeSessions}
-        attentionSessionIds={attentionSessionIds}
         currentTime={currentTime}
         onMoveSessionToProject={onMoveSessionToProject}
         onSaveEditingSession={onSaveEditingSession}

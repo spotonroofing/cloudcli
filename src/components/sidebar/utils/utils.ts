@@ -108,24 +108,16 @@ export const getAllSessions = (project: Project): SessionWithProvider[] => {
   );
 };
 
-export const getProjectLastActivity = (project: Project): Date => {
-  const sessions = getAllSessions(project);
-  if (sessions.length === 0) {
-    return new Date(0);
-  }
-
-  return sessions.reduce((latest, session) => {
-    const sessionDate = getSessionDate(session);
-    return sessionDate > latest ? sessionDate : latest;
-  }, new Date(0));
-};
-
 /**
- * Project order (ui9 B5): starred first, then most-recently-touched floats to
- * the top automatically; names only break exact-activity ties. There is no
- * manual ordering.
+ * Project order (ui14 job 12): starred first, then by when Willem last opened
+ * the project — a deliberate order that changes only on his own actions, never
+ * because a running session streamed or made a tool call. Never-opened
+ * projects sort by name behind the opened ones.
  */
-export const sortProjects = (projects: Project[]): Project[] => {
+export const sortProjects = (
+  projects: Project[],
+  lastOpenedAt: ReadonlyMap<string, number>,
+): Project[] => {
   const sorted = [...projects];
 
   sorted.sort((projectA, projectB) => {
@@ -141,9 +133,9 @@ export const sortProjects = (projects: Project[]): Project[] => {
       return 1;
     }
 
-    const byActivity = getProjectLastActivity(projectB).getTime() - getProjectLastActivity(projectA).getTime();
-    if (byActivity !== 0) {
-      return byActivity;
+    const byOpened = (lastOpenedAt.get(projectB.projectId) ?? 0) - (lastOpenedAt.get(projectA.projectId) ?? 0);
+    if (byOpened !== 0) {
+      return byOpened;
     }
 
     return (projectA.displayName || projectA.projectId).localeCompare(projectB.displayName || projectB.projectId);

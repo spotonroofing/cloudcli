@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { Button } from '../../../shared/view/ui';
 
+import { PANE_HEADER_CLASS } from './paneHeader';
 import type { WindowId } from './useProjectWindows';
 
 type WindowPaneProps = {
@@ -15,8 +16,6 @@ type WindowPaneProps = {
   leading?: ReactNode;
   /** Trailing header controls (the phone's window selector). */
   trailing?: ReactNode;
-  /** Header vertical padding; the phone passes its safe-area top bar classes. */
-  headerClassName?: string;
   children: ReactNode;
 };
 
@@ -34,15 +33,11 @@ export default function WindowPane({
   onRail,
   leading,
   trailing,
-  headerClassName,
   children,
 }: WindowPaneProps) {
   return (
     <div className="flex h-full min-h-0 flex-col" data-slot="window-pane" data-window={id}>
-      <div
-        className={`flex flex-shrink-0 items-center gap-2 overflow-hidden border-b border-border/60 bg-muted/30 px-3 ${headerClassName ?? 'py-1.5'}`}
-        data-slot="pane-header"
-      >
+      <div className={PANE_HEADER_CLASS} data-slot="pane-header">
         {leading}
         <Icon className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         <span className="text-xs font-medium text-foreground">{label}</span>

@@ -1052,6 +1052,12 @@
       opacity: 1 !important;
     }
 
+    /* Display-hidden hover actions (ui14 job 12) surface permanently where
+       hover does not exist. */
+    .touch\:flex {
+      display: flex !important;
+    }
+
     /* Expands a small control's tap area to the 44px minimum without changing
        its rendered size. Requires position:relative (Tailwind `relative`). */
     .touch-hit::after {
@@ -1115,6 +1121,23 @@
      .fixed.inset-0 above never reaches it). */
   .mobile-top-bar {
     padding-top: calc(var(--safe-area-inset-top, 0px) + var(--header-base-padding));
+  }
+
+  /* Pane top bar height (ui14 job 12): every pane header — planner, worker,
+     files, source control, empty state — wears .pane-header, and this fixed
+     box is the only thing that sets its height, so no per-pane control can
+     make one bar taller than another. Desktop: 24px control row + 6px padding
+     each side. Phone: the same 24px row over the safe-area/status-bar
+     clearance the old mobile-top-bar rule provided. */
+  .pane-header {
+    height: 2.25rem;
+  }
+  @media (max-width: 767px) {
+    .pane-header {
+      height: calc(var(--safe-area-inset-top, 0px) + var(--header-base-padding) + 1.875rem);
+      padding-top: calc(var(--safe-area-inset-top, 0px) + var(--header-base-padding));
+      padding-bottom: 0.375rem;
+    }
   }
 
   /* Shell mirror (ui14 job 11): a pane whose shell is toggled on while its

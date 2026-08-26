@@ -129,6 +129,21 @@ function formatDuration(ms: number): string {
 }
 
 /**
+ * Compact date for jobs older than 24 hours (ui14 job 12), e.g. "Aug 25" —
+ * owner-facing, so rendered in America/New_York regardless of host timezone.
+ */
+function formatJobDate(endedAt: number): string | null {
+  if (Date.now() - endedAt < 24 * 60 * 60 * 1000) {
+    return null;
+  }
+  return new Date(endedAt).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'America/New_York',
+  });
+}
+
+/**
  * A completed task's duration from the watchdog's check-off times (ui13 job
  * 14): task i runs from the previous check-off (job start for the first) to
  * its own. Null where the data genuinely does not exist — historical runs, or
@@ -193,6 +208,12 @@ function JobFooter({ unit }: { unit: Unit }) {
         </>
       )}
       <span className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/50">
+        {/* Day-old jobs carry their date next to the duration (ui14 job 12). */}
+        {!showElapsed && unit.endedAt != null && formatJobDate(unit.endedAt) && (
+          <span data-slot="jobs-sidebar-job-date" className="pr-1.5">
+            {formatJobDate(unit.endedAt)}
+          </span>
+        )}
         {showElapsed ? <LiveElapsed startedAt={unit.startedAt!} /> : duration != null ? formatDuration(duration) : null}
       </span>
     </li>

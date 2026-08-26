@@ -21,7 +21,6 @@ type SidebarProjectSessionsProps = {
   hasMoreSessions: boolean;
   isLoadingMoreSessions: boolean;
   activeSessions: SessionActivityMap;
-  attentionSessionIds: ReadonlySet<string>;
   currentTime: Date;
   onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
@@ -67,7 +66,6 @@ export default function SidebarProjectSessions({
   hasMoreSessions,
   isLoadingMoreSessions,
   activeSessions,
-  attentionSessionIds,
   currentTime,
   onMoveSessionToProject,
   onSaveEditingSession,
@@ -125,7 +123,6 @@ export default function SidebarProjectSessions({
               session={session}
               selectedSession={selectedSession}
               isProcessing={activeSessions.has(session.id)}
-              needsAttention={attentionSessionIds.has(session.id)}
               currentTime={currentTime}
               onMoveSessionToProject={onMoveSessionToProject}
               onSaveEditingSession={onSaveEditingSession}

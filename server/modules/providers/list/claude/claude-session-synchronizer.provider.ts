@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { open, readFile } from 'node:fs/promises';
 
 import { sessionsDb } from '@/modules/database/index.js';
 import {
@@ -87,13 +87,14 @@ export class ClaudeSessionSynchronizer implements IProviderSessionSynchronizer {
       }
 
       const timestamps = await readFileTimestamps(filePath);
+      const lastMessageAt = await this.extractLastMessageTimestamp(filePath);
       sessionsDb.createSession(
         parsed.sessionId,
         this.provider,
         parsed.projectPath,
         parsed.sessionName,
         timestamps.createdAt,
-        timestamps.updatedAt,
+        lastMessageAt ?? timestamps.updatedAt,
         filePath,
         this.discoveredOrigin(parsed)
       );
@@ -121,16 +122,67 @@ export class ClaudeSessionSynchronizer implements IProviderSessionSynchronizer {
     }
 
     const timestamps = await readFileTimestamps(filePath);
+    const lastMessageAt = await this.extractLastMessageTimestamp(filePath);
     return sessionsDb.createSession(
       parsed.sessionId,
       this.provider,
       parsed.projectPath,
       parsed.sessionName,
       timestamps.createdAt,
-      timestamps.updatedAt,
+      lastMessageAt ?? timestamps.updatedAt,
       filePath,
       this.discoveredOrigin(parsed)
     );
+  }
+
+  /**
+   * The newest real message's timestamp — the last user/assistant entry in
+   * the transcript tail. `updated_at` derives from this, never from file
+   * mtime (ui14 job 12): marker lines (ai-title, label passes), compaction
+   * rewrites, and watcher re-index touches must not move a chat's age.
+   * Undefined when nothing in the tail parses; callers fall back to mtime.
+   */
+  private async extractLastMessageTimestamp(filePath: string): Promise<string | undefined> {
+    try {
+      const handle = await open(filePath, 'r');
+      try {
+        const { size } = await handle.stat();
+        const tailStart = Math.max(0, size - 256 * 1024);
+        const buffer = Buffer.alloc(size - tailStart);
+        await handle.read(buffer, 0, buffer.length, tailStart);
+        // A mid-line tail start leaves a partial first line; JSON.parse
+        // rejects it and the walk moves on.
+        const lines = buffer.toString('utf8').split(/\r?\n/);
+        for (let index = lines.length - 1; index >= 0; index -= 1) {
+          const line = lines[index]?.trim();
+          if (!line) {
+            continue;
+          }
+
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          const data = parsed as Record<string, unknown>;
+          if (
+            (data.type === 'user' || data.type === 'assistant')
+            && typeof data.timestamp === 'string'
+            && !Number.isNaN(Date.parse(data.timestamp))
+          ) {
+            return data.timestamp;
+          }
+        }
+      } finally {
+        await handle.close();
+      }
+    } catch {
+      // Unreadable file; the caller falls back to mtime.
+    }
+
+    return undefined;
   }
 
   /**

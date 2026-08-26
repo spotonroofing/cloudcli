@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import ChatInterface from '../chat/view/ChatInterface';
 import PaneShell from '../app/workspace/PaneShell';
+import { PANE_HEADER_CLASS } from '../app/workspace/paneHeader';
 import ErrorBoundary from '../main-content/view/ErrorBoundary';
 import MobileMenuButton from '../main-content/view/subcomponents/MobileMenuButton';
 import { useWebSocket } from '../../contexts/WebSocketContext';
@@ -314,13 +315,7 @@ export default function WorkerPane({
       {/* Worker top bar (ui14 job 2): the planner header's anatomy — icon,
           "Worker", the shown run's title as plain text (no dropdown; jobs are
           the navigation). No status words; the two badges are wiring fail-safes. */}
-      <div
-        className={cn(
-          'flex flex-shrink-0 items-center gap-2 overflow-hidden border-b border-border/60 bg-muted/30 px-3',
-          isMobile ? 'mobile-top-bar pb-1.5' : 'py-1.5',
-        )}
-        data-slot="pane-header"
-      >
+      <div className={PANE_HEADER_CLASS} data-slot="pane-header">
         {isMobile && onMenuClick && <MobileMenuButton onMenuClick={onMenuClick} />}
         <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         <span className="text-xs font-medium text-foreground">Worker</span>

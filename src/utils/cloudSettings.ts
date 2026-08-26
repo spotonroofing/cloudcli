@@ -40,6 +40,7 @@ export const SYNCED_SETTING_KEYS = [
   'opencode-effort',
   'workspace-layout-v1',
   'project-windows-v1',
+  'project-last-opened-v1',
   'activeTab',
   'sidebar-active-tab',
   'file-tree-view-mode',

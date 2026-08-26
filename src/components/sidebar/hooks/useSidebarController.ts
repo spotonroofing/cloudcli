@@ -24,6 +24,25 @@ import {
 import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
 
 const SIDEBAR_TAB_STORAGE_KEY = 'sidebar-active-tab';
+// When Willem last opened each project (ui14 job 12): the deliberate sidebar
+// order signal — it moves only on his own open actions, never on session
+// activity, so the list sits still while runs stream.
+const PROJECT_LAST_OPENED_KEY = 'project-last-opened-v1';
+
+const readProjectLastOpened = (): Map<string, number> => {
+  try {
+    const raw = localStorage.getItem(PROJECT_LAST_OPENED_KEY);
+    if (!raw) {
+      return new Map();
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return new Map(
+      Object.entries(parsed).filter((entry): entry is [string, number] => typeof entry[1] === 'number'),
+    );
+  } catch {
+    return new Map();
+  }
+};
 
 type SnippetHighlight = {
   start: number;
@@ -153,6 +172,20 @@ export function useSidebarController({
   const [deletingProjects, setDeletingProjects] = useState<Set<string>>(new Set());
   const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteProjectConfirmation | null>(null);
   const [sessionDeleteConfirmation, setSessionDeleteConfirmation] = useState<SessionDeleteConfirmation | null>(null);
+  const [projectLastOpened, setProjectLastOpened] = useState<Map<string, number>>(readProjectLastOpened);
+
+  const projectLastOpenedRef = useRef(projectLastOpened);
+  projectLastOpenedRef.current = projectLastOpened;
+
+  const markProjectOpened = useCallback((projectId: string) => {
+    if (!projectId) {
+      return;
+    }
+    const next = new Map(projectLastOpenedRef.current);
+    next.set(projectId, Date.now());
+    setProjectLastOpened(next);
+    writeSetting(PROJECT_LAST_OPENED_KEY, JSON.stringify(Object.fromEntries(next)));
+  }, []);
   // The same three tabs on both form factors (ui13 job 9). The active tab
   // persists per device so a refresh restores where the user was.
   const [searchMode, setSearchMode] = useState<SidebarSearchMode>(() => {
@@ -589,11 +622,13 @@ export function useSidebarController({
 
   const handleSessionClick = useCallback(
     (session: SessionWithProvider, projectId: string) => {
+      // Opening a chat is the action that floats its project in the list.
+      markProjectOpened(projectId);
       // Tag the session with its owning projectId so downstream handlers
       // can correlate it with the selectedProject in the app state.
       onSessionSelect({ ...session, __projectId: projectId });
     },
-    [onSessionSelect],
+    [markProjectOpened, onSessionSelect],
   );
 
   const resolveProjectStarState = useCallback(
@@ -729,11 +764,11 @@ export function useSidebarController({
     });
   }, [optimisticStarByProjectId, projects]);
 
-  // Most-recently-touched project floats to top automatically (ui9 B5);
-  // there is no manual ordering.
+  // Deliberate order (ui14 job 12): last opened by Willem; session activity
+  // never reorders the list.
   const sortedProjects = useMemo(
-    () => sortProjects(projectsWithResolvedStarState),
-    [projectsWithResolvedStarState],
+    () => sortProjects(projectsWithResolvedStarState, projectLastOpened),
+    [projectsWithResolvedStarState, projectLastOpened],
   );
 
   const filteredProjects = useMemo(
@@ -965,9 +1000,10 @@ export function useSidebarController({
 
   const handleProjectSelect = useCallback(
     (project: Project) => {
+      markProjectOpened(project.projectId);
       onProjectSelect(project);
     },
-    [onProjectSelect],
+    [markProjectOpened, onProjectSelect],
   );
 
   const openArchivedSession = useCallback((session: ArchivedSessionListItem) => {

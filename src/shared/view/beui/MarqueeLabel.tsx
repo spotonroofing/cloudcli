@@ -10,7 +10,10 @@ import { EASE_OUT } from './ease';
 // looping marquee while `active` (row hovered or its menu open) instead of
 // truncating; labels that fit never move.
 
-const ROW_REVEAL = { duration: 0.16, ease: EASE_OUT } as const;
+// Pointer-leave return (ui14 job 12): the scan stops immediately and slides
+// back to rest on a short ramped ease — long enough to read as a slide back,
+// never a blink.
+const ROW_RETURN = { duration: 0.4, ease: EASE_OUT } as const;
 
 export function MarqueeLabel({ active, children, className }: { active: boolean; children: string; className?: string }) {
   const reduce = useReducedMotion() ?? false;
@@ -47,11 +50,13 @@ export function MarqueeLabel({ active, children, className }: { active: boolean;
                 repeat: Number.POSITIVE_INFINITY,
                 repeatDelay: 2,
               }
-            : ROW_REVEAL
+            : ROW_RETURN
         }
       >
         <span ref={labelRef}>{children}</span>
-        {running ? <span aria-hidden="true">{children}</span> : null}
+        {/* The loop copy stays mounted through the return slide; unmounting it
+            on leave blanks the viewport when the scan is past the first copy. */}
+        {distance > 0 ? <span aria-hidden="true">{children}</span> : null}
       </motion.span>
     </span>
   );

@@ -21,6 +21,7 @@ import PaneShell from '../../app/workspace/PaneShell';
 import WindowPane from '../../app/workspace/WindowPane';
 import WindowSelector, { type WindowSelectorItem } from '../../app/workspace/WindowSelector';
 import { WINDOW_LABELS, WINDOW_ORDER, useProjectWindows } from '../../app/workspace/useProjectWindows';
+import { PANE_HEADER_CLASS } from '../../app/workspace/paneHeader';
 
 import MainContentStateView from './subcomponents/MainContentStateView';
 import MobileMenuButton from './subcomponents/MobileMenuButton';
@@ -229,7 +230,7 @@ function MainContent({
 
     pushPane('planner', 200, (
       <>
-        <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+        <div className={PANE_HEADER_CLASS} data-slot="pane-header">
           {leftPaneIsWorkerSession ? (
             <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
           ) : (
@@ -354,13 +355,7 @@ function MainContent({
         >
           <div className={`h-full ${activeTab === 'chat' ? 'flex flex-col' : 'hidden'}`}>
             {(workerPaneAvailable || isMobile) && (
-              <div
-                className={cn(
-                  'flex flex-shrink-0 items-center gap-2 overflow-hidden border-b border-border/60 bg-muted/30 px-3',
-                  isMobile ? 'mobile-top-bar pb-1.5' : 'py-1.5',
-                )}
-                data-slot="pane-header"
-              >
+              <div className={PANE_HEADER_CLASS} data-slot="pane-header">
                 {mobileMenu}
                 {leftPaneIsWorkerSession ? (
                   <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
@@ -432,7 +427,6 @@ function MainContent({
               icon={FolderTree}
               leading={mobileMenu}
               trailing={mobileSelector}
-              headerClassName={isMobile ? 'mobile-top-bar pb-1.5' : undefined}
             >
               <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
             </WindowPane>
@@ -445,7 +439,6 @@ function MainContent({
               icon={GitBranch}
               leading={mobileMenu}
               trailing={mobileSelector}
-              headerClassName={isMobile ? 'mobile-top-bar pb-1.5' : undefined}
             >
               <GitPanel
                 selectedProject={selectedProject}

@@ -380,6 +380,18 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
     );
   }
 
+  // One error row for the whole app (ui14 job 12): every session-level error
+  // — limit messages, provider errors, anything that used to render as the
+  // red "Error" block — is the same themed tool-row anatomy: leading red
+  // icon, short label, one-line summary, chevron; collapsed by default.
+  if (message.type === 'error') {
+    return (
+      <div className="chat-message error px-3 sm:px-0" data-message-timestamp={message.timestamp || undefined}>
+        <ToolErrorDisplay label={t('messageTypes.error')} content={formattedMessageContent} />
+      </div>
+    );
+  }
+
   if (message.isMemoryUpdate) {
     return (
       <div className="chat-message assistant px-3 sm:px-0" data-message-timestamp={message.timestamp || undefined}>
@@ -488,18 +500,10 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
         <div className="w-full">
           {!isGrouped && message.type !== 'assistant' && (
             <div className="mb-2 flex items-center space-x-3">
-              {message.type === 'error' ? (
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-sm font-medium text-destructive">
-                  !
-                </div>
-              ) : (
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
-                  <Wrench className="h-4 w-4 text-muted-foreground" />
-                </div>
-              )}
-              <div className="text-sm font-medium text-foreground">
-                {message.type === 'error' ? t('messageTypes.error') : t('messageTypes.tool')}
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                <Wrench className="h-4 w-4 text-muted-foreground" />
               </div>
+              <div className="text-sm font-medium text-foreground">{t('messageTypes.tool')}</div>
             </div>
           )}
 

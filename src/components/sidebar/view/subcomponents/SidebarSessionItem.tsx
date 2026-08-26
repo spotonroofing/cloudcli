@@ -1,6 +1,5 @@
 import type { TFunction } from 'i18next';
 
-import { Tooltip } from '../../../../shared/view/ui';
 import { BorderBeamOverlay, useBeamPresence } from '../../../../shared/view/beui';
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { SessionWithProvider } from '../../types/types';
@@ -15,7 +14,6 @@ type SidebarSessionItemProps = {
   session: SessionWithProvider;
   selectedSession: ProjectSession | null;
   isProcessing: boolean;
-  needsAttention: boolean;
   currentTime: Date;
   onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
@@ -44,7 +42,6 @@ export default function SidebarSessionItem({
   session,
   selectedSession,
   isProcessing,
-  needsAttention,
   currentTime,
   onMoveSessionToProject,
   onSaveEditingSession,
@@ -57,7 +54,6 @@ export default function SidebarSessionItem({
   const sessionView = createSessionViewModel(session, currentTime, t);
   const isSelected = selectedSession?.id === session.id;
   const compactSessionAge = formatCompactAge(sessionView.sessionTime, currentTime);
-  const showAttentionIndicator = needsAttention && !isSelected;
   const providerLabel = PROVIDER_LABELS[session.__provider];
   // Activity shimmer: a mid-turn chat row carries the border beam (it replaced
   // the old green pulse dot); appearance and disappearance are engine fades.
@@ -75,21 +71,6 @@ export default function SidebarSessionItem({
 
   return (
     <div className="relative">
-      {showAttentionIndicator && (
-        <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 transform">
-          <Tooltip
-            content={t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })}
-            position="right"
-          >
-            <div
-              role="status"
-              aria-label={t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })}
-              className="h-2 w-2 animate-pulse rounded-full bg-amber-500"
-            />
-          </Tooltip>
-        </div>
-      )}
-
       {/* Unified chat-row anatomy (ui9 B5): the exact same ChatRow as the
           Chats tab at every viewport — title over relative time bottom-left,
           arrow-to-dots trailing control, one shared menu. */}
