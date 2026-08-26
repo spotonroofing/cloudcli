@@ -63,7 +63,12 @@ function parseTaskNotification(content: string): ParsedTaskNotification | null {
  * transcript artifacts such as local slash commands and compact summaries are
  * intentionally preserved and annotated so they can render like normal chat.
  */
-export type SessionMemoryUpdate = { id: number; files: string[]; createdAt: string };
+export type SessionMemoryUpdate = {
+  id: number;
+  files: string[];
+  diffs: Record<string, string[]>;
+  createdAt: string;
+};
 
 /**
  * Merges persisted memory-updated rows (ui12 phase 7) into a converted
@@ -84,6 +89,7 @@ export function mergeMemoryUpdateRows(
       timestamp: update.createdAt,
       isMemoryUpdate: true,
       memoryFiles: update.files,
+      memoryDiffs: update.diffs,
     }));
   if (fresh.length === 0) return messages;
 
@@ -296,6 +302,7 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
           timestamp: msg.timestamp,
           isMemoryUpdate: true,
           memoryFiles: Array.isArray(msg.memoryFiles) ? msg.memoryFiles : [],
+          memoryDiffs: msg.memoryDiffs ?? {},
           ...sharedMetadata,
         });
         break;

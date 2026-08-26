@@ -528,6 +528,12 @@ const addProjectPlannerMemoryColumn = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'projects', columnNames, 'planner_memory_name', 'TEXT DEFAULT NULL');
 };
 
+/** Adds `diffs_json`: the per-file change excerpt behind a memory-updated row (ui14 job 3). */
+const addMemoryUpdateDiffsColumn = (db: Database): void => {
+  const columnNames = getTableInfo(db, 'memory_updates').map((column) => column.name);
+  addColumnToTableIfNotExists(db, 'memory_updates', columnNames, 'diffs_json', 'TEXT');
+};
+
 const ensureProjectsForSessionPaths = (db: Database): void => {
   if (!tableExists(db, 'sessions')) {
     return;
@@ -598,6 +604,7 @@ export const runMigrations = (db: Database) => {
     addSessionBootedColumn(db);
     addSessionBootStateColumn(db);
     addProjectPlannerMemoryColumn(db);
+    addMemoryUpdateDiffsColumn(db);
     ensureProjectsForSessionPaths(db);
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id)');

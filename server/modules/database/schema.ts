@@ -313,6 +313,7 @@ CREATE TABLE IF NOT EXISTS memory_updates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
     files_json TEXT NOT NULL,
+    diffs_json TEXT,
     created_at TEXT NOT NULL
 );
 `;

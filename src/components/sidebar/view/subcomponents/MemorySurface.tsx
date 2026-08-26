@@ -1,154 +1,120 @@
-import { useEffect, useState } from 'react';
-import { BookMarked, ChevronDown } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
+import { BookMarked, Check, Loader2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { AgentDisclosure, Tabs, TabsList, TabsTrigger } from '../../../../shared/view/beui';
+import { PromptInput, PromptInputBody, PromptInputSubmit, PromptInputTextarea } from '../../../../shared/view/ui';
 import { Markdown } from '../../../chat/view/subcomponents/Markdown';
 import { api } from '../../../../utils/api';
-import { cn } from '../../../../lib/utils';
-import type { Project } from '../../../../types/app';
 
 import SidebarSurface from './SidebarSurface';
-
-type MemoryFileEntry = { name: string; content: string };
-
-type ProjectMemoryPayload = {
-  memoryName: string;
-  projectMd: string | null;
-  stateMd: string | null;
-  lessons: MemoryFileEntry[];
-  sessions: MemoryFileEntry[];
-};
 
 type MemorySurfaceProps = {
   open: boolean;
   onClose: () => void;
-  selectedProject: Project | null;
   t: TFunction;
 };
 
-/** First non-empty line of a memory file, heading marks stripped. */
-function firstLineOf(content: string): string {
-  for (const line of content.split('\n')) {
-    const trimmed = line.replace(/^#+\s*/, '').trim();
-    if (trimmed) return trimmed;
-  }
-  return '';
-}
+type EditState = 'idle' | 'running' | 'done';
+
+/** How long the check shows on the send button after an edit lands. */
+const DONE_SETTLE_MS = 1_600;
 
 /**
- * One read-only expandable row: title (and optional one-line summary), spring
- * chevron, and the file's markdown behind an AgentDisclosure viewport.
+ * Memory surface (ui12 phase 7; full-sidebar ui13 job 5; one view ui14 job
+ * 3): fills the sidebar on the slide-up shell with Willem's curated memory
+ * document (planner/_global/GLOBALMEMORY.md) rendered as a clean document,
+ * and a prompt box at the bottom, Claude.ai style. An instruction typed there
+ * runs a one-off headless edit session on the server (not a chat, not a
+ * planner session) that applies it to the document by the document's own
+ * rules, commits and pushes the memory repo, and the view refreshes from the
+ * response. No tabs, no Internals, no Project/Global split.
  */
-function MemoryFileRow({ title, summary, content }: { title: string; summary?: string; content: string }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className="rounded-lg border border-border/60" data-slot="memory-file-row">
-      <button
-        type="button"
-        onClick={() => setExpanded((previous) => !previous)}
-        aria-expanded={expanded}
-        className="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span className="flex-shrink-0 font-mono text-[11px] text-muted-foreground">{title}</span>
-        {summary && (
-          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground/80">{summary}</span>
-        )}
-        <span className="ml-auto grid size-4 flex-shrink-0 place-items-center">
-          <ChevronDown
-            className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform duration-200', expanded && 'rotate-180')}
-          />
-        </span>
-      </button>
-      <AgentDisclosure open={expanded}>
-        <div className="max-h-[280px] overflow-y-auto border-t border-border/60 px-3 py-2">
-          <Markdown className="prose prose-sm max-w-none dark:prose-invert">{content}</Markdown>
-        </div>
-      </AgentDisclosure>
-    </div>
-  );
-}
-
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <p className="mb-1.5 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-      {children}
-    </p>
-  );
-}
-
-/** The curated memory document (the primary view's whole content). */
-const CURATED_FILE = 'WILLEM.md';
-
-/**
- * Read-only memory viewer (ui12 phase 7; full-sidebar surface ui13 job 5;
- * curated-first ui13 job 8): fills the sidebar on the slide-up shell. The
- * primary view renders the curated memory document (planner/_global/WILLEM.md,
- * the planner-maintained record of Willem himself) as clean markdown; the
- * technical layers (PROJECT.md, STATE.md, lessons, session summaries, other
- * global files) live behind the Internals view with the Project/Global split.
- * Browsing only; nothing writes — editing happens by telling the planner (the
- * Claude model, not delete-chips), as the document's own header line says.
- */
-export default function MemorySurface({
-  open,
-  onClose,
-  selectedProject,
-  t,
-}: MemorySurfaceProps) {
-  const [view, setView] = useState<'memory' | 'internals'>('memory');
-  const [tab, setTab] = useState<'project' | 'global'>('project');
-  const [projectMemory, setProjectMemory] = useState<ProjectMemoryPayload | null>(null);
-  const [globalFiles, setGlobalFiles] = useState<MemoryFileEntry[]>([]);
+export default function MemorySurface({ open, onClose, t }: MemorySurfaceProps) {
+  const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [instruction, setInstruction] = useState('');
+  const [editState, setEditState] = useState<EditState>('idle');
+  const [note, setNote] = useState<{ kind: 'error' | 'info'; text: string } | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const projectId = selectedProject?.projectId ?? null;
-
-  // Every open starts on the curated view; Internals is a per-visit detour.
-  useEffect(() => {
-    if (open) setView('memory');
-  }, [open]);
+  const fetchContent = useCallback(async () => {
+    try {
+      const response = await api.memoryCurated();
+      if (!response.ok) return;
+      const body = await response.json();
+      setContent(typeof body?.data?.content === 'string' ? body.data.content : null);
+    } catch (error) {
+      console.error('Failed to fetch curated memory:', error);
+    }
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoading(true);
-    void (async () => {
-      try {
-        const [projectResponse, globalResponse] = await Promise.all([
-          projectId ? api.memoryProject(projectId) : Promise.resolve(null),
-          api.memoryGlobal(),
-        ]);
-        if (cancelled) return;
-        if (projectResponse?.ok) {
-          const body = await projectResponse.json();
-          if (!cancelled) setProjectMemory(body?.data ?? null);
-        } else {
-          setProjectMemory(null);
-        }
-        if (globalResponse.ok) {
-          const body = await globalResponse.json();
-          if (!cancelled) setGlobalFiles(Array.isArray(body?.data?.files) ? body.data.files : []);
-        }
-      } catch (error) {
-        console.error('Failed to fetch memory viewer data:', error);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+    void fetchContent().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [open, projectId]);
+  }, [open, fetchContent]);
 
-  const curatedContent = globalFiles.find((file) => file.name === CURATED_FILE)?.content ?? null;
-  // The curated document has its own primary view; the internals Global list
-  // carries the rest of planner/_global/.
-  const internalGlobalFiles = globalFiles.filter((file) => file.name !== CURATED_FILE);
+  useEffect(() => () => {
+    if (doneTimer.current) clearTimeout(doneTimer.current);
+  }, []);
 
-  const emptyHint = (text: string) => (
-    <p className="px-1 py-1 text-xs text-muted-foreground/70">{text}</p>
-  );
+  // Autogrow the instruction box to its text, capped by the textarea's own max height.
+  useEffect(() => {
+    const element = textareaRef.current;
+    if (!element) return;
+    element.style.height = 'auto';
+    element.style.height = `${element.scrollHeight}px`;
+  }, [instruction, open]);
+
+  const submit = async () => {
+    const text = instruction.trim();
+    if (!text || editState === 'running') return;
+    setEditState('running');
+    setNote(null);
+    try {
+      const response = await api.editMemoryCurated(text);
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(typeof body?.error === 'string' ? body.error : t('memory.editFailed', 'The edit failed.'));
+      }
+      const data = body?.data ?? {};
+      if (typeof data.content === 'string') setContent(data.content);
+      setInstruction('');
+      if (typeof data.warning === 'string') {
+        setNote({ kind: 'error', text: data.warning });
+      } else if (data.changed === false) {
+        setNote({ kind: 'info', text: t('memory.noChange', 'No change') });
+      }
+      setEditState('done');
+      if (doneTimer.current) clearTimeout(doneTimer.current);
+      doneTimer.current = setTimeout(() => setEditState('idle'), DONE_SETTLE_MS);
+    } catch (error) {
+      setNote({ kind: 'error', text: error instanceof Error ? error.message : String(error) });
+      setEditState('idle');
+    }
+  };
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submit();
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      void submit();
+    }
+  };
+
+  const running = editState === 'running';
 
   return (
     <SidebarSurface
@@ -158,121 +124,64 @@ export default function MemorySurface({
       dataSlot="memory-surface"
     >
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="text-sm font-medium text-foreground">{t('memory.title', 'Memory')}</h2>
-          <p className="truncate text-xs text-muted-foreground">
-            {view === 'memory'
-              ? t('memory.curatedSubtitle', 'Edited by telling the planner')
-              : tab === 'global'
-                ? t('memory.globalSubtitle', 'Cross-project preferences and lessons')
-                : selectedProject?.displayName
-                  ?? t('memory.noProject', 'No project selected')}
-          </p>
-        </div>
+        <h2 className="text-sm font-medium text-foreground">{t('memory.title', 'Memory')}</h2>
         <BookMarked className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden />
       </div>
 
-      <div className="border-b border-border/60 px-4 py-2">
-        <Tabs value={view} onValueChange={(value) => setView(value as 'memory' | 'internals')} variant="segment">
-          <TabsList>
-            <TabsTrigger value="memory">{t('memory.memoryTab', 'Memory')}</TabsTrigger>
-            <TabsTrigger value="internals">{t('memory.internalsTab', 'Internals')}</TabsTrigger>
-          </TabsList>
-        </Tabs>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3" data-slot="memory-surface-body">
+        {loading && content === null ? (
+          <p className="px-1 py-1 text-xs text-muted-foreground/70">{t('memory.loading', 'Loading memory...')}</p>
+        ) : content === null ? (
+          <p className="px-1 py-1 text-xs text-muted-foreground/70">
+            {t('memory.noCurated', 'Nothing remembered yet.')}
+          </p>
+        ) : (
+          <div data-slot="memory-curated">
+            <Markdown className="prose prose-sm max-w-none dark:prose-invert">{content}</Markdown>
+          </div>
+        )}
       </div>
 
-      {view === 'internals' && (
-        <div className="border-b border-border/60 px-4 py-2">
-          <Tabs value={tab} onValueChange={(value) => setTab(value as 'project' | 'global')} variant="segment">
-            <TabsList>
-              <TabsTrigger value="project">{t('memory.projectTab', 'Project')}</TabsTrigger>
-              <TabsTrigger value="global">{t('memory.globalTab', 'Global')}</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-      )}
-
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3" data-slot="memory-surface-body">
-        {view === 'memory' ? (
-          loading && !curatedContent ? (
-            emptyHint(t('memory.loading', 'Loading memory...'))
-          ) : !curatedContent ? (
-            emptyHint(t('memory.noCurated', 'No curated memory yet. Tell the planner something worth remembering.'))
-          ) : (
-            <div data-slot="memory-curated">
-              <Markdown className="prose prose-sm max-w-none dark:prose-invert">{curatedContent}</Markdown>
-            </div>
-          )
-        ) : tab === 'project' ? (
-          !projectId ? (
-            emptyHint(t('memory.selectProject', 'Select a project to browse its planner memory.'))
-          ) : loading && !projectMemory ? (
-            emptyHint(t('memory.loading', 'Loading memory...'))
-          ) : !projectMemory ? (
-            emptyHint(t('memory.noMemory', 'No planner memory found for this project.'))
-          ) : (
-            <>
-              <section data-slot="memory-core-files">
-                <SectionLabel>{t('memory.coreFiles', 'Project memory')}</SectionLabel>
-                <div className="space-y-2">
-                  {projectMemory.projectMd !== null && (
-                    <MemoryFileRow title="PROJECT.md" content={projectMemory.projectMd} />
-                  )}
-                  {projectMemory.stateMd !== null && (
-                    <MemoryFileRow title="STATE.md" content={projectMemory.stateMd} />
-                  )}
-                  {projectMemory.projectMd === null && projectMemory.stateMd === null
-                    && emptyHint(t('memory.noCoreFiles', 'No PROJECT.md or STATE.md yet.'))}
-                </div>
-              </section>
-              <section data-slot="memory-lessons">
-                <SectionLabel>{t('memory.lessons', 'Lessons')}</SectionLabel>
-                {projectMemory.lessons.length === 0
-                  ? emptyHint(t('memory.noLessons', 'No lessons recorded yet.'))
-                  : (
-                    <div className="space-y-2">
-                      {projectMemory.lessons.map((lesson) => (
-                        <MemoryFileRow
-                          key={lesson.name}
-                          title={lesson.name}
-                          summary={firstLineOf(lesson.content)}
-                          content={lesson.content}
-                        />
-                      ))}
-                    </div>
-                  )}
-              </section>
-              <section data-slot="memory-sessions">
-                <SectionLabel>{t('memory.sessions', 'Session summaries')}</SectionLabel>
-                {projectMemory.sessions.length === 0
-                  ? emptyHint(t('memory.noSessions', 'No session summaries yet.'))
-                  : (
-                    <div className="space-y-2">
-                      {projectMemory.sessions.map((session) => (
-                        <MemoryFileRow key={session.name} title={session.name} content={session.content} />
-                      ))}
-                    </div>
-                  )}
-              </section>
-            </>
-          )
-        ) : loading && internalGlobalFiles.length === 0 ? (
-          emptyHint(t('memory.loading', 'Loading memory...'))
-        ) : internalGlobalFiles.length === 0 ? (
-          emptyHint(t('memory.noGlobal', 'No global memory files yet.'))
-        ) : (
-          <section data-slot="memory-global-files">
-            <div className="space-y-2">
-              {internalGlobalFiles.map((file) => (
-                <MemoryFileRow
-                  key={file.name}
-                  title={file.name}
-                  summary={firstLineOf(file.content)}
-                  content={file.content}
-                />
-              ))}
-            </div>
-          </section>
+      <div className="border-t border-border/60 px-3 pb-3 pt-2" data-slot="memory-prompt">
+        <PromptInput onSubmit={onSubmit} status={running ? 'submitted' : 'ready'}>
+          <div className="flex items-end px-2 pb-1.5">
+            <PromptInputBody className="min-w-0 flex-1">
+              <PromptInputTextarea
+                ref={textareaRef}
+                value={instruction}
+                onChange={(event) => setInstruction(event.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder={t('memory.prompt', 'Remember that...')}
+                aria-label={t('memory.promptLabel', 'Edit memory')}
+                disabled={running}
+                className="px-2 py-1.5 leading-5 md:text-[13px]"
+              />
+            </PromptInputBody>
+            <PromptInputSubmit
+              className="mb-0.5 h-7 w-7"
+              disabled={running || !instruction.trim()}
+              aria-label={t('memory.apply', 'Apply')}
+              data-state={editState}
+            >
+              {running ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : editState === 'done' ? (
+                <Check className="h-4 w-4" />
+              ) : undefined}
+            </PromptInputSubmit>
+          </div>
+        </PromptInput>
+        {note && (
+          <p
+            data-slot="memory-prompt-note"
+            className={
+              note.kind === 'error'
+                ? 'mt-1.5 px-1 text-xs text-destructive'
+                : 'mt-1.5 px-1 text-xs text-muted-foreground/70'
+            }
+          >
+            {note.text}
+          </p>
         )}
       </div>
     </SidebarSurface>

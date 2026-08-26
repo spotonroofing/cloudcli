@@ -268,6 +268,8 @@ export type NormalizedMessage = {
   isInterruptMarker?: boolean;
   /** `memory_update` rows: memory-relative paths written in this burst (ui12 phase 7). */
   memoryFiles?: string[];
+  /** `memory_update` rows: per-file excerpt of the real change, plain diff lines (ui14 job 3). */
+  memoryDiffs?: Record<string, string[]>;
   images?: unknown;
   /** Non-image files attached to a user turn after provider history normalization. */
   files?: unknown;

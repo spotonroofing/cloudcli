@@ -200,10 +200,13 @@ export const api = {
   // Memory-updated indicator rows for one session (ui12 phase 7).
   sessionMemoryUpdates: (sessionId) =>
     authenticatedFetch(`/api/memory/sessions/${encodeURIComponent(sessionId)}/updates`),
-  // Read-only memory viewer payloads (ui12 phase 7).
-  memoryProject: (projectId) =>
-    authenticatedFetch(`/api/memory/project/${encodeURIComponent(projectId)}`),
-  memoryGlobal: () => authenticatedFetch('/api/memory/global'),
+  // The curated memory document and its one-off prompt edits (ui14 job 3).
+  memoryCurated: () => authenticatedFetch('/api/memory/curated'),
+  editMemoryCurated: (instruction) =>
+    authenticatedFetch('/api/memory/curated/edit', {
+      method: 'POST',
+      body: JSON.stringify({ instruction }),
+    }),
   // Edit-and-resend response versions for one session (ui9 B3).
   sessionMessageVersions: (sessionId) =>
     authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/message-versions`),

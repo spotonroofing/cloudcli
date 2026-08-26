@@ -1,54 +1,36 @@
-import path from 'node:path';
 import { promises as fsPromises } from 'node:fs';
 
 import express from 'express';
 import type { Request, Response } from 'express';
 
-import { memoryUpdatesDb, projectsDb } from '@/modules/database/index.js';
+import { memoryUpdatesDb } from '@/modules/database/index.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
-import { GLOBAL_MEMORY_DIR, PLANNER_MEMORY_ROOT } from './memory.service.js';
+import { CURATED_MEMORY_PATH, editCuratedMemory } from './memory.service.js';
 
 /**
- * Read-only memory API (ui12 phase 7): the per-session memory-updated rows the
- * transcript merges on reload, plus the memory viewer's file listings for a
- * project's planner memory and the cross-project `planner/_global/` folder.
+ * Memory API (ui12 phase 7; curated-only ui14 job 3): the per-session
+ * memory-updated rows the transcript merges on reload, the curated memory
+ * document the Memory surface shows, and the one-off prompt edit that
+ * rewrites it.
  */
 
-type MemoryFileEntry = { name: string; content: string };
+const MAX_INSTRUCTION_CHARS = 4_000;
 
-async function readFileOrNull(filePath: string): Promise<string | null> {
+function parseJson<T>(json: string | null, fallback: T): T {
+  if (!json) return fallback;
   try {
-    return await fsPromises.readFile(filePath, 'utf8');
+    return JSON.parse(json) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+async function readCurated(): Promise<string | null> {
+  try {
+    return await fsPromises.readFile(CURATED_MEMORY_PATH, 'utf8');
   } catch {
     return null;
-  }
-}
-
-/** Reads every markdown file in one directory, alphabetical by name. */
-async function readMarkdownDir(dirPath: string): Promise<MemoryFileEntry[]> {
-  let names: string[];
-  try {
-    names = await fsPromises.readdir(dirPath);
-  } catch {
-    return [];
-  }
-  const entries: MemoryFileEntry[] = [];
-  for (const name of names.filter((entry) => entry.endsWith('.md')).sort()) {
-    const content = await readFileOrNull(path.join(dirPath, name));
-    if (content !== null) {
-      entries.push({ name, content });
-    }
-  }
-  return entries;
-}
-
-function parseFiles(filesJson: string): string[] {
-  try {
-    const parsed = JSON.parse(filesJson);
-    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : [];
-  } catch {
-    return [];
   }
 }
 
@@ -63,7 +45,8 @@ export function createMemoryRouter(): express.Router {
         createApiSuccessResponse({
           updates: rows.map((row) => ({
             id: row.id,
-            files: parseFiles(row.files_json),
+            files: parseJson<string[]>(row.files_json, []).filter((entry) => typeof entry === 'string'),
+            diffs: parseJson<Record<string, string[]>>(row.diffs_json, {}),
             createdAt: row.created_at,
           })),
         }),
@@ -72,40 +55,24 @@ export function createMemoryRouter(): express.Router {
   );
 
   router.get(
-    '/project/:projectId',
-    asyncHandler(async (req: Request, res: Response) => {
-      const projectPath = projectsDb.getProjectPathById(String(req.params.projectId));
-      if (!projectPath) {
-        throw new AppError('Project not found.', { code: 'PROJECT_NOT_FOUND', statusCode: 404 });
-      }
-      const memoryName = projectsDb.getPlannerMemoryName(projectPath)?.trim()
-        || path.basename(projectPath);
-      const memoryDir = path.join(PLANNER_MEMORY_ROOT, memoryName);
-
-      const [projectMd, stateMd, lessons, sessionSummaries] = await Promise.all([
-        readFileOrNull(path.join(memoryDir, 'PROJECT.md')),
-        readFileOrNull(path.join(memoryDir, 'STATE.md')),
-        readMarkdownDir(path.join(memoryDir, 'lessons')),
-        readMarkdownDir(path.join(memoryDir, 'sessions')),
-      ]);
-
-      res.json(
-        createApiSuccessResponse({
-          memoryName,
-          projectMd,
-          stateMd,
-          lessons,
-          // Session summaries are date-prefixed; newest first, recent only.
-          sessions: sessionSummaries.reverse().slice(0, 12),
-        }),
-      );
+    '/curated',
+    asyncHandler(async (_req: Request, res: Response) => {
+      res.json(createApiSuccessResponse({ content: await readCurated() }));
     }),
   );
 
-  router.get(
-    '/global',
-    asyncHandler(async (_req: Request, res: Response) => {
-      res.json(createApiSuccessResponse({ files: await readMarkdownDir(GLOBAL_MEMORY_DIR) }));
+  router.post(
+    '/curated/edit',
+    asyncHandler(async (req: Request, res: Response) => {
+      const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
+      if (!instruction) {
+        throw new AppError('An edit instruction is required.', { code: 'INSTRUCTION_REQUIRED', statusCode: 400 });
+      }
+      if (instruction.length > MAX_INSTRUCTION_CHARS) {
+        throw new AppError('The instruction is too long.', { code: 'INSTRUCTION_TOO_LONG', statusCode: 400 });
+      }
+      const result = await editCuratedMemory(instruction);
+      res.json(createApiSuccessResponse(result));
     }),
   );
 

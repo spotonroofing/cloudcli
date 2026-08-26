@@ -94,7 +94,7 @@ export function InterruptedMarker() {
  * "Thought for a few seconds" row anatomy exactly (icon slot, type, chevron,
  * expand behavior); the files live behind the expand, one row each.
  */
-export function MemoryUpdatedMarker({ files }: { files: string[] }) {
+export function MemoryUpdatedMarker({ files, diffs = {} }: { files: string[]; diffs?: Record<string, string[]> }) {
   const { t } = useTranslation('chat');
   return (
     <div data-slot="memory-updated-marker">
@@ -104,7 +104,27 @@ export function MemoryUpdatedMarker({ files }: { files: string[] }) {
         icon={<BookMarked aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />}
         activeLabel={t('memoryUpdated', { defaultValue: 'Memory updated' })}
         doneLabel={t('memoryUpdated', { defaultValue: 'Memory updated' })}
-        rows={files.map((file) => ({ key: file, primary: file }))}
+        footer={files.map((file) => {
+          // One trace row per file (the Thinking row anatomy), and under it
+          // the server's excerpt of the real change (ui14 job 3): plain diff
+          // lines from the file's before/after, never a summary the model wrote.
+          const excerpt = diffs[file] ?? [];
+          return (
+            <div key={file} data-slot="memory-updated-file">
+              <div className="flex min-h-7 w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left">
+                <span className="min-w-0 truncate text-xs font-medium text-foreground">{file}</span>
+              </div>
+              {excerpt.length > 0 && (
+                <pre
+                  data-slot="memory-updated-diff"
+                  className="mb-1 whitespace-pre-wrap break-words px-1.5 font-mono text-[11px] leading-4 text-muted-foreground/70"
+                >
+                  {excerpt.join('\n')}
+                </pre>
+              )}
+            </div>
+          );
+        })}
       />
     </div>
   );
@@ -363,7 +383,10 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
   if (message.isMemoryUpdate) {
     return (
       <div className="chat-message assistant px-3 sm:px-0" data-message-timestamp={message.timestamp || undefined}>
-        <MemoryUpdatedMarker files={Array.isArray(message.memoryFiles) ? message.memoryFiles : []} />
+        <MemoryUpdatedMarker
+          files={Array.isArray(message.memoryFiles) ? message.memoryFiles : []}
+          diffs={message.memoryDiffs}
+        />
       </div>
     );
   }

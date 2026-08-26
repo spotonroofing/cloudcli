@@ -1,31 +1,47 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs, { promises as fsPromises } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import chokidar, { type FSWatcher } from 'chokidar';
 
 import { memoryUpdatesDb, projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { chatRunRegistry, connectedClients, WS_OPEN_STATE } from '@/modules/websocket/index.js';
+import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import type { LLMProvider, NormalizedMessage } from '@/shared/types.js';
-import { normalizeProjectPath } from '@/shared/utils.js';
+import { getClaudeConfigDir, normalizeProjectPath } from '@/shared/utils.js';
+
+const execFileAsync = promisify(execFile);
 
 /**
- * Memory-write visibility (ui12 phase 7; per-session attribution ui13 job 8).
+ * Memory-write visibility (ui12 phase 7; per-session attribution ui13 job 8;
+ * Bash and subagent attribution ui14 job 3).
  * Primary detection is per session: the sessions watcher hands each changed
- * Claude transcript here and the new tail is scanned for file-tool calls
- * (Write/Edit/MultiEdit/NotebookEdit) targeting memory paths, so a write is
- * attributed to the exact session that made it — worker writes land in the
- * worker transcript, planner writes in the planner chat. The planner-repo
- * chokidar watch and forwarded auto-memory events remain as a fallback for
- * writes no transcript claims (hand edits, Bash appends, subagent writes);
- * they defer briefly so a transcript claim wins, then fall back to the
- * running-run heuristic. Each burst persists as a `memory_updates` row and
- * emits a `memory_update` transcript frame — detection never relies on the
- * model announcing its own writes.
+ * Claude transcript here and the new tail is scanned for tool calls that
+ * touch memory paths, so a write is attributed to the exact session that made
+ * it — worker writes land in the worker transcript, planner writes in the
+ * planner chat. Write/Edit/MultiEdit/NotebookEdit calls name their file and
+ * report immediately on a non-error result. Bash calls (heredocs, appends —
+ * the way workers actually write lessons and summaries) and Agent/Task calls
+ * (a subagent writing on the session's behalf) cannot name the file reliably,
+ * so they leave a claim on the files or a time window they mention and the
+ * planner-repo watcher, which sees the real change, attributes it to the
+ * claimant. Unclaimed writes (hand edits) wait a grace window, then fall back
+ * to the running-run heuristic. Each burst persists as a `memory_updates` row
+ * with a compact excerpt of the real file change and emits a `memory_update`
+ * transcript frame — detection never relies on the model announcing itself.
  */
 
-export const PLANNER_MEMORY_ROOT = path.join(os.homedir(), 'Projects', 'spoton-worker', 'planner');
+export const PLANNER_MEMORY_ROOT = process.env.PLANNER_MEMORY_ROOT
+  || path.join(os.homedir(), 'Projects', 'spoton-worker', 'planner');
 export const GLOBAL_MEMORY_DIR = path.join(PLANNER_MEMORY_ROOT, '_global');
+/** The curated memory document: the one file the Memory surface shows and edits. */
+export const CURATED_MEMORY_FILE = 'GLOBALMEMORY.md';
+export const CURATED_MEMORY_PATH = path.join(GLOBAL_MEMORY_DIR, CURATED_MEMORY_FILE);
+const CLAUDE_AI_EXPORT_FILE = 'claude-ai-memory-export.md';
+/** The memory repo root (the planner folder's parent), where git runs. */
+const MEMORY_REPO_ROOT = path.dirname(PLANNER_MEMORY_ROOT);
 
 /** Writes closer together than this land in one indicator row. */
 const MEMORY_FLUSH_QUIET_MS = 2_500;
@@ -47,11 +63,15 @@ const FALLBACK_GRACE_MS = 15_000;
 const FIRST_SCAN_WINDOW_MS = 20_000;
 
 const MEMORY_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+const SUBAGENT_TOOLS = new Set(['Agent', 'Task']);
+
+/** Lines of excerpt kept per file on a memory-updated row. */
+const DIFF_EXCERPT_MAX_LINES = 6;
 
 type MemoryFileHit =
-  | { scope: 'project'; memoryFolder: string; label: string }
-  | { scope: 'global'; label: string }
-  | { scope: 'auto'; autoSlug: string; label: string };
+  | { scope: 'project'; memoryFolder: string; label: string; absPath: string }
+  | { scope: 'global'; label: string; absPath: string }
+  | { scope: 'auto'; autoSlug: string; label: string; absPath: string };
 
 /**
  * Maps a planner-repo file path to its memory identity. Only the four memory
@@ -71,13 +91,13 @@ function classifyPlannerRepoFile(filePath: string): MemoryFileHit | null {
   const folder = parts[0];
   const rest = parts.slice(1).join('/');
   if (folder === '_global') {
-    return { scope: 'global', label: `_global/${rest}` };
+    return { scope: 'global', label: `_global/${rest}`, absPath: filePath };
   }
   const isMemoryTarget =
     rest === 'PROJECT.md'
     || rest === 'STATE.md'
     || (parts.length === 3 && (parts[1] === 'lessons' || parts[1] === 'sessions'));
-  return isMemoryTarget ? { scope: 'project', memoryFolder: folder, label: rest } : null;
+  return isMemoryTarget ? { scope: 'project', memoryFolder: folder, label: rest, absPath: filePath } : null;
 }
 
 /** The Claude auto-memory dir name for a repo path: `/` and `.` become `-`. */
@@ -147,7 +167,8 @@ function pickSessionForHit(hit: MemoryFileHit): string | null {
 }
 
 type PendingMemoryBurst = {
-  files: Set<string>;
+  /** label -> absolute path of each file in the burst. */
+  files: Map<string, string>;
   startedAt: number;
   timer: ReturnType<typeof setTimeout> | null;
 };
@@ -162,25 +183,107 @@ function keyForHit(hit: MemoryFileHit): string {
   return `global:${hit.label}`;
 }
 
-/** Files recently claimed by a session's transcript tool calls. */
+/**
+ * Files recently claimed by a session's transcript tool calls: the latest
+ * tool call that named the file owns its next changes. A file tool's claim
+ * was already queued by the scanner; a Bash claim names the owner only, and
+ * the watcher's hit, which proves the change, reports it to the claimant.
+ */
 const recentClaims = new Map<string, { sessionId: string; at: number }>();
 
-function claimedSession(hit: MemoryFileHit): string | null {
+/**
+ * Sessions that recently ran something able to write memory without naming
+ * the file (a Bash command touching the memory tree, a subagent). A watcher
+ * hit with no file claim inside the window goes to the newest such session.
+ */
+const scopeClaims = new Map<string, { from: number; until: number }>();
+
+function fileClaim(hit: MemoryFileHit): { sessionId: string } | null {
   const claim = recentClaims.get(keyForHit(hit));
-  return claim && Date.now() - claim.at < CLAIM_TTL_MS ? claim.sessionId : null;
+  return claim && Date.now() - claim.at < CLAIM_TTL_MS ? claim : null;
 }
 
-function flushBurst(sessionId: string): void {
+/** Newest open scope window whose session works the hit's project (any session for global memory). */
+function scopeClaimant(hit: MemoryFileHit): string | null {
+  const now = Date.now();
+  const projectPath = resolveProjectPathForHit(hit);
+  const normalizedProjectPath = projectPath ? normalizeProjectPath(projectPath) : null;
+  let best: { sessionId: string; from: number } | null = null;
+  for (const [sessionId, window] of scopeClaims) {
+    if (window.until < now) {
+      scopeClaims.delete(sessionId);
+      continue;
+    }
+    if (window.from > now) continue;
+    if (normalizedProjectPath) {
+      const row = sessionsDb.getSessionById(sessionId);
+      if (row?.project_path && normalizeProjectPath(row.project_path) !== normalizedProjectPath) continue;
+    }
+    if (!best || window.from > best.from) best = { sessionId, from: window.from };
+  }
+  return best?.sessionId ?? null;
+}
+
+/** Last-known content per memory file, the "before" side of row excerpts. */
+const fileSnapshots = new Map<string, string>();
+
+async function readSnapshotSource(absPath: string): Promise<string | null> {
+  try {
+    return await fsPromises.readFile(absPath, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Compact excerpt of what changed between two versions of a memory file:
+ * the lines present only in the new version (added or edited), then the
+ * lines present only in the old one (removed or edited away), blank lines
+ * skipped, capped with a trailing count. Memory files are one-fact-per-line
+ * prose, so a line-set difference reads as the change itself.
+ */
+export function diffExcerpt(previous: string, current: string): string[] {
+  const oldLines = previous.split('\n').map((line) => line.trimEnd());
+  const newLines = current.split('\n').map((line) => line.trimEnd());
+  const oldSet = new Set(oldLines);
+  const newSet = new Set(newLines);
+  const changed = [
+    ...newLines.filter((line) => line.trim() && !oldSet.has(line)).map((line) => `+ ${line.trim()}`),
+    ...oldLines.filter((line) => line.trim() && !newSet.has(line)).map((line) => `- ${line.trim()}`),
+  ];
+  if (changed.length <= DIFF_EXCERPT_MAX_LINES) return changed;
+  const shown = changed.slice(0, DIFF_EXCERPT_MAX_LINES - 1);
+  shown.push(`${changed.length - shown.length} more lines`);
+  return shown;
+}
+
+async function excerptForFile(absPath: string): Promise<string[]> {
+  // Every memory file is snapshotted at boot, so no "before" side means a
+  // new file: its lines are the added lines.
+  const previous = fileSnapshots.get(absPath) ?? '';
+  const current = await readSnapshotSource(absPath);
+  if (current === null) return [];
+  fileSnapshots.set(absPath, current);
+  return diffExcerpt(previous, current);
+}
+
+async function flushBurst(sessionId: string): Promise<void> {
   const burst = pendingBursts.get(sessionId);
   if (!burst) return;
   pendingBursts.delete(sessionId);
   if (burst.timer) clearTimeout(burst.timer);
 
-  const files = [...burst.files].sort();
+  const files = [...burst.files.keys()].sort();
+  const diffs: Record<string, string[]> = {};
+  for (const label of files) {
+    const excerpt = await excerptForFile(burst.files.get(label) as string);
+    if (excerpt.length > 0) diffs[label] = excerpt;
+  }
+
   const createdAt = new Date().toISOString();
   let rowId: number;
   try {
-    rowId = memoryUpdatesDb.insert({ sessionId, files, createdAt });
+    rowId = memoryUpdatesDb.insert({ sessionId, files, diffs, createdAt });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[Memory] Failed to persist memory update', { sessionId, files, error: message });
@@ -195,6 +298,7 @@ function flushBurst(sessionId: string): void {
     provider: (sessionRow?.provider as LLMProvider | undefined) ?? 'claude',
     kind: 'memory_update',
     memoryFiles: files,
+    memoryDiffs: diffs,
   };
 
   // A live run's writer assigns `seq` and buffers the frame for reconnect
@@ -212,33 +316,54 @@ function flushBurst(sessionId: string): void {
   });
 }
 
-function enqueueBurst(sessionId: string, label: string): void {
+function enqueueBurst(sessionId: string, hit: MemoryFileHit): void {
   let burst = pendingBursts.get(sessionId);
   if (!burst) {
-    burst = { files: new Set(), startedAt: Date.now(), timer: null };
+    burst = { files: new Map(), startedAt: Date.now(), timer: null };
     pendingBursts.set(sessionId, burst);
   }
-  burst.files.add(label);
+  burst.files.set(hit.label, hit.absPath);
 
   if (burst.timer) clearTimeout(burst.timer);
   const elapsed = Date.now() - burst.startedAt;
   const delay = Math.min(MEMORY_FLUSH_QUIET_MS, Math.max(0, MEMORY_FLUSH_MAX_WAIT_MS - elapsed));
-  burst.timer = setTimeout(() => flushBurst(sessionId), delay);
+  burst.timer = setTimeout(() => void flushBurst(sessionId), delay);
+}
+
+/**
+ * Attributes a watcher-observed change. The surface's own edit of the
+ * curated document is never a row (the surface shows the result). A file
+ * that still matches its snapshot is the watcher echoing a write the scanner
+ * already reported and flushed (drop). Otherwise a file claim names the
+ * owner — including a further change inside the claim window, such as a
+ * second append — and a scope window names the owner of an unnamed file.
+ * Returns false when nothing claims the file.
+ */
+async function attributeClaimedHit(hit: MemoryFileHit): Promise<boolean> {
+  if (hit.absPath === CURATED_MEMORY_PATH && curatedEditsInFlight > 0) return true;
+  const claim = fileClaim(hit);
+  if (claim?.sessionId === CURATED_EDIT_SENTINEL) return true;
+  if ((await readSnapshotSource(hit.absPath)) === fileSnapshots.get(hit.absPath)) return true;
+  const sessionId = claim?.sessionId ?? scopeClaimant(hit);
+  if (!sessionId) return false;
+  enqueueBurst(sessionId, hit);
+  return true;
 }
 
 /**
  * Fallback-watcher entry (planner repo chokidar, forwarded auto-memory
- * events). A claimed hit was already queued by the transcript scanner, so it
- * drops here; an unclaimed hit waits out the grace window for a trailing
- * claim before the running-run heuristic attributes it.
+ * events). A claimed hit attributes at once; an unclaimed one waits out the
+ * grace window for a trailing claim before the running-run heuristic
+ * attributes it.
  */
 function queueMemoryHit(hit: MemoryFileHit): void {
-  if (claimedSession(hit)) return;
-  setTimeout(() => {
-    if (claimedSession(hit)) return;
+  void (async () => {
+    if (await attributeClaimedHit(hit)) return;
+    await new Promise((resolve) => setTimeout(resolve, FALLBACK_GRACE_MS));
+    if (await attributeClaimedHit(hit)) return;
     const sessionId = pickSessionForHit(hit);
-    if (sessionId) enqueueBurst(sessionId, hit.label);
-  }, FALLBACK_GRACE_MS);
+    if (sessionId) enqueueBurst(sessionId, hit);
+  })();
 }
 
 /** Maps a path under the Claude projects tree to its auto-memory identity. */
@@ -253,6 +378,7 @@ function classifyAutoMemoryFile(claudeProjectsRoot: string, filePath: string): M
     scope: 'auto',
     autoSlug: parts[0],
     label: `memory/${parts.slice(2).join('/')}`,
+    absPath: filePath,
   };
 }
 
@@ -266,29 +392,69 @@ export function handleAutoMemoryFileEvent(claudeProjectsRoot: string, filePath: 
   if (hit) queueMemoryHit(hit);
 }
 
+/** Planner-repo watcher entry (exported so tests can stand in for chokidar). */
+export function handlePlannerRepoFileEvent(filePath: string): void {
+  const hit = classifyPlannerRepoFile(path.normalize(filePath));
+  if (hit) queueMemoryHit(hit);
+}
+
 const transcriptOffsets = new Map<string, number>();
 const scanChains = new Map<string, Promise<void>>();
 
+type PendingTool =
+  | { kind: 'write'; sessionId: string; hit: MemoryFileHit; at: number }
+  | { kind: 'bash'; sessionId: string; hits: MemoryFileHit[]; at: number }
+  | { kind: 'agent'; sessionId: string; at: number };
+
 /**
- * Memory-target tool calls whose result has not appeared in the transcript
- * yet. Only a non-error tool_result confirms the write — a denied or failed
+ * Memory-relevant tool calls whose result has not appeared in the transcript
+ * yet. Only a non-error tool_result confirms a write — a denied or failed
  * Edit lands a tool_use line too, and firing on it would both show a false
  * indicator and suppress the fallback watcher's honest detection.
  */
-const pendingToolWrites = new Map<string, { sessionId: string; hit: MemoryFileHit; at: number }>();
+const pendingTools = new Map<string, PendingTool>();
 const PENDING_TOOL_TTL_MS = 10 * 60_000;
 
 /** Cap on how much of a never-seen transcript the first scan reads. */
 const MAX_FIRST_SCAN_BYTES = 262_144;
 
+/** Memory file paths spelled out in a shell command. */
+function memoryPathsInCommand(command: string, claudeProjectsRoot: string): MemoryFileHit[] {
+  const hits: MemoryFileHit[] = [];
+  for (const root of [PLANNER_MEMORY_ROOT, claudeProjectsRoot]) {
+    const escaped = root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`${escaped}/[^\\s"'\`;|&<>)]+\\.md`, 'g');
+    for (const match of command.match(pattern) ?? []) {
+      const normalized = path.normalize(match);
+      const hit = classifyPlannerRepoFile(normalized) ?? classifyAutoMemoryFile(claudeProjectsRoot, normalized);
+      if (hit) hits.push(hit);
+    }
+  }
+  return hits;
+}
+
+/** Whether a shell command could write memory: it mentions a memory tree, or runs inside the memory repo. */
+function commandTouchesMemory(command: string, cwd: string | null, claudeProjectsRoot: string): boolean {
+  if (command.includes(PLANNER_MEMORY_ROOT) || command.includes(claudeProjectsRoot)) return true;
+  return cwd !== null && !path.relative(MEMORY_REPO_ROOT, cwd).startsWith('..');
+}
+
+function openScope(sessionId: string, from: number, until: number): void {
+  const existing = scopeClaims.get(sessionId);
+  scopeClaims.set(sessionId, {
+    from: existing ? Math.min(existing.from, from) : from,
+    until: existing ? Math.max(existing.until, until) : until,
+  });
+}
+
 /**
- * Per-session detection (ui13 job 8): scans the new tail of a changed Claude
- * transcript for file-tool calls (Write/Edit/MultiEdit/NotebookEdit) whose
- * target is a memory path, and attributes each confirmed write to this exact
- * session — the transcript is the honest record of who wrote. Called by the
- * sessions watcher after indexing, so `sessionId` is the canonical app
- * session id. Scans of one file serialize so overlapping events cannot
- * regress the offset and double-report a line.
+ * Per-session detection (ui13 job 8; Bash/subagent claims ui14 job 3): scans
+ * the new tail of a changed Claude transcript for tool calls that touch
+ * memory paths and attributes each confirmed write to this exact session —
+ * the transcript is the honest record of who wrote. Called by the sessions
+ * watcher after indexing, so `sessionId` is the canonical app session id.
+ * Scans of one file serialize so overlapping events cannot regress the
+ * offset and double-report a line.
  */
 export function handleSessionTranscriptEvent(
   claudeProjectsRoot: string,
@@ -353,36 +519,64 @@ async function scanTranscriptTail(
           const ts = typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : NaN;
           if (!Number.isFinite(ts) || ts < cutoff) continue;
         }
+        const cwd = typeof entry.cwd === 'string' ? entry.cwd : null;
         for (const item of content as Array<Record<string, unknown>>) {
-          if (item?.type !== 'tool_use' || !MEMORY_WRITE_TOOLS.has(String(item.name))) continue;
-          const toolUseId = typeof item.id === 'string' ? item.id : null;
+          if (item?.type !== 'tool_use' || typeof item.id !== 'string') continue;
+          const toolName = String(item.name);
           const input = item.input as Record<string, unknown> | undefined;
-          const rawPath = typeof input?.file_path === 'string'
-            ? input.file_path
-            : typeof input?.notebook_path === 'string'
-              ? input.notebook_path
-              : null;
-          if (!toolUseId || !rawPath) continue;
-          const absolute = path.isAbsolute(rawPath)
-            ? rawPath
-            : typeof entry.cwd === 'string'
-              ? path.resolve(entry.cwd, rawPath)
-              : null;
-          if (!absolute) continue;
-          const normalized = path.normalize(absolute);
-          const hit = classifyPlannerRepoFile(normalized) ?? classifyAutoMemoryFile(claudeProjectsRoot, normalized);
-          if (!hit) continue;
-          pendingToolWrites.set(toolUseId, { sessionId, hit, at: Date.now() });
+          const now = Date.now();
+
+          if (MEMORY_WRITE_TOOLS.has(toolName)) {
+            const rawPath = typeof input?.file_path === 'string'
+              ? input.file_path
+              : typeof input?.notebook_path === 'string'
+                ? input.notebook_path
+                : null;
+            if (!rawPath) continue;
+            const absolute = path.isAbsolute(rawPath) ? rawPath : cwd ? path.resolve(cwd, rawPath) : null;
+            if (!absolute) continue;
+            const normalized = path.normalize(absolute);
+            const hit = classifyPlannerRepoFile(normalized) ?? classifyAutoMemoryFile(claudeProjectsRoot, normalized);
+            if (hit) pendingTools.set(item.id, { kind: 'write', sessionId, hit, at: now });
+          } else if (toolName === 'Bash') {
+            const command = typeof input?.command === 'string' ? input.command : '';
+            if (!commandTouchesMemory(command, cwd, claudeProjectsRoot)) continue;
+            pendingTools.set(item.id, {
+              kind: 'bash',
+              sessionId,
+              hits: memoryPathsInCommand(command, claudeProjectsRoot),
+              at: now,
+            });
+          } else if (SUBAGENT_TOOLS.has(toolName)) {
+            // The subagent may write any time until it returns; its own
+            // transcript is not indexed, so the parent owns the window.
+            pendingTools.set(item.id, { kind: 'agent', sessionId, at: now });
+            openScope(sessionId, now, Number.POSITIVE_INFINITY);
+          }
         }
       } else if (entry.type === 'user') {
         for (const item of content as Array<Record<string, unknown>>) {
           if (item?.type !== 'tool_result' || typeof item.tool_use_id !== 'string') continue;
-          const pending = pendingToolWrites.get(item.tool_use_id);
+          const pending = pendingTools.get(item.tool_use_id);
           if (!pending) continue;
-          pendingToolWrites.delete(item.tool_use_id);
+          pendingTools.delete(item.tool_use_id);
+          const now = Date.now();
+          if (pending.kind === 'agent') {
+            // Close the window with a tail long enough for the watcher's poll.
+            const window = scopeClaims.get(pending.sessionId);
+            if (window) window.until = now + CLAIM_TTL_MS;
+            continue;
+          }
           if (item.is_error === true) continue;
-          recentClaims.set(keyForHit(pending.hit), { sessionId: pending.sessionId, at: Date.now() });
-          enqueueBurst(pending.sessionId, pending.hit.label);
+          if (pending.kind === 'write') {
+            recentClaims.set(keyForHit(pending.hit), { sessionId: pending.sessionId, at: now });
+            enqueueBurst(pending.sessionId, pending.hit);
+            continue;
+          }
+          for (const hit of pending.hits) {
+            recentClaims.set(keyForHit(hit), { sessionId: pending.sessionId, at: now });
+          }
+          openScope(pending.sessionId, pending.at, now + CLAIM_TTL_MS);
         }
       }
     }
@@ -393,13 +587,51 @@ async function scanTranscriptTail(
         if (now - claim.at >= CLAIM_TTL_MS) recentClaims.delete(key);
       }
     }
-    for (const [id, pending] of pendingToolWrites) {
-      if (now - pending.at >= PENDING_TOOL_TTL_MS) pendingToolWrites.delete(id);
+    for (const [id, pending] of pendingTools) {
+      if (now - pending.at < PENDING_TOOL_TTL_MS) continue;
+      pendingTools.delete(id);
+      // A subagent whose result never came (the process died) must not hold
+      // the session's window open forever.
+      if (pending.kind === 'agent') {
+        const window = scopeClaims.get(pending.sessionId);
+        if (window && window.until === Number.POSITIVE_INFINITY) window.until = now + CLAIM_TTL_MS;
+      }
     }
   } catch {
     // Unreadable tail; the next change event rescans from the same offset.
   } finally {
     await handle?.close();
+  }
+}
+
+/** Snapshots every memory file's content so the first change after boot has a "before" side. */
+export async function snapshotMemoryFiles(): Promise<void> {
+  const claudeProjectsRoot = path.join(getClaudeConfigDir(), 'projects');
+  const walk = async (dir: string, depth: number): Promise<string[]> => {
+    if (depth < 0) return [];
+    let entries: fs.Dirent[];
+    try {
+      entries = await fsPromises.readdir(dir, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const found: string[] = [];
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) found.push(...await walk(full, depth - 1));
+      else if (entry.name.endsWith('.md')) found.push(full);
+    }
+    return found;
+  };
+  const candidates = [
+    ...await walk(PLANNER_MEMORY_ROOT, 2),
+    ...await walk(claudeProjectsRoot, 2),
+  ];
+  for (const file of candidates) {
+    if (!classifyPlannerRepoFile(file) && !classifyAutoMemoryFile(claudeProjectsRoot, file)) continue;
+    const content = await readSnapshotSource(file);
+    if (content !== null) fileSnapshots.set(file, content);
   }
 }
 
@@ -413,6 +645,7 @@ export async function initializeMemoryWatcher(): Promise<void> {
   }
 
   await fsPromises.mkdir(GLOBAL_MEMORY_DIR, { recursive: true });
+  await snapshotMemoryFiles();
 
   plannerRepoWatcher = chokidar.watch(PLANNER_MEMORY_ROOT, {
     ignored: ['**/.git/**', '**/node_modules/**', '**/.DS_Store', '**/*.tmp', '**/*.swp'],
@@ -425,18 +658,147 @@ export async function initializeMemoryWatcher(): Promise<void> {
     binaryInterval: 6_000,
   });
 
-  const onEvent = (filePath: string) => {
-    const hit = classifyPlannerRepoFile(filePath);
-    if (hit) queueMemoryHit(hit);
-  };
-
   plannerRepoWatcher
-    .on('add', onEvent)
-    .on('change', onEvent)
+    .on('add', handlePlannerRepoFileEvent)
+    .on('change', handlePlannerRepoFileEvent)
     .on('error', (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       console.error('[Memory] Planner memory watcher error', { error: message });
     });
 
   console.log('[Memory] Watching planner memory repo', { rootPath: PLANNER_MEMORY_ROOT });
+
+  void importClaudeAiExportIfPresent();
+}
+
+/* ─── Curated memory: one-off prompt edits (ui14 job 3) ─────────────────── */
+
+const CURATED_EDIT_MODEL = 'claude-sonnet-5';
+const CURATED_EDIT_TIMEOUT_MS = 240_000;
+/** Sentinel claimant for the surface's own edits: the watcher drops them, no transcript row. */
+const CURATED_EDIT_SENTINEL = 'memory-surface';
+
+let curatedEditChain: Promise<unknown> = Promise.resolve();
+/** Edits the surface is running right now; their file changes are never rows. */
+let curatedEditsInFlight = 0;
+
+export type CuratedEditResult = {
+  content: string;
+  changed: boolean;
+  /** The edit landed but a later step (push) did not; the caller shows it. */
+  warning?: string;
+};
+
+function claimCuratedForSurface(): void {
+  recentClaims.set(`global:_global/${CURATED_MEMORY_FILE}`, { sessionId: CURATED_EDIT_SENTINEL, at: Date.now() });
+}
+
+async function git(args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync('git', ['-C', MEMORY_REPO_ROOT, ...args], { timeout: 60_000 });
+  return stdout;
+}
+
+/**
+ * Applies one edit instruction to the curated memory document through a
+ * one-off headless Claude session (not a chat, not a planner session), then
+ * commits and pushes the memory repo. Edits serialize; the returned content
+ * is the document after the edit.
+ */
+export function editCuratedMemory(instruction: string, extraCommitPaths: string[] = []): Promise<CuratedEditResult> {
+  const run = curatedEditChain.then(() => runCuratedEdit(instruction, extraCommitPaths), () => runCuratedEdit(instruction, extraCommitPaths));
+  curatedEditChain = run.catch(() => undefined);
+  return run;
+}
+
+async function runCuratedEdit(instruction: string, extraCommitPaths: string[]): Promise<CuratedEditResult> {
+  const relativePath = path.relative(MEMORY_REPO_ROOT, CURATED_MEMORY_PATH);
+  const before = (await readSnapshotSource(CURATED_MEMORY_PATH)) ?? '';
+  const prompt = [
+    `You are editing Willem's curated memory document at ${relativePath} (repository root: ${MEMORY_REPO_ROOT}). Read it first.`,
+    'It is one self-maintained document; follow the rules its header states: add a new fact under the section it belongs to, update an existing entry in place when the instruction changes or refines it, rotate out entries the instruction makes stale, keep entries to one line each in the existing voice, and keep the structure. Technical and project state does not belong in this file. Do not use em dashes.',
+    'Apply the instruction below and nothing else, then stop. Reply with one short line describing the change, no preamble.',
+    '',
+    instruction,
+  ].join('\n');
+
+  curatedEditsInFlight += 1;
+  const claudeExecutable = resolveClaudeCodeExecutablePath(process.env.CLAUDE_CLI_PATH);
+  try {
+    // --no-session-persistence: a one-off edit must not leave a transcript
+    // the session synchronizer would index as a phantom session.
+    await execFileAsync(
+      claudeExecutable,
+      [
+        '-p', prompt,
+        '--model', CURATED_EDIT_MODEL,
+        '--no-session-persistence',
+        '--allowedTools', 'Read', 'Edit', 'Write',
+      ],
+      { cwd: MEMORY_REPO_ROOT, timeout: CURATED_EDIT_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Memory] Curated edit failed', { error: message });
+    throw new Error('The edit session failed.');
+  } finally {
+    // The watcher's echo of the edit can trail the session by a poll cycle.
+    claimCuratedForSurface();
+    curatedEditsInFlight -= 1;
+  }
+
+  const content = (await readSnapshotSource(CURATED_MEMORY_PATH)) ?? '';
+  fileSnapshots.set(CURATED_MEMORY_PATH, content);
+  const changed = content !== before || extraCommitPaths.length > 0;
+  if (!changed) return { content, changed: false };
+
+  const summary = instruction.replace(/\s+/g, ' ').trim().slice(0, 60);
+  try {
+    await git(['add', '--', CURATED_MEMORY_PATH, ...extraCommitPaths]);
+    await git(['commit', '-m', `memory: ${summary}`]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Memory] Curated edit commit failed', { error: message });
+    return { content, changed: true, warning: 'Edited, but the commit failed.' };
+  }
+  try {
+    await git(['push']);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Memory] Curated edit push failed', { error: message });
+    return { content, changed: true, warning: 'Committed, but the push failed.' };
+  }
+  return { content, changed: true };
+}
+
+/**
+ * One-time import of Willem's Claude.ai memory export (ui14 job 3): if the
+ * planner filed `planner/_global/claude-ai-memory-export.md`, fold what
+ * applies to how Willem works and his coding projects into the curated
+ * document and rename the export `.imported`. Renaming first keeps a second
+ * instance (live and dev share the repo) from importing it twice.
+ */
+export async function importClaudeAiExportIfPresent(
+  globalDir: string = GLOBAL_MEMORY_DIR,
+  runEdit: (instruction: string, extraCommitPaths: string[]) => Promise<CuratedEditResult> = editCuratedMemory,
+): Promise<boolean> {
+  const exportPath = path.join(globalDir, CLAUDE_AI_EXPORT_FILE);
+  const importedPath = `${exportPath.replace(/\.md$/, '')}.imported`;
+  if (!fs.existsSync(exportPath)) return false;
+  await fsPromises.rename(exportPath, importedPath);
+  try {
+    await runEdit(
+      [
+        `Import Willem's Claude.ai memory export at ${importedPath}: read it, keep only what applies to how Willem works and his coding projects (drop unrelated personal facts),`,
+        'and merge those entries into the curated document under the sections they belong to, deduplicating against what is already there.',
+      ].join(' '),
+      [exportPath, importedPath],
+    );
+    console.log('[Memory] Claude.ai memory export imported', { importedPath });
+    return true;
+  } catch (error) {
+    await fsPromises.rename(importedPath, exportPath).catch(() => undefined);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Memory] Claude.ai memory export import failed', { error: message });
+    return false;
+  }
 }

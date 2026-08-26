@@ -71,6 +71,8 @@ export interface ChatMessage {
   isMemoryUpdate?: boolean;
   /** Memory-relative paths written in the burst this row marks. */
   memoryFiles?: string[];
+  /** Per-file excerpt of the real change (plain diff lines), keyed by path. */
+  memoryDiffs?: Record<string, string[]>;
   isSubagentContainer?: boolean;
   subagentState?: {
     childTools: SubagentChildTool[];

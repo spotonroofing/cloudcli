@@ -741,7 +741,6 @@ export default function SidebarContent({
       <MemorySurface
         open={showMemory}
         onClose={() => setShowMemory(false)}
-        selectedProject={projectListProps.selectedProject ?? null}
         t={t}
       />
       </div>
