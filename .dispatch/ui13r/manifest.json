@@ -1,0 +1,10 @@
+[
+ {
+  "name": "Column-view wiring bugs",
+  "tasks": [
+   "Project reopen restores both panes",
+   "Pinned transcripts never self-scroll",
+   "Slow load profiled and fixed"
+  ]
+ }
+]
