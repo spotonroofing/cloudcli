@@ -157,3 +157,12 @@ Goal: the worker chat shows when the model is thinking, and message actions exis
 
 Done check: on dev with a live stub run: a reasoning gap renders the thinking row with a running timer in the worker pane; DOM sweep shows copy/rerun only on user rows, copy/timestamp only on final assistant rows (hover-revealed), nothing on tool rows or intermediate texts, in both panes. Phone holds. Fresh-context subagent verification. Commit.
 
+## Job 14 — Commit footers on jobs (appended 2026-08-25)
+
+Goal: an opened job drawer shows what it shipped. Every job already ends in exactly one commit (the commit gate demands it), but the phase-end event carries no hash, so the UI cannot show it. Files: scripts/macos/dispatch-chain-runner (the phase-end event body), the watchdog chain event handling and storage, the jobs sidebar drawer, DESIGN.md. Dependencies: none.
+
+- [ ] The runner includes the job's commit (short hash and subject) in its phase-end event; the watchdog stores it per job on the chain record; completed jobs from this run backfill from the journal where the event already passed.
+- [ ] An open job drawer shows a small footer under its tasks: the commit subject with the short hash, hover marquee if long, monochromatic, no footer for jobs without a commit yet.
+
+Done check: on dev with a stub chain: after a stub job commits, its drawer footer shows the hash and subject (DOM); jobs still running show none; ui13's completed jobs show theirs after backfill. Phone holds. Fresh-context subagent verification. Commit.
+
