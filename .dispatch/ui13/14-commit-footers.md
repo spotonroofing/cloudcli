@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Commit footers -->
-<!-- tasks: Runner reports each job's commit | Watchdog stores it per job | Drawer footer shows hash and subject -->
+<!-- tasks: Runner reports each job's commit | In-drawer footer: commit and total time | Per-task durations where data exists -->
 Execute Job 14 of PUNCHLIST_ui13.md in this repo (commit footers on jobs). The goal and items are Job 14's section and checkboxes in PUNCHLIST_ui13.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
