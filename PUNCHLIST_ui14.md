@@ -8,7 +8,7 @@ Willem's correction round on ui13 plus the harness hardening the audit prescribe
 
 - Jobs surface rules (Willem 2026-08-26): with one or two projects open (side-by-side or stacked) the jobs view is a side column inside that project's worker pane; with three or more projects in columns the same toggle makes jobs take over the entire worker pane. The toggle is the job sign icon alone, top-right of the worker pane. The "Job N of N" strip below the top bar is removed entirely.
 - Job history is one continuous bottom-to-top list across runs (newest on top, older runs pushed down, scroll for history). No "Other runs" section.
-- Memory is one curated view (WILLEM.md in the spoton-worker repo at planner/_global/); no Internals tab, no Project/Global toggle. Edits happen through a one-off prompt box at the bottom, Claude.ai style.
+- Memory is one curated view (GLOBALMEMORY.md in the spoton-worker repo at planner/_global/); no Internals tab, no Project/Global toggle. Edits happen through a one-off prompt box at the bottom, Claude.ai style.
 - cswap accounts are added by logging in (`claude /login` in a terminal) then `cswap add`; there is no API-key or setup-token path in Willem's world.
 - Standing laws: personal tool wording (no explainer copy), drawers not popups, ramped motion, semantic color at task level only, DESIGN.md consistency, mobile parity, no em dashes in UI copy, label caps (job names 24 chars, tasks 40).
 - Rebuild discipline: rebuild/restart dev only when the done check needs the running instance; tests without rebuilds where they suffice.
@@ -41,19 +41,21 @@ Goal: the worker pane's top bar matches the planner's, the session-title dropdow
 - [ ] Navigation between worker sessions is the job list: hovering a job row swaps its chevron for the chat icon, clicking it opens that job's session in the pane (ui13 specified this; verify it works end to end and fix whatever made Willem see a dropdown instead).
 - [ ] Top bar right: a plus button for a new worker session sits immediately left of the Hide worker button, then the job sign toggle per job 1.
 - [ ] Repopulate job history: the continuous list shows the completed jobs of every stored run for the project (ui11, ui11r, ui12, ui13, ui13r) with their names, tasks, counters, commit footers, and durations where the journals or chain records carry them (backfill from ~/forge-logs/<slug>/JOURNAL.md and the punch lists; live DB is where chain records live per the ui11-chain-state-lives-on-live lesson); the list should look like real history, not a single run.
+- [ ] Breathing is opacity only: the active task's and active job's breathing animates lightness/opacity of the white, never scale or size; remove any transform scale from the breathe keyframes app-wide.
 - [ ] Tooltips are collision-aware: near a screen edge the arrow stays anchored to the control and the box slides inward so no text is clipped; fix at the Tooltip primitive so every tooltip benefits.
 
 Done check: on dev: header DOM shows icon + "Worker" + session title with no dropdown trigger; hovering a job row shows the chat icon and clicking navigates (URL/title change); the plus button creates a new worker session; the Hide worker tooltip at the right edge renders fully inside the viewport (rect check). Phone holds. Fresh-context subagent verification. Commit.
 
 ## Job 3 — Memory: one view, sized right, edited by prompt
 
-Goal: Memory shows only Willem's curated memory, at a sane size, and he edits it by typing an instruction. Files: the memory surface, a small server route that runs a one-off edit session against planner/_global/WILLEM.md in the spoton-worker repo (commit and push), DESIGN.md. Dependencies: none.
+Goal: Memory shows only Willem's curated memory, at a sane size, and he edits it by typing an instruction. Files: the memory surface, a small server route that runs a one-off edit session against planner/_global/GLOBALMEMORY.md in the spoton-worker repo (commit and push), DESIGN.md. Dependencies: none.
 
 - [ ] Remove the Internals tab and the Project/Global toggle; the surface is the curated memory only. Shrink the surface's controls to the app's normal control scale (the current buttons are far too large); the content reads as a clean document.
-- [ ] A prompt box at the bottom, Claude.ai style: Willem types an edit instruction, a one-off headless session (not a chat, not an existing planner session) applies it to WILLEM.md following the file's own rules (add, update in place, rotate stale), commits and pushes the memory repo, and the view updates live with a small loading state then a check; repeatable for further edits; errors surface inline.
-- [ ] Import hook: if `planner/_global/claude-ai-memory-export.md` exists in the spoton-worker repo (the planner files Willem's Claude.ai memory export there), a one-time import parses it into WILLEM.md keeping only what applies to how Willem works and his coding projects (drop unrelated personal facts), then renames the export to `.imported`; if the file is absent, skip and say so in the summary.
+- [ ] A prompt box at the bottom, Claude.ai style: Willem types an edit instruction, a one-off headless session (not a chat, not an existing planner session) applies it to GLOBALMEMORY.md following the file's own rules (add, update in place, rotate stale), commits and pushes the memory repo, and the view updates live with a small loading state then a check; repeatable for further edits; errors surface inline.
+- [ ] The memory-updated row expands to a short preview of what changed in that file: the added or changed lines (a compact diff excerpt, a few lines, plain text), taken from the actual file change the server detected, never a summary the model wrote.
+- [ ] Import hook: if `planner/_global/claude-ai-memory-export.md` exists in the spoton-worker repo (the planner files Willem's Claude.ai memory export there), a one-time import parses it into GLOBALMEMORY.md keeping only what applies to how Willem works and his coding projects (drop unrelated personal facts), then renames the export to `.imported`; if the file is absent, skip and say so in the summary.
 
-Done check: on dev: the surface shows only the document with normal-scale controls; an edit instruction ("remember that I prefer X") results in a WILLEM.md commit in the memory repo and the view updates without reload; the import runs if the export exists. Phone holds. Fresh-context subagent verification. Commit.
+Done check: on dev: the surface shows only the document with normal-scale controls; an edit instruction ("remember that I prefer X") results in a GLOBALMEMORY.md commit in the memory repo and the view updates without reload; the import runs if the export exists. Phone holds. Fresh-context subagent verification. Commit.
 
 ## Job 4 — Footer drawers exclusive, account switcher revamped
 
@@ -79,6 +81,8 @@ Done check: on dev: no About tab; the tab strip's DOM matches the sidebar icon-t
 Goal: opening a pasted-text preview lets Willem edit the text in place. Files: the PASTED chip preview, composer attachment state, DESIGN.md. Dependencies: none.
 
 - [ ] Character counter moves to the left end of the row under the prompt bar, flush with the enclosure's left edge (mirroring the usage ring on the right); it shows a static "0" before typing (never blank), lining tabular digits.
+- [ ] Counter digits, fourth report: in "1,174" the two 1s render at different heights, so this is the animated NumberTicker's per-column positioning, not the font. Fix it so identical glyphs have identical boxes at every device-pixel-ratio and zoom; if the ticker cannot be made pixel-exact, replace it on the counter with plain tabular text (a counter does not need a ticker). Verify by measuring glyph boxes of repeated digits.
+- [ ] Remove the X clear-input button from the composer entirely.
 - [ ] The pasted-text preview becomes an editor: the text is editable in the preview, saves back to the attachment on close or Save, cancel restores; works for previews opened from the composer and from a sent bubble (sent bubbles stay read-only, state that).
 
 Done check: on dev: edit text in a composer preview, close, send; the sent message carries the edited text; sent-bubble preview is read-only. Phone holds. Fresh-context subagent verification. Commit.

@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Memory: one view, prompt edits -->
-<!-- tasks: Internals and Project/Global removed, sized right | Prompt box runs one-off edits, live update | Claude.ai export imported if present -->
+<!-- tasks: Internals and Project/Global removed, sized right | Prompt box runs one-off edits, live update | Memory row expands to a real diff preview | Claude.ai export imported if present -->
 Execute Job 3 of PUNCHLIST_ui14.md in this repo (memory: one view, prompt edits). The goal and items are that job's section and checkboxes in PUNCHLIST_ui14.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
