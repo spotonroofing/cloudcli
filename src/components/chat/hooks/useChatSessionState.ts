@@ -797,6 +797,11 @@ export function useChatSessionState({
       setTotalMessages(0);
       setTokenBudget(null);
       lastLoadedSessionKeyRef.current = null;
+      // Nothing is loading for no session. A project switch that lands here
+      // while the previous session's history fetch is still in flight would
+      // otherwise leave the flag set (that fetch's settle is skipped once
+      // the active session moved on) and the pane on a permanent skeleton.
+      setIsLoadingSessionMessages(false);
       return;
     }
 
