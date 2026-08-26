@@ -8,7 +8,7 @@ import { api } from '../../../../utils/api';
 import { cn } from '../../../../lib/utils';
 import type { Project } from '../../../../types/app';
 
-import SidebarFooterDrawer from './SidebarFooterDrawer';
+import SidebarSurface from './SidebarSurface';
 
 type MemoryFileEntry = { name: string; content: string };
 
@@ -20,11 +20,10 @@ type ProjectMemoryPayload = {
   sessions: MemoryFileEntry[];
 };
 
-type MemoryDrawerProps = {
+type MemorySurfaceProps = {
   open: boolean;
   onClose: () => void;
   selectedProject: Project | null;
-  isMobile: boolean;
   t: TFunction;
 };
 
@@ -79,18 +78,18 @@ function SectionLabel({ children }: { children: string }) {
 }
 
 /**
- * Read-only memory viewer (ui12 phase 7): a footer drawer on the shared shell
- * listing the selected project's planner memory (PROJECT.md, STATE.md, lessons
- * with one-line summaries, recent session summaries) and, on the Global tab,
- * the cross-project planner/_global/ folder. Browsing only; nothing writes.
+ * Read-only memory viewer (ui12 phase 7; full-sidebar surface ui13 job 5):
+ * fills the sidebar on the slide-up shell, listing the selected project's
+ * planner memory (PROJECT.md, STATE.md, lessons with one-line summaries,
+ * recent session summaries) and, on the Global tab, the cross-project
+ * planner/_global/ folder. Browsing only; nothing writes.
  */
-export default function MemoryDrawer({
+export default function MemorySurface({
   open,
   onClose,
   selectedProject,
-  isMobile,
   t,
-}: MemoryDrawerProps) {
+}: MemorySurfaceProps) {
   const [tab, setTab] = useState<'project' | 'global'>('project');
   const [projectMemory, setProjectMemory] = useState<ProjectMemoryPayload | null>(null);
   const [globalFiles, setGlobalFiles] = useState<MemoryFileEntry[]>([]);
@@ -135,12 +134,11 @@ export default function MemoryDrawer({
   );
 
   return (
-    <SidebarFooterDrawer
+    <SidebarSurface
       open={open}
       onClose={onClose}
-      isMobile={isMobile}
       ariaLabel={t('memory.title', 'Memory')}
-      dataSlot="memory-drawer"
+      dataSlot="memory-surface"
     >
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
@@ -164,7 +162,7 @@ export default function MemoryDrawer({
         </Tabs>
       </div>
 
-      <div className="max-h-[60dvh] space-y-4 overflow-y-auto px-4 py-3" data-slot="memory-drawer-body">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3" data-slot="memory-surface-body">
         {tab === 'project' ? (
           !projectId ? (
             emptyHint(t('memory.selectProject', 'Select a project to browse its planner memory.'))
@@ -237,6 +235,6 @@ export default function MemoryDrawer({
           </section>
         )}
       </div>
-    </SidebarFooterDrawer>
+    </SidebarSurface>
   );
 }

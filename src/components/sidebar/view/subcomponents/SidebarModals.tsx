@@ -1,19 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { AlertTriangle, EyeOff, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
+
 import { Button, Dialog, DialogContent, DialogTitle } from '../../../../shared/view/ui';
-import Settings from '../../../settings/view/Settings';
-import type { Project } from '../../../../types/app';
-import { normalizeProjectForSettings } from '../../utils/utils';
-import type { DeleteProjectConfirmation, SessionDeleteConfirmation, SettingsProject } from '../../types/types';
+import type { DeleteProjectConfirmation, SessionDeleteConfirmation } from '../../types/types';
 import ProjectCreationWizard from '../../../project-creation-wizard';
 
 type SidebarModalsProps = {
-  projects: Project[];
-  showSettings: boolean;
-  settingsInitialTab: string;
-  onCloseSettings: () => void;
   showNewProject: boolean;
   onCloseNewProject: () => void;
   onProjectCreated: () => void;
@@ -26,24 +20,7 @@ type SidebarModalsProps = {
   t: TFunction;
 };
 
-type TypedSettingsProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  projects: SettingsProject[];
-  initialTab: string;
-};
-
-const SettingsComponent = Settings as (props: TypedSettingsProps) => JSX.Element;
-
-function TypedSettings(props: TypedSettingsProps) {
-  return <SettingsComponent {...props} />;
-}
-
 export default function SidebarModals({
-  projects,
-  showSettings,
-  settingsInitialTab,
-  onCloseSettings,
   showNewProject,
   onCloseNewProject,
   onProjectCreated,
@@ -55,12 +32,6 @@ export default function SidebarModals({
   onConfirmDeleteSession,
   t,
 }: SidebarModalsProps) {
-  // Settings expects project identity/path fields to be present for dropdown labels and local-scope MCP config.
-  const settingsProjects = useMemo(
-    () => projects.map(normalizeProjectForSettings),
-    [projects],
-  );
-
   // Second stage of the project dialog: the chosen action ('archive' | 'delete')
   // waits for an explicit confirm before anything happens.
   const [confirmingProjectAction, setConfirmingProjectAction] = useState<'archive' | 'delete' | null>(null);
@@ -83,17 +54,6 @@ export default function SidebarModals({
           <ProjectCreationWizard
             onClose={onCloseNewProject}
             onProjectCreated={onProjectCreated}
-          />,
-          document.body,
-        )}
-
-      {showSettings &&
-        ReactDOM.createPortal(
-          <TypedSettings
-            isOpen={showSettings}
-            onClose={onCloseSettings}
-            projects={settingsProjects}
-            initialTab={settingsInitialTab}
           />,
           document.body,
         )}

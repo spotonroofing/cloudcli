@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 
 import type { LLMProvider, Project, ProjectSession } from '../../../types/app';
-import type { SettingsProject, SessionViewModel, SessionWithProvider } from '../types/types';
+import type { SessionViewModel, SessionWithProvider } from '../types/types';
 
 export const formatCompactAge = (
   dateString: string | null | undefined,
@@ -167,26 +167,3 @@ export const filterProjects = (projects: Project[], searchFilter: string): Proje
   });
 };
 
-export const normalizeProjectForSettings = (project: Project): SettingsProject => {
-  const fallbackPath =
-    typeof project.fullPath === 'string' && project.fullPath.length > 0
-      ? project.fullPath
-      : typeof project.path === 'string'
-        ? project.path
-        : '';
-
-  // Legacy SettingsProject still expects a `name` field; use the projectId so
-  // downstream consumers that rely on a stable identifier continue to work.
-  return {
-    name: project.projectId,
-    displayName:
-      typeof project.displayName === 'string' && project.displayName.trim().length > 0
-        ? project.displayName
-        : project.projectId,
-    fullPath: fallbackPath,
-    path:
-      typeof project.path === 'string' && project.path.length > 0
-        ? project.path
-        : fallbackPath,
-  };
-};

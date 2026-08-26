@@ -652,7 +652,12 @@ export function useProjectsState({
   const openSettings = useCallback((tab = 'appearance') => {
     setSettingsInitialTab(tab);
     setShowSettings(true);
-  }, []);
+    // Settings fills the sidebar (ui13 job 5): on mobile the sidebar overlay
+    // must be open for the surface to be visible.
+    if (isMobile) {
+      setSidebarOpen(true);
+    }
+  }, [isMobile]);
 
   useEffect(() => {
     void fetchProjects();

@@ -6,16 +6,23 @@ import type { TFunction } from 'i18next';
 import { NumberTicker } from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 import { authenticatedFetch } from '../../../../utils/api';
-import type { Project } from '../../../../types/app';
 import type { ActiveSessionRow } from '../../types/types';
 
 import AccountsPanel from './AccountsPanel';
 import ActiveSessionsDrawer from './ActiveSessionsDrawer';
-import MemoryDrawer from './MemoryDrawer';
 
 type SidebarFooterProps = {
   restartRequired: boolean;
-  onShowSettings: () => void;
+  /** Whether the full-sidebar Settings surface is open (ui13 job 5). */
+  settingsOpen: boolean;
+  /** Toggles the full-sidebar Settings surface. */
+  onToggleSettings: () => void;
+  /** Whether the full-sidebar Memory surface is open (ui13 job 5). */
+  memoryOpen: boolean;
+  /** Toggles the full-sidebar Memory surface. */
+  onToggleMemory: () => void;
+  /** A footer drawer just opened — the parent closes any open surface. */
+  onDrawerOpened: () => void;
   /** Live planner-origin runs (origin planner or null — Willem's chats). */
   plannerRunningCount: number;
   /** Live worker-origin runs (direct, dispatch, external). */
@@ -24,8 +31,6 @@ type SidebarFooterProps = {
   activeSessionRows: ActiveSessionRow[];
   /** Opens a drawer row's session in the pane. */
   onOpenActiveSession: (row: ActiveSessionRow) => void;
-  /** The memory viewer's Project tab reads this project's planner memory. */
-  selectedProject: Project | null;
   /** Phone: the footer drawers render as full-width bottom sheets. */
   isMobile: boolean;
   t: TFunction;
@@ -119,25 +124,38 @@ function TaskbarButton({
 
 export default function SidebarFooter({
   restartRequired,
-  onShowSettings,
+  settingsOpen,
+  onToggleSettings,
+  memoryOpen,
+  onToggleMemory,
+  onDrawerOpened,
   plannerRunningCount,
   workerRunningCount,
   activeSessionRows,
   onOpenActiveSession,
-  selectedProject,
   isMobile,
   t,
 }: SidebarFooterProps) {
   const showCounterBar = plannerRunningCount > 0 || workerRunningCount > 0;
 
   // One footer drawer at a time: the account switcher (ui8 phase 6, drawer in
-  // ui11 phase 5), a counter drawer (ui11 phase 12), or the memory viewer
-  // (ui12 phase 7). All unfold in-flow above the taskbar (ui13 job 4).
-  const [openDrawer, setOpenDrawer] = useState<'accounts' | 'planner' | 'worker' | 'memory' | null>(null);
-  const toggleDrawer = (drawer: 'accounts' | 'planner' | 'worker' | 'memory') =>
-    setOpenDrawer((current) => (current === drawer ? null : drawer));
+  // ui11 phase 5) or a counter drawer (ui11 phase 12). Both unfold in-flow
+  // above the taskbar (ui13 job 4); Settings and Memory left for full-sidebar
+  // surfaces the parent owns (ui13 job 5).
+  const [openDrawer, setOpenDrawer] = useState<'accounts' | 'planner' | 'worker' | null>(null);
+  const toggleDrawer = (drawer: 'accounts' | 'planner' | 'worker') =>
+    setOpenDrawer((current) => {
+      if (current === drawer) return null;
+      onDrawerOpened();
+      return drawer;
+    });
   const [activeAccountEmail, setActiveAccountEmail] = useState<string | null>(null);
   const footerRef = useRef<HTMLDivElement>(null);
+
+  // Drives the taskbar's selected/dimmed treatment across both the footer
+  // drawers and the full-sidebar surfaces: one control reads selected at a
+  // time, the rest dim.
+  const anyOpen = openDrawer !== null || settingsOpen || memoryOpen;
 
   useEffect(() => {
     let cancelled = false;
@@ -235,14 +253,6 @@ export default function SidebarFooter({
         t={t}
       />
 
-      <MemoryDrawer
-        open={openDrawer === 'memory'}
-        onClose={() => setOpenDrawer(null)}
-        selectedProject={selectedProject}
-        isMobile={isMobile}
-        t={t}
-      />
-
       {(['planner', 'worker'] as const).map((kind) => (
         <ActiveSessionsDrawer
           key={kind}
@@ -265,25 +275,28 @@ export default function SidebarFooter({
         <TaskbarButton
           icon={Settings}
           label={t('actions.settings')}
-          onClick={onShowSettings}
-          dimmed={openDrawer !== null}
+          onClick={onToggleSettings}
+          selected={settingsOpen}
+          dimmed={anyOpen && !settingsOpen}
+          expanded={settingsOpen}
+          dataSlot="settings-trigger"
         />
         <TaskbarButton
           icon={AtSign}
           label={activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
           onClick={() => toggleDrawer('accounts')}
           selected={openDrawer === 'accounts'}
-          dimmed={openDrawer !== null && openDrawer !== 'accounts'}
+          dimmed={anyOpen && openDrawer !== 'accounts'}
           expanded={openDrawer === 'accounts'}
           dataSlot="account-switcher-trigger"
         />
         <TaskbarButton
           icon={BookMarked}
           label={t('memory.title', 'Memory')}
-          onClick={() => toggleDrawer('memory')}
-          selected={openDrawer === 'memory'}
-          dimmed={openDrawer !== null && openDrawer !== 'memory'}
-          expanded={openDrawer === 'memory'}
+          onClick={onToggleMemory}
+          selected={memoryOpen}
+          dimmed={anyOpen && !memoryOpen}
+          expanded={memoryOpen}
           dataSlot="memory-viewer-trigger"
         />
       </div>

@@ -63,9 +63,9 @@ Done check: on dev, DOM: footer is one icon row, opening the account drawer push
 
 Goal: Settings stops being a popup and the top tabs become icons. Files: the settings modal, the memory viewer surface, the sidebar tab strip, DESIGN.md. Dependencies: job 4 (taskbar exists).
 
-- [ ] Settings opens as a slide-up surface that fills the entire sidebar (not a centered popup, not a floating panel): same background, ramped slide, closed by its taskbar icon or Escape. All settings content lives inside it, reflowed for the sidebar width.
-- [ ] Memory opens the same way, filling the sidebar.
-- [ ] The Projects / Chats / Archive text tabs become left-aligned icon tabs: folder, chat bubble, and an archive box icon, same selected treatment as today, tooltips allowed (icon-only controls per the ui13 tooltip rule).
+- [x] Settings opens as a slide-up surface that fills the entire sidebar (not a centered popup, not a floating panel): same background, ramped slide, closed by its taskbar icon or Escape. All settings content lives inside it, reflowed for the sidebar width.
+- [x] Memory opens the same way, filling the sidebar.
+- [x] The Projects / Chats / Archive text tabs become left-aligned icon tabs: folder, chat bubble, and an archive box icon, same selected treatment as today, tooltips allowed (icon-only controls per the ui13 tooltip rule).
 
 Done check: on dev: opening Settings fills the sidebar with a slide-up (DOM: occupies the sidebar container, no dialog overlay), memory the same, tab strip renders three icons left-aligned with correct selection; phone holds. Fresh-context subagent verification. Commit.
 

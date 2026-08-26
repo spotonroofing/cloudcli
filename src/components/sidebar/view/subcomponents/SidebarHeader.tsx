@@ -1,4 +1,4 @@
-import { FolderPlus, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
+import { Activity, Archive, Folder, FolderPlus, MessageSquare, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { TFunction } from 'i18next';
 
@@ -60,7 +60,7 @@ export default function SidebarHeader({
   const runningBadgeText = runningSessionsCount > 99 ? '99+' : String(runningSessionsCount);
 
   const segmentClass = (mode: SidebarSearchMode) => cn(
-    'touch-hit relative flex min-w-0 flex-1 basis-0 items-center justify-center gap-1 rounded-md px-1 py-1.5 text-[11px] font-normal transition-colors',
+    'touch-hit relative flex h-7 w-9 items-center justify-center rounded-md transition-colors',
     searchMode === mode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
   );
 
@@ -83,36 +83,43 @@ export default function SidebarHeader({
         style={isPWA && isMobile ? { paddingTop: '16px' } : {}}
       >
         <div className="flex items-center gap-2">
-          {/* Equal-width segmented control inside the top button bar */}
+          {/* Left-aligned icon tabs (ui13 job 5): folder, chat bubble, archive
+              box — icon-only controls, so tooltips are allowed here. */}
           {showSearchTools && (
-            <div className="flex min-w-0 flex-1 rounded-lg bg-muted/50 p-0.5">
+            <div className="flex w-fit flex-shrink-0 rounded-lg bg-muted/50 p-0.5">
               <button
                 onClick={() => onSearchModeChange('projects')}
                 aria-pressed={searchMode === 'projects'}
+                aria-label={t('search.modeProjects', 'Projects')}
+                title={t('search.modeProjects', 'Projects')}
                 className={segmentClass('projects')}
               >
                 {segmentIndicator('projects')}
-                <span className="relative truncate">{t('search.modeProjects', 'Projects')}</span>
+                <Folder className="relative h-3.5 w-3.5" />
               </button>
               <button
                 onClick={() => onSearchModeChange('conversations')}
                 aria-pressed={searchMode === 'conversations'}
+                aria-label={t('search.modeConversations')}
+                title={t('search.modeConversations')}
                 className={segmentClass('conversations')}
               >
                 {segmentIndicator('conversations')}
-                <span className="relative truncate">{t('search.modeConversations')}</span>
+                <MessageSquare className="relative h-3.5 w-3.5" />
               </button>
               {/* Running view is a mobile-only control; desktop is chat-scoped */}
               {isMobile && (
                 <button
                   onClick={() => onSearchModeChange('running')}
                   aria-pressed={searchMode === 'running'}
+                  aria-label={t('search.modeRunning', 'Running')}
+                  title={t('search.modeRunning', 'Running')}
                   className={segmentClass('running')}
                 >
                   {segmentIndicator('running')}
-                  <span className="relative truncate">{t('search.modeRunning', 'Running')}</span>
+                  <Activity className="relative h-3.5 w-3.5" />
                   {runningSessionsCount > 0 && (
-                    <span className="relative flex h-3.5 min-w-3.5 flex-shrink-0 items-center justify-center rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-0.5 text-[8px] font-semibold leading-none text-emerald-600 dark:text-emerald-400">
+                    <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-0.5 text-[8px] font-semibold leading-none text-emerald-600 dark:text-emerald-400">
                       {runningBadgeText}
                     </span>
                   )}
@@ -121,10 +128,12 @@ export default function SidebarHeader({
               <button
                 onClick={() => onSearchModeChange('archived')}
                 aria-pressed={searchMode === 'archived'}
+                aria-label={t('archived.title', 'Archive')}
+                title={t('archived.title', 'Archive')}
                 className={segmentClass('archived')}
               >
                 {segmentIndicator('archived')}
-                <span className="relative truncate">{t('archived.title', 'Archive')}</span>
+                <Archive className="relative h-3.5 w-3.5" />
               </button>
             </div>
           )}

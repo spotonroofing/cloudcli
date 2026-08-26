@@ -115,11 +115,3 @@ export type SessionViewModel = {
   messageCount: number;
 };
 
-// Retained as `name` for backwards compatibility with existing settings
-// consumers; the value is populated from `projectId` by normalizeProjectForSettings.
-export type SettingsProject = {
-  name: string;
-  displayName: string;
-  fullPath: string;
-  path?: string;
-};

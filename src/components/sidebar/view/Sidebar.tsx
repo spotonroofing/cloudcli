@@ -148,6 +148,15 @@ function Sidebar({
     document.body.classList.toggle('pwa-mode', isPWA);
   }, [isPWA]);
 
+  // Settings lives in the sidebar now (ui13 job 5): opening it from the
+  // collapsed rail (or anywhere else) expands the sidebar so the surface
+  // has somewhere to slide up.
+  useEffect(() => {
+    if (showSettings && isSidebarCollapsed) {
+      handleExpandSidebar();
+    }
+  }, [showSettings, isSidebarCollapsed, handleExpandSidebar]);
+
   // Docked tab label: the scoped project's name alone, no wordmark (phase 2
   // chrome strip). Lives here so it runs regardless of sidebar search mode.
   useEffect(() => {
@@ -342,11 +351,7 @@ function Sidebar({
 
   return (
     <>
-        <SidebarModals
-          projects={projects}
-        showSettings={showSettings}
-        settingsInitialTab={settingsInitialTab}
-        onCloseSettings={onCloseSettings}
+      <SidebarModals
         showNewProject={showNewProject}
         onCloseNewProject={() => setShowNewProject(false)}
         onProjectCreated={handleProjectCreated}
@@ -463,6 +468,9 @@ function Sidebar({
             onCollapseSidebar={handleCollapseSidebar}
             restartRequired={restartRequired}
             onShowSettings={onShowSettings}
+            showSettings={showSettings}
+            settingsInitialTab={settingsInitialTab}
+            onCloseSettings={onCloseSettings}
             projectListProps={projectListProps}
             t={t}
           />

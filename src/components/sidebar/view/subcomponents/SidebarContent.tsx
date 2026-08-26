@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Activity, Archive, Folder, Loader2, MessageSquare, RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
@@ -10,9 +10,12 @@ import type { ConversationSearchResults, SearchProgress } from '../../hooks/useS
 import type { ActiveSessionRow, ArchivedProjectListItem, ArchivedSessionListItem, RecentConversationListItem, SidebarSearchMode } from '../../types/types';
 import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
 import { formatCompactAge, getAllSessions } from '../../utils/utils';
+import Settings from '../../../settings/view/Settings';
 
+import MemorySurface from './MemorySurface';
 import SidebarFooter from './SidebarFooter';
 import SidebarHeader from './SidebarHeader';
+import SidebarSurface from './SidebarSurface';
 import SidebarProjectList, { type SidebarProjectListProps } from './SidebarProjectList';
 import SidebarRecentConversations from './SidebarRecentConversations';
 
@@ -140,6 +143,9 @@ type SidebarContentProps = {
   onCollapseSidebar: () => void;
   restartRequired: boolean;
   onShowSettings: () => void;
+  showSettings: boolean;
+  settingsInitialTab: string;
+  onCloseSettings: () => void;
   projectListProps: SidebarProjectListProps;
   t: TFunction;
 };
@@ -190,6 +196,9 @@ export default function SidebarContent({
   onCollapseSidebar,
   restartRequired,
   onShowSettings,
+  showSettings,
+  settingsInitialTab,
+  onCloseSettings,
   projectListProps,
   t,
 }: SidebarContentProps) {
@@ -205,6 +214,27 @@ export default function SidebarContent({
   // button always targets the current scoped project.
   const scopedProject = projectListProps.selectedProject;
 
+  // Full-sidebar surfaces (ui13 job 5): Settings (app-owned open state) and
+  // Memory (local) slide up over the content region above the taskbar. One
+  // surface at a time; opening a footer drawer closes them too.
+  const [showMemory, setShowMemory] = useState(false);
+  const closeSurfaces = () => {
+    setShowMemory(false);
+    if (showSettings) onCloseSettings();
+  };
+  const toggleSettings = () => {
+    if (showSettings) {
+      onCloseSettings();
+    } else {
+      setShowMemory(false);
+      onShowSettings();
+    }
+  };
+  const toggleMemory = () => {
+    if (!showMemory && showSettings) onCloseSettings();
+    setShowMemory((current) => !current);
+  };
+
   // Mobile refreshes by pulling the list down (the refresh button is
   // desktop-only); the indicator row above the list grows with the pull.
   const scrollViewportRef = useRef<HTMLDivElement>(null);
@@ -217,6 +247,9 @@ export default function SidebarContent({
 
   return (
     <div className="flex h-full flex-col bg-background/80 backdrop-blur-sm md:w-72 md:select-none">
+      {/* Content region the full-sidebar surfaces cover: everything above the
+          footer taskbar, so the taskbar icons stay reachable to close them. */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <SidebarHeader
         isPWA={isPWA}
         isMobile={isMobile}
@@ -729,15 +762,35 @@ export default function SidebarContent({
         )}
       </ScrollArea>
 
+      <SidebarSurface
+        open={showSettings}
+        onClose={onCloseSettings}
+        ariaLabel={t('actions.settings')}
+        dataSlot="settings-surface"
+      >
+        <Settings isOpen onClose={onCloseSettings} initialTab={settingsInitialTab} />
+      </SidebarSurface>
+
+      <MemorySurface
+        open={showMemory}
+        onClose={() => setShowMemory(false)}
+        selectedProject={projectListProps.selectedProject ?? null}
+        t={t}
+      />
+      </div>
+
       {!isRenamingOnMobile && (
         <SidebarFooter
           restartRequired={restartRequired}
-          onShowSettings={onShowSettings}
+          settingsOpen={showSettings}
+          onToggleSettings={toggleSettings}
+          memoryOpen={showMemory}
+          onToggleMemory={toggleMemory}
+          onDrawerOpened={closeSurfaces}
           plannerRunningCount={plannerRunningCount}
           workerRunningCount={workerRunningCount}
           activeSessionRows={activeSessionRows}
           onOpenActiveSession={onOpenActiveSession}
-          selectedProject={projectListProps.selectedProject ?? null}
           isMobile={isMobile}
           t={t}
         />
