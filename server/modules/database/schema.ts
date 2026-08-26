@@ -220,7 +220,10 @@ CREATE TABLE IF NOT EXISTS watchdog_chains (
     job_meta TEXT,
     -- 1 while a phase session is actually running (between phase-start and
     -- phase-end/terminal), so run state never reads from a stale session row.
-    phase_active INTEGER NOT NULL DEFAULT 0
+    phase_active INTEGER NOT NULL DEFAULT 0,
+    -- 1 from a terminal event (or liveness stop) until its planner wake is
+    -- delivered (ui14 job 7); hydrate re-queues the wake for such chains.
+    wake_pending INTEGER NOT NULL DEFAULT 0
 );
 `;
 

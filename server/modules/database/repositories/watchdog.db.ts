@@ -17,6 +17,8 @@ export type WatchdogChainRow = {
   punchlist: string | null;
   /** Per-job commit/timing metadata as JSON (ui13 job 14); NULL when none. */
   job_meta: string | null;
+  /** 1 while a terminal planner wake is queued but not yet delivered (ui14 job 7). */
+  wake_pending: number;
 };
 
 export type WatchdogDispatchRunRow = {
@@ -41,8 +43,8 @@ export const watchdogDb = {
   upsertChain(row: WatchdogChainRow): void {
     const db = getConnection();
     db.prepare(`
-      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, manifest, phase_active, punchlist, job_meta)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, manifest, phase_active, punchlist, job_meta, wake_pending)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(slug) DO UPDATE SET
         project_path = excluded.project_path,
         phases = excluded.phases,
@@ -54,7 +56,8 @@ export const watchdogDb = {
         manifest = excluded.manifest,
         phase_active = excluded.phase_active,
         punchlist = excluded.punchlist,
-        job_meta = excluded.job_meta
+        job_meta = excluded.job_meta,
+        wake_pending = excluded.wake_pending
     `).run(
       row.slug,
       row.project_path,
@@ -68,6 +71,7 @@ export const watchdogDb = {
       row.phase_active,
       row.punchlist,
       row.job_meta,
+      row.wake_pending,
     );
   },
 

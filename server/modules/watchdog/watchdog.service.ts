@@ -60,6 +60,12 @@ type ChainRecord = {
   punchlist: string | null;
   /** Per-job commit/timing metadata by 1-based unit index (ui13 job 14). */
   jobs: Record<number, ChainJobMeta>;
+  /**
+   * True from a terminal event (or a liveness stop) until the planner wake it
+   * queued is delivered (ui14 job 7): hydrate re-queues the wake for chains
+   * whose server restarted in between.
+   */
+  wakePending: boolean;
 };
 
 type DispatchRunRecord = {
@@ -113,6 +119,10 @@ type WakeItem = {
   prompt: string;
   /** Always boots a brand-new planner session instead of resuming. */
   freshBoot?: boolean;
+  /** Chain whose wakePending flag this wake clears once delivered. */
+  chainSlug?: string;
+  /** Consecutive delivery failures; the fallback fires at WAKE_MAX_FAILURES. */
+  failures: number;
 };
 
 type WakeQueue = {
@@ -123,6 +133,9 @@ type WakeQueue = {
 const STUCK_SILENCE_MS = 30 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 const WAKE_RETRY_MS = 60 * 1000;
+const WAKE_MAX_FAILURES = 3;
+/** A live phase with no runner event and no journal/transcript writes this long is wedged. */
+const CHAIN_WEDGE_MS = Number(process.env.WATCHDOG_CHAIN_WEDGE_MS || 3 * 60 * 60 * 1000);
 const RESOURCE_ALERT_THROTTLE_MS = 24 * 60 * 60 * 1000;
 const MIN_FREE_DISK_GB = Number(process.env.WATCHDOG_MIN_FREE_DISK_GB || 10);
 const MIN_FREE_MEM_PCT = Number(process.env.WATCHDOG_MIN_FREE_MEM_PCT || 10);
@@ -183,6 +196,7 @@ class WatchdogService {
           phaseActive: Boolean(row.phase_active),
           punchlist: row.punchlist,
           jobs: parseJobMeta(row.job_meta),
+          wakePending: Boolean(row.wake_pending),
         });
       }
       for (const row of watchdogDb.listDispatchRuns()) {
@@ -200,6 +214,14 @@ class WatchdogService {
       }
       if (this.chains.size || this.dispatchRuns.size) {
         log(`hydrated from DB: ${this.chains.size} chain(s), ${this.dispatchRuns.size} dispatched run(s)`);
+      }
+      // A terminal wake that was queued but never delivered before the last
+      // restart (the queue is in-memory) is re-derived from the chain record.
+      for (const chain of this.chains.values()) {
+        if (chain.status !== 'running' && chain.wakePending) {
+          log(`chain ${chain.slug}: re-deriving its undelivered ${chain.status} wake after restart`);
+          this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: chain.slug });
+        }
       }
     } catch (error) {
       log(`hydration failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -221,6 +243,7 @@ class WatchdogService {
         phase_active: chain.phaseActive ? 1 : 0,
         punchlist: chain.punchlist,
         job_meta: Object.keys(chain.jobs).length ? JSON.stringify(chain.jobs) : null,
+        wake_pending: chain.wakePending ? 1 : 0,
       });
     } catch (error) {
       log(`chain persist failed for ${chain.slug}: ${error instanceof Error ? error.message : String(error)}`);
@@ -275,6 +298,7 @@ class WatchdogService {
       phaseActive: false,
       punchlist,
       jobs: existing?.jobs ?? {},
+      wakePending: false,
     };
     this.chains.set(input.slug, chain);
     this.persistChain(chain);
@@ -457,19 +481,10 @@ class WatchdogService {
 
     if (event === 'completed' || event === 'stopped' || event === 'failed') {
       chain.status = event === 'completed' ? 'completed' : event === 'stopped' ? 'stopped' : 'failed';
+      chain.wakePending = true;
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
-      const flag = chain.status === 'completed'
-        ? 'ended'
-        : chain.status === 'stopped'
-          ? 'STOPPED AT THE COMMIT GATE'
-          : 'FAILED';
-      const tail = chain.lastSummaryTail ? `\n\nFinal summary tail:\n${chain.lastSummaryTail}` : '';
-      this.queueWake(
-        chain.projectPath,
-        `Watchdog: dispatched chain "${slug}" ${flag}${chain.phases ? ` (job ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''}. `
-        + `Verify the result against git log and the punch list before declaring anything done.${tail}`,
-      );
+      this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: slug });
     } else {
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
@@ -696,12 +711,39 @@ class WatchdogService {
 
   // ----- planner wakes (queued, serialized, retried while mid-turn) -----
 
-  queueWake(projectPath: string, prompt: string, options: { freshBoot?: boolean } = {}): void {
+  queueWake(projectPath: string, prompt: string, options: { freshBoot?: boolean; chainSlug?: string } = {}): void {
     const queue = this.wakeQueues.get(projectPath) ?? { prompts: [], draining: false };
-    queue.prompts.push({ prompt, freshBoot: options.freshBoot });
+    queue.prompts.push({ prompt, freshBoot: options.freshBoot, chainSlug: options.chainSlug, failures: 0 });
     this.wakeQueues.set(projectPath, queue);
     log(`wake queued for ${projectPath} (${queue.prompts.length} pending)`);
     void this.drainWakes(projectPath);
+  }
+
+  /** The wake reached the planner (or its fallback); the chain no longer owes one. */
+  private wakeSettled(item: WakeItem): void {
+    const chain = item.chainSlug ? this.chains.get(item.chainSlug) : undefined;
+    if (chain?.wakePending) {
+      chain.wakePending = false;
+      this.persistChain(chain);
+    }
+  }
+
+  /**
+   * Wake-delivery fallback (ui14 job 7): a wake that cannot reach a planner is
+   * never discarded silently — it goes out as a decision-needed fleet
+   * notification carrying the wake text, then leaves the queue.
+   */
+  private wakeUndeliverable(projectPath: string, items: WakeItem[], reason: string): void {
+    const body = items.map((item) => item.prompt.replace(/\s+/g, ' ').slice(0, 300)).join('\n\n');
+    this.notify(
+      'decision-needed',
+      `Planner wake undeliverable for ${path.basename(projectPath)}`,
+      `${reason}. The wake could not be delivered to a planner:\n\n${body}`,
+      { projectPath },
+    );
+    for (const item of items) {
+      this.wakeSettled(item);
+    }
   }
 
   private async drainWakes(projectPath: string): Promise<void> {
@@ -715,8 +757,8 @@ class WatchdogService {
       while (queue.prompts.length > 0) {
         const planner = sessionsDb.getLatestPlannerSession(projectPath);
         if (!planner) {
-          log(`no planner session found for ${projectPath}; dropping ${queue.prompts.length} wake(s)`);
-          queue.prompts.length = 0;
+          log(`no planner session found for ${projectPath}; escalating ${queue.prompts.length} wake(s) to decision-needed`);
+          this.wakeUndeliverable(projectPath, queue.prompts.splice(0), 'No planner session exists for this project');
           break;
         }
 
@@ -745,6 +787,7 @@ class WatchdogService {
         if (item.freshBoot) {
           await this.bootFreshPlanner(projectPath, planner.session_id, planner.model, item.prompt);
           queue.prompts.shift();
+          this.wakeSettled(item);
           continue;
         }
 
@@ -765,9 +808,17 @@ class WatchdogService {
             throw new Error(result.errorMessage ?? 'wake run failed');
           }
           queue.prompts.shift();
+          this.wakeSettled(item);
           log(`wake delivered to planner for ${projectPath} (${queue.prompts.length} left)`);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
+          item.failures += 1;
+          if (item.failures >= WAKE_MAX_FAILURES) {
+            log(`wake failed ${item.failures}x for ${projectPath}: ${message}; escalating to decision-needed`);
+            queue.prompts.shift();
+            this.wakeUndeliverable(projectPath, [item], `Delivery failed ${item.failures} times (last error: ${message})`);
+            continue;
+          }
           log(`wake failed for ${projectPath}: ${message}; retrying in ${WAKE_RETRY_MS / 1000}s`);
           setTimeout(() => {
             queue.draining = false;
@@ -804,9 +855,9 @@ class WatchdogService {
       // The provider runtime reports SDK failures as error events instead of
       // throwing; capture them so the queue can retry or fall back.
       send: (data: unknown) => {
-        const event = data as { type?: string; error?: unknown; message?: unknown } | null;
-        if (event && event.type === 'error') {
-          errorMessage = String(event.error ?? event.message ?? 'unknown error');
+        const event = data as { type?: string; kind?: string; error?: unknown; message?: unknown; content?: unknown } | null;
+        if (event && (event.type === 'error' || event.kind === 'error')) {
+          errorMessage = String(event.error ?? event.message ?? event.content ?? 'unknown error');
         }
       },
       setSessionId: (id: string) => {
@@ -930,6 +981,8 @@ class WatchdogService {
   private async sweep(): Promise<void> {
     const now = Date.now();
 
+    await this.sweepChains(now);
+
     for (const run of this.dispatchRuns.values()) {
       if (run.ended || run.stuckWakeSent) {
         continue;
@@ -961,6 +1014,63 @@ class WatchdogService {
 
     await this.checkResources(now);
     await this.checkPlannerRotation();
+  }
+
+  /**
+   * Chain liveness sweep (ui14 job 7, audit 2.1): a chain is never left
+   * "running" forever. Every sweep checks each running chain's runner process
+   * in the process table; a gone runner stops the chain at once. A runner
+   * that is alive but whose live phase has produced no event, journal line,
+   * phase log write, or transcript write for CHAIN_WEDGE_MS is wedged and is
+   * stopped too — the runner is left for the woken planner to assess and
+   * kill, never killed blind. Between phases (limit waits, slot waits) an
+   * alive runner is trusted.
+   */
+  private async sweepChains(now: number): Promise<void> {
+    const running = [...this.chains.values()].filter((chain) => chain.status === 'running');
+    if (!running.length) {
+      return;
+    }
+    const runners = await listChainRunners();
+    if (!runners) {
+      return;
+    }
+    for (const chain of running) {
+      const pid = runners.get(chain.slug);
+      if (pid === undefined) {
+        this.stopChainFromSweep(
+          chain,
+          `Liveness sweep: the chain's runner process is gone with the chain still running `
+          + `(last event ${formatAge(now - chain.lastEventAt)} ago, journal: ${journalLastLine(chain.slug) ?? 'none'}).`,
+        );
+        continue;
+      }
+      if (!chain.phaseActive || now - chain.lastEventAt < CHAIN_WEDGE_MS) {
+        continue;
+      }
+      const activityAt = chainActivityAt(chain);
+      if (now - activityAt < CHAIN_WEDGE_MS) {
+        continue;
+      }
+      this.stopChainFromSweep(
+        chain,
+        `Liveness sweep: runner pid ${pid} is alive but job ${chain.currentPhase ?? '?'} has been silent for `
+        + `${formatAge(now - Math.max(chain.lastEventAt, activityAt))} (no event, journal, phase log, or transcript write). `
+        + `Assess the runner and its claude process before killing pid ${pid}; journal: ${journalLastLine(chain.slug) ?? 'none'}.`,
+      );
+    }
+  }
+
+  private stopChainFromSweep(chain: ChainRecord, reason: string): void {
+    chain.status = 'stopped';
+    chain.phaseActive = false;
+    chain.lastEventAt = Date.now();
+    chain.lastSummaryTail = reason;
+    chain.wakePending = true;
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    log(`chain ${chain.slug}: stopped by the liveness sweep`, { reason });
+    this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: chain.slug });
   }
 
   // ----- planner auto-rotation (spec B7): /handoff at the context threshold -----
@@ -1311,6 +1421,106 @@ function punchlistDoneCounts(
     }
     return done;
   });
+}
+
+/**
+ * The planner wake for a chain that reached a terminal state. Rebuilt from
+ * the record (never stored) so hydrate can re-derive it after a restart.
+ */
+function terminalWakePrompt(chain: ChainRecord): string {
+  const flag = chain.status === 'completed'
+    ? 'ended'
+    : chain.status === 'stopped'
+      ? 'STOPPED'
+      : 'FAILED';
+  const tail = chain.lastSummaryTail ? `\n\nFinal summary tail:\n${chain.lastSummaryTail}` : '';
+  return `Watchdog: dispatched chain "${chain.slug}" ${flag}${chain.phases ? ` (job ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''}. `
+    + `Verify the result against git log and the punch list before declaring anything done.${tail}`;
+}
+
+/**
+ * Chain runners found in the process table, keyed by slug. The runner's argv
+ * is `dispatch-chain-runner <repo> <slug> <phase files...>`, so the slug
+ * sits between two spaces after the script name. Null when ps itself failed
+ * (the sweep then trusts every chain rather than stopping on no evidence).
+ */
+function listChainRunners(): Promise<Map<string, number> | null> {
+  return new Promise((resolve) => {
+    execFile('ps', ['-axww', '-o', 'pid=,command='], { timeout: 10_000, maxBuffer: 8 * 1024 * 1024 }, (error, stdout) => {
+      if (error) {
+        resolve(null);
+        return;
+      }
+      const runners = new Map<string, number>();
+      for (const line of stdout.split('\n')) {
+        const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+        if (!match || !match[2].includes('dispatch-chain-runner ')) {
+          continue;
+        }
+        const args = match[2].split(/\s+/);
+        const runnerIndex = args.findIndex((arg) => arg.endsWith('dispatch-chain-runner'));
+        const slug = args[runnerIndex + 2];
+        if (slug) {
+          runners.set(slug, Number(match[1]));
+        }
+      }
+      resolve(runners);
+    });
+  });
+}
+
+function chainJournalDir(slug: string): string {
+  return path.join(os.homedir(), 'forge-logs', slug);
+}
+
+function journalLastLine(slug: string): string | null {
+  try {
+    const lines = fs.readFileSync(path.join(chainJournalDir(slug), 'JOURNAL.md'), 'utf8').trimEnd().split('\n');
+    return lines[lines.length - 1] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Newest write the live phase has left behind: the run journal, the phase's
+ * stdout log, and the phase session's transcript (plus its subagent
+ * transcripts beside it). 0 when nothing of the kind exists.
+ */
+function chainActivityAt(chain: ChainRecord): number {
+  const candidates = [path.join(chainJournalDir(chain.slug), 'JOURNAL.md')];
+  if (chain.currentPhase != null) {
+    candidates.push(path.join(chainJournalDir(chain.slug), `phase${chain.currentPhase}.log`));
+    try {
+      const session = sessionsDb
+        .listWorkerSessions(chain.projectPath, 10)
+        .find((row) => row.chain_slug === chain.slug && row.chain_phase === chain.currentPhase);
+      if (session?.jsonl_path) {
+        candidates.push(session.jsonl_path);
+        candidates.push(path.join(path.dirname(session.jsonl_path), path.basename(session.jsonl_path, '.jsonl')));
+      }
+    } catch {
+      // no session row yet; the file signals still count
+    }
+  }
+  return Math.max(0, ...candidates.map(newestMtime));
+}
+
+function newestMtime(target: string): number {
+  try {
+    const stat = fs.statSync(target);
+    if (!stat.isDirectory()) {
+      return stat.mtimeMs;
+    }
+    return Math.max(stat.mtimeMs, ...fs.readdirSync(target).map((entry) => newestMtime(path.join(target, entry))));
+  } catch {
+    return 0;
+  }
+}
+
+function formatAge(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  return minutes < 90 ? `${minutes}m` : `${(minutes / 60).toFixed(1)}h`;
 }
 
 function readMemoryFreePercentage(): Promise<number | null> {

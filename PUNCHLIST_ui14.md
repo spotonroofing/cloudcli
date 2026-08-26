@@ -92,9 +92,9 @@ Done check: on dev: edit text in a composer preview, close, send; the sent messa
 
 Goal: a dead or wedged chain wakes someone; a dropped planner wake is never silent. Files: server/modules/watchdog (chain registry, wake queue), DESIGN.md untouched. Dependencies: none. Audit findings 1.3, 2.1, 2.3, 2.6.
 
-- [ ] Chain liveness sweep: a running chain silent past a threshold gets its runner process and journal checked; a dead runner or a wedged phase flips the chain to stopped and wakes the planner (or fires decision-needed when no planner exists), never leaving a chain "running" forever.
-- [ ] Wake-delivery fallback: a planner wake that drops or fails repeatedly fires a decision-needed fleet notification instead of silent discard; undelivered terminal wakes are re-derived on server hydrate.
-- [ ] chrome-slot-wait gets a ceiling and a journal line instead of waiting forever.
+- [x] Chain liveness sweep: a running chain silent past a threshold gets its runner process and journal checked; a dead runner or a wedged phase flips the chain to stopped and wakes the planner (or fires decision-needed when no planner exists), never leaving a chain "running" forever. *(Every 5-minute sweep looks the runner up in the process table; a gone runner stops the chain at once. An alive runner whose live phase shows no event, journal, phase log, or transcript write for 3h (WATCHDOG_CHAIN_WEDGE_MS) stops too, with the pid in the wake for the planner to assess before killing.)*
+- [x] Wake-delivery fallback: a planner wake that drops or fails repeatedly fires a decision-needed fleet notification instead of silent discard; undelivered terminal wakes are re-derived on server hydrate. *(No planner, or three failed deliveries, escalates with the wake text. Terminal chains carry wake_pending until delivered; hydrate re-queues. Found and fixed: the wake writer matched type:'error' but the runtime emits kind:'error', so a spawn failure read as delivered.)*
+- [x] chrome-slot-wait gets a ceiling and a journal line instead of waiting forever. *(CHROME_SLOT_WAIT_MAX, default one hour; past it the runner journals STOPPED and posts a stopped event.)*
 
 Done check: on dev: a stub chain whose runner is killed flips to stopped and a wake lands within the threshold; a forced wake failure produces a decision-needed notification; server restart re-derives a pending terminal wake. Fresh-context subagent verification. Commit.
 

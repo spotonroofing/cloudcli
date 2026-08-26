@@ -97,10 +97,17 @@ PYEOF
 }
 
 # Chrome-cap queueing hook: browser-phase chains wait for a Chrome slot
-# instead of launching a fourth instance.
+# instead of launching a fourth instance. The wait is bounded (ui14 job 7):
+# past chrome-slot-wait's ceiling the chain stops with a journal line and a
+# stopped event instead of queueing forever.
 wait_for_chrome_slot() {
   local helper="$HOME/.local/bin/chrome-slot-wait"
-  [[ -x "$helper" ]] && "$helper" || true
+  [[ -x "$helper" ]] || return 0
+  "$helper" && return 0
+  journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "chrome-slot-wait hit its ceiling with no free Chrome slot before $PHASE_NAME"
+  api_post "/api/watchdog/chains/$SLUG/events" \
+    "$(event_body stopped $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) never got a Chrome slot: chrome-slot-wait hit its ceiling." | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")" 80
+  exit 2
 }
 
 # ----- session-limit resilience (ui10 phase 1) ------------------------------

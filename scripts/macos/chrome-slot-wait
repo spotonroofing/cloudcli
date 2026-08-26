@@ -2,9 +2,12 @@
 # chrome-slot-wait — block until a project-Chrome slot is free (spec 7 cap).
 # Concurrent project Chromes are capped at 3 on 16GB; the dispatch chain
 # runner calls this before a browser phase instead of launching a fourth.
+# The wait has a ceiling (CHROME_SLOT_WAIT_MAX seconds, default one hour):
+# past it the script says so and exits 1 instead of queueing forever.
 set -u
 ROOT="$HOME/browser-profiles"
 CAP="${CHROME_SLOT_CAP:-3}"
+MAX="${CHROME_SLOT_WAIT_MAX:-3600}"
 WAITED=0
 while true; do
   COUNT=$(python3 -c "
@@ -21,6 +24,10 @@ print(len(dirs))")
   fi
   if [[ $WAITED -eq 0 ]]; then
     print -r -- "chrome-slot-wait: $COUNT project Chromes running (cap $CAP); queueing"
+  fi
+  if [[ $WAITED -ge $MAX ]]; then
+    print -r -- "chrome-slot-wait: no slot after ${WAITED}s (cap $CAP, ceiling ${MAX}s); giving up"
+    exit 1
   fi
   sleep 15
   WAITED=$((WAITED + 15))
