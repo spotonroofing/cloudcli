@@ -177,11 +177,18 @@ export function useSlashCommands({
     clearCommandQueryTimer();
   }, [clearCommandQueryTimer]);
 
+  // The command list depends on the project's identity and paths only. Keying
+  // the fetch on those primitives (ui13 job 15) stops every sidebar session
+  // upsert, which replaces the project object, from refetching commands and
+  // skills in every pane of that project.
+  const projectId = selectedProject?.projectId ?? null;
+  const projectPath = selectedProject?.path ?? null;
+  const projectFullPath = selectedProject?.fullPath ?? null;
   useEffect(() => {
     let cancelled = false;
 
     const fetchCommands = async () => {
-      if (!selectedProject) {
+      if (!projectId) {
         setSlashCommands([]);
         setFilteredCommands([]);
         return;
@@ -189,14 +196,14 @@ export function useSlashCommands({
 
       setCommandsFetchState('loading');
       try {
-        const workspacePath = selectedProject.fullPath || selectedProject.path || '';
+        const workspacePath = projectFullPath || projectPath || '';
         const response = await authenticatedFetch('/api/commands/list', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            projectPath: workspacePath || selectedProject.path,
+            projectPath: workspacePath || projectPath,
           }),
         });
 
@@ -230,7 +237,7 @@ export function useSlashCommands({
           })),
         ];
 
-        const parsedHistory = readCommandHistory(selectedProject.projectId);
+        const parsedHistory = readCommandHistory(projectId);
         const sortedCommands = [...allCommands].sort((commandA, commandB) => {
           const commandAUsage = parsedHistory[commandA.name] || 0;
           const commandBUsage = parsedHistory[commandB.name] || 0;
@@ -256,7 +263,7 @@ export function useSlashCommands({
     return () => {
       cancelled = true;
     };
-  }, [selectedProject, provider, commandsRefreshTick]);
+  }, [projectId, projectPath, projectFullPath, provider, commandsRefreshTick]);
 
   useEffect(() => {
     if (!showCommandMenu) {

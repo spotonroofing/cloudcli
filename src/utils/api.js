@@ -91,8 +91,35 @@ export const storeAuthToken = (token) => {
   return true;
 };
 
+// Identical GETs issued while one is already in flight share that request
+// (ui13 job 15): every pane of a multi-project workspace mounts the same
+// model, capability, command, and file lists at once, and on a slow link that
+// storm queues the transcript fetches behind dozens of duplicate requests in
+// the browser's per-host connection limit. Each caller gets its own clone of
+// the shared response; the entry clears as soon as the response settles, so
+// a later refetch always goes to the server.
+/** @type {Map<string, Promise<Response>>} */
+const inflightGets = new Map();
+
 // Utility function for authenticated API calls
 export const authenticatedFetch = (url, options = {}) => {
+  const method = (options.method ?? 'GET').toUpperCase();
+  const shareable = method === 'GET' && !options.signal && !options.body && typeof url === 'string';
+  if (shareable) {
+    const inflight = inflightGets.get(url);
+    if (inflight) {
+      return inflight.then((response) => response.clone());
+    }
+    const request = performAuthenticatedFetch(url, options);
+    inflightGets.set(url, request);
+    const clear = () => inflightGets.delete(url);
+    request.then(clear, clear);
+    return request.then((response) => response.clone());
+  }
+  return performAuthenticatedFetch(url, options);
+};
+
+const performAuthenticatedFetch = (url, options) => {
   const token = getStoredAuthToken();
 
   const defaultHeaders = {};

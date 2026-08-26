@@ -9,6 +9,7 @@ import GitPanel from '../../git-panel/view/GitPanel';
 import ErrorBoundary from '../../main-content/view/ErrorBoundary';
 import { useWebSocket } from '../../../contexts/WebSocketContext';
 import { useUiPreferences } from '../../../hooks/useUiPreferences';
+import { findLatestPlannerSession } from '../../../utils/plannerSessions';
 import { Badge, Button, Tooltip } from '../../../shared/view/ui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../../hooks/useSessionProtection';
 import type { Project, ProjectSession, LLMProvider } from '../../../types/app';
@@ -100,15 +101,10 @@ export default function WorkspaceRow({
   const [localSession, setLocalSession] = useState<ProjectSession | null>(null);
   const startedFreshRef = useRef(false);
 
-  const latestPlannerSession = useMemo(() => {
-    const sessions = project.sessions ?? [];
-    return (
-      sessions.find((session) => {
-        const origin = (session.origin as string | null) ?? null;
-        return origin === 'planner' || origin === null;
-      }) ?? null
-    );
-  }, [project.sessions]);
+  const latestPlannerSession = useMemo(
+    () => findLatestPlannerSession(project.sessions),
+    [project.sessions],
+  );
 
   // Adopt the project's most recent planner chat once it is known; never
   // swap a session the row is already showing.

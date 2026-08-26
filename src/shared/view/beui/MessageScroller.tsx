@@ -93,6 +93,9 @@ export function MessageScroller({
   const scrollToEnd = useCallback((behavior: ScrollBehavior) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
+    // Already at the end: no scroll event will follow, so never arm the
+    // programmatic flag for a scroll that cannot happen.
+    if (viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 1) return;
 
     programmaticScrollRef.current = true;
     if (typeof viewport.scrollTo === 'function') {
@@ -100,17 +103,32 @@ export function MessageScroller({
     } else {
       viewport.scrollTop = viewport.scrollHeight;
     }
+    // The flag clears when the viewport arrives at the end (handleScroll) or
+    // when the reader intervenes (leaveLiveEdge); this timer is only the
+    // fallback for an animation that never reports arrival. A fixed short
+    // timer (ui13 job 15 regression) misread the tail of the engine's own
+    // smooth scroll as the reader leaving: Chrome animates a 1000px re-pin
+    // in ~470ms and 2000px in ~640ms, so any large landing turned follow off
+    // and the transcript kept growing under a viewport that never moved.
     if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
     scrollTimerRef.current = window.setTimeout(() => {
       programmaticScrollRef.current = false;
-    }, behavior === 'smooth' ? 320 : 0);
+    }, behavior === 'smooth' ? 2000 : 100);
   }, []);
 
   const handleScroll = useCallback(() => {
     const viewport = viewportRef.current;
-    if (!viewport || programmaticScrollRef.current) return;
+    if (!viewport) return;
 
     const distance = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    if (programmaticScrollRef.current) {
+      // Scroll events from the engine's own scroll: only arrival matters.
+      if (distance <= followThreshold) {
+        programmaticScrollRef.current = false;
+        if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
+      }
+      return;
+    }
     setFollowing(distance <= followThreshold);
   }, [followThreshold, setFollowing]);
 

@@ -45,3 +45,60 @@ test('isAuthTokenExpired: a malformed/unreadable token is unaffected by the skew
   assert.equal(isAuthTokenExpired('only.two-segments'), false);
   assert.equal(isAuthTokenExpired(null), false);
 });
+
+// In-flight GET sharing (ui13 job 15): concurrent identical GETs collapse into
+// one network request; anything else (POST, aborted, or settled) fetches anew.
+const withMockFetch = async (run) => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  const originalStorage = globalThis.localStorage;
+  globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+  globalThis.fetch = (url, options) => {
+    calls.push({ url, options });
+    return Promise.resolve(new Response(JSON.stringify({ url, n: calls.length }), {
+      headers: { 'Content-Type': 'application/json' },
+    }));
+  };
+  try {
+    await run(calls);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.localStorage = originalStorage;
+  }
+};
+
+test('authenticatedFetch: concurrent identical GETs share one request and each caller can read the body', async () => {
+  const { authenticatedFetch } = await import('./api.js');
+  await withMockFetch(async (calls) => {
+    const [a, b, c] = await Promise.all([
+      authenticatedFetch('/api/providers/capabilities'),
+      authenticatedFetch('/api/providers/capabilities'),
+      authenticatedFetch('/api/providers/capabilities'),
+    ]);
+    assert.equal(calls.length, 1);
+    const bodies = await Promise.all([a.json(), b.json(), c.json()]);
+    assert.deepEqual(bodies.map((body) => body.n), [1, 1, 1]);
+  });
+});
+
+test('authenticatedFetch: sequential GETs after settling, POSTs, and aborted requests are never shared', async () => {
+  const { authenticatedFetch } = await import('./api.js');
+  await withMockFetch(async (calls) => {
+    await authenticatedFetch('/api/commands/list');
+    await authenticatedFetch('/api/commands/list');
+    assert.equal(calls.length, 2);
+
+    await Promise.all([
+      authenticatedFetch('/api/settings/preferences', { method: 'PUT', body: '{}' }),
+      authenticatedFetch('/api/settings/preferences', { method: 'PUT', body: '{}' }),
+    ]);
+    assert.equal(calls.length, 4);
+
+    const controller = new AbortController();
+    await Promise.all([
+      authenticatedFetch('/api/providers/sessions/x/messages', { signal: controller.signal }),
+      authenticatedFetch('/api/providers/sessions/x/messages', { signal: controller.signal }),
+    ]);
+    assert.equal(calls.length, 6);
+  });
+});

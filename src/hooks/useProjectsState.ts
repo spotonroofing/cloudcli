@@ -12,6 +12,7 @@ import type {
 } from '../types/app';
 import { STANDALONE_PROJECT_ID } from '../types/app';
 import { writeSetting } from '../utils/cloudSettings';
+import { findLatestPlannerSession } from '../utils/plannerSessions';
 
 import type { SessionActivityMap } from './useSessionProtection';
 
@@ -1021,21 +1022,31 @@ export function useProjectsState({
 
   const handleProjectSelect = useCallback(
     (project: Project) => {
+      // Selecting a project restores its planner chat (ui13 job 15): the
+      // session this project is already showing when it is re-selected, else
+      // its most recent planner chat — never a blank pane that needs a second
+      // click on the chat. Only a bare project route is the New Session landing.
+      const current = selectedSessionRef.current;
+      const session =
+        selectedProjectRef.current?.projectId === project.projectId
+        && current
+        && (!current.__projectId || current.__projectId === project.projectId)
+          ? current
+          : findLatestPlannerSession(project.sessions);
       setSelectedProject(project);
-      setSelectedSession(null);
+      setSelectedSession(session ? normalizeSessionProvider(session) : null);
 
       if (isMobile) {
-        navigate(rootPath);
         setSidebarOpen(false);
-        return;
       }
 
       // Desktop: picking a project from the Projects tab re-docks the tab to
       // that project's route (claude.ai model), instead of snapping back to
       // the previously pinned project.
-      navigate(`/project/${project.projectId}`);
+      const prefix = isMobile ? basePath : `/project/${project.projectId}`;
+      navigate(session ? `${prefix}/session/${session.id}` : prefix || rootPath);
     },
-    [isMobile, navigate, rootPath],
+    [basePath, isMobile, navigate, rootPath],
   );
 
   const handleSessionSelect = useCallback(

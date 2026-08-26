@@ -175,8 +175,14 @@ export default function WorkerPane({
   // chain_progress is the watchdog streaming per-phase progress: merge the
   // snapshot for an instant navigator update, then refetch to reconcile runs.
   useEffect(() => {
-    const unsubscribe = subscribe?.((event: { kind?: string; chain?: ChainSnapshot } | null) => {
-      if (event?.kind === 'session_upserted') {
+    const unsubscribe = subscribe?.((event: {
+      kind?: string;
+      chain?: ChainSnapshot;
+      project?: { projectId?: string } | null;
+    } | null) => {
+      // Only this project's sessions can change its run list (ui13 job 15):
+      // another project's transcript writes used to refetch every open pane.
+      if (event?.kind === 'session_upserted' && event.project?.projectId === selectedProject.projectId) {
         void refreshRuns();
       }
       if (event?.kind === 'chain_progress' && event.chain) {
@@ -196,7 +202,7 @@ export default function WorkerPane({
       unsubscribe?.();
       clearInterval(interval);
     };
-  }, [subscribe, refreshRuns, projectPath]);
+  }, [subscribe, refreshRuns, projectPath, selectedProject.projectId]);
 
   // Auto-follow: the newest run is selected until the user pins another one.
   // Held off while the composer is focused; it catches up on blur.
