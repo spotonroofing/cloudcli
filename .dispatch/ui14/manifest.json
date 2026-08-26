@@ -1,0 +1,79 @@
+[
+ {
+  "name": "Jobs column rules",
+  "tasks": [
+   "Side column at 1-2 projects, full pane at 3",
+   "Job N of N strip removed",
+   "One continuous job list, no Other runs"
+  ]
+ },
+ {
+  "name": "Worker top bar restored",
+  "tasks": [
+   "Worker label, icon, session title, no dropdown",
+   "Job rows navigate via hover chat icon",
+   "Plus button beside Hide worker",
+   "Edge-aware tooltips"
+  ]
+ },
+ {
+  "name": "Memory: one view, prompt edits",
+  "tasks": [
+   "Internals and Project/Global removed, sized right",
+   "Prompt box runs one-off edits, live update",
+   "Claude.ai export imported if present"
+  ]
+ },
+ {
+  "name": "Exclusive drawers, switcher revamp",
+  "tasks": [
+   "Only one footer drawer open at a time",
+   "Account switcher redesigned to match",
+   "Add account uses login then cswap add"
+  ]
+ },
+ {
+  "name": "Settings navigation",
+  "tasks": [
+   "About tab removed, icon tabs like the sidebar",
+   "Content reflowed at app control scale"
+  ]
+ },
+ {
+  "name": "Editable pasted text",
+  "tasks": [
+   "Preview edits save back to the attachment"
+  ]
+ },
+ {
+  "name": "Chain liveness and wakes",
+  "tasks": [
+   "Liveness sweep flips dead chains and wakes",
+   "Wake fallback to decision-needed",
+   "chrome-slot-wait ceiling"
+  ]
+ },
+ {
+  "name": "Limits and live check-offs",
+  "tasks": [
+   "Spend-cap parking and long-park escalation",
+   "Punch list watched for live task ticks",
+   "dispatch amend for queued jobs"
+  ]
+ },
+ {
+  "name": "Transcript scrub and guards",
+  "tasks": [
+   "Local scrub daemon redacts secret shapes",
+   "promote tag guard and handoff push notify"
+  ]
+ },
+ {
+  "name": "Pipelined verification",
+  "tasks": [
+   "Build and verify stages overlap across jobs",
+   "Verify failure rewinds with a resume point",
+   "Saving measured on a stub chain"
+  ]
+ }
+]
