@@ -52,10 +52,10 @@ Done check: on dev, a long-titled chat row and a long-titled job row both scroll
 
 Goal: the sidebar footer becomes one icon taskbar and the mini drawers stop feeling like separate popouts. Files: the sidebar footer (Memory/account/Settings rows), SidebarFooterDrawer and AccountsPanel, DESIGN.md. Dependencies: none.
 
-- [ ] The stacked footer buttons become a single bottom taskbar of icon-only controls, left-aligned, no labels: Settings, account, Memory. The open drawer's icon reads selected; the others dim. 44px touch targets.
-- [ ] The footer drawers (account switcher, memory) lose the separate gray popout look: same background as the sidebar, integrated with the existing divider line, and opening pushes the content above up naturally (the taskbar stays put at the bottom) instead of overlaying with their own panel chrome.
-- [ ] Fix the close glitch: today the drawer stops descending with a visible sliver before the element unmounts. Close animates fully out with a ramped ease, no terminal jump, no leftover sliver; open gets the same ramp treatment.
-- [ ] Account switcher copy: drop the "Claude accounts" heading; verify what a cswap switch actually does to running sessions (read the accounts module and cswap wiring) and remove the "Switching applies to new sessions" subtitle, replacing it with nothing, or with one short true line only if running sessions genuinely keep the old account.
+- [x] The stacked footer buttons become a single bottom taskbar of icon-only controls, left-aligned, no labels: Settings, account, Memory. The open drawer's icon reads selected; the others dim. 44px touch targets.
+- [x] The footer drawers (account switcher, memory) lose the separate gray popout look: same background as the sidebar, integrated with the existing divider line, and opening pushes the content above up naturally (the taskbar stays put at the bottom) instead of overlaying with their own panel chrome.
+- [x] Fix the close glitch: today the drawer stops descending with a visible sliver before the element unmounts. Close animates fully out with a ramped ease, no terminal jump, no leftover sliver; open gets the same ramp treatment.
+- [x] Account switcher copy: drop the "Claude accounts" heading; verify what a cswap switch actually does to running sessions (read the accounts module and cswap wiring) and remove the "Switching applies to new sessions" subtitle, replacing it with nothing, or with one short true line only if running sessions genuinely keep the old account.
 
 Done check: on dev, DOM: footer is one icon row, opening the account drawer pushes the list content up with the sidebar's own background (no distinct panel bg token), close runs to fully offscreen before unmount (transition end position beyond the container), heading and stale subtitle absent; phone viewport holds. Fresh-context subagent verification. Commit.
 

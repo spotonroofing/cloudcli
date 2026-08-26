@@ -1,58 +1,41 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
-import type { CSSProperties, ReactNode, RefObject } from 'react';
+import { useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 
-import { EASE_OUT } from '../../../../shared/view/beui/ease';
-import { cn } from '../../../../lib/utils';
+import { EASE_IN_OUT } from '../../../../shared/view/beui/ease';
 
 type SidebarFooterDrawerProps = {
   open: boolean;
   onClose: () => void;
-  /** Phone renders a full-width bottom sheet; desktop a sidebar-width drawer
-      rising from the anchor block. Both portal to the body — the sidebar's
-      backdrop-blur makes it the containing block for `fixed` descendants, so
-      an in-tree backdrop could never cover the main pane. */
+  /** Phone renders a full-width bottom sheet portaled over a blur scrim;
+      desktop an in-flow region above the footer taskbar. */
   isMobile: boolean;
-  /** Desktop anchor: the accounts/settings block the drawer rises from. */
-  anchorRef: RefObject<HTMLDivElement>;
   ariaLabel: string;
   dataSlot: string;
   children: ReactNode;
 };
 
 /**
- * The sidebar footer drawer shell (ui11 phase 5; shared with the counter
- * drawers in phase 12): slides up from just above the accounts/settings block,
- * overlaying the project and chat lists, and reverse-slides closed. A second
- * tap on the trigger, Escape, or an outside tap closes it — the transparent
- * full-viewport backdrop catches outside taps.
+ * The sidebar footer drawer shell (ui11 phase 5; integrated ui13 job 4).
+ * Desktop: no portal, no panel chrome — an in-flow region on the sidebar's
+ * own background that unfolds above the taskbar, growing its height so the
+ * lists above squish up naturally and ramping back to zero on close (height
+ * collapse cannot leave an exit sliver). A trailing divider inside the
+ * animated region separates it from the taskbar. Mobile: a full-width bottom
+ * sheet over a blur scrim, same ramped curve. Escape closes here; outside
+ * taps close via the scrim (mobile) or the footer's outside-press listener
+ * (desktop); a second trigger tap toggles.
  */
 export default function SidebarFooterDrawer({
   open,
   onClose,
   isMobile,
-  anchorRef,
   ariaLabel,
   dataSlot,
   children,
 }: SidebarFooterDrawerProps) {
   const reduceMotion = useReducedMotion();
-
-  // Desktop drawer geometry: measured from the anchor block on open, so the
-  // portaled panel sits flush over the sidebar with its bottom edge just
-  // above the accounts/settings rows.
-  const [anchorStyle, setAnchorStyle] = useState<CSSProperties | null>(null);
-  useLayoutEffect(() => {
-    if (!open || isMobile) {
-      setAnchorStyle(null);
-      return;
-    }
-    const rect = anchorRef.current?.getBoundingClientRect();
-    if (rect) {
-      setAnchorStyle({ left: rect.left, width: rect.width, bottom: window.innerHeight - rect.top });
-    }
-  }, [open, isMobile, anchorRef]);
 
   // Escape closes the drawer (the Dialog primitive used to own this).
   useEffect(() => {
@@ -64,12 +47,34 @@ export default function SidebarFooterDrawer({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  const drawer = (
+  if (!isMobile) {
+    return (
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            role="region"
+            aria-label={ariaLabel}
+            data-slot={dataSlot}
+            className="overflow-hidden"
+            initial={{ height: 0 }}
+            animate={{ height: 'auto' }}
+            exit={{ height: 0 }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.3, ease: EASE_IN_OUT }}
+          >
+            {children}
+            <div className="nav-divider" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  }
+
+  const sheet = (
     <AnimatePresence>
-      {open && (isMobile || anchorStyle) && (
+      {open && (
         <>
           <motion.div
-            className={cn('fixed inset-0 z-40', isMobile ? 'bg-background/60 backdrop-blur-sm' : 'bg-transparent')}
+            className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -77,13 +82,7 @@ export default function SidebarFooterDrawer({
             onClick={onClose}
             aria-hidden
           />
-          <div
-            className={cn(
-              'pointer-events-none fixed z-50',
-              isMobile ? 'inset-x-0 bottom-0' : 'overflow-hidden px-1.5 pb-1',
-            )}
-            style={isMobile ? undefined : anchorStyle ?? undefined}
-          >
+          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50">
             <motion.div
               role="dialog"
               aria-label={ariaLabel}
@@ -91,13 +90,8 @@ export default function SidebarFooterDrawer({
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: EASE_OUT }}
-              className={cn(
-                'pointer-events-auto border-border bg-popover shadow-lg',
-                isMobile
-                  ? 'border-t rounded-t-lg pb-safe-area-inset-bottom'
-                  : 'rounded-lg border',
-              )}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: EASE_IN_OUT }}
+              className="pointer-events-auto rounded-t-lg border-t border-border bg-background pb-safe-area-inset-bottom"
             >
               {children}
             </motion.div>
@@ -107,5 +101,5 @@ export default function SidebarFooterDrawer({
     </AnimatePresence>
   );
 
-  return createPortal(drawer, document.body);
+  return createPortal(sheet, document.body);
 }

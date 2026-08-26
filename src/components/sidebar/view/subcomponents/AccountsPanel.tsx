@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { RefObject } from 'react';
 import { Ban, ChevronDown, ChevronUp, Loader2, LogIn, Plus, Power } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
@@ -50,13 +49,9 @@ type AccountsPanelProps = {
   onOpenChange: (open: boolean) => void;
   /** Reports the active account's email whenever a fresh list arrives. */
   onActiveChange: (email: string | null) => void;
-  /** Phone renders a full-width bottom sheet; desktop a sidebar-width drawer
-      rising from the anchor block. Both portal to the body — the sidebar's
-      backdrop-blur makes it the containing block for `fixed` descendants, so
-      an in-tree backdrop could never cover the main pane. */
+  /** Phone renders a full-width bottom sheet; desktop unfolds in-flow above
+      the footer taskbar (ui13 job 4). */
   isMobile: boolean;
-  /** Desktop anchor: the accounts/settings block the drawer rises from. */
-  anchorRef: RefObject<HTMLDivElement>;
   t: TFunction;
 };
 
@@ -118,7 +113,7 @@ function UsageBar({ label, kind, window: win }: { label: string; kind: string; w
   );
 }
 
-export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMobile, anchorRef, t }: AccountsPanelProps) {
+export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMobile, t }: AccountsPanelProps) {
   const [accounts, setAccounts] = useState<CswapAccount[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -219,23 +214,15 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
       open={open}
       onClose={() => onOpenChange(false)}
       isMobile={isMobile}
-      anchorRef={anchorRef}
       ariaLabel={t('accounts.title', 'Claude accounts')}
       dataSlot="accounts-panel"
     >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="min-w-0">
-            <h2 className="text-sm font-medium text-foreground">
-              {t('accounts.title', 'Claude accounts')}
-            </h2>
-            <p className="truncate text-xs text-muted-foreground">
-              {t('accounts.subtitle', 'Switching applies to new sessions')}
-            </p>
-          </div>
-          {loading && <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-muted-foreground" />}
-        </div>
-
         <ul className="max-h-[60dvh] space-y-2 overflow-y-auto px-4 py-3">
+          {loading && accounts === null && (
+            <li className="flex justify-center px-1 py-2">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </li>
+          )}
           {sorted.map((account, index) => {
             const usage = account.usage ?? account.lastGoodUsage ?? undefined;
             const scoped = Array.isArray(usage?.scoped) ? usage.scoped : [];

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import type { RefObject } from 'react';
 import { BookMarked, ChevronDown } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
@@ -26,7 +25,6 @@ type MemoryDrawerProps = {
   onClose: () => void;
   selectedProject: Project | null;
   isMobile: boolean;
-  anchorRef: RefObject<HTMLDivElement>;
   t: TFunction;
 };
 
@@ -91,7 +89,6 @@ export default function MemoryDrawer({
   onClose,
   selectedProject,
   isMobile,
-  anchorRef,
   t,
 }: MemoryDrawerProps) {
   const [tab, setTab] = useState<'project' | 'global'>('project');
@@ -142,7 +139,6 @@ export default function MemoryDrawer({
       open={open}
       onClose={onClose}
       isMobile={isMobile}
-      anchorRef={anchorRef}
       ariaLabel={t('memory.title', 'Memory')}
       dataSlot="memory-drawer"
     >

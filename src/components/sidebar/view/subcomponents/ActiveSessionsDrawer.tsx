@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import type { RefObject } from 'react';
 import { Compass, Hammer } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
@@ -16,7 +15,6 @@ type ActiveSessionsDrawerProps = {
   rows: ActiveSessionRow[];
   onSelect: (row: ActiveSessionRow) => void;
   isMobile: boolean;
-  anchorRef: RefObject<HTMLDivElement>;
   t: TFunction;
 };
 
@@ -40,7 +38,6 @@ export default function ActiveSessionsDrawer({
   rows,
   onSelect,
   isMobile,
-  anchorRef,
   t,
 }: ActiveSessionsDrawerProps) {
   const Icon = kind === 'planner' ? Compass : Hammer;
@@ -77,7 +74,6 @@ export default function ActiveSessionsDrawer({
       open={open}
       onClose={onClose}
       isMobile={isMobile}
-      anchorRef={anchorRef}
       ariaLabel={title}
       dataSlot={`${kind}-sessions-drawer`}
     >

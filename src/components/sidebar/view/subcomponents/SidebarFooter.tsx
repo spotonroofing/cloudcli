@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { Compass, Hammer, Settings, AlertTriangle, AtSign, BookMarked } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
@@ -73,6 +74,49 @@ function ActivityCounterColumn({
   );
 }
 
+/**
+ * One taskbar icon (ui13 job 4): icon-only, 44px hit area via touch-hit. The
+ * open drawer's icon reads selected; the others dim while any drawer is open.
+ */
+function TaskbarButton({
+  icon: Icon,
+  label,
+  onClick,
+  selected = false,
+  dimmed = false,
+  expanded,
+  dataSlot,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+  selected?: boolean;
+  dimmed?: boolean;
+  expanded?: boolean;
+  dataSlot?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'touch-hit relative flex h-9 w-9 items-center justify-center rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+        selected
+          ? 'bg-accent/60 text-foreground'
+          : dimmed
+            ? 'text-muted-foreground/40 hover:text-foreground'
+            : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+      )}
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      aria-expanded={expanded}
+      data-slot={dataSlot}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+}
+
 export default function SidebarFooter({
   restartRequired,
   onShowSettings,
@@ -88,12 +132,12 @@ export default function SidebarFooter({
 
   // One footer drawer at a time: the account switcher (ui8 phase 6, drawer in
   // ui11 phase 5), a counter drawer (ui11 phase 12), or the memory viewer
-  // (ui12 phase 7). All rise from the same anchor block above Settings.
+  // (ui12 phase 7). All unfold in-flow above the taskbar (ui13 job 4).
   const [openDrawer, setOpenDrawer] = useState<'accounts' | 'planner' | 'worker' | 'memory' | null>(null);
   const toggleDrawer = (drawer: 'accounts' | 'planner' | 'worker' | 'memory') =>
     setOpenDrawer((current) => (current === drawer ? null : drawer));
   const [activeAccountEmail, setActiveAccountEmail] = useState<string | null>(null);
-  const accountsAnchorRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,7 +150,7 @@ export default function SidebarFooter({
           setActiveAccountEmail(email);
         }
       } catch {
-        // cswap unavailable; the row falls back to a generic label.
+        // cswap unavailable; the icon falls back to a generic label.
       }
     })();
     return () => {
@@ -114,8 +158,26 @@ export default function SidebarFooter({
     };
   }, []);
 
+  // Desktop: a press outside the footer (drawer + taskbar) closes the open
+  // drawer; presses inside stay with the triggers so a second tap toggles.
+  // Mobile sheets close through their own scrim.
+  useEffect(() => {
+    if (openDrawer === null || isMobile) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (footerRef.current && !footerRef.current.contains(event.target as Node)) {
+        setOpenDrawer(null);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [openDrawer, isMobile]);
+
   return (
-    <div className="flex-shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)' }}>
+    <div
+      ref={footerRef}
+      className="flex-shrink-0"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)' }}
+    >
       {/* Restart-required banner: the running server version differs from the
           installed/frontend version (updated but not restarted). */}
       {restartRequired && (
@@ -160,76 +222,70 @@ export default function SidebarFooter({
         </>
       )}
 
-      {/* Accounts + Settings pinned to the bottom, one treatment on every
-          form factor. The accounts row shows the active Claude account and
-          opens the accounts drawer, which slides up from this block's top
-          edge and overlays the lists (ui11 phase 5). */}
-      <div ref={accountsAnchorRef}>
-        <div className="nav-divider" />
-        <div className="space-y-0.5 px-2 py-1.5">
-          <button
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-            onClick={() => toggleDrawer('memory')}
-            aria-expanded={openDrawer === 'memory'}
-            data-slot="memory-viewer-trigger"
-          >
-            <BookMarked className="h-3.5 w-3.5 flex-shrink-0" />
-            <span className="text-sm">{t('memory.title', 'Memory')}</span>
-          </button>
-          <button
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-            onClick={() => toggleDrawer('accounts')}
-            aria-expanded={openDrawer === 'accounts'}
-            data-slot="account-switcher-trigger"
-          >
-            <AtSign className="h-3.5 w-3.5 flex-shrink-0" />
-            <span className="min-w-0 truncate text-sm" data-slot="account-switcher-active">
-              {activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
-            </span>
-          </button>
-          <button
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-            onClick={onShowSettings}
-          >
-            <Settings className="h-3.5 w-3.5" />
-            <span className="text-sm">{t('actions.settings')}</span>
-          </button>
-        </div>
+      <div className="nav-divider" />
 
-        <AccountsPanel
-          open={openDrawer === 'accounts'}
-          onOpenChange={(open) => setOpenDrawer(open ? 'accounts' : null)}
-          onActiveChange={setActiveAccountEmail}
-          isMobile={isMobile}
-          anchorRef={accountsAnchorRef}
-          t={t}
-        />
+      {/* Footer drawers unfold here, between the divider and the taskbar, on
+          the sidebar's own background (ui13 job 4): opening grows the footer
+          so the lists above squish up; the taskbar never moves. */}
+      <AccountsPanel
+        open={openDrawer === 'accounts'}
+        onOpenChange={(open) => setOpenDrawer(open ? 'accounts' : null)}
+        onActiveChange={setActiveAccountEmail}
+        isMobile={isMobile}
+        t={t}
+      />
 
-        <MemoryDrawer
-          open={openDrawer === 'memory'}
+      <MemoryDrawer
+        open={openDrawer === 'memory'}
+        onClose={() => setOpenDrawer(null)}
+        selectedProject={selectedProject}
+        isMobile={isMobile}
+        t={t}
+      />
+
+      {(['planner', 'worker'] as const).map((kind) => (
+        <ActiveSessionsDrawer
+          key={kind}
+          kind={kind}
+          open={openDrawer === kind}
           onClose={() => setOpenDrawer(null)}
-          selectedProject={selectedProject}
+          rows={activeSessionRows}
+          onSelect={(row) => {
+            setOpenDrawer(null);
+            onOpenActiveSession(row);
+          }}
           isMobile={isMobile}
-          anchorRef={accountsAnchorRef}
           t={t}
         />
+      ))}
 
-        {(['planner', 'worker'] as const).map((kind) => (
-          <ActiveSessionsDrawer
-            key={kind}
-            kind={kind}
-            open={openDrawer === kind}
-            onClose={() => setOpenDrawer(null)}
-            rows={activeSessionRows}
-            onSelect={(row) => {
-              setOpenDrawer(null);
-              onOpenActiveSession(row);
-            }}
-            isMobile={isMobile}
-            anchorRef={accountsAnchorRef}
-            t={t}
-          />
-        ))}
+      {/* The footer taskbar (ui13 job 4): one left-aligned row of icon-only
+          controls — Settings, account, Memory. */}
+      <div className="flex items-center gap-1 px-2 py-1.5" data-slot="sidebar-taskbar">
+        <TaskbarButton
+          icon={Settings}
+          label={t('actions.settings')}
+          onClick={onShowSettings}
+          dimmed={openDrawer !== null}
+        />
+        <TaskbarButton
+          icon={AtSign}
+          label={activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
+          onClick={() => toggleDrawer('accounts')}
+          selected={openDrawer === 'accounts'}
+          dimmed={openDrawer !== null && openDrawer !== 'accounts'}
+          expanded={openDrawer === 'accounts'}
+          dataSlot="account-switcher-trigger"
+        />
+        <TaskbarButton
+          icon={BookMarked}
+          label={t('memory.title', 'Memory')}
+          onClick={() => toggleDrawer('memory')}
+          selected={openDrawer === 'memory'}
+          dimmed={openDrawer !== null && openDrawer !== 'memory'}
+          expanded={openDrawer === 'memory'}
+          dataSlot="memory-viewer-trigger"
+        />
       </div>
     </div>
   );

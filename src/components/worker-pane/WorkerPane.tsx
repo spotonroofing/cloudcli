@@ -119,9 +119,6 @@ export default function WorkerPane({
   // Rail ring hand-off (ui13 job 1): the job whose drawer the sidebar opens
   // with on the next expand; null for a plain expand.
   const [railFocusJob, setRailFocusJob] = useState<number | null>(null);
-  // The sheet shell requires a desktop anchor ref; the phone branch never reads it.
-  const jobsSheetAnchorRef = useRef<HTMLDivElement>(null);
-
   const [paneSession, setPaneSession] = useState<ProjectSession | null>(null);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
   // False until the first run fetch for this project settles; the switcher
@@ -546,7 +543,6 @@ export default function WorkerPane({
           open={jobsSheetOpen}
           onClose={() => setJobsSheetOpen(false)}
           isMobile
-          anchorRef={jobsSheetAnchorRef}
           ariaLabel="Run jobs"
           dataSlot="jobs-sheet"
         >
