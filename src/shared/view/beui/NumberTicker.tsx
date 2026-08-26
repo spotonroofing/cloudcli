@@ -131,7 +131,10 @@ export function NumberTicker({
           if (!isDigit) {
             return (
               <span key={id} className="inline-block" style={glyphBoxStyle}>
-                {char}
+                {/* An inline-block whose only content is a collapsible space
+                    renders zero width ("1m 21s" became "1m21s"); NBSP keeps
+                    the same mono advance width without collapsing. */}
+                {char === ' ' ? '\u00A0' : char}
               </span>
             );
           }

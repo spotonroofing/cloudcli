@@ -77,12 +77,18 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
+/** The curated memory document (the primary view's whole content). */
+const CURATED_FILE = 'WILLEM.md';
+
 /**
- * Read-only memory viewer (ui12 phase 7; full-sidebar surface ui13 job 5):
- * fills the sidebar on the slide-up shell, listing the selected project's
- * planner memory (PROJECT.md, STATE.md, lessons with one-line summaries,
- * recent session summaries) and, on the Global tab, the cross-project
- * planner/_global/ folder. Browsing only; nothing writes.
+ * Read-only memory viewer (ui12 phase 7; full-sidebar surface ui13 job 5;
+ * curated-first ui13 job 8): fills the sidebar on the slide-up shell. The
+ * primary view renders the curated memory document (planner/_global/WILLEM.md,
+ * the planner-maintained record of Willem himself) as clean markdown; the
+ * technical layers (PROJECT.md, STATE.md, lessons, session summaries, other
+ * global files) live behind the Internals view with the Project/Global split.
+ * Browsing only; nothing writes — editing happens by telling the planner (the
+ * Claude model, not delete-chips), as the document's own header line says.
  */
 export default function MemorySurface({
   open,
@@ -90,12 +96,18 @@ export default function MemorySurface({
   selectedProject,
   t,
 }: MemorySurfaceProps) {
+  const [view, setView] = useState<'memory' | 'internals'>('memory');
   const [tab, setTab] = useState<'project' | 'global'>('project');
   const [projectMemory, setProjectMemory] = useState<ProjectMemoryPayload | null>(null);
   const [globalFiles, setGlobalFiles] = useState<MemoryFileEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
   const projectId = selectedProject?.projectId ?? null;
+
+  // Every open starts on the curated view; Internals is a per-visit detour.
+  useEffect(() => {
+    if (open) setView('memory');
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -129,6 +141,11 @@ export default function MemorySurface({
     };
   }, [open, projectId]);
 
+  const curatedContent = globalFiles.find((file) => file.name === CURATED_FILE)?.content ?? null;
+  // The curated document has its own primary view; the internals Global list
+  // carries the rest of planner/_global/.
+  const internalGlobalFiles = globalFiles.filter((file) => file.name !== CURATED_FILE);
+
   const emptyHint = (text: string) => (
     <p className="px-1 py-1 text-xs text-muted-foreground/70">{text}</p>
   );
@@ -144,26 +161,49 @@ export default function MemorySurface({
         <div className="min-w-0">
           <h2 className="text-sm font-medium text-foreground">{t('memory.title', 'Memory')}</h2>
           <p className="truncate text-xs text-muted-foreground">
-            {tab === 'global'
-              ? t('memory.globalSubtitle', 'Cross-project preferences and lessons')
-              : selectedProject?.displayName
-                ?? t('memory.noProject', 'No project selected')}
+            {view === 'memory'
+              ? t('memory.curatedSubtitle', 'Edited by telling the planner')
+              : tab === 'global'
+                ? t('memory.globalSubtitle', 'Cross-project preferences and lessons')
+                : selectedProject?.displayName
+                  ?? t('memory.noProject', 'No project selected')}
           </p>
         </div>
         <BookMarked className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden />
       </div>
 
       <div className="border-b border-border/60 px-4 py-2">
-        <Tabs value={tab} onValueChange={(value) => setTab(value as 'project' | 'global')} variant="segment">
+        <Tabs value={view} onValueChange={(value) => setView(value as 'memory' | 'internals')} variant="segment">
           <TabsList>
-            <TabsTrigger value="project">{t('memory.projectTab', 'Project')}</TabsTrigger>
-            <TabsTrigger value="global">{t('memory.globalTab', 'Global')}</TabsTrigger>
+            <TabsTrigger value="memory">{t('memory.memoryTab', 'Memory')}</TabsTrigger>
+            <TabsTrigger value="internals">{t('memory.internalsTab', 'Internals')}</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
+      {view === 'internals' && (
+        <div className="border-b border-border/60 px-4 py-2">
+          <Tabs value={tab} onValueChange={(value) => setTab(value as 'project' | 'global')} variant="segment">
+            <TabsList>
+              <TabsTrigger value="project">{t('memory.projectTab', 'Project')}</TabsTrigger>
+              <TabsTrigger value="global">{t('memory.globalTab', 'Global')}</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3" data-slot="memory-surface-body">
-        {tab === 'project' ? (
+        {view === 'memory' ? (
+          loading && !curatedContent ? (
+            emptyHint(t('memory.loading', 'Loading memory...'))
+          ) : !curatedContent ? (
+            emptyHint(t('memory.noCurated', 'No curated memory yet. Tell the planner something worth remembering.'))
+          ) : (
+            <div data-slot="memory-curated">
+              <Markdown className="prose prose-sm max-w-none dark:prose-invert">{curatedContent}</Markdown>
+            </div>
+          )
+        ) : tab === 'project' ? (
           !projectId ? (
             emptyHint(t('memory.selectProject', 'Select a project to browse its planner memory.'))
           ) : loading && !projectMemory ? (
@@ -216,14 +256,14 @@ export default function MemorySurface({
               </section>
             </>
           )
-        ) : loading && globalFiles.length === 0 ? (
+        ) : loading && internalGlobalFiles.length === 0 ? (
           emptyHint(t('memory.loading', 'Loading memory...'))
-        ) : globalFiles.length === 0 ? (
+        ) : internalGlobalFiles.length === 0 ? (
           emptyHint(t('memory.noGlobal', 'No global memory files yet.'))
         ) : (
           <section data-slot="memory-global-files">
             <div className="space-y-2">
-              {globalFiles.map((file) => (
+              {internalGlobalFiles.map((file) => (
                 <MemoryFileRow
                   key={file.name}
                   title={file.name}

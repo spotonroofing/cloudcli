@@ -5,7 +5,7 @@ import { promises as fsPromises } from 'node:fs';
 import chokidar, { type FSWatcher } from 'chokidar';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
-import { handleAutoMemoryFileEvent } from '@/modules/memory/index.js';
+import { handleAutoMemoryFileEvent, handleSessionTranscriptEvent } from '@/modules/memory/index.js';
 import { sessionSynchronizerService } from '@/modules/providers/services/session-synchronizer.service.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { LLMProvider } from '@/shared/types.js';
@@ -266,6 +266,13 @@ async function onUpdate(
       filePath,
       sessionId: result.sessionId,
     });
+
+    // Per-session memory-write detection (ui13 job 8): the changed transcript
+    // tail names the file-tool calls this exact session made.
+    if (provider === 'claude' && result.sessionId) {
+      void handleSessionTranscriptEvent(PROVIDER_WATCH_PATHS[0].rootPath, filePath, result.sessionId);
+    }
+
     queuePendingWatcherUpdate(eventType, provider, result.sessionId);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -85,21 +85,24 @@ export function InterruptedMarker() {
 }
 
 /**
- * Small marker row where the planner wrote memory (ui12 phase 7): the
- * server-side watcher on the memory paths detected the write, so the row
- * names the files without relying on the model announcing itself.
+ * Marker row where a session wrote memory (ui12 phase 7; ui13 job 8): the
+ * server detects the write, so the row never relies on the model announcing
+ * itself. Rendered on the beUI Thinking trace so it shares the
+ * "Thought for a few seconds" row anatomy exactly (icon slot, type, chevron,
+ * expand behavior); the files live behind the expand, one row each.
  */
 export function MemoryUpdatedMarker({ files }: { files: string[] }) {
   const { t } = useTranslation('chat');
   return (
-    <div data-slot="memory-updated-marker" className="flex min-w-0 items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground/80">
-      <BookMarked className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
-      <span className="flex-shrink-0">{t('memoryUpdated', { defaultValue: 'Memory updated' })}</span>
-      {files.length > 0 && (
-        <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground/60">
-          {files.join(', ')}
-        </span>
-      )}
+    <div data-slot="memory-updated-marker">
+      <Thinking
+        mode="coding"
+        working={false}
+        icon={<BookMarked aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
+        activeLabel={t('memoryUpdated', { defaultValue: 'Memory updated' })}
+        doneLabel={t('memoryUpdated', { defaultValue: 'Memory updated' })}
+        rows={files.map((file) => ({ key: file, primary: file }))}
+      />
     </div>
   );
 }

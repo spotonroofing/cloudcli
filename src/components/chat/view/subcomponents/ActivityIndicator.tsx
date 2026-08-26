@@ -95,11 +95,14 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
           {label}
         </span>
         <span className="font-mono text-xs tabular-nums text-muted-foreground/60">
-          {/* Digits roll (beUI NumberTicker); the unit glyphs render as plain text, so the label reads exactly as the static string. */}
+          {/* Ticker layout (fixed glyph boxes, place-keyed digits) but zero
+              roll: the tenths digit updates every 100ms, faster than any roll
+              can settle, so a rolling column here is perpetually mid-glyph
+              and reads as digits at different heights. */}
           <NumberTicker
             value={elapsedDeciseconds}
             format={() => elapsedLabel}
-            duration={0.2}
+            duration={0}
             stagger={0}
             startOnView={false}
           />

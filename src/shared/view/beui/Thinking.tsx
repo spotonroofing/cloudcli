@@ -87,6 +87,8 @@ export interface ThinkingProps {
   mode: ThinkingMode;
   /** True while the traced work is still in flight. */
   working?: boolean;
+  /** Replaces the star glyph in the header's icon slot (16px, caller-colored). */
+  icon?: ReactNode;
   /** Shimmering header label while working. */
   activeLabel: string;
   /** Settled header label once done. */
@@ -106,6 +108,7 @@ export interface ThinkingProps {
 export function Thinking({
   mode,
   working = false,
+  icon,
   activeLabel,
   doneLabel,
   query,
@@ -147,16 +150,18 @@ export function Thinking({
         onClick={() => setManualExpanded((current) => !(current ?? autoExpanded))}
         className="-mx-1.5 flex w-fit items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors duration-100 hover:bg-muted/60"
       >
-        <svg
-          aria-hidden="true"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          className={working ? 'shrink-0 text-muted-foreground' : 'shrink-0 text-muted-foreground/60'}
-        >
-          <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
-        </svg>
+        {icon ?? (
+          <svg
+            aria-hidden="true"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className={working ? 'shrink-0 text-muted-foreground' : 'shrink-0 text-muted-foreground/60'}
+          >
+            <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
+          </svg>
+        )}
         {working ? (
           <span
             className={`whitespace-nowrap text-[13px] font-medium ${TEXT_SHIMMER_CLASS_NAME}`}
