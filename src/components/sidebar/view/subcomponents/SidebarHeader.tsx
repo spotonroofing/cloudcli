@@ -6,7 +6,6 @@ import type { IconTab } from '../../../../shared/view/ui';
 import type { SidebarSearchMode } from '../../types/types';
 
 type SidebarHeaderProps = {
-  isPWA: boolean;
   isMobile: boolean;
   isLoading: boolean;
   projectsCount: number;
@@ -24,11 +23,12 @@ type SidebarHeaderProps = {
   /** Header action: new session in the scoped project. Null until a project is scoped. */
   onNewSession: (() => void) | null;
   onCollapseSidebar: () => void;
+  /** Phone only: closes the full-screen sidebar. */
+  onClose?: () => void;
   t: TFunction;
 };
 
 export default function SidebarHeader({
-  isPWA,
   isMobile,
   isLoading,
   projectsCount,
@@ -45,6 +45,7 @@ export default function SidebarHeader({
   onCreateProject,
   onNewSession,
   onCollapseSidebar,
+  onClose,
   t,
 }: SidebarHeaderProps) {
   const showSearchTools = (projectsCount > 0 || runningSessionsCount > 0 || archivedSessionsCount > 0 || isArchivedSessionsLoading) && !isLoading;
@@ -62,10 +63,9 @@ export default function SidebarHeader({
 
   return (
     <div className="flex-shrink-0">
-      <div
-        className="px-3 pb-2 pt-3"
-        style={isPWA && isMobile ? { paddingTop: '16px' } : {}}
-      >
+      {/* Phone: the header is the screen's top bar, so it clears the status
+          bar itself (safe-area top plus the standard header padding). */}
+      <div className={isMobile ? 'mobile-top-bar px-3 pb-2' : 'px-3 pb-2 pt-3'}>
         <div className="flex items-center gap-2">
           {/* Left-aligned icon tabs (ui13 job 5): folder, chat bubble, archive
               box — icon-only controls, so tooltips are allowed here. */}
@@ -128,6 +128,18 @@ export default function SidebarHeader({
                 title={t('tooltips.hideSidebar')}
               >
                 <PanelLeftClose className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {isMobile && onClose && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="touch-hit relative h-7 w-7 rounded-lg p-0 text-muted-foreground hover:bg-accent/80 hover:text-foreground"
+                onClick={onClose}
+                aria-label="Close sidebar"
+                data-slot="mobile-sidebar-close"
+              >
+                <X className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>

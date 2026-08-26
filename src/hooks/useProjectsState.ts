@@ -1055,21 +1055,14 @@ export function useProjectsState({
       setSelectedSession(session);
 
       if (isMobile) {
-        // Sessions are tagged with the owning project's DB `projectId` when
-        // picked from the sidebar (see useSidebarController); compare against
-        // the current selection's `projectId` so we know whether to collapse
-        // the sidebar after navigation.
-        const sessionProjectId = session.__projectId;
-        const currentProjectId = selectedProject?.projectId;
-
-        if (sessionProjectId !== currentProjectId) {
-          setSidebarOpen(false);
-        }
+        // The phone sidebar covers the whole screen (ui14 job 11), so opening
+        // any chat closes it — same-project taps included.
+        setSidebarOpen(false);
       }
 
       navigate(`${basePath}/session/${session.id}`);
     },
-    [activeTab, basePath, clearSessionAttention, isMobile, navigate, selectedProject?.projectId],
+    [activeTab, basePath, clearSessionAttention, isMobile, navigate],
   );
 
   const handleNewSession = useCallback(

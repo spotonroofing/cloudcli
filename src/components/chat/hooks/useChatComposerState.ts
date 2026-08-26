@@ -64,6 +64,8 @@ interface UseChatComposerStateArgs {
   currentProviderModel: string;
   currentProviderEffort: string;
   isLoading: boolean;
+  /** Holds the queued-draft idle flush while the pane's shell view owns the session (ui14 job 11). */
+  holdQueuedFlush?: boolean;
   processingSessions?: SessionActivityMap;
   canAbortSession: boolean;
   tokenBudget: Record<string, unknown> | null;
@@ -290,6 +292,7 @@ export function useChatComposerState({
   currentProviderModel,
   currentProviderEffort,
   isLoading,
+  holdQueuedFlush = false,
   processingSessions,
   canAbortSession,
   tokenBudget,
@@ -1404,7 +1407,11 @@ export function useChatComposerState({
       return;
     }
 
-    if (isLoading || !queuedDraft) {
+    // The shell view owns the session while it is open: the turn ending hands
+    // it to an interactive `claude --resume`, so flushing here would start an
+    // SDK turn against the same session file (ui14 job 11). The draft stays
+    // queued; this effect re-runs when the shell closes.
+    if (isLoading || holdQueuedFlush || !queuedDraft) {
       return;
     }
 
@@ -1469,7 +1476,7 @@ export function useChatComposerState({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [isLoading, isConnected, queuedDraft, sessionKey, setInput, setAttachedFilesSync]);
+  }, [isLoading, holdQueuedFlush, isConnected, queuedDraft, sessionKey, setInput, setAttachedFilesSync]);
 
   const editQueuedDraft = useCallback(() => {
     if (!queuedDraft) {
@@ -1485,7 +1492,7 @@ export function useChatComposerState({
     setInput(queuedDraft.content);
     inputValueRef.current = queuedDraft.content;
     setAttachedFilesSync(queuedDraft.attachments);
-    textareaRef.current?.focus();
+    textareaRef.current?.focus({ preventScroll: true });
   }, [queuedDraft, setAttachedFilesSync]);
 
   const deleteQueuedDraft = useCallback(() => {

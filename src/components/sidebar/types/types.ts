@@ -106,6 +106,8 @@ export type SidebarProps = {
   settingsInitialTab: string;
   onCloseSettings: () => void;
   isMobile: boolean;
+  /** Phone only: closes the full-screen sidebar. */
+  onClose?: () => void;
 };
 
 export type SessionViewModel = {

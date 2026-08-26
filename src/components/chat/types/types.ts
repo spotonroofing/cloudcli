@@ -161,5 +161,11 @@ export interface ChatInterfaceProps {
   sessionOrigin?: 'direct' | 'planner' | null;
   /** Reports the session id this surface actually renders, so the host pane can flag a claim/stream mismatch. */
   onRenderedSessionChange?: (sessionId: string | null) => void;
+  /**
+   * Holds the queued-draft idle flush (ui14 job 11): while the pane's shell
+   * view is open, the turn ending hands the session to an interactive
+   * `claude --resume`, so an auto-send would race it as a second writer.
+   */
+  holdQueuedFlush?: boolean;
   onTaskClick?: (...args: unknown[]) => void;
 }

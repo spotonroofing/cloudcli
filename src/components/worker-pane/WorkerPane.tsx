@@ -1,9 +1,10 @@
 import { Hammer, MessageSquare, Milestone, Plus, Terminal, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import ChatInterface from '../chat/view/ChatInterface';
-import StandaloneShell from '../standalone-shell/view/StandaloneShell';
+import PaneShell from '../app/workspace/PaneShell';
 import ErrorBoundary from '../main-content/view/ErrorBoundary';
+import MobileMenuButton from '../main-content/view/subcomponents/MobileMenuButton';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
@@ -76,6 +77,9 @@ type WorkerPaneProps = {
    * workspace sets this at three or more projects in column layout (ui14 job 1).
    */
   jobsTakeover?: boolean;
+  /** Phone only (ui14 job 11): the top bar opens the sidebar and carries the window selector. */
+  onMenuClick?: () => void;
+  windowSelector?: ReactNode;
 };
 
 /**
@@ -100,6 +104,8 @@ export default function WorkerPane({
   onClose,
   closeLabel,
   jobsTakeover = false,
+  onMenuClick,
+  windowSelector,
 }: WorkerPaneProps) {
   const { subscribe, isConnected } = useWebSocket();
   const { preferences } = useUiPreferences();
@@ -308,7 +314,14 @@ export default function WorkerPane({
       {/* Worker top bar (ui14 job 2): the planner header's anatomy — icon,
           "Worker", the shown run's title as plain text (no dropdown; jobs are
           the navigation). No status words; the two badges are wiring fail-safes. */}
-      <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+      <div
+        className={cn(
+          'flex flex-shrink-0 items-center gap-2 overflow-hidden border-b border-border/60 bg-muted/30 px-3',
+          isMobile ? 'mobile-top-bar pb-1.5' : 'py-1.5',
+        )}
+        data-slot="pane-header"
+      >
+        {isMobile && onMenuClick && <MobileMenuButton onMenuClick={onMenuClick} />}
         <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         <span className="text-xs font-medium text-foreground">Worker</span>
         {!runsLoaded && <Skeleton className="h-3 w-36 rounded-sm" />}
@@ -328,6 +341,7 @@ export default function WorkerPane({
           </Badge>
         )}
         <span className="min-w-0 flex-1" />
+        {isMobile && windowSelector}
         {isMobile && (
           <Tooltip content={shellOpen ? 'Show chat' : 'Show shell'} position="bottom">
             <Button
@@ -392,8 +406,12 @@ export default function WorkerPane({
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div
-          className={`min-h-0 min-w-0 flex-1 ${(isMobile && shellOpen) || (jobsViewOpen && jobsFullPane) ? 'hidden' : ''}`}
+        <PaneShell
+          project={selectedProject}
+          session={paneSession}
+          open={isMobile && shellOpen && !jobsViewOpen}
+          busy={Boolean(paneSession && processingSessions?.has(String(paneSession.id)))}
+          hidden={jobsViewOpen && jobsFullPane}
         >
         <ErrorBoundary showDetails>
           <ChatInterface
@@ -433,20 +451,10 @@ export default function WorkerPane({
             bootCommandName="/worker"
             sessionOrigin="direct"
             onRenderedSessionChange={setRenderedSessionId}
+            holdQueuedFlush={isMobile && shellOpen && !jobsViewOpen}
           />
         </ErrorBoundary>
-        </div>
-
-        {isMobile && shellOpen && !jobsViewOpen && (
-          <div className="min-h-0 min-w-0 flex-1 overflow-hidden" data-slot="pane-shell">
-            <StandaloneShell
-              project={selectedProject}
-              session={paneSession}
-              showHeader={false}
-              isActive
-            />
-          </div>
-        )}
+        </PaneShell>
 
         {/* Jobs list (ui14 job 1): a side column beside the transcript, or
             the whole pane where the pane is too narrow for both; the same

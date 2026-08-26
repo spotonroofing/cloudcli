@@ -252,7 +252,11 @@ export default function ChatComposer({
           column takes pointer events and paints a backdrop, so the
           scrollbar in the right gutter stays visible and grabbable down to
           the viewport bottom. */}
-      <div className="pointer-events-auto mx-auto w-full max-w-[54.25rem] bg-background pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-6">
+      {/* Bottom padding (ui14 job 11): the home-indicator inset with no
+          keyboard, a plain 8px once the keyboard is up (the inset would leave
+          a dead band between the bar and the keyboard's top edge). The var is
+          set in index.css and switched by the app's visualViewport hook. */}
+      <div className="pointer-events-auto mx-auto w-full max-w-[54.25rem] bg-background pb-[var(--composer-bottom-pad)] sm:pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-6">
       {pendingPermissionRequests.length > 0 && (
         <div className="mx-auto mb-3 max-w-[54.25rem]">
           <PermissionRequestsBanner

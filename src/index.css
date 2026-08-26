@@ -120,6 +120,16 @@
     --header-safe-area-top: env(safe-area-inset-top, 0px);
     --header-base-padding: 8px;
     --header-total-padding: calc(var(--header-safe-area-top) + var(--header-base-padding));
+
+    /* Composer bottom padding (ui14 job 11): the home-indicator inset at rest,
+       a plain 8px while the keyboard is up (html[data-keyboard="open"], set by
+       the app's visualViewport hook) — the inset would otherwise leave a dead
+       band between the bar and the keyboard's top edge. */
+    --composer-bottom-pad: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  html[data-keyboard="open"] {
+    --composer-bottom-pad: 0.5rem;
   }
   
   /* Fallback for older iOS versions */
@@ -1098,22 +1108,21 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
   
-  /* PWA specific header adjustments - uses CSS variables for consistency */
-  .pwa-header-safe {
-    padding-top: var(--header-base-padding);
+  /* Phone top bar (ui14 job 11): whichever pane header sits at the top of the
+     screen clears the status bar by the safe-area inset plus the standard
+     header padding — in Safari and on the home screen alike (the app shell is
+     pinned to the visual viewport with an inline top, so the PWA offset on
+     .fixed.inset-0 above never reaches it). */
+  .mobile-top-bar {
+    padding-top: calc(var(--safe-area-inset-top, 0px) + var(--header-base-padding));
   }
 
-  /* When PWA mode is detected by JavaScript */
-  body.pwa-mode .pwa-header-safe {
-    /* Reset padding since #root already handles safe area */
-    padding-top: 0px !important;
-  }
-
-  /* For mobile PWA, add bottom padding for better spacing */
-  @media screen and (max-width: 768px) {
-    body.pwa-mode .pwa-header-safe {
-      padding-bottom: 8px;
-    }
+  /* Shell mirror (ui14 job 11): a pane whose shell is toggled on while its
+     session is mid-turn keeps the transcript up read-only — the prompt bar
+     and its secondary row go, permission requests still show. */
+  [data-shell-mirror] [data-slot="prompt-input-shell"],
+  [data-shell-mirror] [data-slot="composer-secondary-row"] {
+    display: none;
   }
   
   @media screen and (max-width: 768px) {

@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import ChatInterface from '../../chat/view/ChatInterface';
 import WorkerPane from '../../worker-pane/WorkerPane';
 import FileTree from '../../file-tree/view/FileTree';
-import StandaloneShell from '../../standalone-shell/view/StandaloneShell';
 import GitPanel from '../../git-panel/view/GitPanel';
 import type { MainContentProps } from '../types/types';
 import { useWebSocket } from '../../../contexts/WebSocketContext';
@@ -18,12 +17,13 @@ import { Badge, Button, Tooltip } from '../../../shared/view/ui';
 import { ActionSwapIcon } from '../../../shared/view/beui';
 import { cn } from '../../../lib/utils';
 import PaneStrip, { type StripPane } from '../../app/workspace/PaneStrip';
+import PaneShell from '../../app/workspace/PaneShell';
 import WindowPane from '../../app/workspace/WindowPane';
 import WindowSelector, { type WindowSelectorItem } from '../../app/workspace/WindowSelector';
 import { WINDOW_LABELS, WINDOW_ORDER, useProjectWindows } from '../../app/workspace/useProjectWindows';
 
-import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
+import MobileMenuButton from './subcomponents/MobileMenuButton';
 import ErrorBoundary from './ErrorBoundary';
 
 function MainContent({
@@ -174,6 +174,7 @@ function MainContent({
         newSessionTrigger={newSessionTrigger}
         sessionOrigin={workerPaneAvailable ? 'planner' : null}
         onRenderedSessionChange={setRenderedSessionId}
+        holdQueuedFlush={isMobile && plannerShellOpen}
       />
     </ErrorBoundary>
   );
@@ -325,8 +326,10 @@ function MainContent({
     );
   }
 
-  // Mobile (and the project-less standalone chat): full-pane views behind the
-  // tab rail, windows reachable through the same selector (ui13 job 10).
+  // Mobile (and the project-less standalone chat): full-pane views, one
+  // switcher (ui14 job 11) — the pane header's window selector is the only
+  // way between Planner, Worker, Files, and Source Control; the old top strip
+  // is gone. The standalone chat has no windows, so no selector.
   const mobileSelectorItems: WindowSelectorItem[] = [
     { id: 'planner' as const, tab: 'chat' as const },
     { id: 'worker' as const, tab: 'worker' as const },
@@ -337,24 +340,28 @@ function MainContent({
     open: activeTab === tab,
     onSelect: () => setActiveTab(tab),
   }));
+  const mobileSelector = workerPaneAvailable ? <WindowSelector items={mobileSelectorItems} /> : null;
+  const mobileMenu = isMobile ? <MobileMenuButton onMenuClick={onMenuClick} /> : null;
+  // The pane's session is mid-turn: the shell shows the transcript read-only
+  // until the SDK run releases the session file (see PaneShell).
+  const plannerBusy = Boolean(selectedSession && processingSessions.has(String(selectedSession.id)));
 
   return (
     <div className="flex h-full flex-col">
-      {isMobile && (
-        <MainContentHeader
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          onMenuClick={onMenuClick}
-        />
-      )}
-
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div
           className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}
         >
           <div className={`h-full ${activeTab === 'chat' ? 'flex flex-col' : 'hidden'}`}>
-            {workerPaneAvailable && (
-              <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+            {(workerPaneAvailable || isMobile) && (
+              <div
+                className={cn(
+                  'flex flex-shrink-0 items-center gap-2 overflow-hidden border-b border-border/60 bg-muted/30 px-3',
+                  isMobile ? 'mobile-top-bar pb-1.5' : 'py-1.5',
+                )}
+                data-slot="pane-header"
+              >
+                {mobileMenu}
                 {leftPaneIsWorkerSession ? (
                   <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                 ) : (
@@ -368,38 +375,35 @@ function MainContent({
                 )}
                 {failSafeBadges}
                 <span className="min-w-0 flex-1" />
-                <WindowSelector items={mobileSelectorItems} />
-                <Tooltip content={plannerShellOpen ? 'Show chat' : 'Show shell'} position="bottom">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                    onClick={() => setPlannerShellOpen((open) => !open)}
-                    aria-label={plannerShellOpen ? 'Show chat' : 'Show shell'}
-                    data-slot="pane-view-toggle"
-                  >
-                    <ActionSwapIcon value={plannerShellOpen ? 'chat' : 'shell'}>
-                      {plannerShellOpen
-                        ? <MessageSquare className="h-3.5 w-3.5" />
-                        : <Terminal className="h-3.5 w-3.5" />}
-                    </ActionSwapIcon>
-                  </Button>
-                </Tooltip>
+                {mobileSelector}
+                {workerPaneAvailable && (
+                  <Tooltip content={plannerShellOpen ? 'Show chat' : 'Show shell'} position="bottom">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => setPlannerShellOpen((open) => !open)}
+                      aria-label={plannerShellOpen ? 'Show chat' : 'Show shell'}
+                      data-slot="pane-view-toggle"
+                    >
+                      <ActionSwapIcon value={plannerShellOpen ? 'chat' : 'shell'}>
+                        {plannerShellOpen
+                          ? <MessageSquare className="h-3.5 w-3.5" />
+                          : <Terminal className="h-3.5 w-3.5" />}
+                      </ActionSwapIcon>
+                    </Button>
+                  </Tooltip>
+                )}
               </div>
             )}
-            <div className={`min-h-0 flex-1 ${isMobile && plannerShellOpen ? 'hidden' : ''}`}>
+            <PaneShell
+              project={selectedProject}
+              session={selectedSession}
+              open={isMobile && plannerShellOpen}
+              busy={plannerBusy}
+            >
               {plannerChat}
-            </div>
-            {isMobile && plannerShellOpen && (
-              <div className="min-h-0 flex-1 overflow-hidden" data-slot="pane-shell">
-                <StandaloneShell
-                  project={selectedProject}
-                  session={selectedSession}
-                  showHeader={false}
-                  isActive
-                />
-              </div>
-            )}
+            </PaneShell>
           </div>
 
           {isMobile && workerPaneAvailable && (
@@ -415,18 +419,34 @@ function MainContent({
                 onSessionIdle={onSessionIdle}
                 processingSessions={processingSessions}
                 onShowSettings={onShowSettings}
+                onMenuClick={onMenuClick}
+                windowSelector={mobileSelector}
               />
             </div>
           )}
 
           {activeTab === 'files' && (
-            <div className="h-full overflow-hidden">
+            <WindowPane
+              id="files"
+              label={WINDOW_LABELS.files}
+              icon={FolderTree}
+              leading={mobileMenu}
+              trailing={mobileSelector}
+              headerClassName={isMobile ? 'mobile-top-bar pb-1.5' : undefined}
+            >
               <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
-            </div>
+            </WindowPane>
           )}
 
           {activeTab === 'git' && (
-            <div className="h-full overflow-hidden">
+            <WindowPane
+              id="git"
+              label={WINDOW_LABELS.git}
+              icon={GitBranch}
+              leading={mobileMenu}
+              trailing={mobileSelector}
+              headerClassName={isMobile ? 'mobile-top-bar pb-1.5' : undefined}
+            >
               <GitPanel
                 selectedProject={selectedProject}
                 isMobile={isMobile}
@@ -434,7 +454,7 @@ function MainContent({
                 onProjectSelect={onProjectSelect}
                 onProjectsRefresh={onProjectsRefresh}
               />
-            </div>
+            </WindowPane>
           )}
 
         </div>

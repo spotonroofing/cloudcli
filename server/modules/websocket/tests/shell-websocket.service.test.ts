@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import { WebSocket } from 'ws';
@@ -116,4 +119,74 @@ test('shell output detects and normalizes a wrapped authentication URL', () => {
   });
 
   pty.emitExit();
+});
+
+test('a claude shell pre-trusts its project folder in this config dir, keeping the rest of the entry', () => {
+  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-trust-'));
+  const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = configDir;
+  const projectPath = path.resolve(process.cwd());
+  fs.writeFileSync(
+    path.join(configDir, '.claude.json'),
+    JSON.stringify({ numStartups: 3, projects: { [projectPath]: { allowedTools: ['Bash'], hasTrustDialogAccepted: false } } }),
+  );
+  try {
+    const pty = createFakePty();
+    const socket = createFakeSocket();
+    handleShellConnection(socket as never, { resolveProviderSessionId: () => null, spawnPty: () => pty as never });
+    socket.emit(
+      'message',
+      JSON.stringify({ type: 'init', projectPath, sessionId: null, hasSession: false, provider: 'claude', cols: 80, rows: 24 }),
+    );
+    const written = JSON.parse(fs.readFileSync(path.join(configDir, '.claude.json'), 'utf8'));
+    assert.equal(written.numStartups, 3);
+    assert.deepEqual(written.projects[projectPath], { allowedTools: ['Bash'], hasTrustDialogAccepted: true });
+    pty.emitExit();
+  } finally {
+    if (previousConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previousConfigDir;
+    fs.rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
+test('a plain shell never touches the trust record', () => {
+  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-trust-'));
+  const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = configDir;
+  try {
+    const pty = createFakePty();
+    const socket = createFakeSocket();
+    handleShellConnection(socket as never, { resolveProviderSessionId: () => null, spawnPty: () => pty as never });
+    socket.emit(
+      'message',
+      JSON.stringify({ type: 'init', projectPath: process.cwd(), provider: 'plain-shell', isPlainShell: true, initialCommand: 'true' }),
+    );
+    assert.equal(fs.existsSync(path.join(configDir, '.claude.json')), false);
+    pty.emitExit();
+  } finally {
+    if (previousConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previousConfigDir;
+    fs.rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
+test('an unparsable claude config is left untouched rather than rewritten', () => {
+  const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-trust-'));
+  const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = configDir;
+  const configPath = path.join(configDir, '.claude.json');
+  fs.writeFileSync(configPath, '{"projects": {');
+  try {
+    const pty = createFakePty();
+    const socket = createFakeSocket();
+    handleShellConnection(socket as never, { resolveProviderSessionId: () => null, spawnPty: () => pty as never });
+    socket.emit('message', JSON.stringify({ type: 'init', projectPath: process.cwd(), hasSession: false, provider: 'claude' }));
+    assert.equal(fs.readFileSync(configPath, 'utf8'), '{"projects": {');
+    assert.deepEqual(fs.readdirSync(configDir), ['.claude.json']);
+    pty.emitExit();
+  } finally {
+    if (previousConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previousConfigDir;
+    fs.rmSync(configDir, { recursive: true, force: true });
+  }
 });

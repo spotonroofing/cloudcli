@@ -13,7 +13,7 @@ export default function MainContentStateView({ mode, isMobile, onMenuClick }: Ma
   return (
     <div className="flex h-full flex-col">
       {isMobile && (
-        <div className="pwa-header-safe flex flex-shrink-0 items-center border-b border-border/60 bg-muted/30 px-3 py-1.5">
+        <div className="mobile-top-bar flex flex-shrink-0 items-center border-b border-border/60 bg-muted/30 px-3 pb-1.5">
           <MobileMenuButton onMenuClick={onMenuClick} />
         </div>
       )}

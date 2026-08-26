@@ -39,6 +39,7 @@ function Sidebar({
   settingsInitialTab,
   onCloseSettings,
   isMobile,
+  onClose,
 }: SidebarProps) {
   const { t } = useTranslation(['sidebar', 'common']);
   const navigate = useNavigate();
@@ -368,7 +369,6 @@ function Sidebar({
       ) : (
         <>
         <SidebarContent
-            isPWA={isPWA}
             isMobile={isMobile}
             isLoading={isLoading}
             projects={projects}
@@ -458,6 +458,7 @@ function Sidebar({
             isRefreshing={isRefreshing}
             onCreateProject={() => setShowNewProject(true)}
             onCollapseSidebar={handleCollapseSidebar}
+            onClose={onClose}
             restartRequired={restartRequired}
             onShowSettings={onShowSettings}
             showSettings={showSettings}

@@ -324,7 +324,7 @@ export function useSlashCommands({
       resetCommandMenuState();
 
       window.requestAnimationFrame(() => {
-        currentTextarea?.focus();
+        currentTextarea?.focus({ preventScroll: true });
         const nextCursorPosition = `${textBeforeCommand}${separator}${command.name} `.length;
         currentTextarea?.setSelectionRange(nextCursorPosition, nextCursorPosition);
       });
@@ -396,7 +396,7 @@ export function useSlashCommands({
       setFilteredCommands(slashCommands);
     }
 
-    textareaRef.current?.focus();
+    textareaRef.current?.focus({ preventScroll: true });
   }, [showCommandMenu, slashCommands, textareaRef]);
 
   const handleCommandInputChange = useCallback(

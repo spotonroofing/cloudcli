@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 
 import Sidebar from '../sidebar/view/Sidebar';
 import type { RunningRunInfo } from '../sidebar/types/types';
@@ -76,7 +75,6 @@ function AppContentInner() {
   // Scoped tab (`/project/:projectId`): session navigation keeps the prefix so
   // the tab stays docked to its project.
   const projectBasePath = projectId ? `/project/${projectId}` : '';
-  const { t } = useTranslation('common');
   const { isMobile } = useDeviceSettings({ trackPWA: false });
   const { ws, sendMessage, subscribe } = useWebSocket();
   const { user } = useAuth();
@@ -293,24 +291,58 @@ function AppContentInner() {
   // the `chat_subscribed` ack carries them on session open and on reconnect,
   // so no separate permission-recovery message is needed here.
 
-  // Adjust the app container to stay above the virtual keyboard on iOS Safari.
-  // On Chrome for Android the layout viewport already shrinks when the keyboard opens,
-  // so inset-0 adjusts automatically. On iOS the layout viewport stays full-height and
-  // the keyboard overlays it — we use the Visual Viewport API to track keyboard height
-  // and apply it as a CSS variable that shifts the container's bottom edge up.
+  // Keyboard-attached chrome (ui14 job 11). Chrome for Android shrinks the
+  // layout viewport for the keyboard (interactive-widget=resizes-content in
+  // index.html), so inset-0 already follows it. iOS Safari ignores that key:
+  // the layout viewport stays full-height, the keyboard shrinks only the
+  // visual viewport, and Safari pans the visual viewport (offsetTop) to keep
+  // the focused field in view. The app container is pinned to the visual
+  // viewport instead — top at its offset, bottom at the gap below it — so the
+  // composer rides the keyboard's top edge and a focus pan never leaves the
+  // bar stranded up the screen. Both vars go to zero as the keyboard closes.
+  // Consulted: MDN "viewport meta: interactive-widget" (resizes-visual is the
+  // default; Safari ignores the key — WebKit standards-positions issue 65),
+  // bram.us "Prevent content from being hidden underneath the Virtual
+  // Keyboard" (VirtualKeyboard API is Chromium-only; visualViewport
+  // height/offsetTop is the WebKit path), and the iOS 26 note that the visual
+  // viewport can stay short or panned after the keyboard closes.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
+    const root = document.documentElement;
+    let settleTimer: number | null = null;
     const update = () => {
-      // Only resize matters — keyboard open/close changes vv.height.
-      // Do NOT listen to scroll: on iOS Safari, scrolling content changes
-      // vv.offsetTop which would make --keyboard-height fluctuate during
-      // normal scrolling, causing the container to bounce up and down.
-      const kb = Math.max(0, window.innerHeight - vv.height);
-      document.documentElement.style.setProperty('--keyboard-height', `${kb}px`);
+      // A pinch-zoom also shrinks the visual viewport; only an unzoomed
+      // shrink is the keyboard.
+      const zoomed = Math.abs(vv.scale - 1) > 0.01;
+      const keyboard = zoomed ? 0 : Math.max(0, Math.round(window.innerHeight - vv.height));
+      const top = keyboard > 0 ? Math.max(0, Math.round(vv.offsetTop)) : 0;
+      const bottom = keyboard > 0 ? Math.max(0, keyboard - top) : 0;
+      root.style.setProperty('--vv-top', `${top}px`);
+      root.style.setProperty('--keyboard-height', `${bottom}px`);
+      if (keyboard > 0) root.setAttribute('data-keyboard', 'open');
+      else root.removeAttribute('data-keyboard');
     };
+    // Listened on the pan too: while the keyboard is up, a pan (from a focus
+    // scroll) moves the visual viewport and the chrome has to follow it; with
+    // the keyboard down the pan is ignored, so content scrolling never bounces
+    // the container.
     vv.addEventListener('resize', update);
-    return () => vv.removeEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    // iOS 26 can leave the visual viewport short or panned after the keyboard
+    // closes; a blur is the moment to re-read it.
+    const settle = () => {
+      if (settleTimer) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(update, 120);
+    };
+    document.addEventListener('focusout', settle);
+    update();
+    return () => {
+      if (settleTimer) window.clearTimeout(settleTimer);
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      document.removeEventListener('focusout', settle);
+    };
   }, []);
 
   // Scoped route with an unknown project id: show a plain not-found state
@@ -325,7 +357,11 @@ function AppContentInner() {
   }
 
   return (
-    <div className="fixed inset-0 flex bg-background" style={{ bottom: 'var(--keyboard-height, 0px)' }}>
+    <div
+      className="fixed inset-0 flex bg-background"
+      data-slot="app-shell"
+      style={{ top: 'var(--vv-top, 0px)', bottom: 'var(--keyboard-height, 0px)' }}
+    >
       {!isMobile ? (
         <div className="h-full flex-shrink-0 border-r border-border/50">
           <Sidebar
@@ -336,30 +372,20 @@ function AppContentInner() {
           />
         </div>
       ) : (
+        /* Phone sidebar (ui14 job 11): the whole screen, edge to edge inside
+           the app shell (which already sits inside the safe areas and above
+           the keyboard) — no partial drawer with the pane peeking beside it.
+           The same ramped slide in and out; the header's X closes it. */
         <div
-          className={`fixed inset-0 z-50 flex transition-all duration-[320ms] ease-[cubic-bezier(0.77,0,0.175,1)] ${sidebarOpen ? 'visible opacity-100' : 'invisible opacity-0'
-            }`}
+          className={`absolute inset-0 z-50 flex transition-[visibility] duration-[320ms] ${sidebarOpen ? 'visible' : 'invisible'}`}
+          data-slot="mobile-sidebar"
+          data-open={sidebarOpen ? 'true' : 'false'}
         >
-          <button
-            className="fixed inset-0 bg-background/60 backdrop-blur-sm transition-opacity duration-150 ease-out"
-            onClick={(event) => {
-              event.stopPropagation();
-              setSidebarOpen(false);
-            }}
-            onTouchStart={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setSidebarOpen(false);
-            }}
-            aria-label={t('versionUpdate.ariaLabels.closeSidebar')}
-          />
           <div
-            className={`relative h-full w-[85vw] max-w-sm transform border-r border-border/50 bg-background transition-transform duration-[320ms] ease-[cubic-bezier(0.77,0,0.175,1)] sm:w-80 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            className={`h-full w-full transform bg-background transition-transform duration-[320ms] ease-[cubic-bezier(0.77,0,0.175,1)] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
               }`}
-            onClick={(event) => event.stopPropagation()}
-            onTouchStart={(event) => event.stopPropagation()}
           >
-            <Sidebar {...sidebarSharedProps} runningRuns={runningRuns} />
+            <Sidebar {...sidebarSharedProps} runningRuns={runningRuns} onClose={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}

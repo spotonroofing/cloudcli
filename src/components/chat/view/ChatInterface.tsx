@@ -44,6 +44,7 @@ function ChatInterface({
   bootCommandName,
   sessionOrigin,
   onRenderedSessionChange,
+  holdQueuedFlush = false,
 }: ChatInterfaceProps) {
   const { subscribe } = useWebSocket();
   const { t } = useTranslation('chat');
@@ -251,6 +252,7 @@ function ChatInterface({
     currentProviderModel,
     currentProviderEffort,
     isLoading: isProcessing,
+    holdQueuedFlush,
     processingSessions,
     canAbortSession,
     tokenBudget,

@@ -91,7 +91,6 @@ function groupArchivedSessionsByProject(sessions: ArchivedSessionListItem[]): Ar
 }
 
 type SidebarContentProps = {
-  isPWA: boolean;
   isMobile: boolean;
   isLoading: boolean;
   projects: Project[];
@@ -141,6 +140,7 @@ type SidebarContentProps = {
   isRefreshing: boolean;
   onCreateProject: () => void;
   onCollapseSidebar: () => void;
+  onClose?: () => void;
   restartRequired: boolean;
   onShowSettings: () => void;
   showSettings: boolean;
@@ -151,7 +151,6 @@ type SidebarContentProps = {
 };
 
 export default function SidebarContent({
-  isPWA,
   isMobile,
   isLoading,
   projects,
@@ -194,6 +193,7 @@ export default function SidebarContent({
   isRefreshing,
   onCreateProject,
   onCollapseSidebar,
+  onClose,
   restartRequired,
   onShowSettings,
   showSettings,
@@ -251,7 +251,6 @@ export default function SidebarContent({
           footer taskbar, so the taskbar icons stay reachable to close them. */}
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <SidebarHeader
-        isPWA={isPWA}
         isMobile={isMobile}
         isLoading={isLoading}
         projectsCount={projects.length}
@@ -268,6 +267,7 @@ export default function SidebarContent({
         onCreateProject={onCreateProject}
         onNewSession={scopedProject ? () => projectListProps.onNewSession(scopedProject) : null}
         onCollapseSidebar={onCollapseSidebar}
+        onClose={onClose}
         t={t}
       />
 

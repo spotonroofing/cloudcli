@@ -189,7 +189,7 @@ export function useFileMentions({ selectedProject, input, setInput, textareaRef 
       const newCursorPosition = textBeforeAt.length + file.path.length + 1;
 
       if (textareaRef.current && !textareaRef.current.matches(':focus')) {
-        textareaRef.current.focus();
+        textareaRef.current.focus({ preventScroll: true });
       }
 
       setInput(newInput);
@@ -211,7 +211,7 @@ export function useFileMentions({ selectedProject, input, setInput, textareaRef 
         }
         textareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
         if (!textareaRef.current.matches(':focus')) {
-          textareaRef.current.focus();
+          textareaRef.current.focus({ preventScroll: true });
         }
       });
     },

@@ -6,7 +6,7 @@ import path from 'node:path';
 import pty, { type IPty } from 'node-pty';
 import { WebSocket, type RawData } from 'ws';
 
-import { parseIncomingJsonObject } from '@/shared/utils.js';
+import { getClaudeJsonPath, parseIncomingJsonObject } from '@/shared/utils.js';
 
 type ShellIncomingMessage = {
   type?: string;
@@ -227,6 +227,44 @@ function buildShellCommand(
   return command;
 }
 
+/**
+ * Pre-trusts a project folder for the Claude CLI in this instance's config dir
+ * (ui14 job 11): the interactive CLI asks "Do you trust the files in this
+ * folder?" unless `.claude.json` records the answer for the exact cwd, and the
+ * shell is a terminal Willem already chose to open there. Writes only that
+ * flag, keeping whatever else the CLI stored for the project.
+ */
+export function trustProjectForClaude(projectPath: string): void {
+  const claudeJsonPath = getClaudeJsonPath();
+  let config: Record<string, unknown> = {};
+  try {
+    config = JSON.parse(fs.readFileSync(claudeJsonPath, 'utf8')) as Record<string, unknown>;
+  } catch (error) {
+    // Only a missing file starts from scratch. Anything else (a CLI mid-write,
+    // a broken file) must not be answered by rewriting the whole config.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn('[Shell] Could not read the Claude config to pre-trust the project:', error);
+      return;
+    }
+  }
+  const projects = (config.projects && typeof config.projects === 'object' ? config.projects : {}) as Record<
+    string,
+    Record<string, unknown>
+  >;
+  const entry = projects[projectPath] ?? {};
+  if (entry.hasTrustDialogAccepted === true) {
+    return;
+  }
+  projects[projectPath] = { ...entry, hasTrustDialogAccepted: true };
+  config.projects = projects;
+  fs.mkdirSync(path.dirname(claudeJsonPath), { recursive: true });
+  // Temp file + rename so a CLI starting at this moment never reads a
+  // truncated config.
+  const tempPath = `${claudeJsonPath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tempPath, JSON.stringify(config, null, 2));
+  fs.renameSync(tempPath, claudeJsonPath);
+}
+
 function readEnvValue(env: NodeJS.ProcessEnv, key: string): string | undefined {
   const resolvedKey = Object.keys(env).find((envKey) => envKey.toLowerCase() === key.toLowerCase());
   return resolvedKey ? env[resolvedKey] : undefined;
@@ -396,6 +434,9 @@ export function handleShellConnection(
 
         const shellCommand = buildShellCommand(data, dependencies);
         const resumeSessionId = resolveResumeSessionId(data, dependencies);
+        if (!isPlainShell && provider === 'claude') {
+          trustProjectForClaude(resolvedProjectPath);
+        }
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
         const shellArgs =
           os.platform() === 'win32' ? ['-Command', shellCommand] : ['-c', shellCommand];

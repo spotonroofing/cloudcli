@@ -79,7 +79,7 @@ export function useComposerMenuAnchor(
       event.preventDefault();
       event.stopPropagation();
       onClose();
-      triggerRef.current?.focus();
+      triggerRef.current?.focus({ preventScroll: true });
     };
 
     document.addEventListener('pointerdown', handlePointerDown);

@@ -34,12 +34,6 @@ export type MainContentProps = {
   onProjectsRefresh: () => void;
 };
 
-export type MainContentHeaderProps = {
-  activeTab: AppTab;
-  setActiveTab: Dispatch<SetStateAction<AppTab>>;
-  onMenuClick: () => void;
-};
-
 export type MainContentStateViewProps = {
   mode: 'loading' | 'empty';
   isMobile: boolean;
