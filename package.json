@@ -56,8 +56,7 @@
     "release": "./release.sh",
     "prepublishOnly": "npm run build",
     "postinstall": "node scripts/fix-node-pty.js",
-    "prepare": "husky",
-    "update:platform": "./update-platform.sh"
+    "prepare": "husky"
   },
   "build": {
     "appId": "ai.cloudcli.desktop",
@@ -171,10 +170,8 @@
     "cross-spawn": "^7.0.3",
     "dompurify": "^3.4.7",
     "express": "^4.18.2",
-    "fuse.js": "^7.0.0",
     "gray-matter": "^4.0.3",
     "i18next": "^25.7.4",
-    "i18next-browser-languagedetector": "^8.2.0",
     "ignore": "^7.0.6",
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
@@ -184,7 +181,6 @@
     "mime-types": "^3.0.1",
     "motion": "^13.1.1",
     "multer": "^2.0.1",
-    "node-fetch": "^2.7.0",
     "node-pty": "^1.2.0-beta.12",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -196,7 +192,6 @@
     "react-syntax-highlighter": "^15.6.1",
     "react-zoom-pan-pinch": "^4.0.4",
     "rehype-katex": "^7.0.1",
-    "rehype-raw": "^7.0.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
@@ -220,7 +215,6 @@
     "@types/react-dom": "^18.2.17",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.6.0",
-    "auto-changelog": "^2.5.0",
     "autoprefixer": "^10.4.16",
     "concurrently": "^8.2.2",
     "cross-env": "^10.1.0",
@@ -238,7 +232,6 @@
     "globals": "^17.4.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.3.2",
-    "node-gyp": "^10.0.0",
     "postcss": "^8.4.32",
     "release-it": "^19.0.5",
     "sharp": "^0.34.2",
@@ -252,9 +245,5 @@
   "lint-staged": {
     "src/**/*.{ts,tsx,js,jsx}": "eslint",
     "server/**/*.{js,ts}": "eslint"
-  },
-  "optionalDependencies": {
-    "@nut-tree-fork/nut-js": "^4.2.6",
-    "screenshot-desktop": "^1.15.4"
   }
 }

@@ -26,7 +26,6 @@ import {
     authRoutes,
     validateApiKey,
 } from './modules/auth/index.js';
-import { taskmasterRoutes } from './modules/taskmaster/index.js';
 import { commandsRoutes } from './modules/commands/index.js';
 import { settingsRoutes } from './modules/settings/index.js';
 import { createSystemModule } from './modules/system/index.js';
@@ -34,20 +33,11 @@ import { createAgentModule } from './modules/agent/index.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import { userRoutes } from './modules/user/index.js';
-import {
-    getPluginPort,
-    pluginsRoutes,
-    startEnabledPluginServers,
-    stopAllPlugins,
-} from './modules/plugins/index.js';
 import providerRoutes from './modules/providers/provider.routes.js';
 import { voiceRoutes } from './modules/voice/index.js';
-import browserUseRoutes from './modules/browser-use/browser-use.routes.js';
 import { assetsRoutes } from './modules/assets/index.js';
 import { fileTreeRoutes } from './modules/file-tree/index.js';
 import { worktreesRoutes } from './modules/worktrees/index.js';
-import browserUseMcpRoutes from './modules/browser-use/browser-use-mcp.routes.js';
-import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, sessionsDb } from './modules/database/index.js';
 import { configureWebPush } from './modules/notifications/index.js';
 import { createWatchdogRouter, watchdogService } from './modules/watchdog/index.js';
@@ -103,7 +93,7 @@ const agentRoutes = createAgentModule({
     queryOpenCode,
 });
 
-// Single WebSocket server that handles chat, shell, and plugin proxy paths.
+// Single WebSocket server that handles chat and shell paths.
 const wss = createWebSocketServer(server, {
     verifyClient: {
         isPlatform: IS_PLATFORM,
@@ -128,7 +118,6 @@ const wss = createWebSocketServer(server, {
             return null;
         },
     },
-    getPluginPort,
 });
 
 // Make WebSocket server available to routes
@@ -179,9 +168,6 @@ app.use('/api/git', authenticateToken, gitRoutes);
 // Git worktree management (protected)
 app.use('/api/worktrees', authenticateToken, worktreesRoutes);
 
-// TaskMaster API Routes (protected)
-app.use('/api/taskmaster', authenticateToken, taskmasterRoutes);
-
 // Commands API Routes (protected)
 app.use('/api/commands', authenticateToken, commandsRoutes);
 
@@ -194,15 +180,6 @@ app.use('/api/notifications', authenticateToken, notificationRoutes);
 
 // User API Routes (protected)
 app.use('/api/user', authenticateToken, userRoutes);
-
-// Plugins API Routes (protected)
-app.use('/api/plugins', authenticateToken, pluginsRoutes);
-
-// Browser MCP bridge API (local token protected)
-app.use('/api/browser-use-mcp', browserUseMcpRoutes);
-
-// Browser API Routes (protected)
-app.use('/api/browser-use', authenticateToken, browserUseRoutes);
 
 // Unified provider MCP routes (protected)
 app.use('/api/providers', authenticateToken, providerRoutes);
@@ -414,26 +391,10 @@ async function startServer() {
             // Watchdog + scheduler (spec B3): zero-token monitoring of
             // dispatched runs, resource thresholds, weekly push self-test.
             watchdogService.start();
-
-            // Start server-side plugin processes for enabled plugins
-            startEnabledPluginServers().catch(err => {
-                console.error('[Plugins] Error during startup:', err.message);
-            });
         });
 
         await closeSessionsWatcher();
-        // Clean up plugin processes on shutdown
         const shutdownRuntimeServices = async () => {
-            try {
-                await browserUseService.stopAllSessions();
-            } catch (err) {
-                console.error('[Browser] Error stopping sessions during shutdown:', getErrorMessage(err));
-            }
-            try {
-                await stopAllPlugins();
-            } catch (err) {
-                console.error('[Plugins] Error stopping plugins during shutdown:', getErrorMessage(err));
-            }
             try {
                 await removeLocalServerMarker();
             } catch (err) {

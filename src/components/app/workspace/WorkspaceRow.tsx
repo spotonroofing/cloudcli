@@ -345,7 +345,6 @@ export default function WorkspaceRow({
             newSessionTrigger={rowTrigger}
             sessionOrigin="planner"
             onRenderedSessionChange={setRenderedSessionId}
-            onShowAllTasks={null}
           />
         </ErrorBoundary>
       </div>

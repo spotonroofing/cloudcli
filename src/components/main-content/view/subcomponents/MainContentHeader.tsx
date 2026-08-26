@@ -17,8 +17,6 @@ import MainContentTabSwitcher from './MainContentTabSwitcher';
 export default function MainContentHeader({
   activeTab,
   setActiveTab,
-  shouldShowTasksTab,
-  shouldShowBrowserTab,
   onMenuClick,
 }: MainContentHeaderProps) {
   const { t } = useTranslation();
@@ -97,8 +95,6 @@ export default function MainContentHeader({
           <MainContentTabSwitcher
             activeTab={activeTab}
             setActiveTab={setActiveTab}
-            shouldShowTasksTab={shouldShowTasksTab}
-            shouldShowBrowserTab={shouldShowBrowserTab}
           />
         </div>
         {canScrollRight && (

@@ -1,85 +1,34 @@
-import { MessageSquare, ClipboardCheck, Hammer, MonitorPlay, type LucideIcon } from 'lucide-react';
-import { Fragment } from 'react';
+import { MessageSquare, Hammer, type LucideIcon } from 'lucide-react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Tooltip } from '../../../../shared/view/ui';
 import { Tabs, TabsList, TabsTrigger } from '../../../../shared/view/beui/BeuiTabs';
 import type { AppTab } from '../../../../types/app';
-import { usePlugins } from '../../../../contexts/PluginsContext';
-import PluginIcon from '../../../plugins/view/PluginIcon';
 
 type MainContentTabSwitcherProps = {
   activeTab: AppTab;
   setActiveTab: Dispatch<SetStateAction<AppTab>>;
-  shouldShowTasksTab: boolean;
-  shouldShowBrowserTab: boolean;
 };
 
-type BuiltInTab = {
-  kind: 'builtin';
+type TabDefinition = {
   id: AppTab;
   labelKey: string;
   icon: LucideIcon;
 };
 
-type PluginTab = {
-  kind: 'plugin';
-  id: AppTab;
-  label: string;
-  pluginName: string;
-  iconFile: string;
-};
-
-type TabDefinition = BuiltInTab | PluginTab;
-
 // Chat and Worker only (ui13 job 9): the shell lives behind each pane's own
 // chat/shell toggle, and files/source control become windows (job 10).
-const BASE_TABS: BuiltInTab[] = [
-  { kind: 'builtin', id: 'chat',  labelKey: 'tabs.chat',  icon: MessageSquare },
-  { kind: 'builtin', id: 'worker', labelKey: 'tabs.worker', icon: Hammer },
+const TABS: TabDefinition[] = [
+  { id: 'chat',  labelKey: 'tabs.chat',  icon: MessageSquare },
+  { id: 'worker', labelKey: 'tabs.worker', icon: Hammer },
 ];
-
-const BROWSER_TAB: BuiltInTab = {
-  kind: 'builtin',
-  id: 'browser',
-  labelKey: 'tabs.browser',
-  icon: MonitorPlay,
-};
-
-const TASKS_TAB: BuiltInTab = {
-  kind: 'builtin',
-  id: 'tasks',
-  labelKey: 'tabs.tasks',
-  icon: ClipboardCheck,
-};
 
 export default function MainContentTabSwitcher({
   activeTab,
   setActiveTab,
-  shouldShowTasksTab,
-  shouldShowBrowserTab,
 }: MainContentTabSwitcherProps) {
   const { t } = useTranslation();
-  const { plugins } = usePlugins();
-
-  const builtInTabs: BuiltInTab[] = [
-    ...BASE_TABS,
-    ...(shouldShowBrowserTab ? [BROWSER_TAB] : []),
-    ...(shouldShowTasksTab ? [TASKS_TAB] : []),
-  ];
-
-  const pluginTabs: PluginTab[] = plugins
-    .filter((p) => p.enabled)
-    .map((p) => ({
-      kind: 'plugin',
-      id: `plugin:${p.name}` as AppTab,
-      label: p.displayName,
-      pluginName: p.name,
-      iconFile: p.icon,
-    }));
-
-  const tabs: TabDefinition[] = [...builtInTabs, ...pluginTabs];
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     const tabList = event.currentTarget.closest('[role="tablist"]');
@@ -111,38 +60,25 @@ export default function MainContentTabSwitcher({
         ariaLabel={t('tabs.views', { defaultValue: 'Workspace views' })}
         className="min-w-max gap-[2px] border border-border/40 bg-muted/50 p-[3px] shadow-inner shadow-black/[0.025] dark:shadow-black/10"
       >
-        {tabs.map((tab, index) => {
+        {TABS.map((tab) => {
           const isActive = tab.id === activeTab;
-          const displayLabel = tab.kind === 'builtin' ? t(tab.labelKey) : tab.label;
+          const displayLabel = t(tab.labelKey);
 
           return (
-            <Fragment key={`${tab.id}-${index}`}>
-              {index === builtInTabs.length && pluginTabs.length > 0 && (
-                <span aria-hidden="true" className="mx-1 h-4 w-px shrink-0 bg-border" />
-              )}
-              <Tooltip content={displayLabel} position="bottom">
-                <TabsTrigger
-                  value={tab.id}
-                  ariaLabel={displayLabel}
-                  tabIndex={isActive ? 0 : -1}
-                  onKeyDown={handleTabKeyDown}
-                  className="touch-hit relative h-8 max-w-44 touch-manipulation gap-1.5 px-2.5 py-[5px]"
-                >
-                  {tab.kind === 'builtin' ? (
-                    <tab.icon className="h-3.5 w-3.5 shrink-0" strokeWidth={isActive ? 2.2 : 1.8} />
-                  ) : (
-                    <PluginIcon
-                      pluginName={tab.pluginName}
-                      iconFile={tab.iconFile}
-                      className="flex h-3.5 w-3.5 shrink-0 items-center justify-center [&>svg]:h-full [&>svg]:w-full"
-                    />
-                  )}
-                  <span className={`${isActive ? 'inline max-w-28' : 'hidden'} truncate sm:max-w-36 lg:inline`}>
-                    {displayLabel}
-                  </span>
-                </TabsTrigger>
-              </Tooltip>
-            </Fragment>
+            <Tooltip key={tab.id} content={displayLabel} position="bottom">
+              <TabsTrigger
+                value={tab.id}
+                ariaLabel={displayLabel}
+                tabIndex={isActive ? 0 : -1}
+                onKeyDown={handleTabKeyDown}
+                className="touch-hit relative h-8 max-w-44 touch-manipulation gap-1.5 px-2.5 py-[5px]"
+              >
+                <tab.icon className="h-3.5 w-3.5 shrink-0" strokeWidth={isActive ? 2.2 : 1.8} />
+                <span className={`${isActive ? 'inline max-w-28' : 'hidden'} truncate sm:max-w-36 lg:inline`}>
+                  {displayLabel}
+                </span>
+              </TabsTrigger>
+            </Tooltip>
           );
         })}
       </TabsList>

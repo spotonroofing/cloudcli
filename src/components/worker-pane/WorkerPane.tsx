@@ -433,7 +433,6 @@ export default function WorkerPane({
             bootCommandName="/worker"
             sessionOrigin="direct"
             onRenderedSessionChange={setRenderedSessionId}
-            onShowAllTasks={null}
           />
         </ErrorBoundary>
         </div>

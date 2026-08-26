@@ -160,5 +160,4 @@ export interface ChatInterfaceProps {
   /** Reports the session id this surface actually renders, so the host pane can flag a claim/stream mismatch. */
   onRenderedSessionChange?: (sessionId: string | null) => void;
   onTaskClick?: (...args: unknown[]) => void;
-  onShowAllTasks?: (() => void) | null;
 }

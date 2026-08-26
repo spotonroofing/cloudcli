@@ -9,7 +9,6 @@ import {
   SelectValue,
 } from '../../../../shared/view/beui/BeuiSelect';
 import type { CodeEditorSettingsState } from '../../types/types';
-import LanguageSelector from '../../../../shared/view/ui/LanguageSelector';
 import ThemePaletteDots from '../../../../shared/view/ThemePaletteDots';
 import { useUiPreferences } from '../../../../hooks/useUiPreferences';
 import { useTheme } from '../../../../contexts/ThemeContext';
@@ -107,12 +106,6 @@ export default function AppearanceSettingsTab({
           >
             <DarkModeToggle ariaLabel={t('appearanceSettings.darkMode.label')} />
           </SettingsRow>
-        </SettingsCard>
-      </SettingsSection>
-
-      <SettingsSection title={t('mainTabs.appearance')}>
-        <SettingsCard>
-          <LanguageSelector />
         </SettingsCard>
       </SettingsSection>
 

@@ -46,7 +46,6 @@ export const SYNCED_SETTING_KEYS = [
   'voiceConfig',
   'notificationSoundEnabled',
   'tasks-enabled',
-  'userLanguage',
 ];
 
 /** Key families with a dynamic suffix (per project) that sync the same way. */

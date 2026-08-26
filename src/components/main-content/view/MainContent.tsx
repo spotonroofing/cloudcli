@@ -1,26 +1,19 @@
 import { Compass, FolderTree, GitBranch, Hammer, MessageSquare, Terminal, X } from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
 import WorkerPane from '../../worker-pane/WorkerPane';
 import FileTree from '../../file-tree/view/FileTree';
 import StandaloneShell from '../../standalone-shell/view/StandaloneShell';
 import GitPanel from '../../git-panel/view/GitPanel';
-import PluginTabContent from '../../plugins/view/PluginTabContent';
-import { BrowserUsePanel } from '../../browser-use';
 import type { MainContentProps } from '../types/types';
-import { useTaskMaster } from '../../../contexts/TaskMasterContext';
 import { useWebSocket } from '../../../contexts/WebSocketContext';
 import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
-import { useTasksSettings } from '../../../contexts/TasksSettingsContext';
 import { useUiPreferences } from '../../../hooks/useUiPreferences';
 import { useFileOpenResolver } from '../../../hooks/useFileOpenResolver';
-import { authenticatedFetch } from '../../../utils/api';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
 import EditorSidebar from '../../code-editor/view/EditorSidebar';
-import type { Project } from '../../../types/app';
 import { STANDALONE_PROJECT_ID } from '../../../types/app';
-import { TaskMasterPanel } from '../../task-master';
 import { Badge, Button, Tooltip } from '../../../shared/view/ui';
 import { ActionSwapIcon } from '../../../shared/view/beui';
 import { cn } from '../../../lib/utils';
@@ -32,17 +25,6 @@ import { WINDOW_LABELS, WINDOW_ORDER, useProjectWindows } from '../../app/worksp
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
 import ErrorBoundary from './ErrorBoundary';
-
-type TaskMasterContextValue = {
-  currentProject?: Project | null;
-  setCurrentProject?: ((project: Project) => void) | null;
-};
-
-type TasksSettingsContextValue = {
-  tasksEnabled: boolean;
-  isTaskMasterInstalled: boolean | null;
-  isTaskMasterReady: boolean | null;
-};
 
 function MainContent({
   selectedProject,
@@ -69,9 +51,6 @@ function MainContent({
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
 
-  const { currentProject, setCurrentProject } = useTaskMaster() as TaskMasterContextValue;
-  const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings() as TasksSettingsContextValue;
-  const [browserUseEnabled, setBrowserUseEnabled] = useState(false);
   // Standalone chats have no repo of their own to work; no worker surface.
   const workerPaneAvailable = Boolean(
     selectedProject && selectedProject.projectId !== STANDALONE_PROJECT_ID,
@@ -114,9 +93,6 @@ function MainContent({
     return () => clearTimeout(timer);
   }, [renderedSessionId, claimedSessionId]);
 
-  const shouldShowTasksTab = Boolean(tasksEnabled && isTaskMasterInstalled);
-  const shouldShowBrowserTab = browserUseEnabled;
-
   const {
     editingFile,
     editorWidth,
@@ -137,23 +113,6 @@ function MainContent({
   const resolvedFileOpen = useFileOpenResolver(selectedProject, handleFileOpen);
 
   useEffect(() => {
-    // Identify projects by DB `projectId`; the TaskMaster context uses the
-    // same identifier to key its internal maps.
-    const selectedProjectId = selectedProject?.projectId;
-    const currentProjectId = currentProject?.projectId;
-
-    if (selectedProject && selectedProjectId !== currentProjectId) {
-      setCurrentProject?.(selectedProject);
-    }
-  }, [selectedProject, currentProject?.projectId, setCurrentProject]);
-
-  useEffect(() => {
-    if (!shouldShowTasksTab && activeTab === 'tasks') {
-      setActiveTab('chat');
-    }
-  }, [shouldShowTasksTab, activeTab, setActiveTab]);
-
-  useEffect(() => {
     if (!workerPaneAvailable && activeTab === 'worker') {
       setActiveTab('chat');
     }
@@ -167,28 +126,6 @@ function MainContent({
       setActiveTab('chat');
     }
   }, [isMobile, activeTab, setActiveTab]);
-
-  const loadBrowserUseSettings = useCallback(async () => {
-    try {
-      const response = await authenticatedFetch('/api/browser-use/settings');
-      const data = await response.json();
-      setBrowserUseEnabled(Boolean(response.ok && data?.success !== false && data?.data?.settings?.enabled));
-    } catch {
-      setBrowserUseEnabled(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadBrowserUseSettings();
-    window.addEventListener('browserUseSettingsChanged', loadBrowserUseSettings);
-    return () => window.removeEventListener('browserUseSettingsChanged', loadBrowserUseSettings);
-  }, [loadBrowserUseSettings]);
-
-  useEffect(() => {
-    if (!shouldShowBrowserTab && activeTab === 'browser') {
-      setActiveTab('chat');
-    }
-  }, [shouldShowBrowserTab, activeTab, setActiveTab]);
 
   usePaletteOpsRegister({
     openFile: (filePath: string) => {
@@ -237,7 +174,6 @@ function MainContent({
         newSessionTrigger={newSessionTrigger}
         sessionOrigin={workerPaneAvailable ? 'planner' : null}
         onRenderedSessionChange={setRenderedSessionId}
-        onShowAllTasks={tasksEnabled ? () => setActiveTab('tasks') : null}
       />
     </ErrorBoundary>
   );
@@ -408,8 +344,6 @@ function MainContent({
         <MainContentHeader
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          shouldShowTasksTab={shouldShowTasksTab}
-          shouldShowBrowserTab={shouldShowBrowserTab}
           onMenuClick={onMenuClick}
         />
       )}
@@ -503,23 +437,6 @@ function MainContent({
             </div>
           )}
 
-          {shouldShowTasksTab && <TaskMasterPanel isVisible={activeTab === 'tasks'} />}
-
-          {shouldShowBrowserTab && activeTab === 'browser' && (
-            <div className="h-full overflow-hidden">
-              <BrowserUsePanel isVisible={activeTab === 'browser'} />
-            </div>
-          )}
-
-          {activeTab.startsWith('plugin:') && (
-            <div className="h-full overflow-hidden">
-              <PluginTabContent
-                pluginName={activeTab.replace('plugin:', '')}
-                selectedProject={selectedProject}
-                selectedSession={selectedSession}
-              />
-            </div>
-          )}
         </div>
 
         <EditorSidebar
