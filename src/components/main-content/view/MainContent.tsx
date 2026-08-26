@@ -1,5 +1,5 @@
-import { Compass, Hammer, MessageSquare, Terminal, X } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Compass, FolderTree, GitBranch, Hammer, MessageSquare, Terminal, X } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
 import WorkerPane from '../../worker-pane/WorkerPane';
@@ -23,7 +23,11 @@ import { STANDALONE_PROJECT_ID } from '../../../types/app';
 import { TaskMasterPanel } from '../../task-master';
 import { Badge, Button, Tooltip } from '../../../shared/view/ui';
 import { ActionSwapIcon } from '../../../shared/view/beui';
-import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
+import { cn } from '../../../lib/utils';
+import PaneStrip, { type StripPane } from '../../app/workspace/PaneStrip';
+import WindowPane from '../../app/workspace/WindowPane';
+import WindowSelector, { type WindowSelectorItem } from '../../app/workspace/WindowSelector';
+import { WINDOW_LABELS, WINDOW_ORDER, useProjectWindows } from '../../app/workspace/useProjectWindows';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
@@ -61,8 +65,6 @@ function MainContent({
   newSessionTrigger,
   onProjectSelect,
   onProjectsRefresh,
-  plannerSplit,
-  onPlannerSplitChange,
 }: MainContentProps) {
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
@@ -70,74 +72,15 @@ function MainContent({
   const { currentProject, setCurrentProject } = useTaskMaster() as TaskMasterContextValue;
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings() as TasksSettingsContextValue;
   const [browserUseEnabled, setBrowserUseEnabled] = useState(false);
-  // Desktop worker split (spec B2): persisted so the pane survives reloads.
-  const [workerPaneOpen, setWorkerPaneOpen] = useState(() => {
-    try {
-      return localStorage.getItem('worker-pane-open') === '1';
-    } catch {
-      return false;
-    }
-  });
-  const toggleWorkerPane = useCallback((open: boolean) => {
-    setWorkerPaneOpen(open);
-    try {
-      writeSetting('worker-pane-open', open ? '1' : '0');
-    } catch {
-      // localStorage unavailable
-    }
-  }, []);
-  // Desktop planner collapse (phase 6 pane chrome): persisted like
-  // worker-pane-open; the planner defaults open.
-  const [plannerPaneOpen, setPlannerPaneOpen] = useState(() => {
-    try {
-      return localStorage.getItem('planner-pane-open') !== '0';
-    } catch {
-      return true;
-    }
-  });
-  const togglePlannerPane = useCallback((open: boolean) => {
-    setPlannerPaneOpen(open);
-    try {
-      writeSetting('planner-pane-open', open ? '1' : '0');
-    } catch {
-      // localStorage unavailable
-    }
-  }, []);
-  // Another tab or device toggled a pane: apply it live.
-  useEffect(() => onSettingChange(['worker-pane-open', 'planner-pane-open'], (key, value) => {
-    if (key === 'worker-pane-open') setWorkerPaneOpen(value === '1');
-    else setPlannerPaneOpen(value !== '0');
-  }), []);
   // Standalone chats have no repo of their own to work; no worker surface.
   const workerPaneAvailable = Boolean(
     selectedProject && selectedProject.projectId !== STANDALONE_PROJECT_ID,
   );
-  // Two-pane divider (ui8 phase 5): the planner/worker split drags with the
-  // workspace's mechanics and shares its persisted fraction — 50/50 default,
-  // no fixed worker width.
-  const split = plannerSplit ?? 0.5;
-  const plannerPaneRef = useRef<HTMLDivElement>(null);
-  const workerPaneRef = useRef<HTMLDivElement>(null);
-  const splitDragRef = useRef(false);
-  const handleSplitPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    splitDragRef.current = true;
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const handleSplitPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!splitDragRef.current || !onPlannerSplitChange) {
-      return;
-    }
-    const planner = plannerPaneRef.current?.getBoundingClientRect();
-    const worker = workerPaneRef.current?.getBoundingClientRect();
-    if (!planner || !worker || planner.width + worker.width <= 0) {
-      return;
-    }
-    onPlannerSplitChange((event.clientX - planner.left) / (planner.width + worker.width));
-  };
-  const handleSplitPointerEnd = () => {
-    splitDragRef.current = false;
-  };
+  // The windowing layer (ui13 job 10): the desktop surface is this project's
+  // pane strip — planner, worker, files, source control tiled in the grid,
+  // each open, railed, or closed per the project's persisted window set.
+  const windows = useProjectWindows(selectedProject?.projectId ?? null);
+  const desktopStrip = !isMobile && workerPaneAvailable;
   // Mobile chat/shell toggle (ui13 job 9): the planner pane's top bar swaps
   // the transcript for a terminal bound to the pane's own session. Not
   // persisted — a fresh open always lands on chat.
@@ -217,7 +160,8 @@ function MainContent({
   }, [workerPaneAvailable, activeTab, setActiveTab]);
 
   // Desktop is chat-only (phase 2 chrome strip): the view-mode bar is gone, and
-  // any other route into a non-chat tab (palette, notifications) snaps back.
+  // any other route into a non-chat tab (palette, notifications) snaps back —
+  // files and source control are windows in the pane strip, not tabs (job 10).
   useEffect(() => {
     if (!isMobile && activeTab !== 'chat') {
       setActiveTab('chat');
@@ -248,7 +192,12 @@ function MainContent({
 
   usePaletteOpsRegister({
     openFile: (filePath: string) => {
-      setActiveTab('files');
+      // Desktop opens the Files window in the strip; mobile its full-pane view.
+      if (desktopStrip) {
+        windows.setWindowState('files', 'open');
+      } else {
+        setActiveTab('files');
+      }
       handleFileOpen(filePath);
     },
     // Opens the editor side panel in place, keeping the current tab (e.g. chat).
@@ -265,9 +214,193 @@ function MainContent({
     return <MainContentStateView mode="empty" isMobile={isMobile} onMenuClick={onMenuClick} />;
   }
 
-  // Both panes visible: the draggable divider splits them by weight.
-  const splitActive =
-    !isMobile && workerPaneAvailable && workerPaneOpen && plannerPaneOpen && !editorExpanded;
+  const plannerChat = (
+    <ErrorBoundary showDetails>
+      <ChatInterface
+        isActive={activeTab === 'chat'}
+        selectedProject={selectedProject}
+        selectedSession={selectedSession}
+        ws={ws}
+        sendMessage={sendMessage}
+        onFileOpen={handleFileOpen}
+        onInputFocusChange={onInputFocusChange}
+        onSessionProcessing={onSessionProcessing}
+        onSessionIdle={onSessionIdle}
+        processingSessions={processingSessions}
+        onNavigateToSession={onNavigateToSession}
+        onSessionEstablished={onSessionEstablished}
+        onShowSettings={onShowSettings}
+        showRawParameters={showRawParameters}
+        showThinking={showThinking}
+        sendByCtrlEnter={sendByCtrlEnter}
+        externalMessageUpdate={externalMessageUpdate}
+        newSessionTrigger={newSessionTrigger}
+        sessionOrigin={workerPaneAvailable ? 'planner' : null}
+        onRenderedSessionChange={setRenderedSessionId}
+        onShowAllTasks={tasksEnabled ? () => setActiveTab('tasks') : null}
+      />
+    </ErrorBoundary>
+  );
+
+  const failSafeBadges = (
+    <>
+      {streamMismatch && (
+        <Badge status="danger" size="sm" className="flex-shrink-0">
+          stream mismatch
+        </Badge>
+      )}
+      {!isConnected && (
+        <Badge status="danger" size="sm" className="flex-shrink-0">
+          disconnected
+        </Badge>
+      )}
+    </>
+  );
+
+  if (desktopStrip) {
+    // The window selector (ui13 job 10): open windows carry the check; a
+    // selected open window closes — planner/worker to their rails, files and
+    // source control away entirely.
+    const selectorItems: WindowSelectorItem[] = WINDOW_ORDER.map((id) => ({
+      id,
+      open: windows.states[id] === 'open',
+      onSelect: () => {
+        if (windows.states[id] === 'open') {
+          windows.setWindowState(id, id === 'planner' || id === 'worker' ? 'rail' : 'closed');
+        } else {
+          windows.setWindowState(id, 'open');
+        }
+      },
+    }));
+
+    const stripPanes: StripPane[] = [];
+    const pushPane = (id: (typeof WINDOW_ORDER)[number], minWidth: number, content: React.ReactNode) => {
+      const state = windows.states[id];
+      if (state === 'closed') {
+        return;
+      }
+      stripPanes.push({
+        id,
+        state,
+        railLabel: WINDOW_LABELS[id],
+        weight: windows.weights[id],
+        minWidth,
+        onExpand: () => windows.setWindowState(id, 'open'),
+        content: state === 'open' ? content : null,
+      });
+    };
+
+    pushPane('planner', 200, (
+      <>
+        <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+          {leftPaneIsWorkerSession ? (
+            <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+          ) : (
+            <Compass className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+          )}
+          <span className="text-xs font-medium text-foreground">
+            {leftPaneIsWorkerSession ? 'Worker' : 'Planner'}
+          </span>
+          {sessionTitle && (
+            <span className="min-w-0 truncate text-[11px] text-muted-foreground">{sessionTitle}</span>
+          )}
+          {failSafeBadges}
+          <span className="min-w-0 flex-1" />
+          <WindowSelector items={selectorItems} />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+            onClick={() => windows.setWindowState('planner', 'rail')}
+            aria-label="Hide planner pane"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1">{plannerChat}</div>
+      </>
+    ));
+
+    pushPane('worker', 280, (
+      <WorkerPane
+        selectedProject={selectedProject}
+        ws={ws}
+        sendMessage={sendMessage}
+        isActive
+        onFileOpen={resolvedFileOpen}
+        onInputFocusChange={onInputFocusChange}
+        onSessionProcessing={onSessionProcessing}
+        onSessionIdle={onSessionIdle}
+        processingSessions={processingSessions}
+        onShowSettings={onShowSettings}
+        onClose={() => windows.setWindowState('worker', 'rail')}
+      />
+    ));
+
+    pushPane('files', 220, (
+      <WindowPane
+        id="files"
+        label={WINDOW_LABELS.files}
+        icon={FolderTree}
+        onRail={() => windows.setWindowState('files', 'rail')}
+      >
+        <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
+      </WindowPane>
+    ));
+
+    pushPane('git', 220, (
+      <WindowPane
+        id="git"
+        label={WINDOW_LABELS.git}
+        icon={GitBranch}
+        onRail={() => windows.setWindowState('git', 'rail')}
+      >
+        <GitPanel
+          selectedProject={selectedProject}
+          isMobile={false}
+          onFileOpen={handleFileOpen}
+          onProjectSelect={onProjectSelect}
+          onProjectsRefresh={onProjectsRefresh}
+        />
+      </WindowPane>
+    ));
+
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className={cn('flex min-h-0 min-w-0 flex-1', editorExpanded && 'hidden')}>
+            <PaneStrip panes={stripPanes} onPairWeights={windows.setPairWeights} />
+          </div>
+          <EditorSidebar
+            editingFile={editingFile}
+            isMobile={isMobile}
+            editorExpanded={editorExpanded}
+            editorWidth={editorWidth}
+            hasManualWidth={hasManualWidth}
+            resizeHandleRef={resizeHandleRef}
+            onResizeStart={handleResizeStart}
+            onCloseEditor={handleCloseEditor}
+            onToggleEditorExpand={handleToggleEditorExpand}
+            projectPath={selectedProject.path}
+            fillSpace={false}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Mobile (and the project-less standalone chat): full-pane views behind the
+  // tab rail, windows reachable through the same selector (ui13 job 10).
+  const mobileSelectorItems: WindowSelectorItem[] = [
+    { id: 'planner' as const, tab: 'chat' as const },
+    { id: 'worker' as const, tab: 'worker' as const },
+    { id: 'files' as const, tab: 'files' as const },
+    { id: 'git' as const, tab: 'git' as const },
+  ].map(({ id, tab }) => ({
+    id,
+    open: activeTab === tab,
+    onSelect: () => setActiveTab(tab),
+  }));
 
   return (
     <div className="flex h-full flex-col">
@@ -282,21 +415,8 @@ function MainContent({
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {!isMobile && workerPaneAvailable && !plannerPaneOpen && (
-          <button
-            type="button"
-            onClick={() => togglePlannerPane(true)}
-            className="flex w-6 flex-shrink-0 items-center justify-center bg-muted/30 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-            title="Show planner pane"
-            aria-label="Show planner pane"
-          >
-            <span className="rotate-90 whitespace-nowrap text-[10px] font-medium tracking-wide">Planner</span>
-          </button>
-        )}
         <div
-          ref={plannerPaneRef}
-          className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded || (!isMobile && workerPaneAvailable && !plannerPaneOpen) ? 'hidden' : ''} flex-1`}
-          style={splitActive ? { flex: `${split} 1 0%` } : undefined}
+          className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}
         >
           <div className={`h-full ${activeTab === 'chat' ? 'flex flex-col' : 'hidden'}`}>
             {workerPaneAvailable && (
@@ -312,74 +432,29 @@ function MainContent({
                 {sessionTitle && (
                   <span className="min-w-0 truncate text-[11px] text-muted-foreground">{sessionTitle}</span>
                 )}
-                {streamMismatch && (
-                  <Badge status="danger" size="sm" className="flex-shrink-0">
-                    stream mismatch
-                  </Badge>
-                )}
-                {!isConnected && (
-                  <Badge status="danger" size="sm" className="flex-shrink-0">
-                    disconnected
-                  </Badge>
-                )}
+                {failSafeBadges}
                 <span className="min-w-0 flex-1" />
-                {isMobile && (
-                  <Tooltip content={plannerShellOpen ? 'Show chat' : 'Show shell'} position="bottom">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                      onClick={() => setPlannerShellOpen((open) => !open)}
-                      aria-label={plannerShellOpen ? 'Show chat' : 'Show shell'}
-                      data-slot="pane-view-toggle"
-                    >
-                      <ActionSwapIcon value={plannerShellOpen ? 'chat' : 'shell'}>
-                        {plannerShellOpen
-                          ? <MessageSquare className="h-3.5 w-3.5" />
-                          : <Terminal className="h-3.5 w-3.5" />}
-                      </ActionSwapIcon>
-                    </Button>
-                  </Tooltip>
-                )}
-                {!isMobile && (
+                <WindowSelector items={mobileSelectorItems} />
+                <Tooltip content={plannerShellOpen ? 'Show chat' : 'Show shell'} position="bottom">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                    onClick={() => togglePlannerPane(false)}
-                    aria-label="Hide planner pane"
+                    className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => setPlannerShellOpen((open) => !open)}
+                    aria-label={plannerShellOpen ? 'Show chat' : 'Show shell'}
+                    data-slot="pane-view-toggle"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <ActionSwapIcon value={plannerShellOpen ? 'chat' : 'shell'}>
+                      {plannerShellOpen
+                        ? <MessageSquare className="h-3.5 w-3.5" />
+                        : <Terminal className="h-3.5 w-3.5" />}
+                    </ActionSwapIcon>
                   </Button>
-                )}
+                </Tooltip>
               </div>
             )}
             <div className={`min-h-0 flex-1 ${isMobile && plannerShellOpen ? 'hidden' : ''}`}>
-              <ErrorBoundary showDetails>
-                <ChatInterface
-                  isActive={activeTab === 'chat'}
-                  selectedProject={selectedProject}
-                  selectedSession={selectedSession}
-                  ws={ws}
-                  sendMessage={sendMessage}
-                  onFileOpen={handleFileOpen}
-                  onInputFocusChange={onInputFocusChange}
-                  onSessionProcessing={onSessionProcessing}
-                  onSessionIdle={onSessionIdle}
-                  processingSessions={processingSessions}
-                  onNavigateToSession={onNavigateToSession}
-                  onSessionEstablished={onSessionEstablished}
-                  onShowSettings={onShowSettings}
-                  showRawParameters={showRawParameters}
-                  showThinking={showThinking}
-                  sendByCtrlEnter={sendByCtrlEnter}
-                  externalMessageUpdate={externalMessageUpdate}
-                  newSessionTrigger={newSessionTrigger}
-                  sessionOrigin={workerPaneAvailable ? 'planner' : null}
-                  onRenderedSessionChange={setRenderedSessionId}
-                  onShowAllTasks={tasksEnabled ? () => setActiveTab('tasks') : null}
-                />
-              </ErrorBoundary>
+              {plannerChat}
             </div>
             {isMobile && plannerShellOpen && (
               <div className="min-h-0 flex-1 overflow-hidden" data-slot="pane-shell">
@@ -446,55 +521,6 @@ function MainContent({
             </div>
           )}
         </div>
-
-        {splitActive && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            data-two-pane-divider
-            onPointerDown={handleSplitPointerDown}
-            onPointerMove={handleSplitPointerMove}
-            onPointerUp={handleSplitPointerEnd}
-            onPointerCancel={handleSplitPointerEnd}
-            className="w-1 flex-shrink-0 cursor-col-resize touch-none bg-border/60 transition-colors hover:bg-primary active:bg-primary"
-          />
-        )}
-
-        {!isMobile && workerPaneAvailable && workerPaneOpen && (
-          <div
-            ref={workerPaneRef}
-            className={`min-w-[380px] ${
-              splitActive ? '' : `border-l border-border/60 ${plannerPaneOpen ? 'w-[44%] flex-shrink-0' : 'flex-1'}`
-            }`}
-            style={splitActive ? { flex: `${1 - split} 1 0%` } : undefined}
-          >
-            <WorkerPane
-              selectedProject={selectedProject}
-              ws={ws}
-              sendMessage={sendMessage}
-              isActive
-              onFileOpen={resolvedFileOpen}
-              onInputFocusChange={onInputFocusChange}
-              onSessionProcessing={onSessionProcessing}
-              onSessionIdle={onSessionIdle}
-              processingSessions={processingSessions}
-              onShowSettings={onShowSettings}
-              onClose={() => toggleWorkerPane(false)}
-            />
-          </div>
-        )}
-
-        {!isMobile && workerPaneAvailable && !workerPaneOpen && (
-          <button
-            type="button"
-            onClick={() => toggleWorkerPane(true)}
-            className="flex w-6 flex-shrink-0 items-center justify-center border-l border-border/60 bg-muted/30 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-            title="Show worker pane"
-            aria-label="Show worker pane"
-          >
-            <span className="rotate-90 whitespace-nowrap text-[10px] font-medium tracking-wide">Worker</span>
-          </button>
-        )}
 
         <EditorSidebar
           editingFile={editingFile}

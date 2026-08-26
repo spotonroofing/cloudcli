@@ -61,10 +61,6 @@ export type MainContentProps = {
   onProjectSelect: (project: Project) => void;
   /** Silently re-syncs the sidebar project list after worktree projects change. */
   onProjectsRefresh: () => void;
-  /** Planner fraction of the desktop two-pane split (workspace-shared, 50/50 default). */
-  plannerSplit?: number;
-  /** Persists a divider drag; the workspace clamps the fraction. */
-  onPlannerSplitChange?: (fraction: number) => void;
 };
 
 export type MainContentHeaderProps = {

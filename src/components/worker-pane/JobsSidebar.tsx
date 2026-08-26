@@ -1,4 +1,4 @@
-import { ChevronDown, MessageSquare, Milestone, PanelRightClose } from 'lucide-react';
+import { ChevronDown, MessageSquare, Milestone } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -6,9 +6,8 @@ import { cn } from '../../lib/utils';
 import { AgentDisclosure } from '../../shared/view/beui/AgentDisclosure';
 import { MarqueeLabel } from '../../shared/view/beui/MarqueeLabel';
 import { SwapText } from '../../shared/view/beui/SwapText';
-import { JobRingSegments, TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
+import { TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
 import { EASE_OUT, SPRING_SWAP } from '../../shared/view/beui/ease';
-import { Button, Tooltip } from '../../shared/view/ui';
 
 /** One unit of a dispatch manifest: a compiled job or an appended task. */
 export type ChainManifestEntry = {
@@ -104,19 +103,29 @@ const runStateStatus: Record<'running' | 'finished' | 'stopped', TodoListItemSta
   stopped: 'cancelled',
 };
 
+/**
+ * The chain's job ordinal and job count for the worker top bar's jobs-count
+ * control (ui13 job 10); a chain-less run reads as job 1 of 1.
+ */
+export function jobProgress(chain: ChainSnapshot | null): { ordinal: number; total: number } {
+  if (!chain) {
+    return { ordinal: 1, total: 1 };
+  }
+  const units = chainUnits(chain);
+  const total = Math.max(units.filter((unit) => unit.kind === 'phase').length, 1);
+  const current = chain.currentPhase ?? (units.length ? 1 : 0);
+  const ordinal = Math.max(
+    units.slice(0, current).filter((unit) => unit.kind === 'phase').length,
+    1,
+  );
+  return { ordinal, total };
+}
+
 type JobsSidebarProps = {
   /** The viewed run's chain; null for a free-standing (single-prompt) run. */
   chain: ChainSnapshot | null;
   /** Single-prompt fallback: the run itself renders as job 1 of 1. */
   run: { label: string; state: 'running' | 'finished' | 'stopped' } | null;
-  /** Desktop only: collapses the sidebar into its rail. Omitted on the sheet. */
-  onCollapse?: () => void;
-  /**
-   * Rail ring hand-off (ui13 job 1): mount with this job's drawer open and
-   * its row scrolled into view. Read once at mount — the rail expand
-   * remounts the sidebar.
-   */
-  focusJob?: number | null;
   /** The unit whose session the pane is showing (ui13 job 2). */
   activeJob?: number | null;
   /** Units with a session to navigate to (chain phases that have runs). */
@@ -132,20 +141,19 @@ type JobsSidebarProps = {
 };
 
 /**
- * The worker pane's jobs sidebar (ui12 phase 5, relocating the ui9 B4 phase
- * navigator): the primary status surface for a dispatched run, a right-hand
- * sidebar at the left sidebar's width. Every job lists as a collapsible task
- * drawer, ordered bottom-to-top — job 1 at the bottom, later jobs stacking
- * upward, the newest (or queued) on top — with the full history of a
- * completed run scrollable in place. Task rows carry check/working/idle
- * status icons, the job row's ring advances with its done/total counter, and
- * entries stagger in as a manifest (or an append) lands.
+ * The full-pane jobs view (ui12 phase 5 sidebar, a switcher view since ui13
+ * job 10): the primary status surface for a dispatched run, swapped in place
+ * of the worker transcript behind the top bar's jobs count. Every job lists
+ * as a collapsible task drawer, ordered bottom-to-top — job 1 at the bottom,
+ * later jobs stacking upward, the newest (or queued) on top — with the full
+ * history of a completed run scrollable in place. Task rows carry
+ * check/working/idle status icons, the job row's ring advances with its
+ * done/total counter, and entries stagger in as a manifest (or an append)
+ * lands.
  */
 export default function JobsSidebar({
   chain,
   run,
-  onCollapse,
-  focusJob,
   activeJob,
   openableJobs,
   onOpenJob,
@@ -174,22 +182,12 @@ export default function JobsSidebar({
 
   // Per-job drawer overrides: unset rows follow the default (only the active
   // job's drawer open), so advancing to the next job opens its drawer and
-  // lets the finished one fall closed without bookkeeping. A rail ring click
-  // seeds its job's drawer open (ui13 job 1).
-  const [drawerOverrides, setDrawerOverrides] = useState<Record<number, boolean>>(
-    () => (focusJob != null ? { [focusJob]: true } : {}),
-  );
+  // lets the finished one fall closed without bookkeeping.
+  const [drawerOverrides, setDrawerOverrides] = useState<Record<number, boolean>>({});
   // Hover marquee on job rows (ui13 job 3): mouse enter/leave is effectively
   // fine-pointer only — touch taps act before hover matters.
   const [hoveredJob, setHoveredJob] = useState<number | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
-  useEffect(() => {
-    if (focusJob != null) {
-      listRef.current?.querySelector(`[data-job="${focusJob}"]`)?.scrollIntoView({ block: 'center' });
-    }
-    // Mount-only: focusJob only changes across remounts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   // Switching runs resets any user drawer toggles instead of carrying them over.
   const runKey = chain?.slug ?? run?.label ?? '';
   const previousRunKey = useRef(runKey);
@@ -244,19 +242,6 @@ export default function JobsSidebar({
           <span>/</span>
           <span>{units.length}</span>
         </span>
-        {onCollapse && (
-          <Tooltip content="Hide jobs sidebar" position="bottom">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 flex-shrink-0 p-0 text-muted-foreground hover:text-foreground"
-              onClick={onCollapse}
-              aria-label="Hide jobs sidebar"
-            >
-              <PanelRightClose className="h-3.5 w-3.5" />
-            </Button>
-          </Tooltip>
-        )}
       </div>
 
       <ol ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
@@ -518,119 +503,3 @@ export default function JobsSidebar({
   );
 }
 
-/**
- * Collapsed rail (ui13 job 1): a compact vertical list of the run's job
- * rings — one ring per job, its done/total count inside, statuses in the
- * monochromatic job treatment (solid ring done; the same segmented ring as
- * the row icons from the start, muted static idle, fills + working-segment
- * glow while active, ui13 job 7; manifest-less jobs a plain circle with the
- * ramped spinner while working). Same bottom-to-top order as the expanded
- * list; clicking a ring expands the sidebar with that job's drawer open.
- */
-export function JobsRail({
-  chain,
-  run,
-  onOpenJob,
-}: {
-  chain: ChainSnapshot | null;
-  run: { label: string; state: 'running' | 'finished' | 'stopped' } | null;
-  onOpenJob: (jobIndex: number) => void;
-}) {
-  const reduce = useReducedMotion() ?? false;
-  const units: Unit[] = chain
-    ? chainUnits(chain)
-    : run
-      ? [{ index: 1, name: run.label, tasks: [], kind: 'phase', status: runStateStatus[run.state], done: null }]
-      : [];
-  const stacked = [...units].reverse();
-
-  return (
-    <ol
-      data-slot="jobs-rail"
-      className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto py-1"
-    >
-      {stacked.map((unit) => {
-        const done = displayedDone(unit);
-        const total = unit.tasks.length;
-        const segmented =
-          (unit.status === 'in-progress' || unit.status === 'pending') && total > 0;
-        return (
-          <li key={`${unit.index}-${unit.name}`}>
-            <button
-              type="button"
-              onClick={() => onOpenJob(unit.index)}
-              data-slot="jobs-rail-ring"
-              data-job={unit.index}
-              data-status={unit.status}
-              aria-label={`Open ${unit.name}`}
-              title={unit.name}
-              className="relative grid h-9 w-9 place-items-center rounded-lg outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-            >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className={cn(
-                  'size-7 overflow-visible text-status-idle',
-                  (unit.status === 'in-progress' || unit.status === 'completed') && 'text-foreground',
-                  unit.status === 'cancelled' && 'text-rose-600 dark:text-rose-400',
-                )}
-              >
-                {!segmented && (
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    className={cn(unit.status === 'in-progress' && 'opacity-20')}
-                  />
-                )}
-                {!segmented && unit.status === 'in-progress' && (
-                  <g
-                    className="animate-spinner-ramp"
-                    style={{ transformOrigin: '12px 12px', transform: 'rotate(-90deg)' }}
-                  >
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      pathLength="1"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeDasharray="0.68 0.32"
-                    />
-                  </g>
-                )}
-                {segmented && (
-                  <JobRingSegments
-                    segments={{ done, total }}
-                    status={unit.status}
-                    tone="mono"
-                    r={10}
-                    strokeWidth={2}
-                    reduce={reduce}
-                  />
-                )}
-              </svg>
-              {total > 0 && (
-                <span
-                  data-slot="jobs-rail-count"
-                  className={cn(
-                    'absolute text-[8px] font-medium leading-none tabular-nums',
-                    done === total ? 'text-status-done' : 'text-muted-foreground',
-                  )}
-                >
-                  {done}/{total}
-                </span>
-              )}
-            </button>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}

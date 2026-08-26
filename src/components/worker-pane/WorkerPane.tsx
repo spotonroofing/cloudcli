@@ -1,4 +1,4 @@
-import { FileDiff, Hammer, MessageSquare, Milestone, PanelRightOpen, Plus, Terminal, X } from 'lucide-react';
+import { Check, MessageSquare, Milestone, Plus, Terminal, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import ChatInterface from '../chat/view/ChatInterface';
@@ -8,15 +8,14 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
-import { onSettingChange, writeSetting } from '../../utils/cloudSettings';
 import { formatCompactAge } from '../sidebar/utils/utils';
-import SidebarFooterDrawer from '../sidebar/view/subcomponents/SidebarFooterDrawer';
-import { Badge, Button, Skeleton, Tooltip } from '../../shared/view/ui';
+import { cn } from '../../lib/utils';
+import { ActionMenu, Badge, Button, Skeleton, Tooltip, type ActionMenuItem } from '../../shared/view/ui';
 import { ActionSwapIcon } from '../../shared/view/beui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 
-import JobsSidebar, { JobsRail, type ChainSnapshot } from './JobsSidebar';
+import JobsSidebar, { jobProgress, type ChainSnapshot } from './JobsSidebar';
 
 type WorkerRun = {
   sessionId: string;
@@ -75,8 +74,8 @@ type WorkerPaneProps = {
 /**
  * The always-there worker surface (spec B2): a full interactive chat pinned
  * beside the project's chats. It auto-follows the most recent worker session
- * (origin direct or dispatch), New Session boots /worker, and the header
- * surfaces the files the run touched since its base commit.
+ * (origin direct or dispatch), and the top bar is just the run's name (the
+ * run-list menu) and the jobs count (the jobs-view toggle) — ui13 job 10.
  */
 export default function WorkerPane({
   selectedProject,
@@ -97,41 +96,20 @@ export default function WorkerPane({
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
   const { isMobile } = useDeviceSettings({ trackPWA: false });
 
-  // Jobs sidebar (ui12 phase 5): desktop collapse persists like the pane
-  // toggles; phones open the same job list as a full-width bottom sheet.
-  const [jobsSidebarOpen, setJobsSidebarOpen] = useState(() => {
-    try {
-      return localStorage.getItem('jobs-sidebar-open') !== '0';
-    } catch {
-      return true;
-    }
-  });
-  const toggleJobsSidebar = useCallback((open: boolean) => {
-    setJobsSidebarOpen(open);
-    try {
-      writeSetting('jobs-sidebar-open', open ? '1' : '0');
-    } catch {
-      // localStorage unavailable
-    }
-  }, []);
-  useEffect(() => onSettingChange(['jobs-sidebar-open'], (_key, value) => {
-    setJobsSidebarOpen(value !== '0');
-  }), []);
-  const [jobsSheetOpen, setJobsSheetOpen] = useState(false);
+  // Jobs as a switcher view (ui13 job 10): the pane swaps between the
+  // transcript and a full-pane jobs list behind the top bar's jobs count.
+  // Strictly per pane/project — never persisted, never shared across projects.
+  const [jobsViewOpen, setJobsViewOpen] = useState(false);
   // Mobile chat/shell toggle (ui13 job 9): swaps the pane's transcript for a
   // terminal bound to the pane's own session, mirroring the planner pane.
   const [shellOpen, setShellOpen] = useState(false);
-  // Rail ring hand-off (ui13 job 1): the job whose drawer the sidebar opens
-  // with on the next expand; null for a plain expand.
-  const [railFocusJob, setRailFocusJob] = useState<number | null>(null);
   const [paneSession, setPaneSession] = useState<ProjectSession | null>(null);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
-  // False until the first run fetch for this project settles; the switcher
-  // and navigator hold their space with skeletons meanwhile (ui11 phase 11).
+  // False until the first run fetch for this project settles; the top bar
+  // holds its space with a skeleton meanwhile (ui11 phase 11).
   const [runsLoaded, setRunsLoaded] = useState(false);
   const [chains, setChains] = useState<Record<string, ChainSnapshot>>({});
   const [newSessionTrigger, setNewSessionTrigger] = useState(0);
-  const [touchedFiles, setTouchedFiles] = useState<string[] | null>(null);
   // Auto-follow pauses while the user is composing a brand-new pane session or
   // has pinned an older run in the switcher, so a dispatched run landing
   // mid-thought cannot steal the surface.
@@ -187,7 +165,7 @@ export default function WorkerPane({
     setRuns([]);
     setRunsLoaded(false);
     setChains({});
-    setTouchedFiles(null);
+    setJobsViewOpen(false);
     followLatestRef.current = true;
     void refreshRuns();
   }, [refreshRuns]);
@@ -247,7 +225,6 @@ export default function WorkerPane({
   const handleSelectRun = (run: WorkerRun) => {
     // Picking the newest run resumes auto-follow; anything older pins it.
     followLatestRef.current = run.sessionId === runs[0]?.sessionId;
-    setTouchedFiles(null);
     setPaneSession((previous) =>
       previous?.id === run.sessionId
         ? previous
@@ -264,31 +241,8 @@ export default function WorkerPane({
   const handleNewWorkerSession = () => {
     followLatestRef.current = false;
     setPaneSession(null);
-    setTouchedFiles(null);
+    setJobsViewOpen(false);
     setNewSessionTrigger((previous) => previous + 1);
-  };
-
-  const handleShowTouchedFiles = async () => {
-    if (touchedFiles !== null) {
-      setTouchedFiles(null);
-      return;
-    }
-    const sessionId = paneSession?.id ?? latest?.sessionId;
-    if (!sessionId) {
-      return;
-    }
-    try {
-      const response = await authenticatedFetch(
-        `/api/providers/sessions/${encodeURIComponent(String(sessionId))}/touched-files`,
-      );
-      if (!response.ok) {
-        return;
-      }
-      const body = (await response.json()) as { data?: { files?: string[] } };
-      setTouchedFiles(body.data?.files ?? []);
-    } catch {
-      setTouchedFiles([]);
-    }
   };
 
   const selectedRun = runs.find((run) => run.sessionId === paneSession?.id) ?? null;
@@ -296,8 +250,8 @@ export default function WorkerPane({
 
   // Jobs are the navigation (ui13 job 2): which chain units have sessions to
   // open, which unit the pane is showing, and the project's other runs for
-  // cross-run jumps — the retired run-switcher dropdown's functions, routed
-  // through handleSelectRun so pin/auto-follow semantics hold.
+  // cross-run jumps — routed through handleSelectRun so pin/auto-follow
+  // semantics hold.
   const chainRuns = selectedChain
     ? runs.filter((run) => run.chainSlug === selectedChain.slug && run.chainPhase != null)
     : [];
@@ -333,27 +287,50 @@ export default function WorkerPane({
     }
   };
 
+  // The run list behind the run's name (ui13 job 10): the retired dropdown's
+  // one remaining function — every run of the project, newest first, plus the
+  // New-session flow that left the bar.
+  const runListItems: ActionMenuItem[] = [
+    {
+      key: 'new-session',
+      label: 'New worker session',
+      icon: Plus,
+      onSelect: handleNewWorkerSession,
+    },
+    ...runs.map((run, index) => ({
+      key: run.sessionId,
+      label: runLabel(run, chains),
+      icon: run.sessionId === selectedRun?.sessionId ? Check : MessageSquare,
+      trailing: run.lastActivity ? formatCompactAge(run.lastActivity, new Date()) : undefined,
+      showDividerBefore: index === 0,
+      onSelect: () => handleSelectRun(run),
+    })),
+  ];
+
+  const progress = jobProgress(selectedChain);
+
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
-        <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-        <span className="text-xs font-medium text-foreground">Worker</span>
+      {/* Worker top bar (ui13 job 10, Willem-approved): the run's name on the
+          left (opens the run list), the jobs count on the right (toggles the
+          jobs view). No status words; the two badges are wiring fail-safes. */}
+      <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-2 py-1.5">
         {!runsLoaded && <Skeleton className="h-4 w-36 rounded-sm" />}
-        {/* The run-switcher dropdown is retired (ui13 job 2): run selection
-            lives in the jobs sidebar (job rows + Other runs) and the sidebar
-            counter drawer. The header keeps a plain label naming the shown
-            run. */}
-        {runsLoaded && selectedRun && (
-          <span
-            data-slot="worker-run-label"
-            className="min-w-0 truncate text-[11px] font-normal text-muted-foreground"
-          >
-            {runLabel(selectedRun, chains)}
-          </span>
+        {runsLoaded && (
+          <div data-slot="worker-run-name" className="min-w-0">
+            <ActionMenu
+              label={selectedRun ? runLabel(selectedRun, chains) : 'Worker'}
+              ariaLabel="Run list"
+              variant="ghost"
+              size="sm"
+              align="left"
+              items={runListItems}
+              className="max-w-full"
+              triggerClassName="h-6 max-w-full min-w-0 justify-start gap-1 px-1.5 text-xs font-medium text-foreground hover:bg-accent/60 [&>span]:min-w-0 [&>span]:truncate [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:flex-shrink-0 [&>svg]:text-muted-foreground"
+              menuClassName="max-w-[320px]"
+            />
+          </div>
         )}
-        {/* No status badge in any run state (ui11 phase 10): state lives in
-            the jobs sidebar and the run switcher. The two badges below are
-            wiring fail-safes, not run status. */}
         {streamMismatch && (
           <Badge status="danger" size="sm" className="flex-shrink-0">
             stream mismatch
@@ -383,43 +360,22 @@ export default function WorkerPane({
             </Button>
           </Tooltip>
         )}
-        {isMobile && runsLoaded && selectedRun && (
-          <Tooltip content="Run jobs" position="bottom">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-              onClick={() => setJobsSheetOpen(true)}
-              aria-label="Run jobs"
-            >
-              <Milestone className="h-3.5 w-3.5" />
-            </Button>
-          </Tooltip>
+        {runsLoaded && selectedRun && (
+          <button
+            type="button"
+            data-slot="worker-jobs-toggle"
+            aria-pressed={jobsViewOpen}
+            aria-label={jobsViewOpen ? 'Show transcript' : 'Show jobs'}
+            onClick={() => setJobsViewOpen((open) => !open)}
+            className={cn(
+              'touch-hit relative flex h-6 flex-shrink-0 items-center gap-1.5 rounded px-1.5 text-xs font-medium tabular-nums transition-colors hover:bg-accent/60 hover:text-foreground',
+              jobsViewOpen ? 'bg-accent/60 text-foreground' : 'text-muted-foreground',
+            )}
+          >
+            <Milestone className="h-3.5 w-3.5" />
+            Job {progress.ordinal} of {progress.total}
+          </button>
         )}
-        <Tooltip content="Files touched since the run's base commit" position="bottom">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              void handleShowTouchedFiles();
-            }}
-            aria-label="Files touched by this run"
-          >
-            <FileDiff className="h-3.5 w-3.5" />
-          </Button>
-        </Tooltip>
-        <Tooltip content="New worker session (/worker)" position="bottom">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-            onClick={handleNewWorkerSession}
-            aria-label="New worker session"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        </Tooltip>
         {onClose && (
           <Tooltip content={closeLabel ?? 'Hide worker pane'} position="bottom">
             <Button
@@ -435,30 +391,10 @@ export default function WorkerPane({
         )}
       </div>
 
-      {touchedFiles !== null && (
-        <div className="max-h-40 flex-shrink-0 overflow-y-auto border-b border-border/60 bg-muted/20 px-3 py-2">
-          {touchedFiles.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">No files changed since the run's base commit.</p>
-          ) : (
-            <ul className="space-y-0.5">
-              {touchedFiles.map((file) => (
-                <li key={file}>
-                  <button
-                    type="button"
-                    className="w-full truncate rounded px-1 py-0.5 text-left font-mono text-[11px] text-foreground hover:bg-accent/60"
-                    onClick={() => onFileOpen?.(file)}
-                  >
-                    {file}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
       <div className="flex min-h-0 flex-1">
-        <div className={`min-h-0 min-w-0 flex-1 ${isMobile && shellOpen ? 'hidden' : ''}`}>
+        <div
+          className={`min-h-0 min-w-0 flex-1 ${(isMobile && shellOpen) || jobsViewOpen ? 'hidden' : ''}`}
+        >
         <ErrorBoundary showDetails>
           <ChatInterface
             isActive={isActive}
@@ -502,7 +438,7 @@ export default function WorkerPane({
         </ErrorBoundary>
         </div>
 
-        {isMobile && shellOpen && (
+        {isMobile && shellOpen && !jobsViewOpen && (
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden" data-slot="pane-shell">
             <StandaloneShell
               project={selectedProject}
@@ -513,74 +449,11 @@ export default function WorkerPane({
           </div>
         )}
 
-        {/* Jobs sidebar (ui12 phase 5): the run's job history on the right at
-            the left sidebar's width; collapsible to a rail the same way. */}
-        {!isMobile && (!runsLoaded ? (
-          <div
-            data-slot="jobs-sidebar-skeleton"
-            aria-busy="true"
-            className="w-72 flex-shrink-0 space-y-2 border-l border-border/60 bg-muted/20 p-3"
-          >
-            <Skeleton className="h-3.5 w-24 rounded-sm" />
-            <Skeleton className="h-3 w-40 rounded-sm" />
-            <Skeleton className="h-3 w-32 rounded-sm" />
-          </div>
-        ) : selectedRun && (
-          jobsSidebarOpen ? (
-            <div className="w-72 flex-shrink-0 border-l border-border/60">
-              <JobsSidebar
-                chain={selectedChain}
-                run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
-                onCollapse={() => toggleJobsSidebar(false)}
-                focusJob={railFocusJob}
-                activeJob={activeJob}
-                openableJobs={openableJobs}
-                onOpenJob={handleOpenJob}
-                otherRuns={otherRuns}
-                onSelectRun={handleSelectRunId}
-              />
-            </div>
-          ) : (
-            <div
-              data-slot="jobs-sidebar-rail"
-              className="flex w-12 flex-shrink-0 flex-col items-center gap-1 border-l border-border/60 bg-muted/20 py-3"
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setRailFocusJob(null);
-                  toggleJobsSidebar(true);
-                }}
-                className="group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"
-                aria-label="Show jobs sidebar"
-                title="Show jobs sidebar"
-              >
-                <PanelRightOpen className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-              </button>
-              {/* Compact rail (ui13 job 1): one count ring per job; clicking
-                  expands the sidebar with that job's drawer open. */}
-              <JobsRail
-                chain={selectedChain}
-                run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
-                onOpenJob={(jobIndex) => {
-                  setRailFocusJob(jobIndex);
-                  toggleJobsSidebar(true);
-                }}
-              />
-            </div>
-          )
-        ))}
-      </div>
-
-      {isMobile && selectedRun && (
-        <SidebarFooterDrawer
-          open={jobsSheetOpen}
-          onClose={() => setJobsSheetOpen(false)}
-          isMobile
-          ariaLabel="Run jobs"
-          dataSlot="jobs-sheet"
-        >
-          <div className="h-[60dvh]">
+        {/* Full-pane jobs view (ui13 job 10): the same job rows, drawers, and
+            Other-runs footer the sidebar carried, now a switcher view inside
+            the pane; navigating a job swaps back to the transcript. */}
+        {jobsViewOpen && selectedRun && (
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden" data-slot="jobs-view">
             <JobsSidebar
               chain={selectedChain}
               run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
@@ -588,17 +461,17 @@ export default function WorkerPane({
               openableJobs={openableJobs}
               onOpenJob={(jobIndex) => {
                 handleOpenJob(jobIndex);
-                setJobsSheetOpen(false);
+                setJobsViewOpen(false);
               }}
               otherRuns={otherRuns}
               onSelectRun={(sessionId) => {
                 handleSelectRunId(sessionId);
-                setJobsSheetOpen(false);
+                setJobsViewOpen(false);
               }}
             />
           </div>
-        </SidebarFooterDrawer>
-      )}
+        )}
+      </div>
     </div>
   );
 }

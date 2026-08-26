@@ -8,6 +8,7 @@ import { cn } from '../../../lib/utils';
 import { STANDALONE_PROJECT_ID } from '../../../types/app';
 
 import WorkspaceRow, { type WorkspaceGripHandlers } from './WorkspaceRow';
+import { PaneDivider } from './PaneStrip';
 import { PROJECT_DRAG_TYPE, type WorkspaceState } from './useWorkspace';
 
 type WorkspaceViewProps = MainContentProps & {
@@ -67,6 +68,8 @@ export default function WorkspaceView({
     onShowSettings,
     externalMessageUpdate,
     newSessionTrigger,
+    onProjectSelect,
+    onProjectsRefresh,
   } = mainContentProps;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -338,11 +341,7 @@ export default function WorkspaceView({
   if (!multiProjects) {
     return (
       <div {...surfaceProps} className="relative h-full min-h-0 min-w-0">
-        <MainContent
-          {...mainContentProps}
-          plannerSplit={workspace.split}
-          onPlannerSplitChange={workspace.setSplit}
-        />
+        <MainContent {...mainContentProps} />
         {dropOverlay}
       </div>
     );
@@ -360,10 +359,9 @@ export default function WorkspaceView({
       {multiProjects.map((project, index) => (
         <Fragment key={project.projectId}>
           {index > 0 && (
-            <div
-              role="separator"
-              aria-orientation={horizontal ? 'vertical' : 'horizontal'}
-              data-workspace-divider={horizontal ? 'column' : 'row'}
+            <PaneDivider
+              orientation={horizontal ? 'vertical' : 'horizontal'}
+              dataSlot={horizontal ? 'workspace-divider-column' : 'workspace-divider-row'}
               onPointerDown={handleDividerPointerDown(
                 multiProjects[index - 1].projectId,
                 project.projectId,
@@ -371,10 +369,6 @@ export default function WorkspaceView({
               onPointerMove={handleDividerPointerMove}
               onPointerUp={handleDividerPointerEnd}
               onPointerCancel={handleDividerPointerEnd}
-              className={cn(
-                'flex-shrink-0 touch-none bg-border/60 transition-colors hover:bg-primary active:bg-primary',
-                horizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize',
-              )}
             />
           )}
           <div
@@ -391,16 +385,6 @@ export default function WorkspaceView({
               ws={ws}
               sendMessage={sendMessage}
               mode={workspace.mode}
-              split={
-                horizontal
-                  ? workspace.columnSplits[project.projectId] ?? workspace.split
-                  : workspace.split
-              }
-              onSplitChange={(fraction) =>
-                horizontal
-                  ? workspace.setColumnSplit(project.projectId, fraction)
-                  : workspace.setSplit(fraction)
-              }
               gripHandlers={makeGripHandlers(project.projectId)}
               onToggleLayout={workspace.toggleMode}
               onCloseRow={() => onCloseRow(project.projectId)}
@@ -415,6 +399,8 @@ export default function WorkspaceView({
               onSessionIdle={onSessionIdle}
               processingSessions={processingSessions}
               onShowSettings={onShowSettings}
+              onProjectSelect={onProjectSelect}
+              onProjectsRefresh={onProjectsRefresh}
             />
           </div>
         </Fragment>
