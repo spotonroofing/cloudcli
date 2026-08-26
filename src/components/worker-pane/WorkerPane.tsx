@@ -15,7 +15,7 @@ import { ActionSwapIcon } from '../../shared/view/beui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 
-import JobsSidebar, { jobProgress, type ChainSnapshot } from './JobsSidebar';
+import JobsSidebar, { type ChainSnapshot, type JobGroup } from './JobsSidebar';
 
 type WorkerRun = {
   sessionId: string;
@@ -69,13 +69,18 @@ type WorkerPaneProps = {
   onClose?: () => void;
   /** Overrides the close button's label; workspace rows close the whole row here. */
   closeLabel?: string;
+  /**
+   * Jobs take over the whole pane instead of opening as a side column: the
+   * workspace sets this at three or more projects in column layout (ui14 job 1).
+   */
+  jobsTakeover?: boolean;
 };
 
 /**
  * The always-there worker surface (spec B2): a full interactive chat pinned
  * beside the project's chats. It auto-follows the most recent worker session
  * (origin direct or dispatch), and the top bar is just the run's name (the
- * run-list menu) and the jobs count (the jobs-view toggle) — ui13 job 10.
+ * run-list menu) and the job sign (the jobs toggle) — ui13 job 10 / ui14 job 1.
  */
 export default function WorkerPane({
   selectedProject,
@@ -90,15 +95,17 @@ export default function WorkerPane({
   onShowSettings,
   onClose,
   closeLabel,
+  jobsTakeover = false,
 }: WorkerPaneProps) {
   const { subscribe, isConnected } = useWebSocket();
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
   const { isMobile } = useDeviceSettings({ trackPWA: false });
 
-  // Jobs as a switcher view (ui13 job 10): the pane swaps between the
-  // transcript and a full-pane jobs list behind the top bar's jobs count.
-  // Strictly per pane/project — never persisted, never shared across projects.
+  // Jobs behind the top bar's job sign (ui14 job 1): a side column beside the
+  // transcript, or the whole pane where the pane is too narrow for both — at
+  // three or more projects in column layout, and on phones. Strictly per
+  // pane/project — never persisted, never shared across projects.
   const [jobsViewOpen, setJobsViewOpen] = useState(false);
   // Mobile chat/shell toggle (ui13 job 9): swaps the pane's transcript for a
   // terminal bound to the pane's own session, mirroring the planner pane.
@@ -252,46 +259,37 @@ export default function WorkerPane({
   };
 
   const selectedRun = runs.find((run) => run.sessionId === paneSession?.id) ?? null;
-  const selectedChain = selectedRun?.chainSlug ? (chains[selectedRun.chainSlug] ?? null) : null;
 
-  // Jobs are the navigation (ui13 job 2): which chain units have sessions to
-  // open, which unit the pane is showing, and the project's other runs for
-  // cross-run jumps — routed through handleSelectRun so pin/auto-follow
-  // semantics hold.
-  const chainRuns = selectedChain
-    ? runs.filter((run) => run.chainSlug === selectedChain.slug && run.chainPhase != null)
-    : [];
-  const openableJobs = selectedChain
-    ? chainRuns.map((run) => run.chainPhase as number)
-    : selectedRun
-      ? [1]
-      : [];
-  const activeJob = selectedRun ? (selectedChain ? selectedRun.chainPhase : 1) : null;
-  const handleOpenJob = (jobIndex: number) => {
-    const target = selectedChain
-      ? chainRuns.find((run) => run.chainPhase === jobIndex)
-      : selectedRun;
-    if (target) {
-      handleSelectRun(target);
-    }
-  };
-  const otherRuns = runs
-    .filter((run) =>
-      selectedChain ? run.chainSlug !== selectedChain.slug : run.sessionId !== selectedRun?.sessionId,
-    )
-    .map((run) => ({
-      sessionId: run.sessionId,
-      label: runLabel(run, chains),
-      // Same compact relative-date treatment as the sidebar rows; render
-      // time is current enough for a slow-moving list.
-      age: run.lastActivity ? formatCompactAge(run.lastActivity, new Date()) : null,
-    }));
-  const handleSelectRunId = (sessionId: string) => {
+  // Jobs are the navigation (ui13 job 2) and the list spans every run of the
+  // project (ui14 job 1): each chain is a group carrying the sessions its
+  // units have, each chain-less run is a one-row group, newest first. Every
+  // selection routes through handleSelectRun so pin/auto-follow holds.
+  const jobGroups: JobGroup[] = [
+    ...Object.values(chains).map((chain) => {
+      const sessions: Record<number, string> = {};
+      for (const run of runs) {
+        if (run.chainSlug === chain.slug && run.chainPhase != null) {
+          sessions[run.chainPhase] = run.sessionId;
+        }
+      }
+      return { chain, run: null, sessions, startedAt: chain.startedAt };
+    }),
+    ...runs
+      .filter((run) => !run.chainSlug)
+      .map((run) => ({
+        chain: null,
+        run: { label: runLabel(run, chains), state: run.state },
+        sessions: { 1: run.sessionId },
+        startedAt: run.lastActivity ? Date.parse(run.lastActivity) : 0,
+      })),
+  ].sort((a, b) => b.startedAt - a.startedAt);
+  const handleOpenSession = (sessionId: string) => {
     const target = runs.find((run) => run.sessionId === sessionId);
     if (target) {
       handleSelectRun(target);
     }
   };
+  const jobsFullPane = jobsTakeover || isMobile;
 
   // The run list behind the run's name (ui13 job 10): the retired dropdown's
   // one remaining function — every run of the project, newest first, plus the
@@ -313,13 +311,11 @@ export default function WorkerPane({
     })),
   ];
 
-  const progress = jobProgress(selectedChain);
-
   return (
     <div className="flex h-full min-w-0 flex-col">
       {/* Worker top bar (ui13 job 10, Willem-approved): the run's name on the
-          left (opens the run list), the jobs count on the right (toggles the
-          jobs view). No status words; the two badges are wiring fail-safes. */}
+          left (opens the run list), the job sign at the far right (toggles
+          the jobs list). No status words; the two badges are wiring fail-safes. */}
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-2 py-1.5">
         {!runsLoaded && <Skeleton className="h-4 w-36 rounded-sm" />}
         {runsLoaded && (
@@ -366,22 +362,6 @@ export default function WorkerPane({
             </Button>
           </Tooltip>
         )}
-        {runsLoaded && selectedRun && (
-          <button
-            type="button"
-            data-slot="worker-jobs-toggle"
-            aria-pressed={jobsViewOpen}
-            aria-label={jobsViewOpen ? 'Show transcript' : 'Show jobs'}
-            onClick={() => setJobsViewOpen((open) => !open)}
-            className={cn(
-              'touch-hit relative flex h-6 flex-shrink-0 items-center gap-1.5 rounded px-1.5 text-xs font-medium tabular-nums transition-colors hover:bg-accent/60 hover:text-foreground',
-              jobsViewOpen ? 'bg-accent/60 text-foreground' : 'text-muted-foreground',
-            )}
-          >
-            <Milestone className="h-3.5 w-3.5" />
-            Job {progress.ordinal} of {progress.total}
-          </button>
-        )}
         {onClose && (
           <Tooltip content={closeLabel ?? 'Hide worker pane'} position="bottom">
             <Button
@@ -395,11 +375,29 @@ export default function WorkerPane({
             </Button>
           </Tooltip>
         )}
+        {runsLoaded && jobGroups.length > 0 && (
+          <Tooltip content={jobsViewOpen ? 'Hide jobs' : 'Show jobs'} position="bottom">
+            <Button
+              variant="ghost"
+              size="sm"
+              data-slot="worker-jobs-toggle"
+              aria-pressed={jobsViewOpen}
+              aria-label={jobsViewOpen ? 'Hide jobs' : 'Show jobs'}
+              onClick={() => setJobsViewOpen((open) => !open)}
+              className={cn(
+                'touch-hit relative h-6 w-6 p-0 hover:text-foreground',
+                jobsViewOpen ? 'bg-accent/60 text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              <Milestone className="h-3.5 w-3.5" />
+            </Button>
+          </Tooltip>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1">
         <div
-          className={`min-h-0 min-w-0 flex-1 ${(isMobile && shellOpen) || jobsViewOpen ? 'hidden' : ''}`}
+          className={`min-h-0 min-w-0 flex-1 ${(isMobile && shellOpen) || (jobsViewOpen && jobsFullPane) ? 'hidden' : ''}`}
         >
         <ErrorBoundary showDetails>
           <ChatInterface
@@ -454,24 +452,27 @@ export default function WorkerPane({
           </div>
         )}
 
-        {/* Full-pane jobs view (ui13 job 10): the same job rows, drawers, and
-            Other-runs footer the sidebar carried, now a switcher view inside
-            the pane; navigating a job swaps back to the transcript. */}
-        {jobsViewOpen && selectedRun && (
-          <div className="min-h-0 min-w-0 flex-1 overflow-hidden" data-slot="jobs-view">
+        {/* Jobs list (ui14 job 1): a side column beside the transcript, or
+            the whole pane where the pane is too narrow for both; the same
+            rows, drawers, and footers either way. Opening a job's session
+            keeps the column; the full-pane view swaps back to the transcript. */}
+        {jobsViewOpen && (
+          <div
+            data-slot="jobs-view"
+            data-layout={jobsFullPane ? 'pane' : 'column'}
+            className={cn(
+              'min-h-0 min-w-0 overflow-hidden',
+              jobsFullPane ? 'flex-1' : 'w-60 max-w-[50%] flex-shrink-0 border-l border-border/60',
+            )}
+          >
             <JobsSidebar
-              chain={selectedChain}
-              run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
-              activeJob={activeJob}
-              openableJobs={openableJobs}
-              onOpenJob={(jobIndex) => {
-                handleOpenJob(jobIndex);
-                setJobsViewOpen(false);
-              }}
-              otherRuns={otherRuns}
-              onSelectRun={(sessionId) => {
-                handleSelectRunId(sessionId);
-                setJobsViewOpen(false);
+              groups={jobGroups}
+              activeSessionId={paneSession?.id ?? null}
+              onOpenSession={(sessionId) => {
+                handleOpenSession(sessionId);
+                if (jobsFullPane) {
+                  setJobsViewOpen(false);
+                }
               }}
             />
           </div>

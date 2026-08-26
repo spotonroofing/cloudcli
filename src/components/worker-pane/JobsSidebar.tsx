@@ -1,4 +1,4 @@
-import { ChevronDown, GitCommitHorizontal, MessageSquare, Milestone } from 'lucide-react';
+import { ChevronDown, GitCommitHorizontal, MessageSquare } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -41,8 +41,14 @@ export type ChainSnapshot = {
 };
 
 type Unit = {
+  /** List-wide identity: `slug:index` for chain units, `run:<id>` for chain-less runs. */
+  key: string;
+  /** The chain this unit belongs to; null for a chain-less run. */
+  chainSlug: string | null;
   /** 1-based unit index — matches the chain's internal phase numbering. */
   index: number;
+  /** The unit's session, when one exists to navigate to. */
+  sessionId?: string;
   name: string;
   tasks: string[];
   kind: 'phase' | 'task';
@@ -76,6 +82,8 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
       status = chain.status === 'running' ? 'in-progress' : 'cancelled';
     }
     return {
+      key: `${chain.slug}:${index}`,
+      chainSlug: chain.slug,
       index,
       name: entry.name,
       tasks: entry.tasks,
@@ -207,6 +215,7 @@ function taskStatus(unit: Unit, taskIndex: number): TodoListItemStatus {
   return 'pending';
 }
 
+
 const runStateStatus: Record<'running' | 'finished' | 'stopped', TodoListItemStatus> = {
   running: 'in-progress',
   finished: 'completed',
@@ -214,99 +223,83 @@ const runStateStatus: Record<'running' | 'finished' | 'stopped', TodoListItemSta
 };
 
 /**
- * The chain's job ordinal and job count for the worker top bar's jobs-count
- * control (ui13 job 10); a chain-less run reads as job 1 of 1.
+ * One run of the project in the jobs list (ui14 job 1): a dispatch chain with
+ * its units, or a chain-less run that renders as a single job row.
  */
-export function jobProgress(chain: ChainSnapshot | null): { ordinal: number; total: number } {
-  if (!chain) {
-    return { ordinal: 1, total: 1 };
-  }
-  const units = chainUnits(chain);
-  const total = Math.max(units.filter((unit) => unit.kind === 'phase').length, 1);
-  const current = chain.currentPhase ?? (units.length ? 1 : 0);
-  const ordinal = Math.max(
-    units.slice(0, current).filter((unit) => unit.kind === 'phase').length,
-    1,
-  );
-  return { ordinal, total };
-}
+export type JobGroup = {
+  chain: ChainSnapshot | null;
+  /** Chain-less run: label and state for its one row. */
+  run: { label: string; state: 'running' | 'finished' | 'stopped' } | null;
+  /** Unit index → session id, for the units that have a session to open. */
+  sessions: Record<number, string>;
+  /** Ordering key: newer groups sit higher in the list. */
+  startedAt: number;
+};
+
+/** A unit with its bottom-to-top position in the flat list (1 = oldest). */
+type PositionedUnit = Unit & { position: number };
 
 type JobsSidebarProps = {
-  /** The viewed run's chain; null for a free-standing (single-prompt) run. */
-  chain: ChainSnapshot | null;
-  /** Single-prompt fallback: the run itself renders as job 1 of 1. */
-  run: { label: string; state: 'running' | 'finished' | 'stopped' } | null;
-  /** The unit whose session the pane is showing (ui13 job 2). */
-  activeJob?: number | null;
-  /** Units with a session to navigate to (chain phases that have runs). */
-  openableJobs?: number[];
-  /** Navigate the worker pane to this unit's session. */
-  onOpenJob?: (jobIndex: number) => void;
-  /**
-   * The project's runs outside the shown chain — the retired run-switcher
-   * dropdown's cross-run jump, relocated here (ui13 job 2).
-   */
-  otherRuns?: { sessionId: string; label: string; age: string | null }[];
-  onSelectRun?: (sessionId: string) => void;
+  /** Every run of the project, newest first. */
+  groups: JobGroup[];
+  /** The session the pane is showing; marks its row. */
+  activeSessionId: string | null;
+  /** Navigate the worker pane to a unit's session. */
+  onOpenSession: (sessionId: string) => void;
 };
 
 /**
- * The full-pane jobs view (ui12 phase 5 sidebar, a switcher view since ui13
- * job 10): the primary status surface for a dispatched run, swapped in place
- * of the worker transcript behind the top bar's jobs count. Every job lists
- * as a collapsible task drawer, ordered bottom-to-top — job 1 at the bottom,
- * later jobs stacking upward, the newest (or queued) on top — with the full
- * history of a completed run scrollable in place. Task rows carry
- * check/working/idle status icons, the job row's ring advances with its
- * done/total counter, and entries stagger in as a manifest (or an append)
- * lands.
+ * The jobs list (ui12 phase 5 sidebar; a side column or full-pane view since
+ * ui14 job 1): the primary status surface for the project's dispatched runs,
+ * toggled by the worker top bar's job sign. One continuous list across every
+ * run of the project, ordered bottom-to-top — the oldest run's job 1 at the
+ * bottom, later jobs and later runs stacking upward, the newest (or queued)
+ * job on top — with the full history scrollable in place. Every job is a
+ * collapsible task drawer; task rows carry check/working/idle status icons,
+ * the job row's ring advances with its done/total counter, and entries
+ * stagger in as a manifest (or an append) lands.
  */
-export default function JobsSidebar({
-  chain,
-  run,
-  activeJob,
-  openableJobs,
-  onOpenJob,
-  otherRuns,
-  onSelectRun,
-}: JobsSidebarProps) {
+export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: JobsSidebarProps) {
   const reduce = useReducedMotion() ?? false;
-  const openable = new Set(openableJobs ?? []);
 
-  const units: Unit[] = chain
-    ? chainUnits(chain)
-    : run
-      ? [{ index: 1, name: run.label, tasks: [], kind: 'phase', status: runStateStatus[run.state], done: null }]
-      : [];
+  // Newest group first, each group's newest unit first — the flat list is
+  // already top-to-bottom; positions count from the bottom for the stagger.
+  const stacked: PositionedUnit[] = [];
+  for (const group of groups) {
+    const units: Unit[] = group.chain
+      ? chainUnits(group.chain)
+      : group.run
+        ? [{
+            key: `run:${group.sessions[1] ?? group.run.label}`,
+            chainSlug: null,
+            index: 1,
+            name: group.run.label,
+            tasks: [],
+            kind: 'phase',
+            status: runStateStatus[group.run.state],
+            done: null,
+          }]
+        : [];
+    for (const unit of [...units].reverse()) {
+      stacked.push({ ...unit, sessionId: group.sessions[unit.index], position: 0 });
+    }
+  }
+  stacked.forEach((unit, i) => {
+    unit.position = stacked.length - i;
+  });
 
-  const running = chain ? chain.status === 'running' : run?.state === 'running';
-  const jobUnits = units.filter((unit) => unit.kind === 'phase');
-  const jobTotal = Math.max(jobUnits.length, 1);
-  const currentUnit = chain?.currentPhase ?? (units.length ? 1 : 0);
-  const currentOrdinal = Math.max(
-    units.slice(0, currentUnit).filter((unit) => unit.kind === 'phase').length,
-    1,
-  );
-  const doneCount = units.filter((unit) => unit.status === 'completed').length;
-  const allComplete = units.length > 0 && doneCount === units.length;
-
-  // Per-job drawer overrides: unset rows follow the default (only the active
-  // job's drawer open), so advancing to the next job opens its drawer and
-  // lets the finished one fall closed without bookkeeping.
-  const [drawerOverrides, setDrawerOverrides] = useState<Record<number, boolean>>({});
+  // Per-job drawer overrides: unset rows follow the default (only the newest
+  // run's current job open), so advancing to the next job opens its drawer
+  // and lets the finished one fall closed without bookkeeping.
+  const newest = groups[0] ?? null;
+  const defaultOpenKey = newest?.chain
+    ? `${newest.chain.slug}:${newest.chain.currentPhase ?? 1}`
+    : null;
+  const [drawerOverrides, setDrawerOverrides] = useState<Record<string, boolean>>({});
   // Hover marquee on job rows (ui13 job 3): mouse enter/leave is effectively
   // fine-pointer only — touch taps act before hover matters.
-  const [hoveredJob, setHoveredJob] = useState<number | null>(null);
+  const [hoveredJob, setHoveredJob] = useState<string | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
-  // Switching runs resets any user drawer toggles instead of carrying them over.
-  const runKey = chain?.slug ?? run?.label ?? '';
-  const previousRunKey = useRef(runKey);
-  useEffect(() => {
-    if (previousRunKey.current !== runKey) {
-      previousRunKey.current = runKey;
-      setDrawerOverrides({});
-    }
-  }, [runKey]);
 
   // Populate animation: units past the previously rendered count are new (a
   // manifest landing or an append) and stagger in one by one; settled rows
@@ -314,58 +307,33 @@ export default function JobsSidebar({
   const seenCountRef = useRef(0);
   const seenCount = seenCountRef.current;
   useEffect(() => {
-    seenCountRef.current = units.length;
-  }, [units.length]);
-
-  // Bottom-to-top: job 1 sits at the bottom, the newest unit renders first.
-  const stacked = [...units].reverse();
+    seenCountRef.current = stacked.length;
+  }, [stacked.length]);
 
   return (
     <section
-      aria-label="Run jobs"
+      aria-label="Jobs"
       data-slot="jobs-sidebar"
-      data-state={chain?.status ?? run?.state}
       className="flex h-full min-w-0 flex-col bg-muted/20"
     >
-      <div className="flex h-9 flex-shrink-0 items-center gap-2 border-b border-border/60 px-3">
-        <span
-          className={cn(
-            'flex min-w-0 items-center gap-2',
-            running && !reduce && 'animate-counter-breathe',
-          )}
-        >
-          <Milestone className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-          <span className="flex-shrink-0 text-xs font-medium tabular-nums text-foreground">
-            Job <SwapText value={String(currentOrdinal)}>{currentOrdinal}</SwapText> of{' '}
-            <SwapText value={String(jobTotal)}>{jobTotal}</SwapText>
-          </span>
-        </span>
-        <span className="min-w-0 flex-1" />
-        <span
-          data-slot="jobs-sidebar-counts"
-          className={cn(
-            'flex-shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground',
-            allComplete && 'text-status-done',
-          )}
-        >
-          <SwapText value={String(doneCount)}>{doneCount}</SwapText>
-          <span>/</span>
-          <span>{units.length}</span>
-        </span>
-      </div>
-
       <ol ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <AnimatePresence initial={false}>
           {stacked.map((unit) => {
             const hasDrawer = unit.tasks.length > 0;
             const drawerOpen = hasDrawer
-              && (drawerOverrides[unit.index] ?? unit.index === currentUnit);
+              && (drawerOverrides[unit.key] ?? unit.key === defaultOpenKey);
             // Jobs are the navigation (ui13 job 2): a unit with a session
             // navigates the pane on row click; the title alone toggles the
             // drawer. Units without sessions keep the whole-row toggle.
-            const navigable = Boolean(onOpenJob && openable.has(unit.index));
+            const navigable = Boolean(unit.sessionId);
+            const open = () => {
+              if (unit.sessionId) {
+                onOpenSession(unit.sessionId);
+              }
+            };
+            const active = unit.sessionId != null && unit.sessionId === activeSessionId;
             const toggleDrawer = () =>
-              setDrawerOverrides((previous) => ({ ...previous, [unit.index]: !drawerOpen }));
+              setDrawerOverrides((previous) => ({ ...previous, [unit.key]: !drawerOpen }));
             const titleClasses = cn(
               'flex max-w-full min-w-0 text-left leading-5',
               unit.kind === 'task' ? 'text-[12px]' : 'text-[13px]',
@@ -377,7 +345,7 @@ export default function JobsSidebar({
             );
             return (
               <motion.li
-                key={`${unit.index}-${unit.name}`}
+                key={unit.key}
                 initial={reduce ? { opacity: 1 } : { opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={
@@ -386,26 +354,27 @@ export default function JobsSidebar({
                     : {
                         duration: 0.22,
                         ease: EASE_OUT,
-                        delay: unit.index > seenCount ? (unit.index - seenCount - 1) * 0.07 : 0,
+                        delay: unit.position > seenCount ? (unit.position - seenCount - 1) * 0.07 : 0,
                       }
                 }
               >
                 <div
                   onClick={
                     navigable
-                      ? () => onOpenJob?.(unit.index)
+                      ? open
                       : hasDrawer
                         ? toggleDrawer
                         : undefined
                   }
                   data-slot="jobs-sidebar-row"
                   data-job={unit.index}
+                  data-chain={unit.chainSlug ?? undefined}
                   data-kind={unit.kind}
                   data-status={unit.status}
                   data-drawer={hasDrawer ? (drawerOpen ? 'open' : 'closed') : undefined}
-                  data-active={unit.index === activeJob ? 'true' : undefined}
-                  onMouseEnter={() => setHoveredJob(unit.index)}
-                  onMouseLeave={() => setHoveredJob((current) => (current === unit.index ? null : current))}
+                  data-active={active ? 'true' : undefined}
+                  onMouseEnter={() => setHoveredJob(unit.key)}
+                  onMouseLeave={() => setHoveredJob((current) => (current === unit.key ? null : current))}
                   className={cn(
                     'group/row relative flex w-full items-center gap-2 rounded-md px-1.5 text-left',
                     unit.kind === 'task' ? 'min-h-7 pl-4' : 'min-h-8',
@@ -415,7 +384,7 @@ export default function JobsSidebar({
                 >
                   {/* Active-session indicator (ui13 job 2): a quiet
                       foreground-ink edge bar, monochromatic, no chip. */}
-                  {unit.index === activeJob && (
+                  {active && (
                     <span
                       aria-hidden="true"
                       data-slot="jobs-sidebar-active-bar"
@@ -470,13 +439,13 @@ export default function JobsSidebar({
                           'rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         )}
                       >
-                        <MarqueeLabel active={hoveredJob === unit.index} className="flex-initial">
+                        <MarqueeLabel active={hoveredJob === unit.key} className="flex-initial">
                           {unit.name}
                         </MarqueeLabel>
                       </button>
                     ) : (
                       <span className={titleClasses}>
-                        <MarqueeLabel active={hoveredJob === unit.index} className="flex-initial">
+                        <MarqueeLabel active={hoveredJob === unit.key} className="flex-initial">
                           {unit.name}
                         </MarqueeLabel>
                       </span>
@@ -504,7 +473,7 @@ export default function JobsSidebar({
                       aria-label={`Open ${unit.name} chat`}
                       onClick={(event) => {
                         event.stopPropagation();
-                        onOpenJob?.(unit.index);
+                        open();
                       }}
                       data-slot="jobs-sidebar-row-chat"
                       className="flex-shrink-0 rounded-sm text-muted-foreground/50 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring group-hover/row:text-muted-foreground"
@@ -549,7 +518,7 @@ export default function JobsSidebar({
                         const duration = status === 'completed' ? taskDurationMs(unit, taskIndex) : null;
                         return (
                           <li
-                            key={`${unit.index}-${taskIndex}`}
+                            key={`${unit.key}-${taskIndex}`}
                             data-slot="jobs-sidebar-task"
                             data-status={status}
                             className={cn(
@@ -589,43 +558,6 @@ export default function JobsSidebar({
           })}
         </AnimatePresence>
       </ol>
-
-      {/* Other runs (ui13 job 2): the project's runs outside the shown chain
-          — the retired run-switcher dropdown's cross-run jump lives here. */}
-      {onSelectRun && otherRuns && otherRuns.length > 0 && (
-        <div
-          data-slot="jobs-sidebar-other-runs"
-          className="max-h-44 flex-shrink-0 overflow-y-auto border-t border-border/60 px-2 py-2"
-        >
-          <p className="px-1.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Other runs
-          </p>
-          <ul>
-            {otherRuns.map((other) => (
-              <li key={other.sessionId}>
-                <button
-                  type="button"
-                  onClick={() => onSelectRun(other.sessionId)}
-                  data-slot="jobs-sidebar-other-run"
-                  data-session-id={other.sessionId}
-                  className="flex min-h-7 w-full items-center gap-2 rounded-md px-1.5 text-left outline-none transition-colors hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                >
-                  <MessageSquare className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
-                  <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
-                    {other.label}
-                  </span>
-                  {other.age && (
-                    <span className="flex-shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground/70">
-                      {other.age}
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </section>
   );
 }
-

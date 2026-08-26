@@ -385,6 +385,7 @@ export default function WorkspaceView({
               ws={ws}
               sendMessage={sendMessage}
               mode={workspace.mode}
+              projectCount={multiProjects.length}
               gripHandlers={makeGripHandlers(project.projectId)}
               onToggleLayout={workspace.toggleMode}
               onCloseRow={() => onCloseRow(project.projectId)}

@@ -36,6 +36,8 @@ type WorkspaceRowProps = {
   ws: WebSocket | null;
   sendMessage: (message: unknown) => void;
   mode: WorkspaceMode;
+  /** How many projects the workspace has open (this row included). */
+  projectCount: number;
   gripHandlers: WorkspaceGripHandlers;
   onToggleLayout: () => void;
   onCloseRow: () => void;
@@ -74,6 +76,7 @@ export default function WorkspaceRow({
   ws,
   sendMessage,
   mode,
+  projectCount,
   gripHandlers,
   onToggleLayout,
   onCloseRow,
@@ -362,6 +365,9 @@ export default function WorkspaceRow({
       onShowSettings={onShowSettings}
       onClose={onCloseRow}
       closeLabel={`Close ${project.displayName} row`}
+      // Jobs column rules (ui14 job 1): one or two projects keep jobs as a
+      // side column; three or more in column layout take over the pane.
+      jobsTakeover={mode === 'columns' && projectCount >= 3}
     />
   ));
 

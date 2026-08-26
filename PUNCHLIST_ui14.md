@@ -27,9 +27,9 @@ Willem's correction round on ui13 plus the harness hardening the audit prescribe
 
 Goal: the jobs view behaves exactly as decided above. Files: the worker pane and jobs view components, workspace layout rules, DESIGN.md. Dependencies: none.
 
-- [ ] Jobs is a side column inside the worker pane whenever one or two projects are open (side-by-side or stacked); at three or more projects in column view the toggle takes over the whole worker pane instead. One toggle: the job sign icon, top-right of the worker pane, no text. The current per-project switcher behavior at one or two projects is replaced by the column.
-- [ ] Remove the "Job N of N" strip under the top bar entirely; nothing replaces it.
-- [ ] The job list is one continuous bottom-to-top list across all of the project's runs: newest job on top, older runs' jobs continue downward, scrollable; the "Other runs" section is deleted. Commit footers, durations, drawers, and counters carry over unchanged.
+- [x] Jobs is a side column inside the worker pane whenever one or two projects are open (side-by-side or stacked); at three or more projects in column view the toggle takes over the whole worker pane instead. One toggle: the job sign icon, top-right of the worker pane, no text. The current per-project switcher behavior at one or two projects is replaced by the column.
+- [x] Remove the "Job N of N" strip under the top bar entirely; nothing replaces it.
+- [x] The job list is one continuous bottom-to-top list across all of the project's runs: newest job on top, older runs' jobs continue downward, scrollable; the "Other runs" section is deleted. Commit footers, durations, drawers, and counters carry over unchanged.
 
 Done check: on dev: one project open → toggle shows the column beside the transcript; two stacked → column; three columns → toggle takes over the pane; the strip is absent from the DOM; the list shows ui13 and ui13r jobs in one sequence with no "Other runs" heading. Phone holds. Fresh-context subagent verification. Commit.
 
