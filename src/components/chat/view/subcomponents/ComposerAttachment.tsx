@@ -4,7 +4,7 @@ import { FileIcon, XIcon } from 'lucide-react';
 import { authenticatedFetch } from '../../../../utils/api';
 import type { ChatAttachment } from '../../types/types';
 
-import { ImageLightbox } from './ChatMessageImages';
+import { ImageLightbox } from './ImageLightbox';
 import { PastedTextChip, PastedTextViewer, isPastedTextName, useStoredPastedText } from './PastedTextAttachment';
 
 /**

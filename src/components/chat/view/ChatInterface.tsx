@@ -19,6 +19,7 @@ import { convertMarkdownToPlainText } from './subcomponents/MessageCopyControl';
 
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
+import { ChatProjectContext } from './subcomponents/ChatProjectContext';
 import CommandResultModal from './subcomponents/CommandResultModal';
 
 function ChatInterface({
@@ -560,6 +561,8 @@ function ChatInterface({
 
   return (
     <PermissionContext.Provider value={permissionContextValue}>
+      {/* Inline transcript images resolve against this pane's project workspace. */}
+      <ChatProjectContext.Provider value={selectedProject.projectId ?? null}>
       <div ref={paneRef} className="relative flex h-full min-h-0 flex-col">
         <ChatMessagesPane
           scrollContainerRef={scrollContainerRef}
@@ -677,6 +680,7 @@ function ChatInterface({
         currentSessionId={currentSessionId || selectedSession?.id || null}
         onSelectProviderModel={selectProviderModel}
       />
+      </ChatProjectContext.Provider>
     </PermissionContext.Provider>
   );
 }

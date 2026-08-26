@@ -19,6 +19,8 @@ import { copyTextToClipboard } from '../../../../utils/clipboard';
 import { usePaletteOps } from '../../../../contexts/PaletteOpsContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
 
+import MarkdownInlineImage from './MarkdownInlineImage';
+
 type MarkdownProps = {
   children: React.ReactNode;
   className?: string;
@@ -213,6 +215,9 @@ const CodeBlock = ({ node: _node, className, children, forceBlock, ...props }: C
 
 const markdownComponents = {
   code: CodeBlock,
+  // Session-produced images: `![caption](path)` renders inline when the path
+  // is a file inside the project workspace (see MarkdownInlineImage).
+  img: ({ src, alt }: { src?: string; alt?: string }) => <MarkdownInlineImage src={src} alt={alt} />,
   // Fenced/indented code arrives as <pre><code>. Re-render the child CodeBlock
   // with `forceBlock` so it always gets the block treatment (react-markdown v9+
   // no longer passes an `inline` flag), and skip the outer <pre> so Tailwind
