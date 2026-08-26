@@ -1,7 +1,7 @@
 <!-- browser -->
-<!-- name: Memory that reads like Claude's -->
-<!-- tasks: Indicator matches the meta-row family | Viewer defaults to curated WILLEM.md | Claude-style editing via the planner, end-to-end tested | Number heights root-caused on live surfaces | Worker memory writes land in the worker pane | Timer space regression -->
-Execute Job 8 of PUNCHLIST_ui13.md in this repo (memory that reads like Claude's). The goal and items are Job 8's section and checkboxes in PUNCHLIST_ui13.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
+<!-- name: Composer menus and focus polish -->
+<!-- tasks: Context popup opens left, right-aligned to its button | Focus glow fades monotonically | Counter left of switcher, mobile shows effort | Plus button drawer menu: upload, slash, handoff -->
+Execute Job 12 of PUNCHLIST_ui13.md in this repo (composer menus and focus polish). The goal and items are Job 12's section and checkboxes in PUNCHLIST_ui13.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
 

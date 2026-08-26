@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Active segment glow and ramp pass -->
-<!-- tasks: Working task segment pulses with white glow | Complete rings solid | Ramped curves on every drawer and sheet, law in DESIGN.md -->
+<!-- tasks: Working task segment pulses with white glow | Complete rings solid | Ramped curves on every drawer and sheet, law in DESIGN.md | Every popout menu gets the grow treatment from the vendored libraries -->
 Execute Job 7 of PUNCHLIST_ui13.md in this repo (active segment glow and the ramp pass). The goal and items are Job 7's section and checkboxes in PUNCHLIST_ui13.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 

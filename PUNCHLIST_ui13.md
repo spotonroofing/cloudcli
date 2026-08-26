@@ -84,6 +84,7 @@ Done check: on dev: an attachment preview zooms and pans with mouse and with tou
 Goal: the working task's ring segment glows, and every drawer animation in the app gets ramp thinking. Files: the job ring components, drawer/sheet transition definitions, motion tokens, DESIGN.md. Dependencies: none (job 1's mono treatment already landed).
 
 - [ ] On the active job's segmented ring, the segment corresponding to the task currently being worked pulses with a white glow, coordinated with the existing breathing (same beat or a deliberate offset — worker's call, pick what feels best and note it); completed jobs go solid, no breathing, no glow.
+- [ ] Every popout and dropdown menu in the app (not just drawers) opens with a drawer or growing animation, ramped: source the motion from the two vendored libraries already in the app (beUI registry components and the beautifului mirror) rather than hand-rolling; inventory the popout sites and apply one consistent treatment.
 - [ ] Ramp pass over the app's drawers and sheets (footer drawers, jobs sidebar, account/counter drawers, bottom sheets): eased, ramped curves in and out, no linear or abrupt endings; write the ramp principle into DESIGN.md's motion section as a standing law for future animation work.
 
 Done check: on dev with a stub chain: the working segment's computed style animates (glow keyframes running) while other segments do not, completed rings are static; drawer open/close computed transition-timing-functions are the ramped curves from DESIGN.md, not linear; reduced-motion honored. Fresh-context subagent verification. Commit.
@@ -95,6 +96,8 @@ Goal: the memory surface shows Willem his memory, not the plumbing, and it behav
 - [ ] The "Memory updated" indicator row matches the transcript's meta-row anatomy exactly (the "Thought for a few seconds" row family): same icon slot, size, alignment, text style, expand behavior; correct memory icon.
 - [ ] The memory viewer's primary view is the curated memory: planner/_global/WILLEM.md, a single self-maintained document of things Willem said, his preferences, and how he likes to work — rendered cleanly, most recent changes visible. The technical layers (lessons, PROJECT.md, STATE.md, sessions) move to a secondary "internals" view. The Global/project split stays underneath.
 - [ ] Editing follows the Claude model, not the ChatGPT chip model: Willem edits by telling the planner (the viewer has no delete-x chips), and the file carries a short header line saying so. Create the file with a seed section if the planner has not yet (check first; the planner may have committed it already).
+- [ ] Number heights, still broken on live: Willem still sees mono digits at different heights after ui11 job 9 and ui12 job 9. Stop treating prior fixes as done: reproduce on the exact live surfaces he sees (screenshot shows composer counter and timers), root-cause for real (which element, which font feature or ticker path), fix, and verify on the live surfaces at both device-pixel-ratio 1 and 2, stating in the summary why two prior verified fixes did not hold.
+- [ ] Memory indicators attribute to the right pane: a worker session's memory writes surface today in the planner transcript; the indicator row must land in the transcript of the session that wrote (worker writes in the worker pane, planner writes in the planner chat), with the write-detection keyed per session, not per project.
 - [ ] The thinking/turn timer space regression: Willem sees "2m5s" with no space after the minutes in the live app, despite ui12 job 9 verifying "1m 21.1s" with a regular space. Reproduce on dev (a real held turn past one minute), find which surface renders the duration without the space (the ticker's digit columns, a second duration site, or a regression), fix it so every duration renders "2m 5s" with a regular space, and state in the summary why the ui12 check passed while the live app disagreed.
 - [ ] End-to-end test of the whole memory surface: indicator fires on a real write, viewer opens from the taskbar, primary view renders WILLEM.md, internals view still reachable.
 
@@ -130,4 +133,24 @@ Goal: the codebase stops carrying surfaces and code Willem never uses. This app 
 - [ ] Walk the app end to end on dev (desktop and phone) after the sweep: every surface from this round and the last two still works; record the removal list and the size delta (bundle and dependency count) in the summary.
 
 Done check: on dev after a fresh build: tsc, eslint, client and server suites pass; the e2e walk finds no broken surface; the summary carries the full removal list with evidence and the measured size delta. Fresh-context subagent verification. Commit.
+
+## Job 12 — Composer menus and focus polish (appended 2026-08-25)
+
+Goal: the composer's satellite UI behaves: the context popup opens the right way, the focus glow fades honestly, the counter and model switcher sit right, and the left-side buttons collapse into one plus-menu. Files: ChatComposer and its secondary row, the usage/context popup, the plus/attach control, DESIGN.md. Dependencies: job 7 (menu animation treatment exists).
+
+- [ ] The context window popup opens to the left: its right edge aligns with the right edge of its button; it gets the standard grow animation from job 7.
+- [ ] The prompt bar focus stroke: keep the blur glow, fix the fade so opacity ramps down monotonically on focus loss (today it bumps back up mid-fade); same clean ramp on focus in. Verify by sampling opacity across the transition.
+- [ ] The character counter moves to the left of the model switcher; the mobile model switcher shows the effort level like desktop does.
+- [ ] The handoff and slash-command buttons leave the bar: the plus (attach) button opens a drawer menu of stacked horizontal rows — "Upload a file" on top, "Slash commands", then "Handoff" — ramped open/close, touch-friendly targets, closing on selection, outside tap, or Escape.
+
+Done check: on dev: popup's right edge equals the button's right edge (DOM rects); opacity samples across blur-out decrease monotonically; counter sits left of the switcher; phone shows effort in the switcher; the plus menu lists the three rows in order and each action works (upload opens the picker, slash inserts the palette, handoff fires the flow). Fresh-context subagent verification. Commit.
+
+## Job 13 — Transcript states and action-button rules (appended 2026-08-25)
+
+Goal: the worker chat shows when the model is thinking, and message actions exist only where they mean something. Files: the worker pane transcript wiring, the ActivityIndicator/thinking row family, the message action controls (copy, rerun, timestamp) across row types, DESIGN.md. Dependencies: none.
+
+- [ ] The worker pane shows live thinking: between tool calls, when the session is reasoning, the same thinking indicator row the planner chat uses appears (with its timer), live during the run and collapsed appropriately on reload; no more silent gaps where the worker seems idle.
+- [ ] Action-button rules, one consistent law: Willem's own messages keep copy and rerun (rerun resends that prompt); the turn's final assistant message keeps copy and timestamp, hover-revealed; intermediate assistant messages and every tool row lose copy, rerun, and trailing timestamps entirely (the grep-row copy button and right-side timestamp in the worker pane die). Assistant messages never get rerun. Sweep every row type in both panes and DESIGN.md the law.
+
+Done check: on dev with a live stub run: a reasoning gap renders the thinking row with a running timer in the worker pane; DOM sweep shows copy/rerun only on user rows, copy/timestamp only on final assistant rows (hover-revealed), nothing on tool rows or intermediate texts, in both panes. Phone holds. Fresh-context subagent verification. Commit.
 

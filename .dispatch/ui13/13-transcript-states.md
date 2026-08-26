@@ -1,7 +1,7 @@
 <!-- browser -->
-<!-- name: Memory that reads like Claude's -->
-<!-- tasks: Indicator matches the meta-row family | Viewer defaults to curated WILLEM.md | Claude-style editing via the planner, end-to-end tested | Number heights root-caused on live surfaces | Worker memory writes land in the worker pane | Timer space regression -->
-Execute Job 8 of PUNCHLIST_ui13.md in this repo (memory that reads like Claude's). The goal and items are Job 8's section and checkboxes in PUNCHLIST_ui13.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
+<!-- name: Transcript states and action rules -->
+<!-- tasks: Live thinking rows in the worker pane | Copy/rerun on user rows only, copy/timestamp on final assistant rows | Tool rows lose actions and trailing timestamps -->
+Execute Job 13 of PUNCHLIST_ui13.md in this repo (transcript states and action-button rules). The goal and items are Job 13's section and checkboxes in PUNCHLIST_ui13.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
 
