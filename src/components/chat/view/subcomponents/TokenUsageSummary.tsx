@@ -65,14 +65,13 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const close = useCallback(() => setIsOpen(false), []);
-  // The popover's left edge anchors to the ring button on every form factor
-  // (Claude-desktop style, growing rightward); the anchor hook shrinks
-  // maxWidth on narrow viewports so it never runs off the right edge.
+  // The popover opens to the left (ui13 job 12): its right edge aligns with
+  // the ring button's right edge so it grows leftward, staying inside the
+  // pane; the anchor hook shrinks maxWidth on narrow viewports.
   const { triggerRef, menuRef, anchor, updateAnchor } = useComposerMenuAnchor(
     isOpen,
     close,
     320,
-    'left',
   );
 
   const breakdown =

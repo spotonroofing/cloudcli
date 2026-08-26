@@ -142,10 +142,10 @@ Done check: on dev after a fresh build: tsc, eslint, client and server suites pa
 
 Goal: the composer's satellite UI behaves: the context popup opens the right way, the focus glow fades honestly, the counter and model switcher sit right, and the left-side buttons collapse into one plus-menu. Files: ChatComposer and its secondary row, the usage/context popup, the plus/attach control, DESIGN.md. Dependencies: job 7 (menu animation treatment exists).
 
-- [ ] The context window popup opens to the left: its right edge aligns with the right edge of its button; it gets the standard grow animation from job 7.
-- [ ] The prompt bar focus stroke: keep the blur glow, fix the fade so opacity ramps down monotonically on focus loss (today it bumps back up mid-fade); same clean ramp on focus in. Verify by sampling opacity across the transition.
-- [ ] The character counter moves to the left of the model switcher; the mobile model switcher shows the effort level like desktop does.
-- [ ] The handoff and slash-command buttons leave the bar: the plus (attach) button opens a drawer menu of stacked horizontal rows — "Upload a file" on top, "Slash commands", then "Handoff" — ramped open/close, touch-friendly targets, closing on selection, outside tap, or Escape.
+- [x] The context window popup opens to the left: its right edge aligns with the right edge of its button; it gets the standard grow animation from job 7.
+- [x] The prompt bar focus stroke: keep the blur glow, fix the fade so opacity ramps down monotonically on focus loss (today it bumps back up mid-fade); same clean ramp on focus in. Verify by sampling opacity across the transition.
+- [x] The character counter moves to the left of the model switcher; the mobile model switcher shows the effort level like desktop does.
+- [x] The handoff and slash-command buttons leave the bar: the plus (attach) button opens a drawer menu of stacked horizontal rows — "Upload a file" on top, "Slash commands", then "Handoff" — ramped open/close, touch-friendly targets, closing on selection, outside tap, or Escape.
 
 Done check: on dev: popup's right edge equals the button's right edge (DOM rects); opacity samples across blur-out decrease monotonically; counter sits left of the switcher; phone shows effort in the switcher; the plus menu lists the three rows in order and each action works (upload opens the picker, slash inserts the palette, handoff fires the flow). Fresh-context subagent verification. Commit.
 

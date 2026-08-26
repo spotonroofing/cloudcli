@@ -10,8 +10,7 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { PlusIcon, FileTextIcon, XIcon, Loader2, ArrowUpIcon } from 'lucide-react';
-import type { SVGProps } from 'react';
+import { XIcon, Loader2, ArrowUpIcon } from 'lucide-react';
 
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
@@ -27,6 +26,7 @@ import {
   PromptInputButton,
   PromptInputSubmit,
 } from '../../../../shared/view/ui';
+import { NumberTicker } from '../../../../shared/view/beui/NumberTicker';
 
 import CommandMenu from './CommandMenu';
 import ComposerAttachment from './ComposerAttachment';
@@ -35,29 +35,7 @@ import PermissionRequestsBanner from './PermissionRequestsBanner';
 import TokenUsageSummary from './TokenUsageSummary';
 import QueuedMessageCard from './QueuedMessageCard';
 import ComposerModelMenu from './ComposerModelMenu';
-import { NumberTicker } from '../../../../shared/view/beui/NumberTicker';
-
-// Slash-commands icon drawn in the plus icon's visual language: one diagonal
-// stroke whose length (14 units) and stroke width match a single plus arm.
-function CommandSlashIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      {...props}
-    >
-      <path d="M16.95 7.05 7.05 16.95" />
-    </svg>
-  );
-}
+import ComposerPlusMenu from './ComposerPlusMenu';
 
 interface MentionableFile {
   name: string;
@@ -390,16 +368,16 @@ export default function ChatComposer({
 
           {/* Input row (Claude-desktop style): plus flanks the text left, send
               flanks it right; items-end pins the controls to the last text line
-              so a long draft stacks above them. */}
+              so a long draft stacks above them. The plus opens the drawer menu
+              of composer actions (ui13 job 12): upload, slash commands, handoff. */}
           <div data-slot="composer-input-row" className="flex items-end gap-1 px-2 pb-1.5 pt-1">
-            <PromptInputButton
-              tooltip={{ content: t('input.attachFiles') }}
-              onClick={openAttachmentPicker}
-              aria-label={t('input.attachFiles')}
+            <ComposerPlusMenu
+              onUpload={openAttachmentPicker}
+              onSlashCommands={onToggleCommandMenu}
+              onHandoff={onHandoff}
+              handoffAvailable={handoffAvailable}
               className="mb-0.5 ml-0.5 h-7 w-7"
-            >
-              <PlusIcon />
-            </PromptInputButton>
+            />
 
             <PromptInputBody className="min-w-0 flex-1">
               <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
@@ -465,35 +443,17 @@ export default function ChatComposer({
           </div>
       </PromptInput>
 
-        {/* Slim secondary row (ui11 phase 5, ui12 phase 2): floats under the
-            enclosure, outside its border — handoff + slash (+ voice/clear)
-            left, the model selector + character counter + context ring right.
-            No horizontal padding: the left cluster's edge and the ring's right
-            edge sit flush with the enclosure's borders. */}
+        {/* Slim secondary row (ui11 phase 5, ui12 phase 2, ui13 job 12): floats
+            under the enclosure, outside its border — voice + clear left (the
+            handoff and slash buttons moved into the plus menu), the character
+            counter + model selector + context ring right. No horizontal
+            padding: the left cluster's edge and the ring's right edge sit
+            flush with the enclosure's borders. */}
         <div
           data-slot="composer-secondary-row"
           className="mt-1 flex items-center justify-between gap-2"
         >
             <PromptInputTools className="min-w-0">
-              {handoffAvailable && (
-                <PromptInputButton
-                  tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
-                  onClick={onHandoff}
-                  aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
-                  className="h-7 w-7"
-                >
-                  <FileTextIcon />
-                </PromptInputButton>
-              )}
-
-              <PromptInputButton
-                tooltip={{ content: t('input.showAllCommands') }}
-                onClick={onToggleCommandMenu}
-                className="relative h-7 w-7"
-              >
-                <CommandSlashIcon />
-              </PromptInputButton>
-
               {onVoiceTranscript && voiceAvailable && (
                 <VoiceInputButton state={voiceState} onToggle={voiceToggle} errorMsg={voiceError} className="h-7 w-7" />
               )}
@@ -510,6 +470,14 @@ export default function ChatComposer({
             </PromptInputTools>
 
             <div className="flex shrink-0 items-center gap-1.5">
+              {input.length > 0 && (
+                <span
+                  data-slot="char-counter"
+                  className="font-mono text-[10px] font-medium tabular-nums text-muted-foreground"
+                >
+                  <NumberTicker value={input.length} locale duration={0.35} stagger={0} startOnView={false} />
+                </span>
+              )}
               <ComposerModelMenu
                 effort={effort}
                 effortOptions={availableEffortOptions}
@@ -519,14 +487,6 @@ export default function ChatComposer({
                 onSelectModel={onSelectModel}
                 modelsLoading={modelsLoading}
               />
-              {input.length > 0 && (
-                <span
-                  data-slot="char-counter"
-                  className="font-mono text-[10px] font-medium tabular-nums text-muted-foreground"
-                >
-                  <NumberTicker value={input.length} locale duration={0.35} stagger={0} startOnView={false} />
-                </span>
-              )}
               <TokenUsageSummary usage={tokenBudget} />
             </div>
         </div>

@@ -125,7 +125,7 @@ export default function ComposerModelMenu({
           updateAnchor();
           setIsOpen((current) => !current);
         }}
-        className="flex h-7 max-w-20 shrink-0 items-center gap-1 rounded-lg px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:max-w-56"
+        className="flex h-7 max-w-36 shrink-0 items-center gap-1 rounded-lg px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:max-w-56"
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-label={ariaLabel}
@@ -135,8 +135,9 @@ export default function ComposerModelMenu({
             {hasModelSection ? modelLabel : currentEffortLabel}
           </SwapText>
         </span>
+        {/* Effort shows on every form factor (ui13 job 12): phones read it too. */}
         {hasModelSection && hasEffortSection && (
-          <span className="hidden shrink-0 text-muted-foreground sm:inline">
+          <span className="shrink-0 text-muted-foreground">
             <SwapText value={currentEffortLabel}>{currentEffortLabel}</SwapText>
           </span>
         )}

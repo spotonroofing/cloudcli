@@ -38,17 +38,31 @@ export const PromptInput = React.forwardRef<HTMLFormElement, PromptInputProps>(
 
     return (
       <PromptInputContext.Provider value={contextValue}>
-        <form
-          ref={ref}
-          data-slot="prompt-input"
-          className={cn(
-            'relative overflow-hidden rounded-lg border border-border/50 bg-card/80 shadow-sm backdrop-blur-sm transition-all duration-200 focus-within:border-muted-foreground/40 focus-within:shadow-md focus-within:ring-1 focus-within:ring-muted-foreground/20',
-            className
-          )}
-          {...props}
-        >
-          {children}
-        </form>
+        {/* The focus treatment (border + ring + blur glow) lives on one overlay
+            sibling fading through a single opacity channel (ui13 job 12): a
+            crossfade of border color, ring, and mismatched shadow lists on the
+            form itself could not fade monotonically. The overlay sits outside
+            the form because overflow-hidden would clip its outward glow; the
+            shell's :focus-within drives it via .prompt-input-focus-glow in
+            index.css. */}
+        <div data-slot="prompt-input-shell" className="relative">
+          <form
+            ref={ref}
+            data-slot="prompt-input"
+            className={cn(
+              'relative overflow-hidden rounded-lg border border-border/50 bg-card/80 shadow-sm backdrop-blur-sm',
+              className
+            )}
+            {...props}
+          >
+            {children}
+          </form>
+          <div
+            aria-hidden="true"
+            data-slot="prompt-input-focus-glow"
+            className="prompt-input-focus-glow pointer-events-none absolute inset-0 rounded-lg border border-muted-foreground/40 opacity-0 shadow-md ring-1 ring-muted-foreground/20"
+          />
+        </div>
       </PromptInputContext.Provider>
     );
   }
