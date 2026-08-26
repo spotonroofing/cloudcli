@@ -57,7 +57,7 @@ export default function ProjectEditDialog({
             <DialogTitle className="not-sr-only text-sm font-medium text-foreground">
               {t('projects.editProject', 'Edit project')}
             </DialogTitle>
-            <p className="truncate text-xs text-muted-foreground" title={project.fullPath}>
+            <p className="truncate text-xs text-muted-foreground">
               {project.displayName}
             </p>
           </div>

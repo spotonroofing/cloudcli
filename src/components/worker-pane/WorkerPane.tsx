@@ -344,7 +344,6 @@ export default function WorkerPane({
         {runsLoaded && selectedRun && (
           <span
             data-slot="worker-run-label"
-            title={runLabel(selectedRun, chains)}
             className="min-w-0 truncate text-[11px] font-normal text-muted-foreground"
           >
             {runLabel(selectedRun, chains)}
@@ -428,7 +427,6 @@ export default function WorkerPane({
                     type="button"
                     className="w-full truncate rounded px-1 py-0.5 text-left font-mono text-[11px] text-foreground hover:bg-accent/60"
                     onClick={() => onFileOpen?.(file)}
-                    title={file}
                   >
                     {file}
                   </button>

@@ -182,7 +182,6 @@ export default function GitPanelHeader({
                   <button
                     onClick={() => setBranchSearchQuery('')}
                     className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-                    title="Clear search"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>

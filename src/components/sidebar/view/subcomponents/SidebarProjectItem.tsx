@@ -233,7 +233,6 @@ export default function SidebarProjectItem({
         <div
           role="button"
           tabIndex={0}
-          title={project.fullPath}
           draggable
           onDragStart={(event) => {
             event.dataTransfer.setData(PROJECT_DRAG_TYPE, project.projectId);

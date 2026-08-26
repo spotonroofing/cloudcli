@@ -206,7 +206,6 @@ export default function FileTreeHeader({
             size="sm"
             className="touch-hit absolute right-0.5 top-1/2 h-5 w-5 -translate-y-1/2 p-0 hover:bg-accent"
             onClick={() => onSearchQueryChange('')}
-            title={t('fileTree.clearSearch')}
             aria-label={t('fileTree.clearSearch')}
           >
             <X className="h-3 w-3" />

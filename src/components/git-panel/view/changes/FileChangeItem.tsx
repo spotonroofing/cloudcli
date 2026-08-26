@@ -53,7 +53,6 @@ export default function FileChangeItem({
               onToggleExpanded(filePath);
             }}
             className={`cursor-pointer rounded p-0.5 hover:bg-accent ${isMobile ? 'mr-1' : 'mr-2'}`}
-            title={isExpanded ? 'Collapse diff' : 'Expand diff'}
           >
             <ChevronRight className={`h-3 w-3 transition-transform duration-200 ease-in-out ${isExpanded ? 'rotate-90' : 'rotate-0'}`} />
           </button>
@@ -64,7 +63,6 @@ export default function FileChangeItem({
               event.stopPropagation();
               onOpenFile(filePath);
             }}
-            title="Click to open file"
           >
             {filePath}
           </span>

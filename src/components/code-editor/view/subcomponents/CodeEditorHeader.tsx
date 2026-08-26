@@ -92,7 +92,7 @@ export default function CodeEditorHeader({
             )}
           </div>
           <div className="flex min-w-0 items-center gap-1">
-            <p className="truncate text-xs text-gray-500 dark:text-gray-400" title={file.path}>{file.path}</p>
+            <p className="truncate text-xs text-gray-500 dark:text-gray-400">{file.path}</p>
             <button
               type="button"
               onClick={handleCopyPath}
@@ -191,7 +191,6 @@ export default function CodeEditorHeader({
           type="button"
           onClick={onClose}
           className="flex items-center justify-center rounded-md p-1.5 text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
-          title={labels.close}
         >
           <X className="h-4 w-4" />
         </button>

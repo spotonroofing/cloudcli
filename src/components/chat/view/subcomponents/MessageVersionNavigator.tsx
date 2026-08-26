@@ -37,7 +37,6 @@ const MessageVersionNavigator = ({
         type="button"
         onClick={() => step(-1)}
         disabled={nav.current <= 1}
-        title={t('messageVersions.previous', { defaultValue: 'Previous version' })}
         aria-label={t('messageVersions.previous', { defaultValue: 'Previous version' })}
         className={buttonClass}
       >
@@ -48,7 +47,6 @@ const MessageVersionNavigator = ({
         type="button"
         onClick={() => step(1)}
         disabled={nav.current >= nav.total}
-        title={t('messageVersions.next', { defaultValue: 'Next version' })}
         aria-label={t('messageVersions.next', { defaultValue: 'Next version' })}
         className={buttonClass}
       >

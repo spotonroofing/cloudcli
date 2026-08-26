@@ -121,7 +121,6 @@ const ComposerAttachment = ({ file, descriptor, onRemove, uploadProgress, error 
       ) : (
         <div
           className="flex h-20 w-20 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border border-border/50 bg-background/80 px-1.5 shadow-sm"
-          title={size !== undefined ? `${name} (${formatFileSize(size)})` : name}
         >
           <FileIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <p className="w-full truncate text-center text-[10px] font-medium leading-3 text-foreground">{name}</p>

@@ -82,7 +82,7 @@ function ChatMessageFile({ file }: { file: ChatAttachment }) {
         <FileTypeIcon className="h-5 w-5" aria-hidden />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground" title={name}>{name}</p>
+        <p className="truncate text-sm font-medium text-foreground">{name}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{size || 'File attachment'}</p>
       </div>
       <DownloadIcon

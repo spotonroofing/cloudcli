@@ -124,7 +124,6 @@ function WorktreeRow({ worktree, isMobile, isBusy, onOpen, onMerge, onRemove }: 
             <button
               onClick={onOpen}
               className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              title={`Switch to ${branchLabel}`}
             >
               <ArrowRightLeft className="h-3 w-3" />
               Open
@@ -234,7 +233,6 @@ export default function WorktreesView({
           <button
             onClick={clearActionError}
             className="shrink-0 text-destructive/70 transition-colors hover:text-destructive"
-            title="Dismiss"
           >
             <X className="h-3.5 w-3.5" />
           </button>

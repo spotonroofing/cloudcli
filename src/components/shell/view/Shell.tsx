@@ -302,7 +302,6 @@ export default function Shell({
             description={overlayDescription}
             loadingLabel={t('shell.loading')}
             connectLabel={t('shell.actions.connect')}
-            connectTitle={t('shell.actions.connectTitle')}
             connectingLabel={t('shell.connecting')}
             onConnect={handleRestartShell}
           />
@@ -323,7 +322,6 @@ export default function Shell({
                     setCliPromptOptions(null);
                   }}
                   className="max-w-36 truncate rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                  title={`${opt.number}. ${opt.label}`}
                 >
                   {opt.number}. {opt.label}
                 </button>

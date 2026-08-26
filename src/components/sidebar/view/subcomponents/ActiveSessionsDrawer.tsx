@@ -127,7 +127,7 @@ export default function ActiveSessionsDrawer({
                         className={cn('h-1.5 w-1.5 flex-shrink-0 rounded-full', STATE_DOT[row.state])}
                         aria-hidden
                       />
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground" title={row.label}>
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
                         {row.label}
                       </span>
                       <span className="flex-shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">

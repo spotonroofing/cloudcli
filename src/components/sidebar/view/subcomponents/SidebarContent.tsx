@@ -535,9 +535,6 @@ export default function SidebarContent({
                 </div>
                 <span
                   className="rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground"
-                  title={visibleArchivedItemsCount !== archivedSessionsCount
-                    ? `${visibleArchivedItemsCount} of ${archivedSessionsCount}`
-                    : undefined}
                 >
                   {visibleArchivedItemsCount !== archivedSessionsCount
                     ? `${visibleArchivedItemsCount}/${archivedSessionsCount}`
@@ -567,7 +564,7 @@ export default function SidebarContent({
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70" title={project.fullPath}>
+                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70">
                           {project.fullPath}
                         </p>
                       </div>
@@ -666,7 +663,7 @@ export default function SidebarContent({
                         </span>
                       </div>
                       {group.projectPath && (
-                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70" title={group.projectPath}>
+                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70">
                           {group.projectPath}
                         </p>
                       )}

@@ -30,7 +30,6 @@ function RefBadge({ refName, color }: { refName: string; color: string }) {
         color,
         backgroundColor: isHead ? `${color}22` : 'transparent',
       }}
-      title={refName}
     >
       {isTag ? <Tag className="h-2.5 w-2.5 shrink-0" /> : <GitBranch className="h-2.5 w-2.5 shrink-0" />}
       <span className="truncate">{label}</span>

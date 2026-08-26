@@ -143,7 +143,7 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
       {(errorLine || description) && !open && (
         <div className="flex items-center gap-2 pl-6 text-[11px] text-muted-foreground/70">
           {errorLine ? (
-            <span className="min-w-0 truncate text-rose-600 dark:text-rose-400" title={errorLine}>{errorLine}</span>
+            <span className="min-w-0 truncate text-rose-600 dark:text-rose-400">{errorLine}</span>
           ) : (
             <span className="min-w-0 truncate italic">{description}</span>
           )}

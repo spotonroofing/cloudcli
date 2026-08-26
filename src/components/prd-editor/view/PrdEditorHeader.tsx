@@ -36,17 +36,19 @@ type PrdEditorHeaderProps = {
 };
 
 type HeaderIconButtonProps = {
-  title: string;
+  title?: string;
   onClick: () => void;
   icon: ReactNode;
   active?: boolean;
+  ariaLabel?: string;
 };
 
-function HeaderIconButton({ title, onClick, icon, active = false }: HeaderIconButtonProps) {
+function HeaderIconButton({ title, onClick, icon, active = false, ariaLabel }: HeaderIconButtonProps) {
   return (
     <button
       onClick={onClick}
       title={title}
+      aria-label={ariaLabel ?? title}
       className={cn(
         'p-2 rounded-md min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center transition-colors',
         active
@@ -218,8 +220,8 @@ export default function PrdEditorHeader({
         </button>
 
         <HeaderIconButton
-          title="Close"
           onClick={onClose}
+          ariaLabel="Close"
           icon={<X className="h-6 w-6 md:h-4 md:w-4" />}
         />
       </div>

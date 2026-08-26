@@ -102,13 +102,12 @@ export const ResearchDisplay: React.FC<ResearchDisplayProps> = ({ toolName, tool
       >
         {(running || failed) && <ToolRowStatusIcon status={running ? 'running' : 'error'} />}
         <span className="shrink-0 font-medium text-foreground/90">Research</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70" title={query}>
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70">
           {query}
         </span>
         {failed && errorLine && (
           <span
             className="min-w-0 max-w-[50%] truncate text-[11px] text-rose-600 dark:text-rose-400"
-            title={errorLine}
           >
             {errorLine}
           </span>

@@ -170,21 +170,17 @@ function TaskCard({ task, onClick = null, showParent = false, className = '' }: 
       <div className="flex items-center justify-between">
         <div className="flex items-center">
           {Array.isArray(task.dependencies) && task.dependencies.length > 0 && (
-            <Tooltip content={`Depends on: ${task.dependencies.map((dependency) => `Task ${dependency}`).join(', ')}`}>
-              <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                <ArrowRight className="h-3 w-3" />
-                <span>Depends on: {task.dependencies.join(', ')}</span>
-              </div>
-            </Tooltip>
+            <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+              <ArrowRight className="h-3 w-3" />
+              <span>Depends on: {task.dependencies.join(', ')}</span>
+            </div>
           )}
         </div>
 
-        <Tooltip content={`Status: ${statusStyle.statusText}`}>
-          <div className="flex items-center gap-1">
-            <div className={cn('w-2 h-2 rounded-full', statusStyle.iconColor.replace('text-', 'bg-'))} />
-            <span className={cn('text-xs font-medium', statusStyle.textColor)}>{statusStyle.statusText}</span>
-          </div>
-        </Tooltip>
+        <div className="flex items-center gap-1">
+          <div className={cn('w-2 h-2 rounded-full', statusStyle.iconColor.replace('text-', 'bg-'))} />
+          <span className={cn('text-xs font-medium', statusStyle.textColor)}>{statusStyle.statusText}</span>
+        </div>
       </div>
 
       {progress.total > 0 && (

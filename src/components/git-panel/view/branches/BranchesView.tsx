@@ -91,7 +91,6 @@ function BranchRow({ name, isCurrent, isRemote, aheadCount, behindCount, isMobil
             <button
               onClick={onSwitch}
               className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              title={`Switch to ${name}`}
             >
               Switch
             </button>
@@ -215,7 +214,6 @@ export default function BranchesView({
           <button
             onClick={() => setBranchSearchQuery('')}
             className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-            title="Clear search"
           >
             <X className="h-3.5 w-3.5" />
           </button>

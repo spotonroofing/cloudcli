@@ -269,7 +269,6 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
                       'min-w-0 flex-1 truncate text-[13px] font-medium',
                       account.active ? 'text-foreground' : 'text-muted-foreground',
                     )}
-                    title={account.email}
                   >
                     {account.alias || account.email}
                   </span>

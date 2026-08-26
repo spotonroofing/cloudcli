@@ -7,7 +7,6 @@ type ShellConnectionOverlayProps = {
   description: string;
   loadingLabel: string;
   connectLabel: string;
-  connectTitle: string;
   connectingLabel: string;
   onConnect: () => void;
 };
@@ -17,7 +16,6 @@ export default function ShellConnectionOverlay({
   description,
   loadingLabel,
   connectLabel,
-  connectTitle,
   connectingLabel,
   onConnect,
 }: ShellConnectionOverlayProps) {
@@ -40,7 +38,6 @@ export default function ShellConnectionOverlay({
             type="button"
             onClick={onConnect}
             className="pointer-events-auto inline-flex min-h-12 w-full max-w-xs cursor-pointer items-center justify-center gap-2 rounded-md bg-emerald-600 px-5 py-3 text-base font-semibold text-white shadow-lg shadow-emerald-950/30 transition-colors hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:ring-offset-2 focus:ring-offset-gray-950 active:bg-emerald-700"
-            title={connectTitle}
           >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
             <span className="min-w-0 truncate">{connectLabel}</span>

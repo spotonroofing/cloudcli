@@ -47,7 +47,6 @@ export default function TaskMasterSetupModal({ isOpen, project, onClose, onAfter
           <button
             onClick={closeModal}
             className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="Close"
           >
             <Plus className="h-5 w-5 rotate-45" />
           </button>

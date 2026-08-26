@@ -65,7 +65,6 @@ export default function TaskHelpModal({ isOpen, onClose, onCreatePrd }: TaskHelp
           <button
             onClick={onClose}
             className="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="Close"
           >
             <X className="h-5 w-5" />
           </button>

@@ -3,6 +3,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { Check, ChevronRight, X } from 'lucide-react';
 
 import { cn } from '../../../../lib/utils';
+import { MarqueeLabel } from '../../../../shared/view/beui';
 
 import ChatRowMenu, { type ChatRowMenuProps } from './ChatRowMenu';
 
@@ -53,6 +54,9 @@ export default function ChatRow({
 }: ChatRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editingName, setEditingName] = useState('');
+  // Hover marquee (pre-ui12 scan, restored ui13 job 3): mouse enter/leave is
+  // effectively fine-pointer only — touch taps navigate before hover matters.
+  const [rowHovered, setRowHovered] = useState(false);
 
   const startRename = () => {
     setEditingName(title);
@@ -82,8 +86,9 @@ export default function ChatRow({
       data-bounce-key={bounceKey}
       data-testid={dataTestId}
       data-slot="chat-row"
-      title={title}
       onClick={handleClick}
+      onMouseEnter={() => setRowHovered(true)}
+      onMouseLeave={() => setRowHovered(false)}
       className={cn(
         'group relative flex min-w-0 items-center gap-2 rounded-lg py-2 pl-4 pr-3 text-left transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
@@ -131,7 +136,9 @@ export default function ChatRow({
         </span>
       ) : (
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-normal leading-4">{title}</span>
+          <MarqueeLabel active={rowHovered} className="text-[13px] font-normal leading-4">
+            {title}
+          </MarqueeLabel>
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground">
             {subtitle && (
               <>

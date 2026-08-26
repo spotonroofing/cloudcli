@@ -209,7 +209,7 @@ export default function ChatRowMenu({
       {view === 'root' ? (
         <>
           <div className="mb-1 border-b border-border px-3 py-2">
-            <p className="truncate text-xs font-medium text-foreground" title={sessionTitle}>
+            <p className="truncate text-xs font-medium text-foreground">
               {sessionTitle}
             </p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">{providerLabel} session</p>

@@ -61,7 +61,6 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           <button
             onClick={onTitleClick}
             className="min-w-0 truncate text-left font-mono text-[11px] text-primary transition-colors hover:text-primary/80 hover:underline"
-            title={title}
           >
             {title}
           </button>

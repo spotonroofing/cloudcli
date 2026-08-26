@@ -338,72 +338,65 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
           <span className="flex items-center gap-2">
             {!isSingle && (
               <>
-                <Tooltip content="Previous question">
-                  <button
-                    type="button"
-                    aria-label="Previous question"
-                    disabled={isFirst}
-                    onClick={() => setCurrentStep(s => Math.max(0, s - 1))}
-                    className="relative touch-hit flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-100 enabled:hover:bg-muted enabled:hover:text-foreground disabled:opacity-35"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-                  </button>
-                </Tooltip>
+                <button
+                  type="button"
+                  aria-label="Previous question"
+                  disabled={isFirst}
+                  onClick={() => setCurrentStep(s => Math.max(0, s - 1))}
+                  className="relative touch-hit flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-100 enabled:hover:bg-muted enabled:hover:text-foreground disabled:opacity-35"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+                </button>
                 <span className="flex items-center gap-1">
                   {questions.map((_, i) => (
-                    <Tooltip key={i} content={`Question ${i + 1} of ${total}`}>
-                      <button
-                        type="button"
-                        aria-label={`Go to question ${i + 1}`}
-                        aria-current={i === currentStep ? 'step' : undefined}
-                        onClick={() => setCurrentStep(i)}
-                        className="relative touch-hit rounded-full transition-all duration-300"
-                        style={
-                          i === currentStep
-                            ? { width: 9, height: 9, border: '2.5px solid hsl(var(--foreground))' }
-                            : i < currentStep
-                              ? { width: 7, height: 7, background: 'hsl(var(--muted-foreground))' }
-                              : { width: 7, height: 7, border: '1.5px solid hsl(var(--muted-foreground))' }
-                        }
-                      />
-                    </Tooltip>
+                    <button
+                      key={i}
+                      type="button"
+                      aria-label={`Go to question ${i + 1}`}
+                      aria-current={i === currentStep ? 'step' : undefined}
+                      onClick={() => setCurrentStep(i)}
+                      className="relative touch-hit rounded-full transition-all duration-300"
+                      style={
+                        i === currentStep
+                          ? { width: 9, height: 9, border: '2.5px solid hsl(var(--foreground))' }
+                          : i < currentStep
+                            ? { width: 7, height: 7, background: 'hsl(var(--muted-foreground))' }
+                            : { width: 7, height: 7, border: '1.5px solid hsl(var(--muted-foreground))' }
+                      }
+                    />
                   ))}
                 </span>
-                <Tooltip content="Next question">
-                  <button
-                    type="button"
-                    aria-label="Next question"
-                    disabled={isLast}
-                    onClick={() => setCurrentStep(s => Math.min(total - 1, s + 1))}
-                    className="relative touch-hit flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-100 enabled:hover:bg-muted enabled:hover:text-foreground disabled:opacity-35"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
-                  </button>
-                </Tooltip>
+                <button
+                  type="button"
+                  aria-label="Next question"
+                  disabled={isLast}
+                  onClick={() => setCurrentStep(s => Math.min(total - 1, s + 1))}
+                  className="relative touch-hit flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-100 enabled:hover:bg-muted enabled:hover:text-foreground disabled:opacity-35"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                </button>
               </>
             )}
           </span>
 
-          <Tooltip content={isLast ? 'Send answers (Enter)' : 'Next question (Enter)'}>
-            <motion.button
-              type="button"
-              aria-label={isLast ? 'Send answers' : 'Next question'}
-              disabled={!forwardEnabled}
-              whileTap={reduce || !forwardEnabled ? undefined : { scale: 0.96 }}
-              transition={SPRING_PRESS}
-              onClick={() => (isLast ? handleSubmit() : setCurrentStep(s => s + 1))}
-              className={`relative touch-hit flex size-7 items-center justify-center rounded-md transition-colors duration-200 ${
-                forwardEnabled
-                  ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
-                  : 'cursor-not-allowed bg-muted text-muted-foreground'
-              }`}
-              data-slot="approval-forward"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 19V5M5 12l7-7 7 7" />
-              </svg>
-            </motion.button>
-          </Tooltip>
+          <motion.button
+            type="button"
+            aria-label={isLast ? 'Send answers' : 'Next question'}
+            disabled={!forwardEnabled}
+            whileTap={reduce || !forwardEnabled ? undefined : { scale: 0.96 }}
+            transition={SPRING_PRESS}
+            onClick={() => (isLast ? handleSubmit() : setCurrentStep(s => s + 1))}
+            className={`relative touch-hit flex size-7 items-center justify-center rounded-md transition-colors duration-200 ${
+              forwardEnabled
+                ? 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90'
+                : 'cursor-not-allowed bg-muted text-muted-foreground'
+            }`}
+            data-slot="approval-forward"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 19V5M5 12l7-7 7 7" />
+            </svg>
+          </motion.button>
         </div>
       </div>
     </div>

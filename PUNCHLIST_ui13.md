@@ -43,8 +43,8 @@ Done check: on dev with a completed multi-job run: hovering row 3 shows the chat
 
 Goal: truncated titles reveal themselves on hover again, everywhere, and tooltips only exist where a control does not explain itself. Files: the marquee/scan text component from the pre-ui12 sidebar (find it in git history if deleted), ChatRow, the jobs sidebar rows, the tooltip call sites app-wide, DESIGN.md. Dependencies: job 1.
 
-- [ ] The rolling hover scan (the marquee that scrolls a truncated title so the whole thing can be read) is restored on sidebar chat rows and applied to job rows in the jobs sidebar; fine-pointer hover only, with a coarse-pointer equivalent already sanctioned by the app's laws (or none, if the full title is reachable another way on touch; state the choice).
-- [ ] Tooltip purge: inventory every tooltip call site; keep tooltips only on icon-only controls whose purpose is not self-evident; remove them from chat rows, titles, and anything whose visible text already says what it is. List kept and removed sites in the summary.
+- [x] The rolling hover scan (the marquee that scrolls a truncated title so the whole thing can be read) is restored on sidebar chat rows and applied to job rows in the jobs sidebar; fine-pointer hover only, with a coarse-pointer equivalent already sanctioned by the app's laws (or none, if the full title is reachable another way on touch; state the choice).
+- [x] Tooltip purge: inventory every tooltip call site; keep tooltips only on icon-only controls whose purpose is not self-evident; remove them from chat rows, titles, and anything whose visible text already says what it is. List kept and removed sites in the summary.
 
 Done check: on dev, a long-titled chat row and a long-titled job row both scroll their text on hover (computed animation running) and rest truncated otherwise; removed tooltip sites show no tooltip content in the DOM on hover; kept sites (icon-only controls) still show theirs. Phone viewport holds. Fresh-context subagent verification. Commit.
 

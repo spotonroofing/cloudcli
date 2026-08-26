@@ -96,7 +96,7 @@ export function MemoryUpdatedMarker({ files }: { files: string[] }) {
       <BookMarked className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
       <span className="flex-shrink-0">{t('memoryUpdated', { defaultValue: 'Memory updated' })}</span>
       {files.length > 0 && (
-        <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground/60" title={files.join(', ')}>
+        <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground/60">
           {files.join(', ')}
         </span>
       )}

@@ -52,7 +52,6 @@ export function PastedTextChip({ name, text, onOpen }: { name: string; text: str
       onClick={onOpen}
       data-slot="pasted-text-chip"
       aria-label={`View ${name}`}
-      title={name}
       className="relative block h-20 w-20 overflow-hidden rounded-lg border border-border/50 bg-background/80 text-left shadow-sm transition-colors hover:bg-accent/40 outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
     >
       <div

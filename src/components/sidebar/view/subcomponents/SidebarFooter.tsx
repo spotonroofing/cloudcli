@@ -65,7 +65,6 @@ function ActivityCounterColumn({
             : 'animate-counter-breathe text-emerald-700 dark:text-emerald-300'
           : 'text-muted-foreground',
       )}
-      title={`${label}: ${count}`}
     >
       <Icon className="h-3.5 w-3.5 flex-shrink-0" />
       <span className="truncate">{label}</span>
@@ -180,7 +179,6 @@ export default function SidebarFooter({
           <button
             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
             onClick={() => toggleDrawer('accounts')}
-            title={activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
             aria-expanded={openDrawer === 'accounts'}
             data-slot="account-switcher-trigger"
           >

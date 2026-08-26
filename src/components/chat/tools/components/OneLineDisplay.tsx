@@ -135,7 +135,6 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
         <button
           onClick={handleAction}
           className="truncate font-mono text-xs text-primary transition-colors hover:text-primary/80 hover:underline"
-          title={value}
         >
           {displayName}
         </button>

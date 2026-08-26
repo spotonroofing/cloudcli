@@ -281,7 +281,6 @@ export default function CommandMenu({
                   <div className={`flex min-w-0 items-center gap-2 ${command.description ? 'mb-1' : 'mb-0'}`}>
                     <span
                       className="min-w-0 truncate font-mono text-[13px] font-semibold text-foreground"
-                      title={command.name}
                     >
                       {command.name}
                     </span>
@@ -294,7 +293,6 @@ export default function CommandMenu({
                   {command.description && (
                     <div
                       className="truncate whitespace-nowrap text-[12px] leading-4 text-muted-foreground"
-                      title={command.description}
                     >
                       {command.description}
                     </div>

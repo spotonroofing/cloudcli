@@ -129,7 +129,6 @@ export default function ComposerModelMenu({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-label={ariaLabel}
-        title={ariaLabel}
       >
         <span className="truncate">
           <SwapText value={hasModelSection ? modelLabel : currentEffortLabel}>

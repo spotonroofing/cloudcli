@@ -40,7 +40,6 @@ export const FileListContent: React.FC<FileListContentProps> = ({
               <button
                 onClick={handleClick}
                 className="font-mono text-[11px] text-primary transition-colors hover:text-primary/80 hover:underline"
-                title={filePath}
               >
                 {fileName}
               </button>

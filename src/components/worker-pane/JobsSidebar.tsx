@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { cn } from '../../lib/utils';
 import { AgentDisclosure } from '../../shared/view/beui/AgentDisclosure';
+import { MarqueeLabel } from '../../shared/view/beui/MarqueeLabel';
 import { SwapText } from '../../shared/view/beui/SwapText';
 import { TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
 import { EASE_OUT, SPRING_SWAP } from '../../shared/view/beui/ease';
@@ -178,6 +179,9 @@ export default function JobsSidebar({
   const [drawerOverrides, setDrawerOverrides] = useState<Record<number, boolean>>(
     () => (focusJob != null ? { [focusJob]: true } : {}),
   );
+  // Hover marquee on job rows (ui13 job 3): mouse enter/leave is effectively
+  // fine-pointer only — touch taps act before hover matters.
+  const [hoveredJob, setHoveredJob] = useState<number | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
   useEffect(() => {
     if (focusJob != null) {
@@ -268,7 +272,7 @@ export default function JobsSidebar({
             const toggleDrawer = () =>
               setDrawerOverrides((previous) => ({ ...previous, [unit.index]: !drawerOpen }));
             const titleClasses = cn(
-              'block max-w-full truncate text-left leading-5',
+              'flex max-w-full min-w-0 text-left leading-5',
               unit.kind === 'task' ? 'text-[12px]' : 'text-[13px]',
               unit.status === 'pending' && 'text-muted-foreground/65',
               unit.status === 'in-progress' && 'text-foreground',
@@ -305,6 +309,8 @@ export default function JobsSidebar({
                   data-status={unit.status}
                   data-drawer={hasDrawer ? (drawerOpen ? 'open' : 'closed') : undefined}
                   data-active={unit.index === activeJob ? 'true' : undefined}
+                  onMouseEnter={() => setHoveredJob(unit.index)}
+                  onMouseLeave={() => setHoveredJob((current) => (current === unit.index ? null : current))}
                   className={cn(
                     'group/row relative flex w-full items-center gap-2 rounded-md px-1.5 text-left',
                     unit.kind === 'task' ? 'min-h-7 pl-4' : 'min-h-8',
@@ -365,10 +371,16 @@ export default function JobsSidebar({
                           'rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         )}
                       >
-                        {unit.name}
+                        <MarqueeLabel active={hoveredJob === unit.index} className="flex-initial">
+                          {unit.name}
+                        </MarqueeLabel>
                       </button>
                     ) : (
-                      <span className={titleClasses}>{unit.name}</span>
+                      <span className={titleClasses}>
+                        <MarqueeLabel active={hoveredJob === unit.index} className="flex-initial">
+                          {unit.name}
+                        </MarqueeLabel>
+                      </span>
                     )}
                   </span>
                   {unit.tasks.length > 0 && (
@@ -479,7 +491,6 @@ export default function JobsSidebar({
                 <button
                   type="button"
                   onClick={() => onSelectRun(other.sessionId)}
-                  title={other.label}
                   data-slot="jobs-sidebar-other-run"
                   data-session-id={other.sessionId}
                   className="flex min-h-7 w-full items-center gap-2 rounded-md px-1.5 text-left outline-none transition-colors hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
