@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Transcript states and action rules -->
-<!-- tasks: Live thinking rows in the worker pane | Row-anatomy pass: every row family matches the Bash-row reference | Copy/rerun on user rows only, copy/timestamp on final assistant rows | Tool rows lose actions and trailing timestamps -->
+<!-- tasks: Live thinking rows in the worker pane | Shorten this run's manifest labels in place | Row-anatomy pass: every row family matches the Bash-row reference | Copy/rerun on user rows only, copy/timestamp on final assistant rows | Tool rows lose actions and trailing timestamps -->
 Execute Job 13 of PUNCHLIST_ui13.md in this repo (transcript states and action-button rules). The goal and items are Job 13's section and checkboxes in PUNCHLIST_ui13.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
