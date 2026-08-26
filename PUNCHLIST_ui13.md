@@ -33,9 +33,9 @@ Done check: on dev with a stub chain and the ui12 history: computed color of a c
 
 Goal: the jobs sidebar replaces the worker pane's top dropdown as the way to reach a run's chats. Files: the jobs sidebar row components, the worker pane header (the run switcher dropdown), routing/session-select paths, DESIGN.md. Dependencies: job 1 (row anatomy settles).
 
-- [ ] Hovering a job row swaps the right-side chevron for a chat icon; clicking it (or the row body) navigates the worker pane to that job's session transcript; clicking the job's title toggles its task drawer instead of navigating. Touch: tap the row navigates, tap the title toggles, consistent with tap-first law.
-- [ ] The top-of-pane run-switcher dropdown is retired: run selection happens through the jobs sidebar (and the existing worker counter drawer for cross-run jumps); whatever unique function the dropdown still carried (e.g. jumping to another run's chain) moves into the sidebar or counter drawer rather than being lost — inventory its functions first and state the mapping in the summary.
-- [ ] The active job's row indicates which session the pane is showing (subtle, monochromatic, not a tag chip).
+- [x] Hovering a job row swaps the right-side chevron for a chat icon; clicking it (or the row body) navigates the worker pane to that job's session transcript; clicking the job's title toggles its task drawer instead of navigating. Touch: tap the row navigates, tap the title toggles, consistent with tap-first law.
+- [x] The top-of-pane run-switcher dropdown is retired: run selection happens through the jobs sidebar (and the existing worker counter drawer for cross-run jumps); whatever unique function the dropdown still carried (e.g. jumping to another run's chain) moves into the sidebar or counter drawer rather than being lost — inventory its functions first and state the mapping in the summary.
+- [x] The active job's row indicates which session the pane is showing (subtle, monochromatic, not a tag chip).
 
 Done check: on dev with a completed multi-job run: hovering row 3 shows the chat icon; clicking navigates the pane to job 3's session (URL/pane header match); clicking the title only toggles the drawer; the dropdown is absent from the header DOM and each of its inventoried functions is reachable through the sidebar or counter drawer. Phone viewport holds. Fresh-context subagent verification. Commit.
 

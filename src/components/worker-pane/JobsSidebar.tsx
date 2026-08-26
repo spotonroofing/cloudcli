@@ -1,4 +1,4 @@
-import { ChevronDown, Milestone, PanelRightClose } from 'lucide-react';
+import { ChevronDown, MessageSquare, Milestone, PanelRightClose } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -116,6 +116,18 @@ type JobsSidebarProps = {
    * remounts the sidebar.
    */
   focusJob?: number | null;
+  /** The unit whose session the pane is showing (ui13 job 2). */
+  activeJob?: number | null;
+  /** Units with a session to navigate to (chain phases that have runs). */
+  openableJobs?: number[];
+  /** Navigate the worker pane to this unit's session. */
+  onOpenJob?: (jobIndex: number) => void;
+  /**
+   * The project's runs outside the shown chain — the retired run-switcher
+   * dropdown's cross-run jump, relocated here (ui13 job 2).
+   */
+  otherRuns?: { sessionId: string; label: string; age: string | null }[];
+  onSelectRun?: (sessionId: string) => void;
 };
 
 /**
@@ -128,8 +140,19 @@ type JobsSidebarProps = {
  * status icons, the job row's ring advances with its done/total counter, and
  * entries stagger in as a manifest (or an append) lands.
  */
-export default function JobsSidebar({ chain, run, onCollapse, focusJob }: JobsSidebarProps) {
+export default function JobsSidebar({
+  chain,
+  run,
+  onCollapse,
+  focusJob,
+  activeJob,
+  openableJobs,
+  onOpenJob,
+  otherRuns,
+  onSelectRun,
+}: JobsSidebarProps) {
   const reduce = useReducedMotion() ?? false;
+  const openable = new Set(openableJobs ?? []);
 
   const units: Unit[] = chain
     ? chainUnits(chain)
@@ -238,6 +261,21 @@ export default function JobsSidebar({ chain, run, onCollapse, focusJob }: JobsSi
             const hasDrawer = unit.tasks.length > 0;
             const drawerOpen = hasDrawer
               && (drawerOverrides[unit.index] ?? unit.index === currentUnit);
+            // Jobs are the navigation (ui13 job 2): a unit with a session
+            // navigates the pane on row click; the title alone toggles the
+            // drawer. Units without sessions keep the whole-row toggle.
+            const navigable = Boolean(onOpenJob && openable.has(unit.index));
+            const toggleDrawer = () =>
+              setDrawerOverrides((previous) => ({ ...previous, [unit.index]: !drawerOpen }));
+            const titleClasses = cn(
+              'block max-w-full truncate text-left leading-5',
+              unit.kind === 'task' ? 'text-[12px]' : 'text-[13px]',
+              unit.status === 'pending' && 'text-muted-foreground/65',
+              unit.status === 'in-progress' && 'text-foreground',
+              unit.status === 'completed' && 'text-muted-foreground/60',
+              unit.status === 'cancelled' && 'text-muted-foreground/55',
+              (hasDrawer || navigable) && 'group-hover/row:text-foreground',
+            );
             return (
               <motion.li
                 key={`${unit.index}-${unit.name}`}
@@ -253,24 +291,36 @@ export default function JobsSidebar({ chain, run, onCollapse, focusJob }: JobsSi
                       }
                 }
               >
-                <button
-                  type="button"
-                  disabled={!hasDrawer}
-                  aria-expanded={hasDrawer ? drawerOpen : undefined}
-                  onClick={() =>
-                    setDrawerOverrides((previous) => ({ ...previous, [unit.index]: !drawerOpen }))
+                <div
+                  onClick={
+                    navigable
+                      ? () => onOpenJob?.(unit.index)
+                      : hasDrawer
+                        ? toggleDrawer
+                        : undefined
                   }
                   data-slot="jobs-sidebar-row"
                   data-job={unit.index}
                   data-kind={unit.kind}
                   data-status={unit.status}
                   data-drawer={hasDrawer ? (drawerOpen ? 'open' : 'closed') : undefined}
+                  data-active={unit.index === activeJob ? 'true' : undefined}
                   className={cn(
-                    'group/row flex w-full items-center gap-2 rounded-md px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    'group/row relative flex w-full items-center gap-2 rounded-md px-1.5 text-left',
                     unit.kind === 'task' ? 'min-h-7 pl-4' : 'min-h-8',
-                    hasDrawer && 'cursor-pointer',
+                    (hasDrawer || navigable) && 'cursor-pointer',
+                    navigable && 'hover:bg-accent/50',
                   )}
                 >
+                  {/* Active-session indicator (ui13 job 2): a quiet
+                      foreground-ink edge bar, monochromatic, no chip. */}
+                  {unit.index === activeJob && (
+                    <span
+                      aria-hidden="true"
+                      data-slot="jobs-sidebar-active-bar"
+                      className="absolute bottom-1.5 left-0 top-1.5 w-0.5 rounded-full bg-foreground/70"
+                    />
+                  )}
                   <span className={cn(unit.kind === 'task' && 'scale-90')}>
                     {/* The active job's indicator breathes (ui12 job 8);
                         the pulse wraps only the icon, not the row. */}
@@ -298,18 +348,28 @@ export default function JobsSidebar({ chain, run, onCollapse, focusJob }: JobsSi
                       />
                     </span>
                   </span>
-                  <span
-                    className={cn(
-                      'min-w-0 flex-1 truncate leading-5',
-                      unit.kind === 'task' ? 'text-[12px]' : 'text-[13px]',
-                      unit.status === 'pending' && 'text-muted-foreground/65',
-                      unit.status === 'in-progress' && 'text-foreground',
-                      unit.status === 'completed' && 'text-muted-foreground/60',
-                      unit.status === 'cancelled' && 'text-muted-foreground/55',
-                      hasDrawer && 'group-hover/row:text-foreground',
+                  {/* The title shrinks to its text: the leftover middle
+                      space stays row body, so it navigates, not toggles. */}
+                  <span className="min-w-0 flex-1">
+                    {hasDrawer ? (
+                      <button
+                        type="button"
+                        aria-expanded={drawerOpen}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleDrawer();
+                        }}
+                        data-slot="jobs-sidebar-row-title"
+                        className={cn(
+                          titleClasses,
+                          'rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        )}
+                      >
+                        {unit.name}
+                      </button>
+                    ) : (
+                      <span className={titleClasses}>{unit.name}</span>
                     )}
-                  >
-                    {unit.name}
                   </span>
                   {unit.tasks.length > 0 && (
                     <span
@@ -324,7 +384,40 @@ export default function JobsSidebar({ chain, run, onCollapse, focusJob }: JobsSi
                       <span>{unit.tasks.length}</span>
                     </span>
                   )}
-                  {hasDrawer && (
+                  {/* Trailing slot: navigable rows swap the chevron for a
+                      chat icon on hover (ui13 job 2); rows without a session
+                      keep the plain state chevron. */}
+                  {navigable ? (
+                    <button
+                      type="button"
+                      aria-label={`Open ${unit.name} chat`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenJob?.(unit.index);
+                      }}
+                      data-slot="jobs-sidebar-row-chat"
+                      className="flex-shrink-0 rounded-sm text-muted-foreground/50 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring group-hover/row:text-muted-foreground"
+                    >
+                      {hasDrawer && (
+                        <motion.span
+                          aria-hidden="true"
+                          animate={{ rotate: drawerOpen ? 180 : 0 }}
+                          transition={reduce ? { duration: 0 } : SPRING_SWAP}
+                          className="block group-hover/row:hidden"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </motion.span>
+                      )}
+                      <MessageSquare
+                        className={cn(
+                          'h-3.5 w-3.5',
+                          hasDrawer
+                            ? 'hidden group-hover/row:block'
+                            : 'invisible group-hover/row:visible',
+                        )}
+                      />
+                    </button>
+                  ) : hasDrawer ? (
                     <motion.span
                       aria-hidden="true"
                       animate={{ rotate: drawerOpen ? 180 : 0 }}
@@ -333,8 +426,8 @@ export default function JobsSidebar({ chain, run, onCollapse, focusJob }: JobsSi
                     >
                       <ChevronDown className="h-3.5 w-3.5" />
                     </motion.span>
-                  )}
-                </button>
+                  ) : null}
+                </div>
                 {hasDrawer && (
                   <AgentDisclosure open={drawerOpen} data-slot="jobs-sidebar-drawer">
                     <ul className="pb-0.5 pl-9">
@@ -369,6 +462,43 @@ export default function JobsSidebar({ chain, run, onCollapse, focusJob }: JobsSi
           })}
         </AnimatePresence>
       </ol>
+
+      {/* Other runs (ui13 job 2): the project's runs outside the shown chain
+          — the retired run-switcher dropdown's cross-run jump lives here. */}
+      {onSelectRun && otherRuns && otherRuns.length > 0 && (
+        <div
+          data-slot="jobs-sidebar-other-runs"
+          className="max-h-44 flex-shrink-0 overflow-y-auto border-t border-border/60 px-2 py-2"
+        >
+          <p className="px-1.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Other runs
+          </p>
+          <ul>
+            {otherRuns.map((other) => (
+              <li key={other.sessionId}>
+                <button
+                  type="button"
+                  onClick={() => onSelectRun(other.sessionId)}
+                  title={other.label}
+                  data-slot="jobs-sidebar-other-run"
+                  data-session-id={other.sessionId}
+                  className="flex min-h-7 w-full items-center gap-2 rounded-md px-1.5 text-left outline-none transition-colors hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  <MessageSquare className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+                    {other.label}
+                  </span>
+                  {other.age && (
+                    <span className="flex-shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground/70">
+                      {other.age}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

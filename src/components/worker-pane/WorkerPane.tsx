@@ -7,11 +7,10 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
-import { modelDisplayLabel } from '../../utils/modelLabels';
 import { onSettingChange, writeSetting } from '../../utils/cloudSettings';
 import { formatCompactAge } from '../sidebar/utils/utils';
 import SidebarFooterDrawer from '../sidebar/view/subcomponents/SidebarFooterDrawer';
-import { ActionMenu, Badge, Button, Skeleton, Tooltip } from '../../shared/view/ui';
+import { Badge, Button, Skeleton, Tooltip } from '../../shared/view/ui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 
@@ -293,34 +292,63 @@ export default function WorkerPane({
   const selectedRun = runs.find((run) => run.sessionId === paneSession?.id) ?? null;
   const selectedChain = selectedRun?.chainSlug ? (chains[selectedRun.chainSlug] ?? null) : null;
 
+  // Jobs are the navigation (ui13 job 2): which chain units have sessions to
+  // open, which unit the pane is showing, and the project's other runs for
+  // cross-run jumps — the retired run-switcher dropdown's functions, routed
+  // through handleSelectRun so pin/auto-follow semantics hold.
+  const chainRuns = selectedChain
+    ? runs.filter((run) => run.chainSlug === selectedChain.slug && run.chainPhase != null)
+    : [];
+  const openableJobs = selectedChain
+    ? chainRuns.map((run) => run.chainPhase as number)
+    : selectedRun
+      ? [1]
+      : [];
+  const activeJob = selectedRun ? (selectedChain ? selectedRun.chainPhase : 1) : null;
+  const handleOpenJob = (jobIndex: number) => {
+    const target = selectedChain
+      ? chainRuns.find((run) => run.chainPhase === jobIndex)
+      : selectedRun;
+    if (target) {
+      handleSelectRun(target);
+    }
+  };
+  const otherRuns = runs
+    .filter((run) =>
+      selectedChain ? run.chainSlug !== selectedChain.slug : run.sessionId !== selectedRun?.sessionId,
+    )
+    .map((run) => ({
+      sessionId: run.sessionId,
+      label: runLabel(run, chains),
+      // Same compact relative-date treatment as the sidebar rows; render
+      // time is current enough for a slow-moving list.
+      age: run.lastActivity ? formatCompactAge(run.lastActivity, new Date()) : null,
+    }));
+  const handleSelectRunId = (sessionId: string) => {
+    const target = runs.find((run) => run.sessionId === sessionId);
+    if (target) {
+      handleSelectRun(target);
+    }
+  };
+
   return (
     <div className="flex h-full min-w-0 flex-col">
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
         <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         <span className="text-xs font-medium text-foreground">Worker</span>
         {!runsLoaded && <Skeleton className="h-4 w-36 rounded-sm" />}
-        {runsLoaded && runs.length > 0 && (
-          <ActionMenu
-            label={selectedRun ? runLabel(selectedRun, chains) : 'Runs'}
-            ariaLabel="Switch worker run"
-            align="left"
-            variant="ghost"
-            size="sm"
-            className="min-w-0"
-            triggerClassName="h-6 max-w-full gap-1 px-1.5 text-[11px] font-normal text-muted-foreground hover:text-foreground [&>span]:truncate [&_svg]:h-3 [&_svg]:w-3"
-            menuClassName="w-72"
-            items={runs.map((run) => ({
-              key: run.sessionId,
-              label: runLabel(run, chains),
-              description: [run.origin, run.state, run.model && modelDisplayLabel(run.model)]
-                .filter(Boolean)
-                .join(' · '),
-              // Same compact relative-date treatment as the sidebar rows; the
-              // menu is transient, so render time is current enough.
-              trailing: run.lastActivity ? formatCompactAge(run.lastActivity, new Date()) : undefined,
-              onSelect: () => handleSelectRun(run),
-            }))}
-          />
+        {/* The run-switcher dropdown is retired (ui13 job 2): run selection
+            lives in the jobs sidebar (job rows + Other runs) and the sidebar
+            counter drawer. The header keeps a plain label naming the shown
+            run. */}
+        {runsLoaded && selectedRun && (
+          <span
+            data-slot="worker-run-label"
+            title={runLabel(selectedRun, chains)}
+            className="min-w-0 truncate text-[11px] font-normal text-muted-foreground"
+          >
+            {runLabel(selectedRun, chains)}
+          </span>
         )}
         {/* No status badge in any run state (ui11 phase 10): state lives in
             the jobs sidebar and the run switcher. The two badges below are
@@ -476,6 +504,11 @@ export default function WorkerPane({
                 run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
                 onCollapse={() => toggleJobsSidebar(false)}
                 focusJob={railFocusJob}
+                activeJob={activeJob}
+                openableJobs={openableJobs}
+                onOpenJob={handleOpenJob}
+                otherRuns={otherRuns}
+                onSelectRun={handleSelectRunId}
               />
             </div>
           ) : (
@@ -523,6 +556,17 @@ export default function WorkerPane({
             <JobsSidebar
               chain={selectedChain}
               run={selectedChain ? null : { label: runLabel(selectedRun, chains), state: selectedRun.state }}
+              activeJob={activeJob}
+              openableJobs={openableJobs}
+              onOpenJob={(jobIndex) => {
+                handleOpenJob(jobIndex);
+                setJobsSheetOpen(false);
+              }}
+              otherRuns={otherRuns}
+              onSelectRun={(sessionId) => {
+                handleSelectRunId(sessionId);
+                setJobsSheetOpen(false);
+              }}
             />
           </div>
         </SidebarFooterDrawer>
