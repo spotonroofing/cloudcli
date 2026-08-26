@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Sidebar row fixes -->
-<!-- tasks: Orange dot removed | Timestamps reflect the last real message | Border beam fires for worker activity too | Planner and worker bars pixel-equal in height | One themed expandable error row | Marquee stops and returns on leave -->
+<!-- tasks: Orange dot removed | Timestamps reflect the last real message | Border beam fires for worker activity too | Planner and worker bars pixel-equal in height | One themed expandable error row | Stable project order, full-width names | Chat switching never resets the layout | Dates on day-old jobs | Marquee stops and returns on leave -->
 Execute Job 12 of PUNCHLIST_ui14.md in this repo (sidebar rows: no orange dot, honest timestamps, marquee stops on leave). The goal and items are that job's section and checkboxes in PUNCHLIST_ui14.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
