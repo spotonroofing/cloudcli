@@ -81,10 +81,10 @@ Done check: on dev: no About tab; the tab strip's DOM matches the sidebar icon-t
 
 Goal: opening a pasted-text preview lets Willem edit the text in place. Files: the PASTED chip preview, composer attachment state, DESIGN.md. Dependencies: none.
 
-- [ ] Character counter moves to the left end of the row under the prompt bar, flush with the enclosure's left edge (mirroring the usage ring on the right); it shows a static "0" before typing (never blank), lining tabular digits.
-- [ ] Counter digits, fourth report: in "1,174" the two 1s render at different heights, so this is the animated NumberTicker's per-column positioning, not the font. Fix it so identical glyphs have identical boxes at every device-pixel-ratio and zoom; if the ticker cannot be made pixel-exact, replace it on the counter with plain tabular text (a counter does not need a ticker). Verify by measuring glyph boxes of repeated digits.
-- [ ] Remove the X clear-input button from the composer entirely.
-- [ ] The pasted-text preview becomes an editor: the text is editable in the preview, saves back to the attachment on close or Save, cancel restores; works for previews opened from the composer and from a sent bubble (sent bubbles stay read-only, state that).
+- [x] Character counter moves to the left end of the row under the prompt bar, flush with the enclosure's left edge (mirroring the usage ring on the right); it shows a static "0" before typing (never blank), lining tabular digits.
+- [x] Counter digits, fourth report: in "1,174" the two 1s render at different heights, so this is the animated NumberTicker's per-column positioning, not the font. Fix it so identical glyphs have identical boxes at every device-pixel-ratio and zoom; if the ticker cannot be made pixel-exact, replace it on the counter with plain tabular text (a counter does not need a ticker). Verify by measuring glyph boxes of repeated digits. *(Replaced with plain tabular text; the two 1s in "1,174" measure identical boxes at zoom 0.9, 1, 1.1, 1.25, 1.5.)*
+- [x] Remove the X clear-input button from the composer entirely.
+- [x] The pasted-text preview becomes an editor: the text is editable in the preview, saves back to the attachment on close or Save, cancel restores; works for previews opened from the composer and from a sent bubble (sent bubbles stay read-only, state that). *(Sent-bubble viewers stay read-only and carry a "Read only" caption; the edit re-uploads as a fresh file under the same name.)*
 
 Done check: on dev: edit text in a composer preview, close, send; the sent message carries the edited text; sent-bubble preview is read-only. Phone holds. Fresh-context subagent verification. Commit.
 

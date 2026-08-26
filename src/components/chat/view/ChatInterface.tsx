@@ -209,8 +209,10 @@ function ChatInterface({
     selectFile,
     attachedFiles,
     removeAttachedFile,
+    replaceAttachedFileText,
     draftAttachments,
     removeDraftAttachment,
+    replaceDraftAttachmentText,
     uploadingFiles,
     fileErrors,
     getRootProps,
@@ -229,7 +231,6 @@ function ChatInterface({
     handleTextareaClick,
     handleTextareaInput,
     syncInputOverlayScroll,
-    handleClearInput,
     handleAbortSession,
     handlePermissionDecision,
     handleGrantToolPermission,
@@ -626,8 +627,6 @@ function ChatInterface({
           onToggleCommandMenu={handleToggleCommandMenu}
           onHandoff={runHandoff}
           handoffAvailable={selectedSession ? selectedSession.origin === 'planner' : sessionOrigin === 'planner'}
-          hasInput={Boolean(input.trim())}
-          onClearInput={handleClearInput}
           onSubmit={handleSubmit}
           isDragActive={isDragActive}
           queuedDraft={queuedDraft}
@@ -635,8 +634,10 @@ function ChatInterface({
           onDeleteQueuedDraft={deleteQueuedDraft}
           attachedFiles={attachedFiles}
           onRemoveAttachment={removeAttachedFile}
+          onReplaceAttachmentText={replaceAttachedFileText}
           draftAttachments={draftAttachments}
           onRemoveDraftAttachment={removeDraftAttachment}
+          onReplaceDraftAttachmentText={replaceDraftAttachmentText}
           uploadingFiles={uploadingFiles}
           fileErrors={fileErrors}
           showFileDropdown={showFileDropdown}

@@ -191,7 +191,7 @@ const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 /**
  * A text paste longer than this collapses into a pasted-text file attachment
  * (Claude-desktop style) instead of flooding the textarea. The file rides the
- * existing attachment path: uploaded to /api/assets/files at send time and
+ * existing attachment path: uploaded to /api/assets/files when attached and
  * referenced through the provider-neutral <files_input> block.
  */
 const PASTE_AS_FILE_THRESHOLD = 2000;
@@ -1746,18 +1746,6 @@ export function useChatComposerState({
     [resizeTextarea, setCursorPosition, syncInputOverlayScroll],
   );
 
-  const handleClearInput = useCallback(() => {
-    setInput('');
-    inputValueRef.current = '';
-    editContextRef.current = null;
-    resetCommandMenuState();
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.focus();
-    }
-    setIsTextareaExpanded(false);
-  }, [resetCommandMenuState]);
-
   const handleAbortSession = useCallback(() => {
     if (!canAbortSession) {
       return;
@@ -1824,6 +1812,27 @@ export function useChatComposerState({
     setDraftAttachmentsSync(draftAttachmentsRef.current.filter((_, currentIndex) => currentIndex !== index));
   }, [setDraftAttachmentsSync]);
 
+  // Pasted-text edits (ui14 job 6): the edited text becomes a fresh File under
+  // the same name, uploaded like any attachment; the old file or descriptor
+  // drops out (an in-flight upload of the old File then swaps nothing).
+  const replaceAttachedFileText = useCallback((index: number, text: string) => {
+    const previous = attachedFilesRef.current[index];
+    if (!previous) return;
+    const next = new File([text], previous.name, { type: 'text/plain' });
+    setAttachedFilesSync(attachedFilesRef.current.map((file, currentIndex) => (currentIndex === index ? next : file)));
+    beginBackgroundUpload([next]);
+  }, [beginBackgroundUpload, setAttachedFilesSync]);
+
+  const replaceDraftAttachmentText = useCallback((index: number, text: string) => {
+    const previous = draftAttachmentsRef.current[index];
+    if (!previous) return;
+    const name = previous.name || previous.path?.split(/[\\/]/).pop() || 'Pasted text.txt';
+    const next = new File([text], name, { type: 'text/plain' });
+    setDraftAttachmentsSync(draftAttachmentsRef.current.filter((_, currentIndex) => currentIndex !== index));
+    setAttachedFilesSync([...attachedFilesRef.current, next]);
+    beginBackgroundUpload([next]);
+  }, [beginBackgroundUpload, setAttachedFilesSync, setDraftAttachmentsSync]);
+
   const [isInputFocused, setIsInputFocused] = useState(false);
 
   const handleInputFocusChange = useCallback(
@@ -1856,8 +1865,10 @@ export function useChatComposerState({
     selectFile,
     attachedFiles,
     removeAttachedFile,
+    replaceAttachedFileText,
     draftAttachments,
     removeDraftAttachment,
+    replaceDraftAttachmentText,
     uploadingFiles,
     fileErrors,
     getRootProps,
@@ -1876,7 +1887,6 @@ export function useChatComposerState({
     handleTextareaClick,
     handleTextareaInput,
     syncInputOverlayScroll,
-    handleClearInput,
     handleAbortSession,
     handlePermissionDecision,
     handleGrantToolPermission,

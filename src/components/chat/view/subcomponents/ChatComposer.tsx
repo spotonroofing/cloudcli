@@ -10,7 +10,7 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { XIcon, Loader2, ArrowUpIcon } from 'lucide-react';
+import { Loader2, ArrowUpIcon } from 'lucide-react';
 
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
@@ -23,10 +23,8 @@ import {
   PromptInputBody,
   PromptInputTextarea,
   PromptInputTools,
-  PromptInputButton,
   PromptInputSubmit,
 } from '../../../../shared/view/ui';
-import { NumberTicker } from '../../../../shared/view/beui/NumberTicker';
 
 import CommandMenu from './CommandMenu';
 import ComposerAttachment from './ComposerAttachment';
@@ -75,8 +73,6 @@ interface ChatComposerProps {
   onHandoff: () => void;
   /** Handoff applies only to planner project chats, not worker/scratch surfaces. */
   handoffAvailable: boolean;
-  hasInput: boolean;
-  onClearInput: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement> | MouseEvent<HTMLButtonElement> | TouchEvent<HTMLButtonElement>) => void;
   isDragActive: boolean;
   queuedDraft: QueuedDraft | null;
@@ -84,9 +80,11 @@ interface ChatComposerProps {
   onDeleteQueuedDraft: () => void;
   attachedFiles: File[];
   onRemoveAttachment: (index: number) => void;
+  onReplaceAttachmentText: (index: number, text: string) => void;
   /** Draft attachments already uploaded to the asset store (restored or attach-time uploads). */
   draftAttachments: ChatAttachment[];
   onRemoveDraftAttachment: (index: number) => void;
+  onReplaceDraftAttachmentText: (index: number, text: string) => void;
   uploadingFiles: Map<string, number>;
   fileErrors: Map<string, string>;
   showFileDropdown: boolean;
@@ -136,8 +134,6 @@ export default function ChatComposer({
   onToggleCommandMenu,
   onHandoff,
   handoffAvailable,
-  hasInput,
-  onClearInput,
   onSubmit,
   isDragActive,
   queuedDraft,
@@ -145,8 +141,10 @@ export default function ChatComposer({
   onDeleteQueuedDraft,
   attachedFiles,
   onRemoveAttachment,
+  onReplaceAttachmentText,
   draftAttachments,
   onRemoveDraftAttachment,
+  onReplaceDraftAttachmentText,
   uploadingFiles,
   fileErrors,
   showFileDropdown,
@@ -350,6 +348,7 @@ export default function ChatComposer({
                   key={attachment.path || `${attachment.name}-${index}`}
                   descriptor={attachment}
                   onRemove={() => onRemoveDraftAttachment(index)}
+                  onReplaceText={(text) => onReplaceDraftAttachmentText(index, text)}
                 />
               ))}
               {attachedFiles.map((file, index) => (
@@ -357,6 +356,7 @@ export default function ChatComposer({
                   key={`${file.name}-${file.lastModified}-${index}`}
                   file={file}
                   onRemove={() => onRemoveAttachment(index)}
+                  onReplaceText={(text) => onReplaceAttachmentText(index, text)}
                   uploadProgress={uploadingFiles.get(file.name)}
                   error={fileErrors.get(file.name)}
                 />
@@ -443,41 +443,30 @@ export default function ChatComposer({
           </div>
       </PromptInput>
 
-        {/* Slim secondary row (ui11 phase 5, ui12 phase 2, ui13 job 12): floats
-            under the enclosure, outside its border — voice + clear left (the
-            handoff and slash buttons moved into the plus menu), the character
-            counter + model selector + context ring right. No horizontal
-            padding: the left cluster's edge and the ring's right edge sit
-            flush with the enclosure's borders. */}
+        {/* Slim secondary row (ui11 phase 5, ui12 phase 2, ui13 job 12, ui14
+            job 6): floats under the enclosure, outside its border. Left: the
+            character counter flush with the enclosure's left edge (plain
+            tabular text, always shown, "0" before typing), then voice. Right:
+            model selector + context ring, the ring flush with the right edge.
+            No horizontal padding on the row. */}
         <div
           data-slot="composer-secondary-row"
           className="mt-1 flex items-center justify-between gap-2"
         >
-            <PromptInputTools className="min-w-0">
+            <PromptInputTools className="min-w-0 gap-1.5">
+              <span
+                data-slot="char-counter"
+                className="font-mono text-[10px] font-medium tabular-nums text-muted-foreground"
+              >
+                {input.length.toLocaleString('en-US')}
+              </span>
+
               {onVoiceTranscript && voiceAvailable && (
                 <VoiceInputButton state={voiceState} onToggle={voiceToggle} errorMsg={voiceError} className="h-7 w-7" />
-              )}
-
-              {hasInput && (
-                <PromptInputButton
-                  tooltip={{ content: t('input.clearInput', { defaultValue: 'Clear input' }) }}
-                  onClick={onClearInput}
-                  className="h-7 w-7"
-                >
-                  <XIcon />
-                </PromptInputButton>
               )}
             </PromptInputTools>
 
             <div className="flex shrink-0 items-center gap-1.5">
-              {input.length > 0 && (
-                <span
-                  data-slot="char-counter"
-                  className="font-mono text-[10px] font-medium tabular-nums text-muted-foreground"
-                >
-                  <NumberTicker value={input.length} locale duration={0.35} stagger={0} startOnView={false} />
-                </span>
-              )}
               <ComposerModelMenu
                 effort={effort}
                 effortOptions={availableEffortOptions}

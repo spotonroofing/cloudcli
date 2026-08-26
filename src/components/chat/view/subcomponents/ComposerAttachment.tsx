@@ -17,6 +17,8 @@ interface ComposerAttachmentProps {
   file?: File;
   descriptor?: ChatAttachment;
   onRemove: () => void;
+  /** Pasted-text chips only: the viewer's edited text replaces the attachment. */
+  onReplaceText?: (text: string) => void;
   uploadProgress?: number;
   error?: string;
 }
@@ -27,7 +29,7 @@ const formatFileSize = (size: number) => {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-const ComposerAttachment = ({ file, descriptor, onRemove, uploadProgress, error }: ComposerAttachmentProps) => {
+const ComposerAttachment = ({ file, descriptor, onRemove, onReplaceText, uploadProgress, error }: ComposerAttachmentProps) => {
   const [preview, setPreview] = useState<string | undefined>(undefined);
   const [expanded, setExpanded] = useState(false);
   const [filePastedText, setFilePastedText] = useState<string | null>(null);
@@ -153,7 +155,13 @@ const ComposerAttachment = ({ file, descriptor, onRemove, uploadProgress, error 
         <ImageLightbox src={preview} alt={name} onClose={() => setExpanded(false)} />
       )}
       {isPastedText && (
-        <PastedTextViewer name={name} text={pastedText} open={viewerOpen} onOpenChange={setViewerOpen} />
+        <PastedTextViewer
+          name={name}
+          text={pastedText}
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          onSave={onReplaceText}
+        />
       )}
     </div>
   );
