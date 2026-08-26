@@ -1,0 +1,25 @@
+[
+ {
+  "name": "Jobs mono, compact rail",
+  "tasks": [
+   "White job checks, green tasks and counters",
+   "Collapsed rail of count rings",
+   "Ring click opens that job's drawer"
+  ]
+ },
+ {
+  "name": "Jobs are the navigation",
+  "tasks": [
+   "Job rows navigate to their session, chat icon on hover",
+   "Top run-switcher dropdown retired with functions mapped",
+   "Active job indicated monochromatically"
+  ]
+ },
+ {
+  "name": "Rolling scan and tooltip purge",
+  "tasks": [
+   "Hover marquee restored on chat rows and added to job rows",
+   "Tooltips kept only on non-self-evident icon controls"
+  ]
+ }
+]
