@@ -11,7 +11,7 @@ NODE=$(command -v node || echo /usr/local/bin/node)
 AGENTS_DIR="$HOME/Library/LaunchAgents"
 UID_NUM=$(id -u)
 
-mkdir -p "$AGENTS_DIR" "$HOME/forge-logs/cloudcli-service" "$HOME/forge-logs/cloudcli-backup" "$HOME/backups/cloudcli-nightly"
+mkdir -p "$AGENTS_DIR" "$HOME/forge-logs/cloudcli-service" "$HOME/forge-logs/cloudcli-backup" "$HOME/forge-logs/cloudcli-scrub" "$HOME/backups/cloudcli-nightly"
 
 install_agent() {
     local template="$1" label="$2"
@@ -24,7 +24,7 @@ install_agent() {
     echo "installed + bootstrapped $label"
 }
 
-chmod +x "$SCRIPT_DIR/cloudcli-backup.sh" "$SCRIPT_DIR/dispatch" "$SCRIPT_DIR/dispatch-chain-runner" "$SCRIPT_DIR/cloudcli-dev-start.sh"
+chmod +x "$SCRIPT_DIR/cloudcli-backup.sh" "$SCRIPT_DIR/transcript-scrub.mjs" "$SCRIPT_DIR/dispatch" "$SCRIPT_DIR/dispatch-chain-runner" "$SCRIPT_DIR/cloudcli-dev-start.sh"
 mkdir -p "$HOME/.local/bin"
 ln -sf "$SCRIPT_DIR/dispatch" "$HOME/.local/bin/dispatch"
 chmod +x "$SCRIPT_DIR/promote.sh"
@@ -34,6 +34,7 @@ mkdir -p "$HOME/.cloudcli-dev" "$HOME/.claude-dev/projects"
 [[ -f "$HOME/.claude-dev/.claude.json" ]] || cp "$HOME/.claude.json" "$HOME/.claude-dev/.claude.json" 2>/dev/null || true
 install_agent com.spoton.cloudcli-live.plist.template com.spoton.cloudcli-live
 install_agent com.spoton.cloudcli-backup.plist.template com.spoton.cloudcli-backup
+install_agent com.spoton.cloudcli-scrub.plist.template com.spoton.cloudcli-scrub
 install_agent com.spoton.cloudcli-dev.plist.template com.spoton.cloudcli-dev
 
 launchctl list | grep -E 'com\.spoton\.cloudcli' || true

@@ -4,11 +4,14 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { appConfigDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
+import { appConfigDb, projectsDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
+import { PLANNER_MEMORY_ROOT } from '@/modules/memory/index.js';
 import { providerRuntimeService, providerTokenUsageService, sessionsService } from '@/modules/providers/index.js';
 import { sendFleetNotification } from '@/modules/notifications/index.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
 import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/websocket/index.js';
+
+import { findUnpushedHandoff } from './handoff-push.js';
 
 type ChainStatus = 'running' | 'completed' | 'stopped' | 'failed';
 
@@ -997,7 +1000,32 @@ class WatchdogService {
    * fresh-boot wake the rotation uses.
    */
   plannerHandoffComplete(projectPath: string): void {
+    this.checkHandoffPushed(projectPath).catch((error) => {
+      log(`handoff push check failed for ${projectPath}: ${error instanceof Error ? error.message : String(error)}`);
+    });
     this.queueWake(projectPath, readPlannerBootPrompt(), { freshBoot: true });
+  }
+
+  /**
+   * A handoff that ended cleanly but left planner/<project> uncommitted or
+   * the memory repo unpushed (audit 2.8) fires decision-needed: the other
+   * machines would otherwise boot from a stale STATE.md with no signal.
+   */
+  private async checkHandoffPushed(projectPath: string): Promise<void> {
+    const normalized = normalizeProjectPath(projectPath);
+    const project = projectsDb.getProjectPaths().find((row) => normalizeProjectPath(row.project_path) === normalized);
+    const memoryFolder = project?.planner_memory_name?.trim() || path.basename(normalized);
+    const repoRoot = path.dirname(PLANNER_MEMORY_ROOT);
+    const problem = await findUnpushedHandoff(repoRoot, memoryFolder);
+    if (!problem) {
+      return;
+    }
+    this.notify(
+      'decision-needed',
+      'Handoff did not push',
+      `The /handoff for ${normalized} ended but ${problem}. Push ${repoRoot} by hand so the other machines see this handoff.`,
+      { projectPath: normalized },
+    );
   }
 
   /**

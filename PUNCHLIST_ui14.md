@@ -112,8 +112,8 @@ Done check: on dev: a stub phase printing the spend-limit message parks the acco
 
 Goal: leaked secrets stop living in local transcripts, and promote cannot tag a mid-flight commit. Files: a new local scrub script + launchd schedule, promote.sh, the handoff push path. Dependencies: none. Audit findings 3.5, 2.4, 2.8. Do not print any secret value anywhere while doing this.
 
-- [ ] Transcript scrub daemon: a scheduled local job over ~/.claude/projects and ~/.claude-dev/projects that redacts known secret shapes (Twilio SK/secret pairs and AccountSids, Anthropic keys, generic bearer tokens) in place with a redaction marker, logs counts only, never values; first run covers the six transcripts the audit named (section 3.3), verified by grep count zero afterward.
-- [ ] promote.sh guards the `mini-last-good` tag against a commit that belongs to a running chain (drain must be complete and HEAD must not be a dispatched phase mid-flight); handoff push failure fires decision-needed.
+- [x] Transcript scrub daemon: a scheduled local job over ~/.claude/projects and ~/.claude-dev/projects that redacts known secret shapes (Twilio SK/secret pairs and AccountSids, Anthropic keys, generic bearer tokens) in place with a redaction marker, logs counts only, never values; first run covers the six transcripts the audit named (section 3.3), verified by grep count zero afterward.
+- [x] promote.sh guards the `mini-last-good` tag against a commit that belongs to a running chain (drain must be complete and HEAD must not be a dispatched phase mid-flight); handoff push failure fires decision-needed.
 
 Done check: after the first scrub, grep for the audited shapes across both transcript dirs returns zero matches (counts in the summary, never values); promote's guard refuses a simulated mid-flight tag in a dry run; a forced handoff push failure notifies. Fresh-context subagent verification. Commit.
 

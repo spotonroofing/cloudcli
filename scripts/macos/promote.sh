@@ -9,15 +9,20 @@
 # via launchd → post-promote health check → on success advance the last-good
 # artifact snapshot and the mini-last-good git tag; on failure restore the
 # last-good artifacts, restart live back to health, and fire decision-needed.
+#
+# The tag has a guard (ui14 job 9): mini-last-good never lands on a commit a
+# running chain is still building. `promote --tag-guard` runs only that check
+# against the watchdog (PROMOTE_SERVER_URL / PROMOTE_DB_PATH pick the
+# instance) and exits 0 when the tag would be allowed, 2 when refused.
 set -u
 
 REPO="${CLOUDCLI_REPO:-$HOME/Projects/cloudcli}"
-SERVER_URL="http://127.0.0.1:4747"
+SERVER_URL="${PROMOTE_SERVER_URL:-http://127.0.0.1:4747}"
 DEV_URL="http://127.0.0.1:4748"
 SNAPSHOT_DIR="$REPO/.last-good"
 DRAIN_BUDGET_S="${PROMOTE_DRAIN_BUDGET_S:-1800}"
 UID_NUM=$(id -u)
-DB_PATH="$HOME/.cloudcli/auth.db"
+DB_PATH="${PROMOTE_DB_PATH:-$HOME/.cloudcli/auth.db}"
 
 log() { print -r -- "[promote $(date +%H:%M:%S)] $*"; }
 fail() { log "ABORT: $*"; exit 1; }
@@ -35,7 +40,42 @@ notify() {
 
 health() { curl -s -m 5 "$1/health" | grep -q '"status":"ok"'; }
 
+# Tag guard: HEAD is safe to tag only when no chain on this repo has a phase
+# mid-flight (phase-start seen, no phase-end yet) and no in-server dispatched
+# run is still open. A between-phases chain is fine: HEAD is its last
+# committed unit. Unreadable status refuses; a guard that cannot see the
+# chain state must not tag.
+tag_guard() {
+  local verdict
+  verdict=$(curl -s -K "$HEADER_FILE" -m 10 "$SERVER_URL/api/watchdog/status" | REPO_REAL="$(cd "$REPO" && pwd -P)" python3 -c '
+import json, os, sys
+repo = os.environ["REPO_REAL"]
+def same(p):
+    return bool(p) and os.path.realpath(p) == repo
+try:
+    d = json.load(sys.stdin)["data"]
+except Exception:
+    print("watchdog status unreadable"); sys.exit(0)
+live = [c["slug"] for c in d.get("chains", []) if c.get("status") == "running" and c.get("phaseActive") and same(c.get("projectPath"))]
+open_runs = [r for r in d.get("dispatchRuns", []) if not r.get("ended") and same(r.get("projectPath"))]
+if live:
+    print("chain " + ", ".join(live) + " has a phase mid-flight")
+elif open_runs:
+    print(str(len(open_runs)) + " dispatched run(s) still open")
+else:
+    print("ok")
+')
+  [[ "$verdict" == ok ]] && return 0
+  log "tag guard refused mini-last-good: $verdict"
+  return 1
+}
+
 cd "$REPO" || fail "repo missing"
+
+if [[ "${1:-}" == "--tag-guard" ]]; then
+  if tag_guard; then log "tag guard: HEAD $(git rev-parse --short HEAD) may be tagged"; exit 0; fi
+  exit 2
+fi
 
 log "building (client + server)"
 npm run build >/tmp/promote-build.log 2>&1 || fail "build failed; see /tmp/promote-build.log"
@@ -99,8 +139,12 @@ if [[ $LIVE_OK -eq 1 ]]; then
   mkdir -p "$SNAPSHOT_DIR"
   cp -R "$REPO/dist" "$SNAPSHOT_DIR/dist"
   cp -R "$REPO/dist-server" "$SNAPSHOT_DIR/dist-server"
-  git -C "$REPO" tag -f mini-last-good HEAD >/dev/null 2>&1 || true
-  log "promote complete (mini-last-good -> $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null))"
+  if tag_guard; then
+    git -C "$REPO" tag -f mini-last-good HEAD >/dev/null 2>&1 || true
+    log "promote complete (mini-last-good -> $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null))"
+  else
+    log "promote complete (mini-last-good withheld; re-run promote once the chain is between phases)"
+  fi
   exit 0
 fi
 
