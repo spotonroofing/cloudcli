@@ -204,3 +204,53 @@ test('Agent route reuses a matching checkout without cloning or deleting it', as
   assert.deepEqual(spawnedArguments, [['config', '--get', 'remote.origin.url']]);
   assert.deepEqual(removedPaths, []);
 });
+
+test('Agent route launches dispatched Claude and Codex sessions without MCP servers', async () => {
+  const launchOptions = new Map<string, Parameters<AgentDependencies['queryClaude']>[1]>();
+  const mcpToolCounts = new Map<string, number>();
+  const models = {
+    getProviderModels: async () => ({ models: { DEFAULT: 'default-model' } }),
+  } as unknown as AgentDependencies['models'];
+  const recordHeadlessLaunch = (
+    provider: string,
+    options: Parameters<AgentDependencies['queryClaude']>[1],
+  ): void => {
+    launchOptions.set(provider, options);
+    const mcpToolCount = options.mcpPolicy === 'none' ? 0 : 1;
+    mcpToolCounts.set(provider, mcpToolCount);
+    console.log(`Headless agent route ${provider} MCP tools: ${mcpToolCount}`);
+  };
+
+  await withAgentServer(createDependencies({
+    fileSystem: {
+      access: async () => undefined,
+    } as unknown as AgentDependencies['fileSystem'],
+    models,
+    queryClaude: (async (_message, options) => {
+      recordHeadlessLaunch('claude', options);
+    }) as AgentDependencies['queryClaude'],
+    queryCodex: (async (_message, options) => {
+      recordHeadlessLaunch('codex', options);
+    }) as AgentDependencies['queryCodex'],
+  }), async (baseUrl) => {
+    for (const provider of ['claude', 'codex']) {
+      const response = await fetch(`${baseUrl}/api/agent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projectPath: '/workspace/project',
+          message: 'Run headlessly',
+          provider,
+          origin: 'dispatch',
+          stream: false,
+        }),
+      });
+      assert.equal(response.status, 200);
+    }
+  });
+
+  assert.equal(launchOptions.get('claude')?.mcpPolicy, 'none');
+  assert.equal(launchOptions.get('codex')?.mcpPolicy, 'none');
+  assert.equal(mcpToolCounts.get('claude'), 0);
+  assert.equal(mcpToolCounts.get('codex'), 0);
+});

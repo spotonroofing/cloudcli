@@ -999,6 +999,10 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
         ? req.body.chainSlug.trim()
         : null;
       const isDispatch = req.body.origin !== 'direct' && req.body.origin !== 'planner';
+      // Machine-owned route launches must use the same empty MCP policy as the
+      // dispatch runner, while user-owned direct and planner turns keep their
+      // configured MCP servers.
+      const mcpPolicy = isDispatch ? 'none' : undefined;
       const dispatchedModel = typeof model === 'string' && model.trim() ? model.trim() : null;
       if (isDispatch) {
         const originalSend = writer.send.bind(writer);
@@ -1051,6 +1055,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           sessionId: sessionId || null,
           model: model,
           effort,
+          mcpPolicy,
           permissionMode: 'bypassPermissions' // Bypass all permissions for API calls
         }, writer);
 
@@ -1073,6 +1078,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           sessionId: sessionId || null,
           model: model || codexModels.DEFAULT,
           effort,
+          mcpPolicy,
           permissionMode: 'bypassPermissions'
         }, writer);
       } else if (provider === 'opencode') {
