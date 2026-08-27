@@ -110,6 +110,14 @@ const wss = createWebSocketServer(server, {
         },
         resolveBootSelection: ({ role, provider, projectPath, sessionId }) =>
             settingsService.resolveSpawnSelection(role, provider, projectPath, sessionId),
+        resolvePlannerMcpServers: (projectPath) => settingsService.getPlannerMcpSettings(projectPath).enabled,
+        pauseDispatchSession: async (sessionId) => {
+            const session = sessionsDb.getSessionById(sessionId);
+            if (!session?.chain_slug || !session.project_path || session.origin !== 'dispatch') {
+                return false;
+            }
+            return await watchdogService.requestChainPause(session.chain_slug, session.project_path) === 'paused';
+        },
     },
     shell: {
         resolveProviderSessionId: (sessionId, provider) => {

@@ -15,6 +15,7 @@ import SettingsCard from '../SettingsCard';
 import SettingsRow from '../SettingsRow';
 import SettingsSection from '../SettingsSection';
 import SettingsToggle from '../SettingsToggle';
+import type { SettingsProject } from '../../types/types';
 
 type Behavior =
   | 'plannerRotation'
@@ -37,6 +38,12 @@ type WatchdogSettings = {
 type ModelRole = 'planner' | 'worker';
 type ModelSelection = { provider: LLMProvider; model: string; effort: string };
 type ModelDefaults = { roles: Record<ModelRole, ModelSelection> };
+type PlannerMcpSettings = {
+  projectPath: string;
+  enabled: string[];
+  servers: string[];
+  defaults: string[];
+};
 
 const behaviors: Array<{
   key: Behavior;
@@ -79,13 +86,17 @@ const effortLabelFor = (value: string): string => (
 
 const modelKey = (provider: string, model: string): string => `${provider}:${model}`;
 
-/** System tab: Willem-owned switches for every automatic watchdog behavior, and the Models defaults. */
-export default function SystemSettingsTab() {
+const projectPath = (project: SettingsProject): string => project.fullPath || project.path || '';
+
+/** System tab: Willem-owned automation, planner MCP, and model defaults. */
+export default function SystemSettingsTab({ projects = [] }: { projects?: SettingsProject[] }) {
   const [state, setState] = useState<WatchdogSettings | null>(null);
-  const [saving, setSaving] = useState<Behavior | 'threshold' | ModelRole | null>(null);
+  const [saving, setSaving] = useState<Behavior | 'threshold' | ModelRole | `mcp:${string}` | null>(null);
   const [thresholdDraft, setThresholdDraft] = useState('');
   const [models, setModels] = useState<ModelDefaults | null>(null);
   const [catalogs, setCatalogs] = useState<Partial<Record<LLMProvider, ProviderModelsDefinition>>>({});
+  const [selectedMcpProject, setSelectedMcpProject] = useState(() => projectPath(projects[0] ?? {}));
+  const [mcp, setMcp] = useState<PlannerMcpSettings | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +124,21 @@ export default function SystemSettingsTab() {
     }
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!selectedMcpProject) {
+      setMcp(null);
+      return;
+    }
+    let cancelled = false;
+    setMcp(null);
+    void authenticatedFetch(`/api/settings/planner-mcp?projectPath=${encodeURIComponent(selectedMcpProject)}`)
+      .then((response) => response.json())
+      .then((body: PlannerMcpSettings) => {
+        if (!cancelled) setMcp(body);
+      });
+    return () => { cancelled = true; };
+  }, [selectedMcpProject]);
 
   const putWatchdog = async (
     key: Behavior | 'threshold',
@@ -169,6 +195,28 @@ export default function SystemSettingsTab() {
       setModels(await response.json() as ModelDefaults);
     } catch {
       setModels(previous);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const saveMcpServer = async (server: string, enabled: boolean) => {
+    if (!mcp) return;
+    const previous = mcp;
+    const nextEnabled = enabled
+      ? [...new Set([...mcp.enabled, server])]
+      : mcp.enabled.filter((candidate) => candidate !== server);
+    setMcp({ ...mcp, enabled: nextEnabled });
+    setSaving(`mcp:${server}`);
+    try {
+      const response = await authenticatedFetch('/api/settings/planner-mcp', {
+        method: 'PUT',
+        body: JSON.stringify({ projectPath: selectedMcpProject, enabled: nextEnabled }),
+      });
+      if (!response.ok) throw new Error('save failed');
+      setMcp(await response.json() as PlannerMcpSettings);
+    } catch {
+      setMcp(previous);
     } finally {
       setSaving(null);
     }
@@ -239,6 +287,46 @@ export default function SystemSettingsTab() {
           </SettingsCard>
         </SettingsSection>
       ))}
+      {projects.length > 0 && (
+        <SettingsSection title="Planner MCP">
+          <SettingsCard divided>
+            {projects.length > 1 && (
+              <SettingsRow label="Project" description="MCP access is stored separately for each project.">
+                <Select value={selectedMcpProject} onValueChange={setSelectedMcpProject} className="w-40">
+                  <SelectTrigger className="h-7 px-2 py-0 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={projectPath(project)} value={projectPath(project)}>
+                        {project.displayName || project.name || projectPath(project)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SettingsRow>
+            )}
+            {mcp ? mcp.servers.map((server) => (
+              <SettingsRow
+                key={server}
+                label={server}
+                description={`Available to planner turns for this project. Default ${mcp.defaults.includes(server) ? 'on' : 'off'}.`}
+              >
+                <SettingsToggle
+                  checked={mcp.enabled.includes(server)}
+                  onChange={(enabled) => { void saveMcpServer(server, enabled); }}
+                  ariaLabel={`${server} planner MCP access`}
+                  disabled={saving === `mcp:${server}`}
+                />
+              </SettingsRow>
+            )) : (
+              <SettingsRow label="Planner tools" description="Loading project MCP access…">
+                <Skeleton className="h-5 w-9 rounded-full" />
+              </SettingsRow>
+            )}
+          </SettingsCard>
+        </SettingsSection>
+      )}
       <SettingsSection title="Models">
         <SettingsCard divided>
           {modelRoles.map((role) => {

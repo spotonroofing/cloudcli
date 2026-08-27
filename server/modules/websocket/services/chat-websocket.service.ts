@@ -103,6 +103,10 @@ type ChatWebSocketDependencies = {
     projectPath: string;
     sessionId: string;
   }) => { model: string; effort: string };
+  /** Project-scoped planner MCP allowlist from the System settings store. */
+  resolvePlannerMcpServers?: (projectPath: string) => string[];
+  /** Pauses an out-of-process dispatch chain that owns this worker session. */
+  pauseDispatchSession?: (sessionId: string) => Promise<boolean>;
 };
 
 /**
@@ -258,6 +262,13 @@ async function handleChatSend(
     }
   }
 
+  if (session.origin === 'planner') {
+    clientOptions.mcpPolicy = 'planner';
+    clientOptions.allowedMcpServers = dependencies.resolvePlannerMcpServers?.(session.project_path ?? '') ?? [];
+  } else if (session.origin === 'dispatch' || session.origin === 'maintenance') {
+    clientOptions.mcpPolicy = 'none';
+  }
+
   // Record what this turn runs with so reopening the session later restores the
   // same model and reasoning effort, and so the resume path has a
   // session-scoped model answer to use.
@@ -380,6 +391,9 @@ async function handleChatAbort(
 
   const run = chatRunRegistry.getRun(sessionId);
   if (!run || run.status !== 'running') {
+    if (dependencies.pauseDispatchSession && await dependencies.pauseDispatchSession(sessionId)) {
+      return;
+    }
     sendProtocolError(ws, 'NO_ACTIVE_RUN', `Session "${sessionId}" has no active run.`, sessionId);
     return;
   }

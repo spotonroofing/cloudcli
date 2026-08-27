@@ -10,6 +10,7 @@ import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
+import { onSettingChange, writeSetting } from '../../utils/cloudSettings';
 import { cn } from '../../lib/utils';
 import { Badge, Button, Skeleton, Tooltip } from '../../shared/view/ui';
 import { ActionSwapIcon } from '../../shared/view/beui';
@@ -18,6 +19,27 @@ import type { Project, ProjectSession } from '../../types/app';
 import { titleFromPrompt } from '../../../shared/sessionTitle.js';
 
 import JobsSidebar, { type ChainSnapshot, type JobGroup } from './JobsSidebar';
+
+const JOBS_VIEW_PREFERENCE_KEY = 'worker-jobs-view-open-v1';
+
+const readJobsViewPreference = (projectPath: string): boolean => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(JOBS_VIEW_PREFERENCE_KEY) || '{}') as Record<string, unknown>;
+    return stored[projectPath] === true;
+  } catch {
+    return false;
+  }
+};
+
+const persistJobsViewPreference = (projectPath: string, open: boolean): void => {
+  let stored: Record<string, boolean> = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(JOBS_VIEW_PREFERENCE_KEY) || '{}') as Record<string, boolean>;
+  } catch {
+    // Replace a corrupt boot cache with the next valid per-project record.
+  }
+  writeSetting(JOBS_VIEW_PREFERENCE_KEY, JSON.stringify({ ...stored, [projectPath]: open }));
+};
 
 type WorkerRun = {
   sessionId: string;
@@ -113,12 +135,21 @@ export default function WorkerPane({
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
   const { isMobile } = useDeviceSettings({ trackPWA: false });
+  const projectPath = selectedProject.fullPath || selectedProject.path || '';
 
   // Jobs behind the top bar's job sign (ui14 job 1): a side column beside the
   // transcript, or the whole pane where the pane is too narrow for both — at
-  // three or more projects in column layout, and on phones. Strictly per
-  // pane/project — never persisted, never shared across projects.
-  const [jobsViewOpen, setJobsViewOpen] = useState(false);
+  // three or more projects in column layout, and on phones. The cloud-synced
+  // record is keyed by project, so reloads and other devices restore the same
+  // view without one project's choice leaking into another.
+  const [jobsViewOpen, setJobsViewOpenState] = useState(() => readJobsViewPreference(projectPath));
+  const setJobsViewOpen = useCallback((value: boolean | ((open: boolean) => boolean)) => {
+    setJobsViewOpenState((previous) => {
+      const next = typeof value === 'function' ? value(previous) : value;
+      if (projectPath) persistJobsViewPreference(projectPath, next);
+      return next;
+    });
+  }, [projectPath]);
   // Mobile chat/shell toggle (ui13 job 9): swaps the pane's transcript for a
   // terminal bound to the pane's own session, mirroring the planner pane.
   const [shellOpen, setShellOpen] = useState(false);
@@ -153,7 +184,12 @@ export default function WorkerPane({
     return () => clearTimeout(timer);
   }, [renderedSessionId, claimedSessionId]);
 
-  const projectPath = selectedProject.fullPath || selectedProject.path || '';
+  useEffect(() => {
+    setJobsViewOpenState(readJobsViewPreference(projectPath));
+    return onSettingChange([JOBS_VIEW_PREFERENCE_KEY], () => {
+      setJobsViewOpenState(readJobsViewPreference(projectPath));
+    });
+  }, [projectPath]);
 
   const refreshRuns = useCallback(async () => {
     if (!projectPath) {
@@ -184,7 +220,6 @@ export default function WorkerPane({
     setRuns([]);
     setRunsLoaded(false);
     setChains({});
-    setJobsViewOpen(false);
     followLatestRef.current = true;
     void refreshRuns();
   }, [refreshRuns]);

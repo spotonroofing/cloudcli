@@ -5,7 +5,7 @@ export type SaveStatus = 'success' | 'error' | null;
 export type CodexPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
 
 export type SettingsProject = {
-  name: string;
+  name?: string;
   displayName?: string;
   fullPath?: string;
   path?: string;

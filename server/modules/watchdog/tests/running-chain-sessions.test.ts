@@ -97,3 +97,45 @@ test('an announced title replaces a prompt-shaped name discovery wrote first', a
     assert.equal(sessionsDb.getSessionById(id)?.custom_name, 'Two');
   });
 });
+
+test('an auto-recovering limit posts a recovery notice without waking a planner', async () => {
+  await withIsolatedDatabase(() => {
+    const projectPath = '/workspace/recovery-project';
+    const messages: string[] = [];
+    const notificationClient = {
+      readyState: WS_OPEN_STATE,
+      send: (message: string) => { messages.push(message); },
+    } as unknown as RealtimeClientConnection;
+    connectedClients.add(notificationClient);
+    appConfigDb.set('watchdog_recovery_notices', '1');
+    projectsDb.createProjectPath(projectPath);
+    watchdogService.registerChain({
+      slug: 'recoverystub',
+      projectPath,
+      phases: 1,
+      manifest: [{ name: 'One', tasks: [], kind: 'phase' }],
+    });
+
+    try {
+      watchdogService.chainEvent('recoverystub', 'phase-start', { phase: 1 });
+      assert.equal(watchdogService.chainEvent('recoverystub', 'limit', {
+        phase: 1,
+        summaryTail: 'switched account and retrying',
+      }), true);
+
+      const notifications = messages
+        .map((message) => JSON.parse(message) as { kind?: string; notificationKind?: string; title?: string })
+        .filter((message) => message.kind === 'fleet_notification');
+      assert.deepEqual(
+        notifications.map((message) => [message.notificationKind, message.title]),
+        [['recovery', 'Chain recoverystub is auto-recovering']],
+      );
+      assert.equal(
+        notifications.some((message) => message.title?.includes('wake undeliverable')),
+        false,
+      );
+    } finally {
+      connectedClients.delete(notificationClient);
+    }
+  });
+});

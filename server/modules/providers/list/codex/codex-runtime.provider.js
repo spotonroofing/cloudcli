@@ -265,7 +265,9 @@ export async function queryCodex(command, options = {}, ws, context) {
   const sessionKey = () => sessionId || capturedSessionId || null;
 
   try {
-    codex = new Codex();
+    codex = new Codex(options.mcpPolicy === 'none'
+      ? { config: { mcp_servers: {} } }
+      : undefined);
 
     const threadOptions = {
       workingDirectory,

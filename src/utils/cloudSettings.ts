@@ -41,6 +41,7 @@ export const SYNCED_SETTING_KEYS = [
   'workspace-layout-v1',
   'project-windows-v1',
   'project-last-opened-v1',
+  'worker-jobs-view-open-v1',
   'activeTab',
   'sidebar-active-tab',
   'file-tree-view-mode',

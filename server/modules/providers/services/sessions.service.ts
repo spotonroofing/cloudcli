@@ -155,7 +155,7 @@ export const sessionsService = {
     provider: LLMProvider;
     startedAt: number;
     lastSeq: number;
-    /** False for externally-driven runs the composer's stop button cannot abort. */
+    /** True when the composer can abort the runtime or pause its dispatch chain. */
     canInterrupt?: boolean;
     origin: 'planner' | 'direct' | 'dispatch' | 'external' | 'maintenance' | null;
     projectId: string | null;
@@ -170,14 +170,15 @@ export const sessionsService = {
     // attaching to any chat stream.
     const registryRuns = chatRunRegistry.listRunningRuns();
     // Externally-driven runs (dispatched chains, ui13 job 13) merge in behind
-    // the registry so the worker pane's activity indicator covers them too;
-    // they cannot be aborted from the composer, hence canInterrupt false.
+    // the registry so the worker pane's activity indicator covers them too.
+    // A chain-backed row becomes interruptible below because its stop action
+    // routes to dispatch pause; free-standing external runs stay read-only.
     const registryIds = new Set(registryRuns.map((run: { sessionId: string }) => run.sessionId));
     const merged = [
-      ...registryRuns,
+      ...registryRuns.map((run) => ({ ...run, canInterrupt: true })),
       ...extraRuns
         .filter((run) => !registryIds.has(run.sessionId))
-        .map((run) => ({ ...run, provider: run.provider as LLMProvider, lastSeq: 0, canInterrupt: false })),
+        .map((run) => ({ ...run, provider: run.provider as LLMProvider, lastSeq: 0, canInterrupt: undefined })),
     ];
     return merged.map((run) => {
       const row = sessionsDb.getSessionById(run.sessionId);
@@ -198,6 +199,7 @@ export const sessionsService = {
         : null;
       return {
         ...run,
+        canInterrupt: run.canInterrupt ?? Boolean(row?.chain_slug),
         origin,
         projectId: project?.project_id ?? null,
         projectDisplayName: projectPath

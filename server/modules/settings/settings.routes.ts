@@ -4,7 +4,7 @@ import { userSettingsDb } from '@/modules/database/index.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/index.js';
 import { AppError } from '@/shared/utils.js';
 
-import type { ModelRole, ModelSelection, createSettingsService } from './settings.service.js';
+import type { ModelRole, ModelSelection, PlannerMcpServer, createSettingsService } from './settings.service.js';
 
 const MODEL_ROLES: ModelRole[] = ['planner', 'worker'];
 const MODEL_PROVIDERS = ['claude', 'codex', 'cursor', 'opencode'];
@@ -88,6 +88,35 @@ export function createSettingsRouter(
       };
     }
     return { success: true, ...service.updateModelDefaults(roles) };
+  }));
+
+  router.get('/planner-mcp', respond((req) => {
+    const projectPath = queryString(req.query.projectPath);
+    if (!projectPath) {
+      throw new AppError('projectPath is required.', { code: 'PLANNER_MCP_PROJECT_REQUIRED', statusCode: 400 });
+    }
+    return { success: true, ...service.getPlannerMcpSettings(projectPath) };
+  }));
+  router.put('/planner-mcp', respond((req) => {
+    const body = (req.body ?? {}) as { projectPath?: unknown; enabled?: unknown };
+    const projectPath = queryString(body.projectPath);
+    if (!projectPath || !Array.isArray(body.enabled) || !body.enabled.every((value) => typeof value === 'string')) {
+      throw new AppError('projectPath and enabled server names are required.', {
+        code: 'PLANNER_MCP_SETTINGS_INVALID',
+        statusCode: 400,
+      });
+    }
+    const known = service.getPlannerMcpSettings(projectPath).servers as readonly string[];
+    if (body.enabled.some((server) => !known.includes(server))) {
+      throw new AppError('enabled contains an unknown MCP server.', {
+        code: 'PLANNER_MCP_SERVER_INVALID',
+        statusCode: 400,
+      });
+    }
+    return {
+      success: true,
+      ...service.updatePlannerMcpSettings(projectPath, body.enabled as PlannerMcpServer[]),
+    };
   }));
 
   // Synced client preferences (ui11 phase 1): every localStorage preference the

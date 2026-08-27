@@ -864,20 +864,22 @@ class WatchdogService {
 
     // Session-limit auto-recovery (ui10 phase 1): not a failure. The runner
     // is switching accounts or waiting out the reset, then retrying the
-    // phase; the chain stays running and the wake says so explicitly.
+    // phase; the chain stays running and the notice says so explicitly.
     if (event === 'limit') {
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
       // A Codex usage-limit wait (codex job 2) is announced through a
       // recovery notification instead; the event only records the wait.
-      if (detail?.quiet || !this.policy('recoveryNotices', `limit recovery wake for chain ${slug}`)) {
+      if (detail?.quiet || !this.policy('recoveryNotices', `limit recovery notice for chain ${slug}`)) {
         return true;
       }
       const tail = chain.lastSummaryTail ? `\n\nRecovery detail:\n${chain.lastSummaryTail}` : '';
-      this.queueWake(
-        chain.projectPath,
-        `Watchdog: dispatched chain "${slug}" hit the session limit${chain.phases ? ` (job ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''} `
-        + `and is auto-recovering (account switch or reset wait, then retry). This is not a failure; no action needed.${tail}`,
+      this.notify(
+        'recovery',
+        `Chain ${slug} is auto-recovering`,
+        `The dispatched chain hit the session limit${chain.phases ? ` at job ${chain.currentPhase ?? '?'} of ${chain.phases}` : ''} `
+        + `and is switching accounts or waiting for a reset before retrying. No action is needed.${tail}`,
+        { chainSlug: slug, projectPath: chain.projectPath, status: 'recovering' },
       );
       return true;
     }

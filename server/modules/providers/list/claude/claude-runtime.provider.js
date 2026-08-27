@@ -269,6 +269,16 @@ function mapCliOptionsToSDK(options = {}) {
 
   sdkOptions.settingSources = ['project', 'user', 'local'];
 
+  // Machine-owned turns (watchdog wakes, maintenance and other one-offs)
+  // must not inherit MCP servers from user, project, plugin, or agent config.
+  // Passing both values is deliberate: an empty map defines the complete
+  // server set and strictMcpConfig prevents every on-disk source from adding
+  // servers back in.
+  if (options.mcpPolicy === 'none') {
+    sdkOptions.mcpServers = {};
+    sdkOptions.strictMcpConfig = true;
+  }
+
   // The SDK resumes with the provider-native session id, never the app id.
   if (providerSessionId) {
     sdkOptions.resume = providerSessionId;
@@ -684,7 +694,7 @@ const STEER_FOLLOW_UP_GRACE_MS = 60 * 1000;
  * @param {string} cwd - Current working directory for project-specific configs
  * @returns {Object|null} MCP servers object or null if none found
  */
-async function loadMcpConfig(cwd) {
+async function loadMcpConfig(cwd, allowedServerNames = null) {
   try {
     const claudeConfigPath = getClaudeJsonPath();
 
@@ -723,6 +733,13 @@ async function loadMcpConfig(cwd) {
         mcpServers = { ...mcpServers, ...projectConfig.mcpServers };
         // Project MCP servers merged
       }
+    }
+
+    if (Array.isArray(allowedServerNames)) {
+      const allowed = new Set(allowedServerNames);
+      mcpServers = Object.fromEntries(
+        Object.entries(mcpServers).filter(([name]) => allowed.has(name)),
+      );
     }
 
     // Return null if no servers found
@@ -945,9 +962,21 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
       effortModels,
     });
 
-    const mcpServers = await loadMcpConfig(options.cwd);
-    if (mcpServers) {
-      sdkOptions.mcpServers = mcpServers;
+    if (options.mcpPolicy !== 'none') {
+      const allowedMcpServers = options.mcpPolicy === 'planner'
+        ? (Array.isArray(options.allowedMcpServers) ? options.allowedMcpServers : [])
+        : null;
+      const mcpServers = await loadMcpConfig(options.cwd, allowedMcpServers);
+      if (mcpServers) {
+        sdkOptions.mcpServers = mcpServers;
+      }
+      if (options.mcpPolicy === 'planner') {
+        // The filtered map is authoritative for planner turns. This also
+        // blocks project .mcp.json files and plugin/agent MCP declarations
+        // that were not enabled in the project's System settings.
+        sdkOptions.mcpServers = mcpServers || {};
+        sdkOptions.strictMcpConfig = true;
+      }
     }
 
     // Every turn uses streaming input so stdin stays open past the turn's

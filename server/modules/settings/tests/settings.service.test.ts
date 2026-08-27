@@ -97,6 +97,29 @@ test('model defaults seed per role and round-trip through the store', () => {
   );
 });
 
+test('planner MCP settings default to the three core servers and stay project-scoped', () => {
+  const appConfig = storedConfig();
+  const service = createSettingsService(dependencies({ appConfig }));
+
+  assert.deepEqual(service.getPlannerMcpSettings('/workspace/alpha').enabled, [
+    'spoton-core',
+    'spoton-sign',
+    'playwright',
+  ]);
+
+  service.updatePlannerMcpSettings('/workspace/alpha', ['spoton-core', 'github']);
+  assert.deepEqual(service.getPlannerMcpSettings('/workspace/alpha').enabled, ['spoton-core', 'github']);
+  assert.deepEqual(service.getPlannerMcpSettings('/workspace/beta').enabled, [
+    'spoton-core',
+    'spoton-sign',
+    'playwright',
+  ]);
+  assert.equal(
+    appConfig.map.get('planner_mcp_servers:/workspace/alpha'),
+    '["spoton-core","github"]',
+  );
+});
+
 test('spawn selection carries the previous row of the role, else the Models default', () => {
   const rows: Record<string, { session_id: string; provider: string; model: string | null; effort: string | null }> = {
     planner: { session_id: 'prev-planner', provider: 'claude', model: 'claude-fable-5', effort: 'xhigh' },

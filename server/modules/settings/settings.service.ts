@@ -78,6 +78,23 @@ const MODEL_ROLE_DEFAULTS: Record<ModelRole, ModelSelection> = {
 
 const modelSettingKey = (role: ModelRole): string => `model_default_${role}`;
 
+const PLANNER_MCP_SERVERS = [
+  'spoton-core',
+  'spoton-sign',
+  'playwright',
+  'twilio',
+  'resend',
+  'cloudflare-api',
+  'github',
+  'railway',
+  'forge-propagator',
+] as const;
+const DEFAULT_PLANNER_MCP_SERVERS = ['spoton-core', 'spoton-sign', 'playwright'] as const;
+/** Server ids accepted by Settings routes and the planner runtime allowlist. */
+export type PlannerMcpServer = (typeof PLANNER_MCP_SERVERS)[number];
+
+const plannerMcpSettingKey = (projectPath: string): string => `planner_mcp_servers:${projectPath}`;
+
 const settingsLog = (message: string) => {
   console.log(`[Settings] ${message}`);
 };
@@ -114,6 +131,21 @@ export function createSettingsService(dependencies: SettingsDependencies) {
       return MODEL_ROLE_DEFAULTS[role];
     }
     return JSON.parse(stored) as ModelSelection;
+  };
+
+  const readPlannerMcpServers = (projectPath: string): PlannerMcpServer[] => {
+    const stored = dependencies.appConfig.get(plannerMcpSettingKey(projectPath));
+    if (stored === null) {
+      return [...DEFAULT_PLANNER_MCP_SERVERS];
+    }
+    try {
+      const parsed = JSON.parse(stored) as unknown;
+      return Array.isArray(parsed)
+        ? PLANNER_MCP_SERVERS.filter((server) => parsed.includes(server))
+        : [...DEFAULT_PLANNER_MCP_SERVERS];
+    } catch {
+      return [...DEFAULT_PLANNER_MCP_SERVERS];
+    }
   };
 
   return {
@@ -168,6 +200,20 @@ export function createSettingsService(dependencies: SettingsDependencies) {
         dependencies.appConfig.set(modelSettingKey(role), JSON.stringify(selection));
       }
       return this.getModelDefaults();
+    },
+    /** Per-project MCP allowlist applied only to interactive planner turns. */
+    getPlannerMcpSettings(projectPath: string) {
+      return {
+        projectPath,
+        enabled: readPlannerMcpServers(projectPath),
+        servers: PLANNER_MCP_SERVERS,
+        defaults: DEFAULT_PLANNER_MCP_SERVERS,
+      };
+    },
+    updatePlannerMcpSettings(projectPath: string, enabled: PlannerMcpServer[]) {
+      const allowed = PLANNER_MCP_SERVERS.filter((server) => enabled.includes(server));
+      dependencies.appConfig.set(plannerMcpSettingKey(projectPath), JSON.stringify(allowed));
+      return this.getPlannerMcpSettings(projectPath);
     },
     /**
      * What a spawned planner or direct worker session runs with: the newest

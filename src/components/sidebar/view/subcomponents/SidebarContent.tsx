@@ -735,7 +735,7 @@ export default function SidebarContent({
         ariaLabel={t('actions.settings')}
         dataSlot="settings-surface"
       >
-        <Settings isOpen onClose={onCloseSettings} initialTab={settingsInitialTab} />
+        <Settings isOpen onClose={onCloseSettings} initialTab={settingsInitialTab} projects={projects} />
       </SidebarSurface>
 
       <MemorySurface
