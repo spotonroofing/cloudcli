@@ -1,11 +1,11 @@
 <!-- browser -->
+<!-- verify: no -->
 <!-- engine: codex -->
 <!-- model: gpt-5.6-sol -->
 <!-- effort: high -->
-<!-- supersedes: ui15r2/2, ui15r/1, ui15/3 -->
-<!-- name: Jobs view polish -->
-<!-- tasks: Less indent, wider sidebar, tooltip | Ring check and red X for done and failed | Per-task durations and live counters | Verify row as a task, only when live | Mono text, red failures with reason | Month and year grouping | One-off runs labeled by kind -->
-Execute Job 3 of PUNCHLIST_ui15.md in this repo (jobs view polish). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read only that job's section plus the whole-file rules block at the top (including the rerun rules), the recent git log, and the files the job names; items already checked stay done; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
+<!-- name: Thinking grid -->
+<!-- tasks: Middle row shift fixed | Stray patterns found and fixed | Ten word and pattern pairs | Cross-fade between pairs | Catalog in DESIGN -->
+Execute Job 22 of PUNCHLIST_ui15.md in this repo (the thinking indicator's pixel grid: glitches fixed, a real pattern vocabulary). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read only that job's section plus the whole-file rules block at the top (including the rerun rules), the recent git log, and the files the job names; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 Before running a command that changes state (restarts, deletes, config edits), check that the evidence supports that specific action; a signal that matches a known failure can have a different cause. Rebuild and restart dev only when the done check needs the running instance to show the change, and never twice when once serves.
 
