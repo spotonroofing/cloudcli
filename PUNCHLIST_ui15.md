@@ -20,6 +20,19 @@ Willem's pre-build polish round on the ui14 app. Dividers snap to notches, the c
 
 ---
 
+## Job 0 — Context diet (2026-08-27 spend audit). Verify: yes
+
+Goal: cut what every session re-reads on every turn. The 7-day audit measured ~300k tokens re-read per planner turn and ~250k per worker turn across 150+ sessions; the standing context, not the model's writing, is the spend. Files: DESIGN.md (94KB today), the SDK runtime provider (session spawn options), the watchdog wake policy, the dispatch runner and its verify stage, the worker pane header, DESIGN.md itself. Dependencies: none; runs first.
+
+- [ ] DESIGN.md becomes an index plus per-area files (design/<area>.md: tokens, sidebar, transcript rows, composer, worker pane and jobs, settings, motion, mobile): the index lists areas with one line each and the rule "read only the areas your files touch"; update CLAUDE.md's pointer and the consistency tail wording that the planner compiles (the planner updates doctrine; you update the repo side).
+- [ ] Headless and machine sessions run without MCP servers: dispatched phases and verify stages (the runner already passes an empty strict MCP config as of today; confirm it holds and that verify-stage spawns use the same flags), watchdog wakes, maintenance, and memory-edit one-offs spawned by the app pass an empty strict MCP config through the SDK options; planner sessions keep only the servers a planner uses (spoton-core, spoton-sign, playwright; twilio, resend, cloudflare, github, railway, forge-propagator become opt-in per project via settings). Measure the system-prompt token delta in the summary.
+- [ ] Watchdog notices that need no decision (limit hit and auto-recovering, switch, park) become notifications and system rows, never planner wakes; only terminal events (completed, stopped, failed) and genuine decisions wake the planner.
+- [ ] `dispatch pause <project> <slug>` and `dispatch resume <project> <slug>`: pause stops the runner and its phase cleanly (WIP parked as today, journal line, chain marked paused in the watchdog, jobs view shows paused); resume restarts from the first unfinished job in the same chain record (no duplicate jobs, no new slug).
+- [ ] Worker stop button: while a worker turn runs, the worker pane's send button becomes the stop square exactly like the planner's, and stopping a dispatched phase pauses the chain through the same path.
+- [ ] The jobs column's open/closed state persists (settings store, per device-agnostic like everything else) so a refresh never closes it.
+
+Done check: on dev: DESIGN.md is under 8KB and the area files exist; a headless stub phase's system prompt carries no MCP tools (log the tool list length before and after); a stub "auto-recovering" event produces a notification and no planner wake; `dispatch pause` then `dispatch resume` on a stub chain resumes at the right job with one record; the worker stop square pauses a stub chain; the jobs column stays open across reload. Fresh-context subagent verification. Commit.
+
 ## Job 1 — Dividers: smooth and notched. Verify: yes
 
 Goal: dragging the planner/worker divider feels instant and lands on deliberate notches. Files: the pane divider and resize logic, DESIGN.md. Dependencies: none.
