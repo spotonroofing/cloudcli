@@ -34,6 +34,8 @@ Goal: cut what every session re-reads on every turn. The 7-day audit measured ~3
 - [x] The jobs column's open/closed state persists (settings store, per device-agnostic like everything else) so a refresh never closes it.
 - [x] (done, codex job 5) Resume-chain supersession: as soon as a resume chain starts, hide the earlier chain's failed, stopped, and never-reached jobs from jobs history while keeping every record in the database. A resume chain supersedes its earlier chain (ui15 by ui15r, ui15r by ui15r2), matched by an explicit `<!-- supersedes: slug/n, slug/n -->` header carrying one or several comma-separated targets when present, or by the same punch list file plus job section otherwise. Apply the rule retroactively to ui11/ui11r, ui13/ui13r, and ui15/ui15r/ui15r2.
 
+- [ ] (ui15r3 verify finding, 2026-08-27) The external agent route (`server/modules/agent/agent.routes.ts`, the `isDispatch` branch near line 1001 and the Claude and Codex launches near lines 1048 and 1070) treats every non-direct, non-planner origin as a machine session yet launches Claude and Codex without the empty strict MCP policy; those launches pass `mcpPolicy: 'none'` (Claude) and the equivalent empty MCP config (Codex) exactly as the dispatch runner path does, with a test that asserts both launch calls carry it. Done check for this item: the test passes and a headless run through the agent route with a dispatch origin logs zero MCP tools.
+
 Done check: on dev: DESIGN.md is under 8KB and the area files exist; a headless stub phase's system prompt carries no MCP tools (log the tool list length before and after); a stub "auto-recovering" event produces a notification and no planner wake; `dispatch pause` then `dispatch resume` on a stub chain resumes at the right job with one record; the worker stop square pauses a stub chain; the jobs column stays open across reload; starting a resume chain hides the superseded failed, stopped, and never-reached jobs for the named retroactive chain pairs without deleting their database rows. Fresh-context subagent verification. Commit.
 
 ## Job 1 — Dividers: smooth and notched. Verify: yes
@@ -253,3 +255,14 @@ Goal: watching a Codex worker session is calm: rows append as they happen, nothi
 - [ ] Same treatment holds for Claude sessions (no regression in the JSONL path), verified with a synthetic transcript appended live.
 
 Done check: on dev with a real Codex session running (a `codex exec` one-liner in `~/Projects/codex-smoke` is enough): over two minutes of rollout writes the pane's message list element identity never changes (DOM node identity or a mount counter), no row animates twice, the scroll offset stays put when scrolled up and follows when at the bottom; a stub pipelined chain shows the pane staying on the build session while a verify session exists; regression tests. Commit.
+
+## Job 21 — Composer stays silent on auto-sent text (2026-08-27, Willem). Verify: yes
+
+Goal: Willem never sees a message being typed for him. Today a slash command (typed, from the plus menu, or the Handoff button) and a planner boot both write their expanded body into the composer textarea and submit on the next tick, so the prompt box visibly fills with the whole command or boot text before it sends. He wants none of that: the composer shows only what he typed himself. Files: `src/components/chat/hooks/useChatComposerState.ts` (the command execution path that calls `setInput` with the built command message and defers submit, `executeCommand`, the boot effect and `handleSubmit`), `src/components/chat/view/subcomponents/ChatComposer.tsx`, and any other caller that fills the input to send.
+
+- [ ] Slash commands submit their expanded body directly through the send path without ever writing it to the composer's input state or textarea; the input keeps whatever the user had (empty after a typed command, untouched in the preserve-input case).
+- [ ] The planner boot and the Handoff button's /handoff go the same way: nothing appears in the composer at any frame; the composer lock while booting stays as it is.
+- [ ] The transcript still renders the compact command bubble and the boot behaves exactly as before (placeholder title, boot flag, hidden prologue).
+- [ ] A regression test on the hook covers the submit path: a command execution never sets the input value.
+
+Done check: on dev with agent-browser, poll the composer textarea value every animation frame (a small eval loop collecting values) while a fresh planner boot fires and while a slash command fires from the plus menu; the collected values never contain the command or boot text; the transcript shows the command bubble and the boot completes as before; tests pass. Commit.
