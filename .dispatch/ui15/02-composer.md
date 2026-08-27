@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Composer like claude.ai -->
-<!-- tasks: Full-width text above the controls row | Clear-to-X with depleting undo | Handoff button back beside history | Queued messages stack in order | Card clears the frame the bubble lands | Prompt history panel with files | Spellcheck squiggles gone -->
+<!-- tasks: Full-width text above the controls row | Clear-to-X with depleting undo | Handoff button back, plus-menu entry gone | Drop a file anywhere on the pane | Queued messages stack in order | Card clears the frame the bubble lands | Prompt history panel with files | Spellcheck squiggles gone -->
 Execute Job 2 of PUNCHLIST_ui15.md in this repo (composer like claude.ai). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
