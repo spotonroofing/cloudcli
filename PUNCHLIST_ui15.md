@@ -50,7 +50,8 @@ Goal: the job list reads like a clean history with real timing. Files: the jobs 
 
 - [ ] Task rows indent less (pull the task list left; state the new indent); the jobs sidebar gets ~20px wider so titles stop clipping; the drawer footer's items sit comfortably; the commit name gets a tooltip carrying the full subject (sanctioned exception).
 - [ ] Per-task durations on hover: hovering a completed task shows its duration on the row's right; a running task shows a live counter there, and the drawer footer's total ticks live (both lining tabular, "1m 50s" format).
-- [ ] Completed job icon: a finished job shows its segmented ring fully filled with a checkmark drawn in the center (replacing the plain check icon); jobs only, task rows keep their plain check.
+- [ ] Completed job icon: a finished job shows its segmented ring fully filled with a checkmark drawn in the center (replacing the plain check icon); jobs only, task rows keep their plain check. Applies to every job in the history (all previous runs), not just new ones.
+- [ ] Failed job icon: a failed or stopped job shows the same segmented ring with the segments of its failed (or unreached) tasks in red, completed segments filled normally, and an X drawn in the center; historical failed jobs render the same way where the record knows which task it died on (fall back to a plain red-ring X when it does not).
 - [ ] Task and job text is monochromatic: no green text anywhere in the list (icons and counters keep their semantic color); a failed task's text goes red, and opening its job's footer shows the failure reason in one line.
 - [ ] Month grouping: when the month rolls over, prior-month jobs group under a clean month row (not indented, just visually grouped) with a jobs-done count on the right; years group the same way when the year rolls; the continuous bottom-to-top order holds inside groups. Test with stubbed dates.
 
