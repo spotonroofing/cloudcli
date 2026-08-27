@@ -171,22 +171,26 @@ export function createSettingsService(dependencies: SettingsDependencies) {
     },
     /**
      * What a spawned planner or direct worker session runs with: the newest
-     * previous row of the same role and provider in the project carries its
+     * previous row of the same role in the project carries its provider,
      * model and effort forward; the Models default covers a project with no
-     * such row (or a row that never recorded one of the two).
+     * such row (or a row that never recorded one of the two). A session that
+     * already exists passes its provider, and only a previous row on that
+     * provider carries; the watchdog's planner spawns pass null and take the
+     * previous row's provider (else the Models default's).
      */
     resolveSpawnSelection(
       role: ModelRole,
-      provider: string,
+      requestedProvider: string | null,
       projectPath: string,
       excludeSessionId: string | null,
-    ): { model: string; effort: string; source: string } {
+    ): { provider: string; model: string; effort: string; source: string } {
       const fallback = readModelDefault(role);
       const previous = dependencies.sessions.latestByOrigin(
         projectPath,
         role === 'planner' ? 'planner' : 'direct',
         excludeSessionId,
       );
+      const provider = requestedProvider ?? previous?.provider ?? fallback.provider;
       const carried = previous && previous.provider === provider ? previous : null;
       const model = carried?.model ?? (fallback.provider === provider ? fallback.model : '');
       // 'default' is the composer's untouched placeholder (recorded on every
@@ -195,8 +199,8 @@ export function createSettingsService(dependencies: SettingsDependencies) {
       const source = carried
         ? `previous ${role} row ${carried.session_id}`
         : `Models default (no previous ${role} row on ${provider})`;
-      settingsLog(`${role} spawn selection: model=${model || '(runtime default)'} effort=${effort} from ${source}`);
-      return { model, effort, source };
+      settingsLog(`${role} spawn selection: provider=${provider} model=${model || '(runtime default)'} effort=${effort} from ${source}`);
+      return { provider, model, effort, source };
     },
     listCredentials(userId: number, credentialType: string | null) {
       return { credentials: dependencies.credentials.list(userId, credentialType) };

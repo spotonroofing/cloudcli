@@ -333,9 +333,9 @@ test('resolveSessionModel uses the requested model when provider reports the cat
 test('resolveSessionModel returns a requested model before a session exists', async () => {
   const { service } = createTestService();
 
-  const resolved = await service.resolveSessionModel('codex', { requestedModel: 'gpt-5.5' });
+  const resolved = await service.resolveSessionModel('codex', { requestedModel: 'gpt-5.6-terra' });
 
-  assert.equal(resolved.model, 'gpt-5.5');
+  assert.equal(resolved.model, 'gpt-5.6-terra');
   assert.equal(resolved.sessionId, null);
   assert.equal(resolved.source, 'session');
 });
@@ -368,8 +368,8 @@ test('resolveResumeModel never consults provider-global state', async () => {
     },
   });
 
-  const model = await service.resolveResumeModel('codex', 'session-456', 'gpt-5.5');
+  const model = await service.resolveResumeModel('codex', 'session-456', 'gpt-5.6-terra');
 
-  assert.equal(model, 'gpt-5.5');
+  assert.equal(model, 'gpt-5.6-terra');
   assert.equal(providerLookups, 0);
 });

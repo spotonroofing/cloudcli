@@ -429,12 +429,12 @@ export default function WorkerPane({
                   : { id: targetSessionId, __provider: 'claude', origin: 'direct' },
               );
             }}
-            onSessionEstablished={(targetSessionId: string) => {
+            onSessionEstablished={(targetSessionId: string, context) => {
               followLatestRef.current = true;
               setPaneSession((previous) =>
                 previous?.id === targetSessionId
                   ? previous
-                  : { id: targetSessionId, __provider: 'claude', origin: 'direct' },
+                  : { id: targetSessionId, __provider: context.provider, origin: 'direct' },
               );
               void refreshRuns();
             }}
@@ -443,6 +443,7 @@ export default function WorkerPane({
             showThinking={showThinking}
             sendByCtrlEnter={sendByCtrlEnter}
             newSessionTrigger={newSessionTrigger}
+            onStartNewSession={handleNewWorkerSession}
             bootCommandName="/worker"
             sessionOrigin="direct"
             onRenderedSessionChange={setRenderedSessionId}

@@ -88,7 +88,7 @@ test('model defaults seed per role and round-trip through the store', () => {
 test('spawn selection carries the previous row of the role, else the Models default', () => {
   const rows: Record<string, { session_id: string; provider: string; model: string | null; effort: string | null }> = {
     planner: { session_id: 'prev-planner', provider: 'claude', model: 'claude-fable-5', effort: 'xhigh' },
-    direct: { session_id: 'prev-worker', provider: 'codex', model: 'gpt-5.6-sol', effort: 'ultra' },
+    direct: { session_id: 'prev-worker', provider: 'codex', model: 'gpt-5.6-sol', effort: 'xhigh' },
   };
   const seen: unknown[] = [];
   const service = createSettingsService(dependencies({
@@ -117,7 +117,16 @@ test('spawn selection carries the previous row of the role, else the Models defa
   assert.equal(worker.effort, 'high');
   const codexWorker = service.resolveSpawnSelection('worker', 'codex', '/p', 'new-3');
   assert.equal(codexWorker.model, 'gpt-5.6-sol');
-  assert.equal(codexWorker.effort, 'ultra');
+  assert.equal(codexWorker.effort, 'xhigh');
+
+  // No provider requested (the watchdog's planner spawns): the previous row's
+  // provider carries with its pair; a project with no row takes the default's.
+  const derived = service.resolveSpawnSelection('worker', null, '/p', 'new-5');
+  assert.equal(derived.provider, 'codex');
+  assert.equal(derived.model, 'gpt-5.6-sol');
+  const derivedFresh = service.resolveSpawnSelection('planner', null, '/empty', null);
+  assert.equal(derivedFresh.provider, 'claude');
+  assert.equal(derivedFresh.model, 'claude-fable-5');
 
   // The composer records 'default' on every send when nothing was picked;
   // that placeholder is not a pick, so the Models default effort applies.

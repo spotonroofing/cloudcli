@@ -16,12 +16,14 @@ import { findEditGroupId } from '../utils/messageVersions';
 import { useSessionStore } from '../../../stores/useSessionStore';
 import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
 import { copyTextToClipboard } from '../../../utils/clipboard';
+import type { LLMProvider } from '../../../types/app';
 import { convertMarkdownToPlainText } from './subcomponents/MessageCopyControl';
 
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
 import { ChatProjectContext } from './subcomponents/ChatProjectContext';
 import CommandResultModal from './subcomponents/CommandResultModal';
+import type { ProviderModelGroup } from './subcomponents/ComposerModelMenu';
 
 function ChatInterface({
   isActive,
@@ -42,6 +44,7 @@ function ChatInterface({
   sendByCtrlEnter,
   externalMessageUpdate,
   newSessionTrigger,
+  onStartNewSession,
   bootCommandName,
   sessionOrigin,
   onRenderedSessionChange,
@@ -74,7 +77,6 @@ function ChatInterface({
     currentProviderEffort,
     currentProviderEffortOptions,
     currentProviderModel,
-    currentProviderModelOptions,
     permissionMode,
     pendingPermissionRequests,
     setPendingPermissionRequests,
@@ -461,15 +463,33 @@ function ChatInterface({
     handlePermissionDecision,
   }), [pendingPermissionRequests, handlePermissionDecision]);
 
-  // A composer pick becomes the default for new chats and, when a session is
-  // open, is recorded against that session so reopening it restores this model.
-  const handleSelectComposerModel = useCallback(async (model: string) => {
+  // A composer pick becomes the default for new chats (switching the composer
+  // to that model's provider) and, when a session is open, is recorded against
+  // that session so reopening it restores this model. A chat never changes
+  // engine mid-conversation: a pick from the other provider's group while a
+  // chat is open starts a new session on that engine instead.
+  const handleSelectComposerModel = useCallback(async (targetProvider: LLMProvider, model: string) => {
+    const openSessionId = currentSessionId || selectedSession?.id || null;
     try {
-      await selectProviderModel(provider, model, currentSessionId || selectedSession?.id || null);
+      if (openSessionId && targetProvider !== provider && onStartNewSession) {
+        // Both in one synchronous batch: with the pane's session already
+        // cleared when the provider flips, the session-provider sync effect
+        // has nothing to snap the composer back to.
+        onStartNewSession();
+        await selectProviderModel(targetProvider, model, null);
+        return;
+      }
+      await selectProviderModel(targetProvider, model, openSessionId);
     } catch (error) {
       console.error('Error changing the active session model:', error);
     }
-  }, [currentSessionId, provider, selectProviderModel, selectedSession?.id]);
+  }, [currentSessionId, onStartNewSession, provider, selectProviderModel, selectedSession?.id]);
+
+  // The switcher lists the two engines in use, each under its provider mark.
+  const composerModelGroups = useMemo<ProviderModelGroup[]>(() => [
+    { provider: 'claude', options: providerModelCatalog.claude?.OPTIONS ?? [] },
+    { provider: 'codex', options: providerModelCatalog.codex?.OPTIONS ?? [] },
+  ], [providerModelCatalog.claude, providerModelCatalog.codex]);
 
   const handleSelectComposerEffort = useCallback(async (effort: string) => {
     try {
@@ -643,7 +663,8 @@ function ChatInterface({
           availableEffortOptions={currentProviderEffortOptions}
           onSelectEffort={handleSelectComposerEffort}
           model={currentProviderModel}
-          availableModelOptions={currentProviderModelOptions}
+          provider={provider}
+          modelGroups={composerModelGroups}
           onSelectModel={handleSelectComposerModel}
           modelsLoading={providerModelsLoading}
           tokenBudget={tokenBudget}

@@ -21,7 +21,7 @@ import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
 const FALLBACK_DEFAULT_MODEL: Record<LLMProvider, string> = {
   claude: 'claude-fable-5',
   cursor: 'gpt-5.3-codex',
-  codex: 'gpt-5.4',
+  codex: 'gpt-5.6-sol',
   opencode: 'anthropic/claude-sonnet-4-5',
 };
 
@@ -604,8 +604,9 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
    * Applies a model choice.
    *
    * The pick always becomes the per-provider default so the next new chat
-   * inherits it, and — when a session is open — is also recorded against that
-   * session so reopening it later restores this model.
+   * inherits it (and makes that provider the composer's provider, since the
+   * switcher lists both engines), and — when a session is open — is also
+   * recorded against that session so reopening it later restores this model.
    */
   const selectProviderModel = useCallback(async (
     targetProvider: LLMProvider,
@@ -613,6 +614,12 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     sessionId?: string | null,
   ) => {
     setStoredProviderModel(targetProvider, model);
+    setProvider((current) => {
+      if (current !== targetProvider) {
+        writeSetting('selected-provider', targetProvider);
+      }
+      return targetProvider;
+    });
 
     const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
     if (!normalizedSessionId) {

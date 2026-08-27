@@ -46,6 +46,7 @@ function MainContent({
   onShowSettings,
   externalMessageUpdate,
   newSessionTrigger,
+  onNewProjectSession,
   onProjectSelect,
   onProjectsRefresh,
 }: MainContentProps) {
@@ -173,6 +174,7 @@ function MainContent({
         sendByCtrlEnter={sendByCtrlEnter}
         externalMessageUpdate={externalMessageUpdate}
         newSessionTrigger={newSessionTrigger}
+        onStartNewSession={selectedProject ? () => onNewProjectSession(selectedProject) : undefined}
         sessionOrigin={workerPaneAvailable ? 'planner' : null}
         onRenderedSessionChange={setRenderedSessionId}
         holdQueuedFlush={isMobile && plannerShellOpen}

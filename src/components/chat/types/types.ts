@@ -155,6 +155,12 @@ export interface ChatInterfaceProps {
   sendByCtrlEnter?: boolean;
   externalMessageUpdate?: number;
   newSessionTrigger?: number;
+  /**
+   * The pane's own New Session action. A model picked from the other
+   * provider's group while a chat is open starts a new session on that engine
+   * through it (a chat never changes engine mid-conversation).
+   */
+  onStartNewSession?: () => void;
   /** Slash command auto-sent on a New Session trigger; defaults to /planner. */
   bootCommandName?: string;
   /** Origin tag recorded on sessions this surface creates ('direct' worker pane, 'planner' main surface). */

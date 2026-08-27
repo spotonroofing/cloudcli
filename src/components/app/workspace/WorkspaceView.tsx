@@ -320,7 +320,7 @@ export default function WorkspaceView({
   if (!multiProjects) {
     return (
       <div {...surfaceProps} className="relative h-full min-h-0 min-w-0">
-        <MainContent {...mainContentProps} />
+        <MainContent {...mainContentProps} onNewProjectSession={onNewProjectSession} />
         {dropOverlay}
       </div>
     );

@@ -3,14 +3,16 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
-import type { ProviderModelOption } from '../../../../types/app';
+import type { LLMProvider, ProviderModelOption } from '../../../../types/app';
 import { prettifyModelId } from '../../../../utils/modelLabels';
+import ProviderMark from '../../../llm-provider-logo/ProviderMark';
 import { DEFAULT_EFFORT_VALUE } from '../../constants/providerEffort';
 import { useComposerMenuAnchor } from '../../hooks/useComposerMenuAnchor';
 import { Badge } from '../../../../shared/view/ui';
 import { SwapText } from '../../../../shared/view/beui';
 
 import {
+  ComposerMenuHeading,
   ComposerMenuItem,
   ComposerMenuSeparator,
   ComposerMenuSurface,
@@ -18,9 +20,16 @@ import {
 
 type EffortOption = NonNullable<ProviderModelOption['effort']>['values'][number];
 
+/** One provider's catalog as the switcher lists it, under that provider's mark. */
+export type ProviderModelGroup = {
+  provider: LLMProvider;
+  options: ProviderModelOption[];
+};
+
 /**
- * Display labels for wire effort values. Labels only — the wire format
- * (low/medium/high/xhigh/max/…) sent to the server and SDK is unchanged.
+ * Display labels for wire effort values, shared across providers. Labels
+ * only — the wire format (low/medium/high/xhigh/max/…) sent to the server
+ * and SDK is unchanged.
  */
 const EFFORT_LABELS: Record<string, string> = {
   none: 'None',
@@ -39,15 +48,21 @@ const effortLabelFor = (value: string): string => (
   EFFORT_LABELS[value] ?? value.charAt(0).toUpperCase() + value.slice(1)
 );
 
+const PROVIDER_GROUP_NAMES: Partial<Record<LLMProvider, string>> = {
+  claude: 'Claude',
+  codex: 'OpenAI',
+};
+
 interface ComposerModelMenuProps {
   effort: string;
   /** Effort values the active provider/model actually accepts; empty hides the section. */
   effortOptions: EffortOption[];
   onSelectEffort: (effort: string) => void;
   model: string;
-  /** Model catalog for the active provider; empty hides the section. */
-  modelOptions: ProviderModelOption[];
-  onSelectModel: (model: string) => void;
+  provider: LLMProvider;
+  /** The catalogs the switcher lists; all empty (and not loading) hides the section. */
+  modelGroups: ProviderModelGroup[];
+  onSelectModel: (provider: LLMProvider, model: string) => void;
   modelsLoading: boolean;
 }
 
@@ -56,7 +71,8 @@ export default function ComposerModelMenu({
   effortOptions,
   onSelectEffort,
   model,
-  modelOptions,
+  provider,
+  modelGroups,
   onSelectModel,
   modelsLoading,
 }: ComposerModelMenuProps) {
@@ -74,31 +90,27 @@ export default function ComposerModelMenu({
     }
   }, [isOpen]);
 
+  const activeOptions = useMemo(
+    () => modelGroups.find((group) => group.provider === provider)?.options ?? [],
+    [modelGroups, provider],
+  );
+
   const selectedModelOption = useMemo(() => {
-    const exact = modelOptions.find((option) => option.value === model);
+    const exact = activeOptions.find((option) => option.value === model);
     if (exact) {
       return exact;
     }
     // Session-derived ids may carry a date suffix (e.g. claude-haiku-4-5-20251001);
     // match them to the catalog entry so the friendly name still renders.
-    return modelOptions.find((option) => model.startsWith(`${option.value}-`)) ?? null;
-  }, [model, modelOptions]);
+    return activeOptions.find((option) => model.startsWith(`${option.value}-`)) ?? null;
+  }, [activeOptions, model]);
   // Ids absent from the catalog render prettified (claude-opus-5 -> Opus 5),
   // never as the raw wire id.
   const modelLabel = selectedModelOption?.label || prettifyModelId(model);
-
-  // Claude.ai parity: the selected model renders as the checked card above, so
-  // More models hides it and splits the rest into current / legacy groups
-  // (ungrouped options count as current) in catalog order.
-  const listedModelOptions = useMemo(() => {
-    const selectedValue = selectedModelOption?.value ?? model;
-    return modelOptions.filter((option) => option.value !== selectedValue);
-  }, [model, modelOptions, selectedModelOption]);
-  const currentModelOptions = listedModelOptions.filter((option) => option.group !== 'legacy');
-  const legacyModelOptions = listedModelOptions.filter((option) => option.group === 'legacy');
+  const selectedValue = selectedModelOption?.value ?? model;
 
   const hasEffortSection = effortOptions.length > 0;
-  const hasModelSection = modelOptions.length > 0 || modelsLoading;
+  const hasModelSection = modelGroups.some((group) => group.options.length > 0) || modelsLoading;
   if (!hasEffortSection && !hasModelSection) {
     return null;
   }
@@ -116,6 +128,18 @@ export default function ComposerModelMenu({
     defaultValue: 'Select model and reasoning effort',
   });
 
+  const renderModelRow = (groupProvider: LLMProvider, option: ProviderModelOption) => (
+    <ComposerMenuItem
+      key={`${groupProvider}:${option.value}`}
+      label={option.label || option.value}
+      isSelected={false}
+      onSelect={() => {
+        onSelectModel(groupProvider, option.value);
+        setIsOpen(false);
+      }}
+    />
+  );
+
   return (
     <>
       <button
@@ -130,6 +154,11 @@ export default function ComposerModelMenu({
         aria-expanded={isOpen}
         aria-label={ariaLabel}
       >
+        {hasModelSection && (
+          <span data-slot="model-trigger-mark" data-provider={provider} className="shrink-0 text-muted-foreground">
+            <ProviderMark provider={provider} className="h-3.5 w-3.5" />
+          </span>
+        )}
         <span className="truncate">
           <SwapText value={hasModelSection ? modelLabel : currentEffortLabel}>
             {hasModelSection ? modelLabel : currentEffortLabel}
@@ -223,36 +252,35 @@ export default function ComposerModelMenu({
 
           {view === 'models' && (
             <>
-              {modelOptions.length === 0 && modelsLoading && (
+              {!modelGroups.some((group) => group.options.length > 0) && modelsLoading && (
                 <p className="px-2.5 py-1.5 text-sm text-muted-foreground">
                   {t('composer.loadingModels', { defaultValue: 'Loading models…' })}
                 </p>
               )}
-              {currentModelOptions.map((option) => (
-                <ComposerMenuItem
-                  key={option.value}
-                  label={option.label || option.value}
-                  isSelected={false}
-                  onSelect={() => {
-                    onSelectModel(option.value);
-                    setIsOpen(false);
-                  }}
-                />
-              ))}
-              {currentModelOptions.length > 0 && legacyModelOptions.length > 0 && (
-                <ComposerMenuSeparator />
-              )}
-              {legacyModelOptions.map((option) => (
-                <ComposerMenuItem
-                  key={option.value}
-                  label={option.label || option.value}
-                  isSelected={false}
-                  onSelect={() => {
-                    onSelectModel(option.value);
-                    setIsOpen(false);
-                  }}
-                />
-              ))}
+              {modelGroups.filter((group) => group.options.length > 0).map((group, index) => {
+                // The selected model renders as the checked card above, so its
+                // group hides it; the rest keep catalog order, legacy models
+                // (Claude) below a divider.
+                const listed = group.options.filter((option) => option.value !== selectedValue);
+                const current = listed.filter((option) => option.group !== 'legacy');
+                const legacy = listed.filter((option) => option.group === 'legacy');
+                return (
+                  <div key={group.provider} data-slot="model-group" data-provider={group.provider}>
+                    {index > 0 && <ComposerMenuSeparator />}
+                    <ComposerMenuHeading>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span data-slot="model-group-mark" data-provider={group.provider} className="text-muted-foreground">
+                          <ProviderMark provider={group.provider} className="h-3.5 w-3.5" />
+                        </span>
+                        {PROVIDER_GROUP_NAMES[group.provider] ?? group.provider}
+                      </span>
+                    </ComposerMenuHeading>
+                    {current.map((option) => renderModelRow(group.provider, option))}
+                    {current.length > 0 && legacy.length > 0 && <ComposerMenuSeparator />}
+                    {legacy.map((option) => renderModelRow(group.provider, option))}
+                  </div>
+                );
+              })}
             </>
           )}
         </ComposerMenuSurface>,

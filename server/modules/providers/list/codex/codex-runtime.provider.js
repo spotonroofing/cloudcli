@@ -21,6 +21,7 @@ import {
   normalizeImageDescriptors
 } from '@/shared/image-attachments.js';
 import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index.js';
+import { parseCommandMessage } from '@/shared/command-message.js';
 import { createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
 
 const activeCodexSessions = new Map();
@@ -298,9 +299,14 @@ export async function queryCodex(command, options = {}, ws, context) {
       registerSession(sessionKey());
     }
 
+    // Codex has no slash commands: a composer command (the /planner or
+    // /worker boot, a typed /handoff) arrives in the tagged wrapper and goes
+    // to Codex as its expanded body alone.
+    const parsedCommand = parseCommandMessage(command);
+    const prompt = parsedCommand ? parsedCommand.body : command;
     // Execute with streaming. Turns with image attachments send structured
     // input items so Codex reads the images from their local asset paths.
-    const promptWithFiles = appendFilesInputTag(command, files);
+    const promptWithFiles = appendFilesInputTag(prompt, files);
     const turnInput = normalizeImageDescriptors(images).length > 0
       ? buildCodexInputItems(promptWithFiles, images, workingDirectory)
       : promptWithFiles;

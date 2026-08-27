@@ -16,7 +16,8 @@ import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
 import type { QueuedDraft } from '../../hooks/useChatComposerState';
 import type { ChatAttachment, PendingPermissionRequest } from '../../types/types';
-import type { ProviderModelOption } from '../../../../types/app';
+import type { LLMProvider, ProviderModelOption } from '../../../../types/app';
+import type { ProviderModelGroup } from './ComposerModelMenu';
 import {
   PromptInput,
   PromptInputHeader,
@@ -108,8 +109,10 @@ interface ChatComposerProps {
   availableEffortOptions: NonNullable<ProviderModelOption['effort']>['values'];
   onSelectEffort: (effort: string) => void;
   model: string;
-  availableModelOptions: ProviderModelOption[];
-  onSelectModel: (model: string) => void;
+  provider: LLMProvider;
+  /** The Claude and OpenAI catalogs the switcher lists, each under its provider mark. */
+  modelGroups: ProviderModelGroup[];
+  onSelectModel: (provider: LLMProvider, model: string) => void;
   modelsLoading: boolean;
   tokenBudget: Record<string, unknown> | null;
   onToggleCommandMenu: () => void;
@@ -176,7 +179,8 @@ export default function ChatComposer({
   availableEffortOptions,
   onSelectEffort,
   model,
-  availableModelOptions,
+  provider,
+  modelGroups,
   onSelectModel,
   modelsLoading,
   tokenBudget,
@@ -499,7 +503,8 @@ export default function ChatComposer({
               effortOptions={availableEffortOptions}
               onSelectEffort={onSelectEffort}
               model={model}
-              modelOptions={availableModelOptions}
+              provider={provider}
+              modelGroups={modelGroups}
               onSelectModel={onSelectModel}
               modelsLoading={modelsLoading}
             />

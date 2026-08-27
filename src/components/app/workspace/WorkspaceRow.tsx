@@ -343,6 +343,7 @@ export default function WorkspaceRow({
             sendByCtrlEnter={sendByCtrlEnter}
             externalMessageUpdate={isPrimary ? externalMessageUpdate : undefined}
             newSessionTrigger={rowTrigger}
+            onStartNewSession={handleNewSession}
             sessionOrigin="planner"
             onRenderedSessionChange={setRenderedSessionId}
           />

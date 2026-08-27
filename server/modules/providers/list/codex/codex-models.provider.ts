@@ -21,74 +21,27 @@ export const CODEX_PREDEFINED_MODELS: ProviderModelsDefinition = {
     {
       value: 'gpt-5.6-sol',
       label: 'GPT-5.6 Sol',
-      description: 'Latest frontier agentic coding model.',
+      description: 'Builds backend, wiring and harness jobs',
       effort: {
-        default: 'low',
-        values: [
-          { value: 'low' },
-          { value: 'medium' },
-          { value: 'high' },
-          { value: 'xhigh' },
-          { value: 'max' },
-          { value: 'ultra' },
-        ],
+        default: 'high',
+        values: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }, { value: 'xhigh' }],
       },
     },
     {
       value: 'gpt-5.6-terra',
       label: 'GPT-5.6 Terra',
-      description: 'Balanced agentic coding model for everyday work.',
+      description: 'Fallback when the weekly cap hits',
       effort: {
-        default: 'medium',
-        values: [
-          { value: 'low' },
-          { value: 'medium' },
-          { value: 'high' },
-          { value: 'xhigh' },
-          { value: 'max' },
-          { value: 'ultra' },
-        ],
+        default: 'high',
+        values: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }, { value: 'xhigh' }],
       },
     },
     {
       value: 'gpt-5.6-luna',
       label: 'GPT-5.6 Luna',
-      description: 'Fast and affordable agentic coding model.',
+      description: 'Verifies',
       effort: {
-        default: 'medium',
-        values: [
-          { value: 'low' },
-          { value: 'medium' },
-          { value: 'high' },
-          { value: 'xhigh' },
-          { value: 'max' },
-        ],
-      },
-    },
-    {
-      value: 'gpt-5.5',
-      label: 'GPT-5.5',
-      description: 'Frontier model for complex coding, research, and real-world work.',
-      effort: {
-        default: 'medium',
-        values: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }, { value: 'xhigh' }],
-      },
-    },
-    {
-      value: 'gpt-5.4',
-      label: 'GPT-5.4',
-      description: 'Strong model for everyday coding.',
-      effort: {
-        default: 'medium',
-        values: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }, { value: 'xhigh' }],
-      },
-    },
-    {
-      value: 'gpt-5.4-mini',
-      label: 'GPT-5.4 Mini',
-      description: 'Small, fast, and cost-efficient model for simpler coding tasks.',
-      effort: {
-        default: 'medium',
+        default: 'high',
         values: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }, { value: 'xhigh' }],
       },
     },

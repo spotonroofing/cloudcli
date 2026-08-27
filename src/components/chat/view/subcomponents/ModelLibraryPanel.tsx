@@ -231,7 +231,7 @@ export default function ModelLibraryPanel({
             value={model}
             onChange={(event) => setModel(event.target.value)}
             maxLength={80}
-            placeholder="e.g. GPT-5.5 Pro"
+            placeholder="e.g. GPT-5.6 Terra"
             autoComplete="off"
             className="mt-1.5 h-10 rounded-lg bg-background"
           />
@@ -244,7 +244,7 @@ export default function ModelLibraryPanel({
             value={modelId}
             onChange={(event) => setModelId(event.target.value)}
             maxLength={200}
-            placeholder="e.g. gpt-5.5-pro"
+            placeholder="e.g. gpt-5.6-terra"
             autoComplete="off"
             spellCheck={false}
             className="mt-1.5 h-10 rounded-lg bg-background font-mono"

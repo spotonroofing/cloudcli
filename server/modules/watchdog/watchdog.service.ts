@@ -9,6 +9,7 @@ import { PLANNER_MEMORY_ROOT } from '@/modules/memory/index.js';
 import { providerRuntimeService, providerTokenUsageService, sessionsService } from '@/modules/providers/index.js';
 import { sendFleetNotification } from '@/modules/notifications/index.js';
 import { settingsService, type WatchdogBehavior } from '@/modules/settings/index.js';
+import type { LLMProvider } from '@/shared/types.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
 import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/websocket/index.js';
 
@@ -1066,11 +1067,25 @@ class WatchdogService {
           // exists on disk; otherwise boot a fresh planner session — the
           // planner is stateless by design and re-grounds from STATE.md.
           const resumeId = planner.jsonl_path ? planner.provider_session_id : null;
-          const result = await this.runPlannerTurn(resumeId, planner.model, planner.effort, projectPath, item.prompt);
+          const result = await this.runPlannerTurn(
+            planner.provider as LLMProvider,
+            resumeId,
+            planner.model,
+            planner.effort,
+            projectPath,
+            item.prompt,
+          );
           if (result.errored && resumeId && /no conversation found/i.test(result.errorMessage ?? '')) {
             log(`planner session ${planner.session_id} is dead; booting a fresh planner`);
-            const spawn = settingsService.resolveSpawnSelection('planner', 'claude', projectPath, null);
-            const fresh = await this.runPlannerTurn(null, spawn.model || null, spawn.effort, projectPath, item.prompt);
+            const spawn = settingsService.resolveSpawnSelection('planner', null, projectPath, null);
+            const fresh = await this.runPlannerTurn(
+              spawn.provider as LLMProvider,
+              null,
+              spawn.model || null,
+              spawn.effort,
+              projectPath,
+              item.prompt,
+            );
             if (fresh.errored) {
               throw new Error(fresh.errorMessage ?? 'fresh planner boot failed');
             }
@@ -1113,6 +1128,7 @@ class WatchdogService {
   }
 
   private async runPlannerTurn(
+    provider: LLMProvider,
     providerSessionId: string | null,
     model: string | null,
     effort: string | null,
@@ -1120,7 +1136,7 @@ class WatchdogService {
     prompt: string,
     onAnnounced?: (announcedSessionId: string) => void,
   ): Promise<{ errored: boolean; errorMessage: string | null; announcedSessionId: string | null }> {
-    const runner = providerRuntimeService.getRunner('claude');
+    const runner = providerRuntimeService.getRunner(provider);
     let announcedId: string | null = providerSessionId;
     let errorMessage: string | null = null;
     const writer = {
@@ -1205,26 +1221,30 @@ class WatchdogService {
     prompt: string,
   ): Promise<void> {
     let sessionId: string;
-    let spawn: { model: string; effort: string; source: string };
+    let spawn: { provider: string; model: string; effort: string; source: string };
     try {
-      sessionId = sessionsService.createAppSession('claude', projectPath, prompt, 'planner', true).sessionId;
+      // Sticky provider, model and effort: the previous planner row's trio,
+      // else the Models default. Recorded on the new row so its successor
+      // inherits it; a Codex row makes the successor a Codex session, whose
+      // transcript then renders through the rollout parser.
+      spawn = settingsService.resolveSpawnSelection('planner', null, projectPath, null);
+      const provider = spawn.provider as LLMProvider;
+      sessionId = sessionsService.createAppSession(provider, projectPath, prompt, 'planner', true).sessionId;
       sessionsDb.markSessionBooted(sessionId);
-      // Sticky model and effort: the previous planner row's pair, else the
-      // Models default. Recorded on the new row so its successor inherits it.
-      spawn = settingsService.resolveSpawnSelection('planner', 'claude', projectPath, sessionId);
       if (spawn.model) {
         sessionsDb.setSessionModel(sessionId, spawn.model);
       }
       sessionsDb.setSessionEffort(sessionId, spawn.effort);
-      log(`fresh planner ${sessionId} spawn options: model=${spawn.model || '(runtime default)'} effort=${spawn.effort} (${spawn.source})`);
+      log(`fresh planner ${sessionId} spawn options: provider=${provider} model=${spawn.model || '(runtime default)'} effort=${spawn.effort} (${spawn.source})`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log(`fresh planner boot setup failed for ${projectPath}: ${message}`);
       return;
     }
+    const provider = spawn.provider as LLMProvider;
     const run = chatRunRegistry.startRun({
       appSessionId: sessionId,
-      provider: 'claude',
+      provider,
       providerSessionId: null,
       userId: null,
     });
@@ -1249,7 +1269,7 @@ class WatchdogService {
     let runtimeThrew = false;
     try {
       await providerRuntimeService.run(
-        'claude',
+        provider,
         prompt,
         {
           sessionId,
@@ -1501,7 +1521,7 @@ class WatchdogService {
     };
     void (async () => {
       try {
-        const result = await this.runPlannerTurn(null, null, null, repo, prompt, tagMaintenanceSession);
+        const result = await this.runPlannerTurn('claude', null, null, null, repo, prompt, tagMaintenanceSession);
         if (result.announcedSessionId) {
           tagMaintenanceSession(result.announcedSessionId);
         }
@@ -1595,7 +1615,9 @@ Never push the scratch repo. Keep the final summary to a few lines.`;
 
 /**
  * The /planner boot ritual as a plain prompt: a fresh rotated planner boots
- * through the same steps the slash command runs, grounding from STATE.md.
+ * through the same steps the slash command runs, grounding from STATE.md. The
+ * body goes inline for every provider, which is also what a Codex planner
+ * needs (Codex has no slash commands).
  */
 function readPlannerBootPrompt(): string {
   try {
