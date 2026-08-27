@@ -9,8 +9,6 @@ import SettingsRow from '../SettingsRow';
 import SettingsSection from '../SettingsSection';
 import SettingsToggle from '../SettingsToggle';
 
-import PlannerRotationSection from './PlannerRotationSection';
-
 type NotificationsSettingsTabProps = {
   notificationPreferences: NotificationPreferencesState;
   onNotificationPreferencesChange: (value: NotificationPreferencesState) => void;
@@ -162,8 +160,6 @@ export default function NotificationsSettingsTab({
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>
-
-      <PlannerRotationSection />
     </div>
   );
 }

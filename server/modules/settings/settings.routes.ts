@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { appConfigDb, userSettingsDb } from '@/modules/database/index.js';
+import { userSettingsDb } from '@/modules/database/index.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/index.js';
 import { AppError } from '@/shared/utils.js';
 
@@ -26,26 +26,37 @@ export function createSettingsRouter(
       try { res.json(await operation(req)); } catch (error) { next(error); }
     };
 
-  // Planner auto-rotation (spec B7): on/off + threshold percent against the
-  // session model's real window. The watchdog sweep reads these each pass.
-  router.get('/planner-rotation', respond(() => ({
-    success: true,
-    enabled: appConfigDb.get('planner_rotation_enabled') !== '0',
-    thresholdPercent: Number(appConfigDb.get('planner_rotation_threshold') ?? 60),
-  })));
-  router.put('/planner-rotation', respond((req) => {
-    const body = (req.body ?? {}) as { enabled?: unknown; thresholdPercent?: unknown };
-    if (typeof body.enabled === 'boolean') {
-      appConfigDb.set('planner_rotation_enabled', body.enabled ? '1' : '0');
+  router.get('/watchdog', respond(() => ({ success: true, ...service.getWatchdogSettings() })));
+  router.put('/watchdog', respond((req) => {
+    const body = (req.body ?? {}) as { settings?: unknown; plannerRotationThreshold?: unknown };
+    if (!body.settings || typeof body.settings !== 'object' || Array.isArray(body.settings)) {
+      throw new AppError('settings must be an object.', {
+        code: 'WATCHDOG_SETTINGS_REQUIRED',
+        statusCode: 400,
+      });
     }
-    const threshold = Number(body.thresholdPercent);
-    if (Number.isFinite(threshold) && threshold >= 5 && threshold <= 95) {
-      appConfigDb.set('planner_rotation_threshold', String(Math.round(threshold)));
+    const current = service.getWatchdogSettings().settings;
+    const settings: Partial<Record<keyof typeof current, boolean>> = {};
+    for (const [key, value] of Object.entries(body.settings as Record<string, unknown>)) {
+      if (!(key in current) || typeof value !== 'boolean') {
+        throw new AppError(`Invalid watchdog setting "${key}".`, {
+          code: 'WATCHDOG_SETTING_INVALID',
+          statusCode: 400,
+        });
+      }
+      settings[key as keyof typeof current] = value;
+    }
+    const rawThreshold = body.plannerRotationThreshold;
+    const threshold = rawThreshold === undefined ? undefined : Number(rawThreshold);
+    if (threshold !== undefined && (!Number.isFinite(threshold) || threshold < 5 || threshold > 95)) {
+      throw new AppError('plannerRotationThreshold must be between 5 and 95.', {
+        code: 'WATCHDOG_ROTATION_THRESHOLD_INVALID',
+        statusCode: 400,
+      });
     }
     return {
       success: true,
-      enabled: appConfigDb.get('planner_rotation_enabled') !== '0',
-      thresholdPercent: Number(appConfigDb.get('planner_rotation_threshold') ?? 60),
+      ...service.updateWatchdogSettings(settings, threshold === undefined ? undefined : Math.round(threshold)),
     };
   }));
 

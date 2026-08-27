@@ -1,4 +1,4 @@
-import { Bell, Palette } from 'lucide-react';
+import { Bell, Palette, Settings2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { IconTabs } from '../../../shared/view/ui';
@@ -21,6 +21,7 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
   const tabs: IconTab<SettingsMainTab>[] = [
     { id: 'appearance', label: t('mainTabs.appearance'), icon: Palette },
     { id: 'notifications', label: t('mainTabs.notifications'), icon: Bell },
+    { id: 'system', label: 'System', icon: Settings2 },
   ];
 
   return (

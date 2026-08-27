@@ -1,0 +1,6 @@
+[
+ {"name": "Settings and defaults", "tasks": ["Commit the ui15 job 0 WIP first", "System switches govern the watchdog", "Models section, per-role defaults", "Planner inherits model and effort", "Codex placeholder reads GPT-5.6 Sol"]},
+ {"name": "Dispatch runner and guardrails", "tasks": ["Per-job engine, model, effort headers", "Verify stage on Luna by default", "Codex jobs link to the worker pane", "Codex limits wait and retry", "Subagents off, Codex worker prompt", "Destructive guard widened, both engines"]},
+ {"name": "ChatGPT in the switcher", "tasks": ["ChatGPT group with 5h and 7d meters", "Meters refresh from new rollouts", "Signed-out state", "Accounts API parity"]},
+ {"name": "Switcher and marks", "tasks": ["Catalog is Sol, Terra, Luna at high", "Provider marks in the switcher", "Same marks in Settings and accounts", "Labels match across providers"]}
+]

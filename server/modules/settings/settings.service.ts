@@ -5,6 +5,10 @@ type NotificationPreferences = Record<string, unknown> & {
 };
 
 type SettingsDependencies = {
+  appConfig: {
+    get(key: string): string | null;
+    set(key: string, value: string): void;
+  };
   credentials: {
     list(userId: number, credentialType: string | null): unknown[];
     create(
@@ -31,6 +35,24 @@ type SettingsDependencies = {
   getVapidPublicKey(): string | null;
 };
 
+const WATCHDOG_DEFAULTS = {
+  plannerRotation: false,
+  terminalWakes: false,
+  livenessSweep: true,
+  dispatchRunLiveness: true,
+  resourceAlerts: true,
+  weeklySelfTest: true,
+  weeklyMaintenance: false,
+  handoffAutomation: false,
+  punchlistWatching: true,
+  recoveryNotices: true,
+} as const;
+
+type WatchdogBehavior = keyof typeof WATCHDOG_DEFAULTS;
+
+const watchdogSettingKey = (behavior: WatchdogBehavior): string =>
+  `watchdog_${behavior.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)}`;
+
 function requiredString(value: unknown, fieldName: string, code: string): string {
   const normalizedValue = typeof value === 'string' ? value.trim() : '';
   if (!normalizedValue) {
@@ -48,6 +70,38 @@ function assertFound(found: boolean, resourceName: string, code: string): void {
 /** Creates settings workflows with repositories and notification effects injected. */
 export function createSettingsService(dependencies: SettingsDependencies) {
   return {
+    /** Watchdog module reads the stored automation policy before acting. */
+    isWatchdogBehaviorEnabled(behavior: WatchdogBehavior): boolean {
+      const stored = dependencies.appConfig.get(watchdogSettingKey(behavior));
+      return stored === null ? WATCHDOG_DEFAULTS[behavior] : stored === '1';
+    },
+    /** Settings System tab reads every behavior and its explicit default. */
+    getWatchdogSettings() {
+      const settings = Object.fromEntries(
+        (Object.keys(WATCHDOG_DEFAULTS) as WatchdogBehavior[]).map((behavior) => [
+          behavior,
+          this.isWatchdogBehaviorEnabled(behavior),
+        ]),
+      ) as Record<WatchdogBehavior, boolean>;
+      return {
+        settings,
+        defaults: WATCHDOG_DEFAULTS,
+        plannerRotationThreshold: Number(dependencies.appConfig.get('planner_rotation_threshold') ?? 60),
+      };
+    },
+    /** Settings route persists only values Willem explicitly changed. */
+    updateWatchdogSettings(
+      settings: Partial<Record<WatchdogBehavior, boolean>>,
+      plannerRotationThreshold?: number,
+    ) {
+      for (const [behavior, enabled] of Object.entries(settings) as [WatchdogBehavior, boolean][]) {
+        dependencies.appConfig.set(watchdogSettingKey(behavior), enabled ? '1' : '0');
+      }
+      if (plannerRotationThreshold !== undefined) {
+        dependencies.appConfig.set('planner_rotation_threshold', String(plannerRotationThreshold));
+      }
+      return this.getWatchdogSettings();
+    },
     listCredentials(userId: number, credentialType: string | null) {
       return { credentials: dependencies.credentials.list(userId, credentialType) };
     },

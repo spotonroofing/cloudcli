@@ -1,4 +1,5 @@
 import {
+  appConfigDb,
   credentialsDb,
   notificationPreferencesDb,
   pushSubscriptionsDb,
@@ -12,7 +13,12 @@ import {
 import { createSettingsRouter } from './settings.routes.js';
 import { createSettingsService } from './settings.service.js';
 
-const settingsService = createSettingsService({
+/** Shared settings policy consumed by routes and watchdog automation. */
+export const settingsService = createSettingsService({
+  appConfig: {
+    get: (key) => appConfigDb.get(key),
+    set: (key, value) => appConfigDb.set(key, value),
+  },
   credentials: {
     list: (userId, type) => credentialsDb.getCredentials(userId, type),
     create: (userId, name, type, value, description) =>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import SettingsSidebar from '../view/SettingsSidebar';
 import AppearanceSettingsTab from '../view/tabs/AppearanceSettingsTab';
 import NotificationsSettingsTab from '../view/tabs/NotificationsSettingsTab';
+import SystemSettingsTab from '../view/tabs/SystemSettingsTab';
 import { useSettingsController } from '../hooks/useSettingsController';
 import { useWebPush } from '../../../hooks/useWebPush';
 import type { SettingsProps } from '../types/types';
@@ -147,6 +148,8 @@ function Settings({ isOpen, initialTab = 'appearance' }: SettingsProps) {
               onDisableDesktopNotifications={handleDisableDesktopNotifications}
             />
           )}
+
+          {activeTab === 'system' && <SystemSettingsTab />}
         </div>
       </main>
     </div>
