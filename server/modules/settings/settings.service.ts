@@ -189,7 +189,9 @@ export function createSettingsService(dependencies: SettingsDependencies) {
       );
       const carried = previous && previous.provider === provider ? previous : null;
       const model = carried?.model ?? (fallback.provider === provider ? fallback.model : '');
-      const effort = carried?.effort ?? fallback.effort;
+      // 'default' is the composer's untouched placeholder (recorded on every
+      // send), not a pick: the Models default effort applies instead.
+      const effort = carried?.effort && carried.effort !== 'default' ? carried.effort : fallback.effort;
       const source = carried
         ? `previous ${role} row ${carried.session_id}`
         : `Models default (no previous ${role} row on ${provider})`;

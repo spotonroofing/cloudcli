@@ -118,6 +118,13 @@ test('spawn selection carries the previous row of the role, else the Models defa
   const codexWorker = service.resolveSpawnSelection('worker', 'codex', '/p', 'new-3');
   assert.equal(codexWorker.model, 'gpt-5.6-sol');
   assert.equal(codexWorker.effort, 'ultra');
+
+  // The composer records 'default' on every send when nothing was picked;
+  // that placeholder is not a pick, so the Models default effort applies.
+  rows.planner = { session_id: 'prev-untouched', provider: 'claude', model: 'claude-fable-5', effort: 'default' };
+  const untouched = service.resolveSpawnSelection('planner', 'claude', '/p', 'new-4');
+  assert.equal(untouched.model, 'claude-fable-5');
+  assert.equal(untouched.effort, 'medium');
 });
 
 test('subscribeToPush persists the subscription and enables Web Push', () => {
