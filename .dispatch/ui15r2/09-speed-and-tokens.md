@@ -1,8 +1,7 @@
 <!-- browser -->
-<!-- supersedes: ui15r/1, ui15/3 -->
-<!-- name: Jobs view polish -->
-<!-- tasks: Less indent, wider sidebar, commit tooltip | Filled ring with centered check for done jobs, history included | Red segments and centered X for failed jobs | Per-task durations and live counters | Verify row styled as a task, only when live | Mono text, red failures with reason | Month and year grouping -->
-Execute Job 3 of PUNCHLIST_ui15.md in this repo (jobs view polish). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read only that job's section plus the whole-file rules block, and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
+<!-- name: Streaming off, job tokens -->
+<!-- tasks: Streaming text renders per block | Double-posted reply fixed | Token count per job -->
+Execute Job 11 of PUNCHLIST_ui15.md in this repo (streaming off and job tokens). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read only that job's section plus the whole-file rules block, and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
 

@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Context diet -->
-<!-- tasks: DESIGN.md becomes index plus area files | No MCP in headless and machine sessions | Recovery notices stop waking the planner | dispatch pause and resume | Worker stop square | Jobs column state persists | Watchdog scope pass with System-tab switches -->
+<!-- tasks: DESIGN.md becomes index plus area files | No MCP in headless and machine sessions | Recovery notices stop waking the planner | dispatch pause and resume | Worker stop square | Jobs column state persists | Watchdog scope pass with System-tab switches | Supersede earlier resume-chain jobs -->
 First, sync the repo: pull the latest from origin. If the tree has uncommitted changes or the pull conflicts, resolve it with judgment (commit or stash local work, then reconcile), never discard work, and state in one line what you found.
 
 Execute Job 0 of PUNCHLIST_ui15.md in this repo (context diet). Read only Job 0's section plus the whole-file rules at the top of PUNCHLIST_ui15.md, and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.

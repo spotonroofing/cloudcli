@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Sidebar alignment and indicators -->
-<!-- tasks: Row shifts as one, gap kept, title gains width | Quiet planner/worker response indicators | Beam distinguishes planner vs worker | Verify spinner in the ring center before the check | Re-run jobs supersede their failed twin | Verify sessions titled properly | Worker pane follows one session, no flapping | Account drawer stops closing on click-away | One footer button, sectioned drawer -->
+<!-- tasks: Row shifts as one, gap kept, title gains width | Quiet planner/worker response indicators | Beam distinguishes planner vs worker | Verify spinner in the ring center before the check | Verify sessions titled properly | Worker pane follows one session, no flapping | Account drawer stops closing on click-away | One footer button, sectioned drawer -->
 Execute Job 10 of PUNCHLIST_ui15.md in this repo (sidebar alignment and response indicators). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read only that job's section plus the whole-file rules block, and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 

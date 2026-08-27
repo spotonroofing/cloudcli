@@ -7,7 +7,9 @@
    "Recovery notices stop waking the planner",
    "dispatch pause and resume",
    "Worker stop square",
-   "Jobs column state persists"
+   "Jobs column state persists",
+   "Watchdog scope pass with System switches",
+   "Supersede earlier resume-chain jobs"
   ]
  },
  {
@@ -67,8 +69,16 @@
   "tasks": [
    "Row shifts as one, gap kept",
    "Quiet response indicators, beam split",
-   "Supersede failed twins, verify spinner",
+   "Verify spinner before the check",
    "One footer button, drawer stays open"
+  ]
+ },
+ {
+  "name": "Streaming off, job tokens",
+  "tasks": [
+   "Streaming text renders per block",
+   "Double-posted reply fixed",
+   "Token count per job"
   ]
  }
 ]

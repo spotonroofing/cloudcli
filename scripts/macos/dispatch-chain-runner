@@ -37,14 +37,27 @@ PHASE_FILES=("$@")
 
 cd "$REPO" || { print -u2 "dispatch-chain-runner: cannot cd to $REPO"; exit 66; }
 
-# Phase model/effort per runner doctrine: Fable by default with the Opus 4.8
-# capacity fallback; DISPATCH_MODEL/DISPATCH_EFFORT pin every phase when set.
-MODEL="${DISPATCH_MODEL:-claude-fable-5}"
+# Phase engine/model/effort per runner doctrine: Claude with Fable by default;
+# DISPATCH_ENGINE=codex selects Codex CLI, whose default model is GPT-5.6 Sol.
+# DISPATCH_MODEL/DISPATCH_EFFORT pin every phase when set.
+ENGINE="${DISPATCH_ENGINE:-claude}"
+[[ "$ENGINE" == "claude" || "$ENGINE" == "codex" ]] \
+  || { print -u2 "dispatch-chain-runner: DISPATCH_ENGINE must be claude or codex"; exit 64; }
+if [[ "$ENGINE" == "codex" ]]; then
+  MODEL="${DISPATCH_MODEL:-gpt-5.6-sol}"
+else
+  MODEL="${DISPATCH_MODEL:-claude-fable-5}"
+fi
 EFFORT="${DISPATCH_EFFORT:-high}"
 FALLBACK_MODEL="claude-opus-4-8"
 
-CLAUDE_BIN=$(command -v claude)
-[[ -n "$CLAUDE_BIN" ]] || { print -u2 "dispatch-chain-runner: claude CLI not on PATH"; exit 69; }
+if [[ "$ENGINE" == "codex" ]]; then
+  CODEX_BIN=$(command -v codex)
+  [[ -n "$CODEX_BIN" ]] || { print -u2 "dispatch-chain-runner: codex CLI not on PATH"; exit 69; }
+else
+  CLAUDE_BIN=$(command -v claude)
+  [[ -n "$CLAUDE_BIN" ]] || { print -u2 "dispatch-chain-runner: claude CLI not on PATH"; exit 69; }
+fi
 
 # Session-limit resilience (ui10 phase 1): a limit-exit never trips the commit
 # gate. CSWAP_PATH override mirrors server/modules/accounts.
@@ -347,6 +360,30 @@ run_claude() {
     < "$1" > "$2" 2>&1
 }
 
+# One headless Codex session with the same prompt/log/session-id contract as
+# run_claude. Codex assigns its own rollout id, so $3 is announced to the
+# watchdog while the CLI receives the long prompt on stdin. The final message
+# is kept separately for the verifier's exact VERIFY line.
+run_codex() {
+  exec python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' \
+    "$CODEX_BIN" exec \
+    --dangerously-bypass-approvals-and-sandbox \
+    -C "$REPO" \
+    -m "$MODEL" \
+    -c model_reasoning_effort="$EFFORT" \
+    -o "$2.last" \
+    - \
+    < "$1" > "$2" 2>&1
+}
+
+run_engine() {
+  if [[ "$ENGINE" == "codex" ]]; then
+    run_codex "$@"
+  else
+    run_claude "$@"
+  fi
+}
+
 # Pre-tag a stage session: the id is chosen here and announced to the server
 # before claude starts, so the row exists tagged origin=dispatch (with the
 # chain slug and unit) before transcript discovery can index it untagged.
@@ -402,7 +439,7 @@ start_verify() {
   announce_session "$session" "$VERIFY_COMMIT" "$VERIFY_NUM" verify
   journal "verify $VERIFY_NUM/$TOTAL" "start" "$VERIFY_NAME against $VERIFY_COMMIT"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-start $VERIFY_NUM '')" 3
-  run_claude "$prompt" "$JOURNAL_DIR/verify$VERIFY_NUM.log" "$session" &
+  run_engine "$prompt" "$JOURNAL_DIR/verify$VERIFY_NUM.log" "$session" &
   VERIFY_PID=$!
 }
 
@@ -410,14 +447,17 @@ start_verify() {
 # limit exit without a verdict marks the stage for a re-run once no build is
 # in flight (reconcile_verify); anything else is a FAIL and rewinds.
 settle_verify() {
-  local rc log="$JOURNAL_DIR/verify$VERIFY_NUM.log" verdict
+  local rc log="$JOURNAL_DIR/verify$VERIFY_NUM.log" verdict verdict_source
   wait $VERIFY_PID
   rc=$?
   VERIFY_PID=""
-  # The verdict is the last VERIFY: line, wherever markdown wrapped it
+  # Codex writes its final assistant message to .last; Claude's verdict stays
+  # in the session log. The verdict is the last VERIFY: line, wherever markdown wrapped it
   # (`**VERIFY: PASS**`, a backticked or indented line all count).
-  verdict=$(grep -oE 'VERIFY: (PASS|FAIL[^`*]*)' "$log" 2>/dev/null | tail -1 | sed 's/[[:space:]]*$//')
-  if [[ $rc -ne 0 && -z "$verdict" ]] && grep -qiE "$LIMIT_PATTERN" "$log"; then
+  verdict_source="$log"
+  [[ "$ENGINE" == "codex" ]] && verdict_source="$log.last"
+  verdict=$(grep -oE 'VERIFY: (PASS|FAIL[^`*]*)' "$verdict_source" 2>/dev/null | tail -1 | sed 's/[[:space:]]*$//')
+  if [[ "$ENGINE" == "claude" && $rc -ne 0 && -z "$verdict" ]] && grep -qiE "$LIMIT_PATTERN" "$log"; then
     journal "verify $VERIFY_NUM/$TOTAL" "limit" "verifier exited $rc on the session limit; re-running once the build in flight has recovered"
     VERIFY_RETRY=1
     return 0
@@ -519,7 +559,7 @@ CHAIN_BASE=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
 MANIFEST_PATH="${DISPATCH_MANIFEST:-}"
 
 journal run "start" "chain $SLUG in $REPO ($TOTAL phases)"
-[[ -x "$CSWAP_BIN" ]] && unpark_stale
+[[ "$ENGINE" == "claude" && -x "$CSWAP_BIN" ]] && unpark_stale
 api_post "/api/watchdog/chains" "$(python3 - "$SLUG" "$REPO" "$TOTAL" "$MANIFEST_PATH" <<'PYEOF'
 import json, sys
 slug, repo, total, manifest_path = sys.argv[1:5]
@@ -567,7 +607,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
 
   # The build stage: a fresh headless session in the repo, run in the
   # background so the previous unit's verify can be settled while it works.
-  run_claude "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" &
+  run_engine "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" &
   BUILD_PID=$!
   watch_build
   RC=$?
@@ -577,7 +617,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
 
   # Limit-exit: recover (switch or wait) and retry the phase instead of
   # tripping the commit gate.
-  if [[ $RC -ne 0 ]] && grep -qiE "$LIMIT_PATTERN" "$JOURNAL_DIR/phase$PHASE_NUM.log"; then
+  if [[ "$ENGINE" == "claude" && $RC -ne 0 ]] && grep -qiE "$LIMIT_PATTERN" "$JOURNAL_DIR/phase$PHASE_NUM.log"; then
     recover_from_limit "phase $PHASE_NUM/$TOTAL" "$PHASE_NUM" "$PHASE_NAME" "$JOURNAL_DIR/phase$PHASE_NUM.log"
     journal "phase $PHASE_NUM/$TOTAL" "retry" "re-running $PHASE_NAME after limit recovery"
     PHASE_NUM=$((PHASE_NUM - 1))
@@ -590,16 +630,21 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
 
   if [[ $RC -ne 0 ]]; then
     reconcile_verify
-    journal "phase $PHASE_NUM/$TOTAL" "FAILED" "claude exited $RC; stopping chain (phase$PHASE_NUM.log)"
+    journal "phase $PHASE_NUM/$TOTAL" "FAILED" "$ENGINE exited $RC; stopping chain (phase$PHASE_NUM.log)"
     api_post "/api/watchdog/chains/$SLUG/events" \
-      "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) failed: claude exited $RC." | json_string)")" 80
+      "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) failed: $ENGINE exited $RC." | json_string)")" 80
     exit 1
   fi
 
   # Commit gate: a phase that lands no commit stops the chain right here.
   if [[ "$NEW_COMMIT" == "$BASE_COMMIT" ]]; then
     reconcile_verify
-    journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME"
+    if [[ "$ENGINE" == "codex" ]]; then
+      LOG_TAIL=$(tail -n 3 "$JOURNAL_DIR/phase$PHASE_NUM.log" | /usr/bin/awk 'BEGIN { sep = "" } { printf "%s%s", sep, $0; sep = " | " } END { print "" }')
+      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME; log tail: $LOG_TAIL"
+    else
+      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME"
+    fi
     api_post "/api/watchdog/chains/$SLUG/events" \
       "$(event_body stopped $PHASE_NUM "$(print -rn -- "Commit gate stopped the chain: phase $PHASE_NUM ($PHASE_NAME) produced no commit." | json_string)")" 80
     exit 2
