@@ -120,6 +120,7 @@ Goal: chat rows align to the New session button's edge, and responses announce t
 
 - [ ] Chat row alignment: the active-session dot and the row text shift right so the dot touches an imaginary 1px line at the New session button's left edge, text following; consistent in both tabs and nested rows.
 - [ ] Response indicators: when a planner or a worker finishes a response Willem has not seen, a subtle indicator appears (not the dot; invent something quiet that fits the design language) with a visible distinction between planner and worker (and both), present on the chat row, the project row when collapsed, and the footer counters; opening the chat clears it.
+- [ ] The border beam distinguishes who is working: a planner mid-turn reads differently from a worker mid-turn on the project row's beam (and both at once reads as both, each in its own way); invent the treatment within the design language, subtle, no labels; consistent with the response indicators' planner/worker distinction.
 - [ ] Footer counters show only active kinds: only planners active means one full-width Planner button; planners and workers means a split pair; zero of a kind shows no button for it; the drawer keeps its upward ramped animation.
 
 Done check: on dev: dot's left edge equals the New session button's left edge (DOM rects); a stub worker completion shows the indicator on row, collapsed project, and counter, distinct from the planner's, cleared on open; footer renders one wide button with only a planner active and a split with both. Phone holds. Render-sanity pass. Commit.
