@@ -341,7 +341,7 @@ run_claude() {
   CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 \
   CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
     exec python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' \
-    "$CLAUDE_BIN" -p --model "$MODEL" --effort "$EFFORT" "${fallback_args[@]}" \
+    "$CLAUDE_BIN" -p --strict-mcp-config --mcp-config "$MCP_EMPTY" --model "$MODEL" --effort "$EFFORT" "${fallback_args[@]}" \
     --session-id "$3" \
     --dangerously-skip-permissions \
     < "$1" > "$2" 2>&1
