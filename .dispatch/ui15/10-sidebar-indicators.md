@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Sidebar alignment and indicators -->
-<!-- tasks: Dot and text align to the New session edge | Quiet planner/worker response indicators | Beam distinguishes planner vs worker | Footer shows only active kinds -->
+<!-- tasks: Row shifts as one, gap kept, title gains width | Quiet planner/worker response indicators | Beam distinguishes planner vs worker | Footer shows only active kinds -->
 Execute Job 10 of PUNCHLIST_ui15.md in this repo (sidebar alignment and response indicators). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
