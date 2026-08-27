@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import { cn } from '../../../lib/utils';
 
+import { SnapGuides, useSnapDivider } from './dividerSnap';
 import type { WindowId } from './useProjectWindows';
 
 type PaneDividerProps = {
@@ -91,14 +92,11 @@ type PaneStripProps = {
  */
 export default function PaneStrip({ panes, onPairWeights }: PaneStripProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const resizeRef = useRef<{
-    idA: WindowId;
-    idB: WindowId;
-    startX: number;
-    weightA: number;
-    weightB: number;
-    pixels: number;
-  } | null>(null);
+  const snap = useSnapDivider<WindowId>({
+    containerRef,
+    minFraction: () => 0.15,
+    onCommit: onPairWeights,
+  });
 
   const handleDividerPointerDown =
     (idA: WindowId, idB: WindowId) => (event: React.PointerEvent<HTMLDivElement>) => {
@@ -114,35 +112,18 @@ export default function PaneStrip({ panes, onPairWeights }: PaneStripProps) {
       }
       const paneA = panes.find((pane) => pane.id === idA);
       const paneB = panes.find((pane) => pane.id === idB);
-      resizeRef.current = {
+      snap.beginDrag(event, {
         idA,
         idB,
-        startX: event.clientX,
-        weightA: paneA?.weight ?? 1,
-        weightB: paneB?.weight ?? 1,
-        pixels: elA.getBoundingClientRect().width + elB.getBoundingClientRect().width,
-      };
-      event.currentTarget.setPointerCapture(event.pointerId);
+        elA,
+        elB,
+        horizontal: true,
+        total: (paneA?.weight ?? 1) + (paneB?.weight ?? 1),
+      });
     };
 
-  const handleDividerPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const state = resizeRef.current;
-    if (!state || state.pixels <= 0) {
-      return;
-    }
-    const total = state.weightA + state.weightB;
-    const delta = ((event.clientX - state.startX) / state.pixels) * total;
-    const minWeight = total * 0.15;
-    const nextA = Math.min(total - minWeight, Math.max(minWeight, state.weightA + delta));
-    onPairWeights(state.idA, nextA, state.idB, total - nextA);
-  };
-
-  const handleDividerPointerEnd = () => {
-    resizeRef.current = null;
-  };
-
   return (
-    <div ref={containerRef} data-slot="pane-strip" className="flex h-full min-h-0 min-w-0 flex-1">
+    <div ref={containerRef} data-slot="pane-strip" className="relative flex h-full min-h-0 min-w-0 flex-1">
       {panes.map((pane, index) => {
         // A divider sits between two open panes that touch directly; a rail
         // at the boundary is its own separator.
@@ -154,9 +135,9 @@ export default function PaneStrip({ panes, onPairWeights }: PaneStripProps) {
               <PaneDivider
                 orientation="vertical"
                 onPointerDown={handleDividerPointerDown(previous.id, pane.id)}
-                onPointerMove={handleDividerPointerMove}
-                onPointerUp={handleDividerPointerEnd}
-                onPointerCancel={handleDividerPointerEnd}
+                onPointerMove={snap.moveDrag}
+                onPointerUp={snap.endDrag}
+                onPointerCancel={snap.endDrag}
               />
             )}
             {pane.state === 'rail' ? (
@@ -189,6 +170,7 @@ export default function PaneStrip({ panes, onPairWeights }: PaneStripProps) {
           </Fragment>
         );
       })}
+      <SnapGuides guide={snap.guides} />
     </div>
   );
 }

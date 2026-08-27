@@ -9,6 +9,7 @@ import { STANDALONE_PROJECT_ID } from '../../../types/app';
 
 import WorkspaceRow, { type WorkspaceGripHandlers } from './WorkspaceRow';
 import { PaneDivider } from './PaneStrip';
+import { SnapGuides, useSnapDivider } from './dividerSnap';
 import { PROJECT_DRAG_TYPE, type WorkspaceState } from './useWorkspace';
 
 type WorkspaceViewProps = MainContentProps & {
@@ -76,16 +77,14 @@ export default function WorkspaceView({
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [dropZone, setDropZone] = useState<DropZone | null>(null);
-  const resizeRef = useRef<{
-    idA: string;
-    idB: string;
-    startPos: number;
-    weightA: number;
-    weightB: number;
-    pixels: number;
-  } | null>(null);
 
   const horizontal = workspace.mode === 'columns';
+
+  const snap = useSnapDivider<string>({
+    containerRef,
+    minFraction: (pixels) => MIN_UNIT_PX / pixels,
+    onCommit: workspace.setPairWeights,
+  });
 
   const measureUnits = () => {
     const container = containerRef.current;
@@ -185,35 +184,15 @@ export default function WorkspaceView({
       if (!elA || !elB) {
         return;
       }
-      const rectA = elA.getBoundingClientRect();
-      const rectB = elB.getBoundingClientRect();
-      resizeRef.current = {
+      snap.beginDrag(event, {
         idA,
         idB,
-        startPos: horizontal ? event.clientX : event.clientY,
-        weightA: workspace.weights[idA] ?? 1,
-        weightB: workspace.weights[idB] ?? 1,
-        pixels: horizontal ? rectA.width + rectB.width : rectA.height + rectB.height,
-      };
-      event.currentTarget.setPointerCapture(event.pointerId);
+        elA,
+        elB,
+        horizontal,
+        total: (workspace.weights[idA] ?? 1) + (workspace.weights[idB] ?? 1),
+      });
     };
-
-  const handleDividerPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const state = resizeRef.current;
-    if (!state || state.pixels <= 0) {
-      return;
-    }
-    const pointer = horizontal ? event.clientX : event.clientY;
-    const total = state.weightA + state.weightB;
-    const delta = ((pointer - state.startPos) / state.pixels) * total;
-    const minWeight = Math.min(total / 2, (MIN_UNIT_PX / state.pixels) * total);
-    const nextA = Math.min(total - minWeight, Math.max(minWeight, state.weightA + delta));
-    workspace.setPairWeights(state.idA, nextA, state.idB, total - nextA);
-  };
-
-  const handleDividerPointerEnd = () => {
-    resizeRef.current = null;
-  };
 
   // Drag-to-combine (phase 5): a sidebar project row dragged over the view
   // offers edge drop zones — left/right edge opens the project as a column,
@@ -366,9 +345,9 @@ export default function WorkspaceView({
                 multiProjects[index - 1].projectId,
                 project.projectId,
               )}
-              onPointerMove={handleDividerPointerMove}
-              onPointerUp={handleDividerPointerEnd}
-              onPointerCancel={handleDividerPointerEnd}
+              onPointerMove={snap.moveDrag}
+              onPointerUp={snap.endDrag}
+              onPointerCancel={snap.endDrag}
             />
           )}
           <div
@@ -406,6 +385,7 @@ export default function WorkspaceView({
           </div>
         </Fragment>
       ))}
+      <SnapGuides guide={snap.guides} />
       {drag && !drag.edge && (
         <div
           data-workspace-snap-guide
