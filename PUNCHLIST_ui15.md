@@ -202,13 +202,15 @@ Goal: the multi-project column view stops surprising. Files: the workspace layou
 
 Done check: on dev with three projects open: jobs column toggles on one project only and survives reload; pane widths measured equal after opening the column; three-column layout snapshot matches the documented geometry. Commit.
 
-## Job 16 — Command Center wording sweep (2026-08-27). Verify: no
+## Job 16 — Command Center naming sweep (2026-08-27, widened). Verify: yes
 
-Goal: the app's own docs and instruction files say Command Center, not CloudCLI or Claude CLI, where they mean the product. Files: CLAUDE.md, AGENTS.md (symlink, no edit), README, docs/, design/, in-app copy strings, package name only if nothing depends on it. Dependencies: none. The local folder rename stays deferred (it would break running chains); env and path names that carry cloudcli stay.
+Goal: nothing in the repo says CloudCLI or Claude CLI when it means this app; the product is Command Center, and identifiers that cannot carry a space are `command-center`. Files: everything in the repo (docs, CLAUDE.md, README, design/, UI copy, code identifiers, package name, env variable names, script names, comments, tests). Dependencies: none. Out of this job, deliberately: the four runtime anchors that live outside the repo and would break the running chain if moved now: the database directories `~/.cloudcli` and `~/.cloudcli-dev`, the launchd labels `com.spoton.cloudcli-*`, the config directory names, and the local folder `~/Projects/cloudcli`; those move in Job 19 after this chain ends.
 
-- [ ] Replace product mentions of CloudCLI and Claude CLI with Command Center in docs, instruction files and UI copy; leave paths, env names, database names and the repo folder alone; list what was left on purpose in the summary.
+- [ ] Replace every product mention: "CloudCLI", "Cloud CLI", "cloudcli" and "Claude CLI" (when it means this app, not Anthropic's `claude` binary) become "Command Center" in prose and copy and `command-center` in identifiers, env names, package name, script and file names, keys and comments; renamed env names and keys keep reading the old name for one release with a one-line deprecation log so nothing silently breaks; every renamed file keeps git history (git mv).
+- [ ] Keep the runtime anchors above untouched but centralize them: one small module or config block names the DB directory, config directory and launchd label so Job 19 changes them in one place.
+- [ ] The summary lists every remaining `cloudcli` string with its reason (runtime anchor only).
 
-Done check: `grep -ri "cloudcli\|claude cli"` over docs, design, CLAUDE.md and src copy strings returns only the path, env and database mentions listed in the summary. Commit.
+Done check: `grep -rni "cloudcli\|cloud cli\|claude cli"` over the repo (excluding node_modules, dist folders and .git) returns only the centralized runtime anchors listed in the summary; build, typecheck, lint and both test suites pass; dev boots and serves. Commit.
 
 ## Job 17 — Fast mode toggle for ChatGPT models (2026-08-27). Verify: yes
 
@@ -219,3 +221,23 @@ Goal: with a ChatGPT model selected, the model menu offers a Fast mode toggle th
 - [ ] Wiring: the choice persists per session next to model and effort and applies to the next turn of an interactive session through the Codex runtime; a per-provider default lives in the settings store like `codex-effort`; dispatched jobs never use it (doctrine: Codex fast mode never for chains).
 
 Done check: on dev: with GPT-5.6 Sol selected the row renders under Effort with the descriptor and hides on a Claude model (DOM); toggling it on and sending a turn produces a Codex request or rollout entry that shows the fast tier engaged (read it back from the rollout or SDK options log); it persists across reload and across two browser profiles; phone holds. Commit.
+
+## Job 18 — Wakes follow the planner that dispatched (2026-08-27). Verify: yes
+
+Goal: watchdog wakes land in the chat that owns the work, and follow it through handoffs, never in whichever planner chat Willem touched last. Files: `sessions.db.ts` (`getLatestPlannerSession` and the session row), the chain registry and `watchdog_chains` (dispatching session), the dispatch CLI and runner (announce the dispatching planner session), the handoff and rotation spawn paths in `watchdog.service.ts` (successor lineage), the wake resolver, the sidebar chat row and its menu, `design/sidebar.md`. Dependencies: none.
+
+- [ ] A chain records the planner session that dispatched it: the dispatch CLI passes the dispatching session id (from the environment the planner runs in, or the newest planner session at dispatch time as the fallback) and the watchdog stores it on the chain; appends and amends do not change it.
+- [ ] Lineage: every session spawned by handoff, rotation or dead-planner reboot records its predecessor; the wake resolver for a chain event starts at the dispatching session and follows the lineage to the live successor; a chain-end, stopped, failed or decision wake goes there and nowhere else. Wakes that belong to no chain (maintenance, self-test) go to the project's wake target below.
+- [ ] Project wake target: each project has one wake target session; dispatching sets it to the dispatching session, handoff moves it to the successor, a side chat never takes it by being typed in; `getLatestPlannerSession` stops being the resolver for wakes (it may stay for boot-prologue and rotation sweeps).
+- [ ] Visible and movable: the chat row that is the project's wake target carries a subtle mark in the sidebar language (muted, icon-sized, no label), and the row menu offers "Receive watchdog wakes here" to move it by hand; a wake posted to a chat shows nothing new beyond what wakes show today.
+
+Done check: on dev: dispatch a stub chain from planner chat A, type in a new side chat B, complete the chain: the wake lands in A; hand off from A to A2, complete a second stub chain dispatched before the handoff: the wake lands in A2; move the target to B by hand and complete a chain dispatched with no session context: the wake lands in B; the mark moves with the target in the DOM; regression tests for the resolver. Commit.
+
+## Job 19 — Runtime rename to command-center (runs after this chain, never inside it). Verify: yes
+
+Goal: the four runtime anchors Job 16 left alone move to the new name with a migration, then the local folder renames. Files: the centralized anchor module from Job 16, `scripts/macos/*.plist.template`, `install.sh`, `promote.sh`, `dispatch`, `dispatch-chain-runner`, backup and scrub scripts, CLAUDE.md, PROJECT.md pointers in the memory repo (planner-owned, list them for the planner). Dependencies: Job 16; no chain may be running.
+
+- [ ] Migration script: moves `~/.cloudcli` to `~/.command-center` and `~/.cloudcli-dev` to `~/.command-center-dev` (or symlinks the old to the new for one release), re-bootstraps launchd under `com.spoton.command-center-*` labels and unloads the old ones, updates every script default; idempotent; dry-run flag; logs each step.
+- [ ] Local folder: `~/Projects/cloudcli` becomes `~/Projects/command-center` with the memory repo's PROJECT.md config, the Codex trust entry in `~/.codex/config.toml`, the Claude project trust entry, and the promote and dispatch defaults following; the planner's memory folder name stays `cloudcli` until the planner renames it.
+
+Done check: after the migration on the mini: live and dev serve from the new directories under the new launchd labels, the old labels are gone, `dispatch` and `promote --tag-guard` run against the new paths, a stub chain completes, and the grep from Job 16 returns nothing. Commit.
