@@ -2,7 +2,7 @@
 <!-- model: gpt-5.6-sol -->
 <!-- effort: high -->
 <!-- name: Pause and resume -->
-<!-- tasks: dispatch pause parks and marks paused | dispatch resume from the first unfinished job | Runner traps the pause signal -->
+<!-- tasks: dispatch pause parks and marks paused | Resume from the first unfinished job | Runner traps the pause signal -->
 First, sync the repo: pull the latest from origin. If the tree has uncommitted changes or the pull conflicts, resolve it with judgment (commit or stash local work, then reconcile), never discard work, and state in one line what you found.
 
 Execute Job 1 of PUNCHLIST_pauseresume.md in this repo (dispatch pause and resume). The goal and items are that job's section and checkboxes in PUNCHLIST_pauseresume.md; read that file, the recent git log, and the files the job names; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
