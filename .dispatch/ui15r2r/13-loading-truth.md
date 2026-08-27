@@ -3,7 +3,7 @@
 <!-- model: gpt-5.6-sol -->
 <!-- effort: high -->
 <!-- name: Live loading truth -->
-<!-- tasks: Claude context figure updates live | Messages load in without refresh | Skeleton or blur for everything loading -->
+<!-- tasks: Claude context figure updates live | Messages load in without refresh | Skeleton or blur for everything loading | Codex rows append, no full reload -->
 Execute Job 13 of PUNCHLIST_ui15.md in this repo (live loading truth). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read only that job's section plus the whole-file rules block at the top (including the rerun rules), the recent git log, and the files the job names; items already checked stay done; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 Before running a command that changes state (restarts, deletes, config edits), check that the evidence supports that specific action; a signal that matches a known failure can have a different cause. Rebuild and restart dev only when the done check needs the running instance to show the change, and never twice when once serves.
