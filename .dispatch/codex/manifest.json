@@ -1,0 +1,37 @@
+[
+ {
+  "name": "System tab and defaults",
+  "tasks": [
+   "Commit job 0 WIP, wire 10 switches",
+   "Rotation key fixed, threshold saves",
+   "Models section: default model, effort",
+   "Sticky effort and model on spawn"
+  ]
+ },
+ {
+  "name": "Runner: engines, Luna",
+  "tasks": [
+   "Per-unit engine, model, effort headers",
+   "Verify stage always Luna",
+   "Codex jobs link to their rollout",
+   "Codex limit waits, never fails",
+   "Subagents off, hooks widened"
+  ]
+ },
+ {
+  "name": "ChatGPT account",
+  "tasks": [
+   "ChatGPT row with rollout usage",
+   "Live refresh, updated-ago hint",
+   "Accounts API carries ChatGPT"
+  ]
+ },
+ {
+  "name": "Switcher and Codex boot",
+  "tasks": [
+   "Catalog: Sol, Terra, Luna, high",
+   "Provider marks in the menu",
+   "Planner and worker boot on Codex"
+  ]
+ }
+]
