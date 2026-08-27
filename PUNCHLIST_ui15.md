@@ -61,6 +61,7 @@ Done check: on dev with stub history spanning two months: indent reduced, sideba
 Goal: the memory row finally shows what changed, and the memory popout's prompt bar sits right. Files: the memory indicator row and its expansion, the memory popout, DESIGN.md. Dependencies: none.
 
 - [ ] Second report: expanding a memory-updated row still shows only the file name. ui14 job 3 claimed a diff preview; reproduce on live surfaces, find why it does not render (data not sent, renderer path, or the expansion showing the wrong slot), and fix so the expansion lists the actual changed lines (compact, changes only, never the whole file), next to or under the file name. Regression test.
+- [ ] Watchdog messages stop looking like Willem's: turns originating from the watchdog (wakes, rotation prompts, chain events) render as a distinct system row instead of a user message bubble — the meta-row family's language (leading icon, muted treatment, compact one-line summary, expandable to the full text), visually unmistakable as machine-to-planner; creative freedom on the exact form within the row anatomy. Applies live and on reload; detection keyed on the message's origin, not text matching.
 - [ ] Memory popout: the padding above its prompt bar equals the padding below it; the placeholder reads "Iterate memory..." (he removes more than he adds; never "Remember that").
 
 Done check: on dev: a real memory write's row expands to the changed lines; popout paddings measure equal; placeholder text correct. Phone holds. Fresh-context subagent verification. Commit.

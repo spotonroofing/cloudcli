@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Memory diff preview for real -->
-<!-- tasks: Expansion shows the changed lines | Popout padding equal, Iterate memory copy -->
+<!-- tasks: Watchdog turns render as system rows | Expansion shows the changed lines | Popout padding equal, Iterate memory copy -->
 Execute Job 4 of PUNCHLIST_ui15.md in this repo (memory diff preview for real). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
