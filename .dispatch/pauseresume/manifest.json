@@ -1,0 +1,10 @@
+[
+ {
+  "name": "Pause and resume",
+  "tasks": [
+   "dispatch pause parks and marks paused",
+   "dispatch resume from the first unfinished job",
+   "Runner traps the pause signal"
+  ]
+ }
+]
