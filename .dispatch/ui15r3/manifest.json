@@ -1,0 +1,156 @@
+[
+ {
+  "name": "Context diet",
+  "tasks": [
+   "No MCP in headless and machine sessions",
+   "Recovery notices stop waking the planner",
+   "Worker stop square pauses the chain",
+   "Jobs column state persists",
+   "Effort switcher proven real"
+  ]
+ },
+ {
+  "name": "Codex transcript calm",
+  "tasks": [
+   "Cause found with evidence",
+   "Rollout writes append, no remount",
+   "Pane follows the build, never verify",
+   "Claude path unchanged, tested"
+  ]
+ },
+ {
+  "name": "Memory and status truth",
+  "tasks": [
+   "Expansion shows the changed lines",
+   "Watchdog turns marked not-for-Willem",
+   "Interrupted marker reconciled",
+   "Exact durations on status rows",
+   "Live indicator reflects the real phase",
+   "Popout padding, Iterate memory copy"
+  ]
+ },
+ {
+  "name": "Sounds and settings",
+  "tasks": [
+   "Per-pane completion sounds",
+   "Missing-settings pass"
+  ]
+ },
+ {
+  "name": "Themes with depth",
+  "tasks": [
+   "Dots right-aligned, hover-only, bigger",
+   "New fully-layered themes"
+  ]
+ },
+ {
+  "name": "Usage alerts",
+  "tasks": [
+   "Gated 5h alerts per account",
+   "Parking never disables accounts",
+   "Near-real-time usage in the switcher",
+   "All-dry turns auto-retry at reset",
+   "Fleet-wide window aggregates",
+   "Thresholds cover ChatGPT too"
+  ]
+ },
+ {
+  "name": "Images end to end",
+  "tasks": [
+   "Inline images verified and polished",
+   "Remote URL cards documented"
+  ]
+ },
+ {
+  "name": "Seasonal touches",
+  "tasks": [
+   "Date-gated surprises, no spoilers"
+  ]
+ },
+ {
+  "name": "Sidebar and indicators",
+  "tasks": [
+   "Row shifts as one, title gains width",
+   "Quiet planner and worker indicators",
+   "Beam distinguishes planner vs worker",
+   "Verify spinner in the ring center",
+   "Account drawer stays open",
+   "Switcher: Claude header, one anatomy",
+   "One footer button, sectioned drawer"
+  ]
+ },
+ {
+  "name": "Streaming off, tokens",
+  "tasks": [
+   "Streaming text renders per block",
+   "Double post and chopped text fixed",
+   "No orange dot, no cursor",
+   "Token count per job"
+  ]
+ },
+ {
+  "name": "Composer row order",
+  "tasks": [
+   "Context window control joins the row"
+  ]
+ },
+ {
+  "name": "Live loading truth",
+  "tasks": [
+   "Claude context figure updates live",
+   "Messages load in without refresh",
+   "Skeleton or blur for everything loading",
+   "Codex rows append, no full reload"
+  ]
+ },
+ {
+  "name": "Indicator row unity",
+  "tasks": [
+   "One anatomy for every indicator row"
+  ]
+ },
+ {
+  "name": "Column view behaves",
+  "tasks": [
+   "Jobs column per project, persisted",
+   "Panes squish evenly, no random widths",
+   "Three-project view renders right"
+  ]
+ },
+ {
+  "name": "Command Center naming",
+  "tasks": [
+   "Every mention becomes Command Center",
+   "Identifiers become command-center",
+   "Runtime anchors centralized for job 19"
+  ]
+ },
+ {
+  "name": "Fast mode toggle",
+  "tasks": [
+   "Find the real Codex fast-mode switch",
+   "Toggle row under Effort with cost line",
+   "Persists per session, never for chains"
+  ]
+ },
+ {
+  "name": "Wakes follow the planner",
+  "tasks": [
+   "Chain records its dispatching planner",
+   "Wakes follow the handoff lineage",
+   "Project wake target, no side chats",
+   "Row mark and manual move"
+  ]
+ },
+ {
+  "name": "Jobs view polish",
+  "tasks": [
+   "Less indent, wider sidebar, tooltip",
+   "Ring check and red X for done and failed",
+   "Per-task durations and live counters",
+   "Verify row as a task, only when live",
+   "Mono text, red failures with reason",
+   "Month and year grouping"
+  ]
+ }
+]
