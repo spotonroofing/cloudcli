@@ -208,3 +208,13 @@ Goal: the app's own docs and instruction files say Command Center, not CloudCLI 
 - [ ] Replace product mentions of CloudCLI and Claude CLI with Command Center in docs, instruction files and UI copy; leave paths, env names, database names and the repo folder alone; list what was left on purpose in the summary.
 
 Done check: `grep -ri "cloudcli\|claude cli"` over docs, design, CLAUDE.md and src copy strings returns only the path, env and database mentions listed in the summary. Commit.
+
+## Job 17 — Fast mode toggle for ChatGPT models (2026-08-27). Verify: yes
+
+Goal: with a ChatGPT model selected, the model menu offers a Fast mode toggle that really switches Codex into its fast tier, with the cost stated next to it so Willem knows what he is spending. Files: the composer model menu (`ComposerModelMenu.tsx`), the per-session model and effort persistence (`sessions.model`/`sessions.effort` and the `active-*` routes), the Codex runtime provider (thread options), the per-provider defaults in the settings store, `design/composer.md`. Dependencies: none.
+
+- [ ] Find the real mechanism first: how Codex CLI 0.147 and `@openai/codex-sdk` enable fast mode (a service tier or config key, not a model id; check `codex --help`, `codex exec --help`, the config reference and the SDK's thread options) and what OpenAI documents for its speed and usage multiplier; the worker-seat research in the memory repo recorded roughly 1.5x speed for 2.5x usage. Record the finding in the summary. If neither the CLI nor the SDK exposes it, the toggle does not ship; say so and stop.
+- [ ] The toggle: when the selected model is a ChatGPT model, the menu gains one row directly under Effort: "Fast mode" with a switch and a one-line muted descriptor carrying the real figures ("1.5x speed, 2.5x usage" or whatever is documented, marked "approx." if it is not); hidden entirely for Claude models; same row anatomy as Effort. The trigger label gains a small muted "fast" tag while it is on.
+- [ ] Wiring: the choice persists per session next to model and effort and applies to the next turn of an interactive session through the Codex runtime; a per-provider default lives in the settings store like `codex-effort`; dispatched jobs never use it (doctrine: Codex fast mode never for chains).
+
+Done check: on dev: with GPT-5.6 Sol selected the row renders under Effort with the descriptor and hides on a Claude model (DOM); toggling it on and sending a turn produces a Codex request or rollout entry that shows the fast tier engaged (read it back from the rollout or SDK options log); it persists across reload and across two browser profiles; phone holds. Commit.
