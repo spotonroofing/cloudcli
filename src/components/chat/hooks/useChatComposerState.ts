@@ -257,6 +257,27 @@ export type QueuedDraft = {
   preserveComposer?: boolean;
 };
 
+type ComposerSubmit = (
+  event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>,
+  queuedSubmission?: QueuedDraft,
+) => Promise<void>;
+
+/**
+ * Sends programmatic command content through the normal submit path without
+ * staging it in the user-owned composer state. `preserveComposer` also keeps
+ * text entered while command expansion is in flight from being cleared when
+ * the request finally submits.
+ */
+export const submitExpandedCommand = (
+  submit: ComposerSubmit | null,
+  content: string,
+): Promise<void> | undefined => submit?.(createFakeSubmitEvent(), {
+  id: createQueuedMessageId(),
+  content,
+  attachments: [],
+  preserveComposer: true,
+});
+
 const restoreQueuedDrafts = (sessionKey: string): QueuedDraft[] =>
   readQueuedMessages(sessionKey).map((saved) => ({
     id: saved.id,
@@ -499,15 +520,7 @@ export function useChatComposerState({
           body: content || '',
         })
       : content || '';
-    setInput(commandContent);
-    inputValueRef.current = commandContent;
-
-    // Defer submit to next tick so the command text is reflected in UI before dispatching.
-    setTimeout(() => {
-      if (handleSubmitRef.current) {
-        handleSubmitRef.current(createFakeSubmitEvent());
-      }
-    }, 0);
+    await submitExpandedCommand(handleSubmitRef.current, commandContent);
   }, [addMessage]);
 
   const executeCommand = useCallback(
@@ -521,6 +534,14 @@ export function useChatComposerState({
         const commandMatch = effectiveInput.match(new RegExp(`${escapeRegExp(command.name)}\\s*(.*)`));
         const args =
           commandMatch && commandMatch[1] ? commandMatch[1].trim().split(/\s+/) : [];
+
+        // A command chosen from the typed slash palette owns that invocation,
+        // so remove only the text the user just executed. Button/boot callers
+        // explicitly preserve any draft already in the composer.
+        if (commandMatch && !options?.preserveInput) {
+          setInput('');
+          inputValueRef.current = '';
+        }
 
         // The `/api/commands/execute` context sends `projectId` now instead of
         // a folder-derived project name; the path is still included verbatim.
@@ -643,7 +664,7 @@ export function useChatComposerState({
     if (!handoffCommand) {
       return;
     }
-    void executeCommand(handoffCommand, handoffCommand.name);
+    void executeCommand(handoffCommand, handoffCommand.name, { preserveInput: true });
   }, [slashCommands, executeCommand]);
 
   // A New Session action boots the planner automatically. The provider layer
@@ -712,7 +733,7 @@ export function useChatComposerState({
     lastPlannerBootTriggerRef.current = trigger;
     bootSubmissionRef.current = true;
     bootInFlightRef.current = true;
-    void executeCommand(bootCommand, bootCommand.name);
+    void executeCommand(bootCommand, bootCommand.name, { preserveInput: true });
   }, [newSessionTrigger, selectedSession, currentSessionId, isLoading, slashCommands, commandsFetchState, executeCommand, bootCommandName, selectedProject?.projectId, setBootState]);
 
   // A different project means a different boot context; drop any stale state.
@@ -755,7 +776,7 @@ export function useChatComposerState({
       if (!bootInFlightRef.current) {
         bootSubmissionRef.current = true;
         bootInFlightRef.current = true;
-        void executeCommand(bootCommand, bootCommand.name);
+        void executeCommand(bootCommand, bootCommand.name, { preserveInput: true });
       }
       return;
     }

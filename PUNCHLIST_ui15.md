@@ -262,10 +262,10 @@ Done check: on dev with a real Codex session running (a `codex exec` one-liner i
 
 Goal: Willem never sees a message being typed for him. Today a slash command (typed, from the plus menu, or the Handoff button) and a planner boot both write their expanded body into the composer textarea and submit on the next tick, so the prompt box visibly fills with the whole command or boot text before it sends. He wants none of that: the composer shows only what he typed himself. Files: `src/components/chat/hooks/useChatComposerState.ts` (the command execution path that calls `setInput` with the built command message and defers submit, `executeCommand`, the boot effect and `handleSubmit`), `src/components/chat/view/subcomponents/ChatComposer.tsx`, and any other caller that fills the input to send.
 
-- [ ] Slash commands submit their expanded body directly through the send path without ever writing it to the composer's input state or textarea; the input keeps whatever the user had (empty after a typed command, untouched in the preserve-input case).
-- [ ] The planner boot and the Handoff button's /handoff go the same way: nothing appears in the composer at any frame; the composer lock while booting stays as it is.
-- [ ] The transcript still renders the compact command bubble and the boot behaves exactly as before (placeholder title, boot flag, hidden prologue).
-- [ ] A regression test on the hook covers the submit path: a command execution never sets the input value.
+- [x] Slash commands submit their expanded body directly through the send path without ever writing it to the composer's input state or textarea; the input keeps whatever the user had (empty after a typed command, untouched in the preserve-input case).
+- [x] The planner boot and the Handoff button's /handoff go the same way: nothing appears in the composer at any frame; the composer lock while booting stays as it is.
+- [x] The transcript still renders the compact command bubble and the boot behaves exactly as before (placeholder title, boot flag, hidden prologue).
+- [x] A regression test on the hook covers the submit path: a command execution never sets the input value.
 
 Done check: on dev with agent-browser, poll the composer textarea value every animation frame (a small eval loop collecting values) while a fresh planner boot fires and while a slash command fires from the plus menu; the collected values never contain the command or boot text; the transcript shows the command bubble and the boot completes as before; tests pass. Commit.
 
