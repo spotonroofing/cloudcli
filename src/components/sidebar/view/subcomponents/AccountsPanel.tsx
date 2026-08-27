@@ -3,6 +3,7 @@ import { Ban, ChevronDown, ChevronUp, Loader2, LogIn, Plus, Power, Terminal } fr
 import type { TFunction } from 'i18next';
 
 import ProviderLoginModal from '../../../provider-auth/view/ProviderLoginModal';
+import { useWebSocket } from '../../../../contexts/WebSocketContext';
 import { Button } from '../../../../shared/view/ui';
 import { authenticatedFetch } from '../../../../utils/api';
 import { cn } from '../../../../lib/utils';
@@ -20,7 +21,10 @@ import SidebarFooterDrawer from './SidebarFooterDrawer';
  * or focus, which is the only time the name truncates; touch shows them
  * always. Adding an account is the real flow: log in, then `cswap add`, each
  * a shell window opened from the two-step block, with the panel watching
- * cswap's list until the account lands.
+ * cswap's list until the account lands. Below the Claude accounts sits the
+ * ChatGPT group (codex job 3): the one Codex login with the same meters,
+ * read from Codex's own rollout files, pushed live over the websocket while
+ * the drawer is open. No controls: there is one login and nothing switches it.
  */
 
 type CswapWindow = {
@@ -48,6 +52,15 @@ export type CswapAccount = {
   usage?: CswapUsage | null;
   lastGoodUsage?: CswapUsage | null;
 };
+
+export type ChatgptAccount = {
+  email: string | null;
+  plan: string | null;
+  state: 'ok' | 'logged_out' | 'stale';
+  usage: { fiveHour?: CswapWindow; sevenDay?: CswapWindow; readAt: string } | null;
+};
+
+type AccountList = { accounts: CswapAccount[]; chatgpt: ChatgptAccount | null };
 
 type AccountsPanelProps = {
   open: boolean;
@@ -83,15 +96,37 @@ type AddStep = keyof typeof ADD_STEPS;
 /** How often the panel re-reads cswap's list while the add block is open. */
 const ADD_POLL_MS = 5000;
 
-const fetchAccountList = async (): Promise<CswapAccount[]> => {
+const fetchAccountList = async (): Promise<AccountList> => {
   const response = await authenticatedFetch('/api/accounts');
   const body = await response.json();
   if (!response.ok) {
     throw new Error(body?.error || 'Failed to load accounts');
   }
   const accounts = body?.data?.accounts;
-  return Array.isArray(accounts) ? (accounts as CswapAccount[]) : [];
+  const chatgpt = body?.data?.chatgpt;
+  return {
+    accounts: Array.isArray(accounts) ? (accounts as CswapAccount[]) : [],
+    chatgpt: chatgpt && typeof chatgpt === 'object' ? (chatgpt as ChatgptAccount) : null,
+  };
 };
+
+/** "12s", "5m", "3h", "2d": how old the ChatGPT reading is. */
+const formatAge = (readAt: string, now: number): string => {
+  const seconds = Math.max(0, Math.round((now - Date.parse(readAt)) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86_400)}d`;
+};
+
+/** The OpenAI mark, in the numeral slot of the ChatGPT row. */
+function OpenAIMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" />
+    </svg>
+  );
+}
 
 const postAccountAction = async (url: string, payload: Record<string, unknown>) => {
   const response = await authenticatedFetch(url, {
@@ -146,6 +181,10 @@ function UsageBar({ label, kind, window: win }: { label: string; kind: string; w
 
 export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMobile, t }: AccountsPanelProps) {
   const [accounts, setAccounts] = useState<CswapAccount[] | null>(null);
+  const [chatgpt, setChatgpt] = useState<ChatgptAccount | null>(null);
+  /** Ticks while open so the ChatGPT "updated ago" hint stays honest. */
+  const [now, setNow] = useState(() => Date.now());
+  const { subscribe } = useWebSocket();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** `<action>:<slot>` while a row action runs; disables every action. */
@@ -160,10 +199,12 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
     setLoading(true);
     try {
       const list = await fetchAccountList();
-      setAccounts(list);
+      setAccounts(list.accounts);
+      setChatgpt(list.chatgpt);
+      setNow(Date.now());
       setError(null);
-      onActiveChange(list.find((account) => account.active)?.email ?? null);
-      return list;
+      onActiveChange(list.accounts.find((account) => account.active)?.email ?? null);
+      return list.accounts;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       return null;
@@ -181,6 +222,24 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
       setError(null);
     }
   }, [open, refresh]);
+
+  // The ChatGPT meters update live: the server pushes `chatgpt_usage` when a
+  // Codex rollout carries a newer reading. Only an open drawer listens.
+  useEffect(() => {
+    if (!open) return;
+    return subscribe((event) => {
+      if (event.kind === 'chatgpt_usage' && event.chatgpt && typeof event.chatgpt === 'object') {
+        setChatgpt(event.chatgpt as ChatgptAccount);
+        setNow(Date.now());
+      }
+    });
+  }, [open, subscribe]);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = window.setInterval(() => setNow(Date.now()), 10_000);
+    return () => window.clearInterval(id);
+  }, [open]);
 
   // Re-read cswap's list and close the add block once the flow is done: a
   // new slot appeared, or the active slot changed (an in-place re-add).
@@ -254,7 +313,7 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
       open={open}
       onClose={() => onOpenChange(false)}
       isMobile={isMobile}
-      ariaLabel={t('accounts.title', 'Claude accounts')}
+      ariaLabel={t('accounts.title', 'Accounts')}
       dataSlot="accounts-panel"
     >
       {/* Top padding, not a divider, separates the panel from the list above. */}
@@ -448,6 +507,59 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
             </button>
           )}
         </li>
+
+        {/* The ChatGPT group (codex job 3): one login, no controls. */}
+        {chatgpt && (
+          <>
+            <li
+              className="px-2 pb-1 pt-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+              data-slot="account-group-chatgpt"
+            >
+              ChatGPT
+            </li>
+            <li
+              className="rounded-lg px-2 py-2.5"
+              data-slot="account-row"
+              data-account="chatgpt"
+              data-state={chatgpt.state}
+            >
+              <div className="flex h-7 items-center gap-2">
+                <span className="flex w-4 flex-shrink-0 justify-end text-muted-foreground">
+                  <OpenAIMark className="h-3.5 w-3.5" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground" data-slot="account-name">
+                  {chatgpt.email ?? 'ChatGPT'}
+                </span>
+                {chatgpt.plan && (
+                  <span
+                    className="flex-shrink-0 rounded-sm border border-border px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground"
+                    data-slot="account-plan"
+                  >
+                    {chatgpt.plan}
+                  </span>
+                )}
+              </div>
+              {chatgpt.state === 'ok' ? (
+                <div className="mt-1.5 space-y-1 pl-6">
+                  <UsageBar label={t('accounts.fiveHour', '5h')} kind="5h" window={chatgpt.usage?.fiveHour} />
+                  <UsageBar label={t('accounts.sevenDay', '7d')} kind="7d" window={chatgpt.usage?.sevenDay} />
+                  <p className="text-[10px] text-muted-foreground" data-slot="account-usage-meta">
+                    {chatgpt.usage
+                      ? t('accounts.updatedAgo', 'updated {{age}} ago', { age: formatAge(chatgpt.usage.readAt, now) })
+                      : t('accounts.noUsage', 'no usage recorded yet')}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-1.5 pl-6 text-[10px] text-muted-foreground" data-slot="account-login-fix">
+                  {chatgpt.state === 'logged_out'
+                    ? t('accounts.chatgptLoggedOut', 'Logged out.')
+                    : t('accounts.chatgptStale', 'Login stale.')}{' '}
+                  <span className="font-mono text-foreground">codex login</span> on the mini
+                </p>
+              )}
+            </li>
+          </>
+        )}
       </ul>
 
       {error && (

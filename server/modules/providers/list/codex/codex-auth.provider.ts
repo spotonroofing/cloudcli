@@ -15,6 +15,76 @@ type CodexCredentialsStatus = {
   error?: string;
 };
 
+/** The claims the app reads off a Codex id token; never the token itself. */
+export type CodexIdTokenClaims = {
+  email?: string;
+  /** ChatGPT plan slug (`plus`, `pro`, `prolite`, ...). */
+  plan?: string;
+  /** Token expiry, unix seconds. */
+  exp?: number;
+};
+
+export type CodexLogin = {
+  /** True when auth.json carries an id or access token. */
+  loggedIn: boolean;
+  email: string | null;
+  plan: string | null;
+  /** Id token expiry, unix seconds, when readable. */
+  tokenExpiresAt: number | null;
+};
+
+const PLAN_CLAIM = 'https://api.openai.com/auth.chatgpt_plan_type';
+
+/**
+ * Decodes the payload of a Codex id token (a JWT). Returns only the claims
+ * the app shows; the caller must never surface the token itself.
+ */
+export function decodeCodexIdToken(idToken: string): CodexIdTokenClaims {
+  try {
+    const parts = idToken.split('.');
+    if (parts.length >= 2) {
+      const payload = readObjectRecord(JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))) ?? {};
+      const exp = Number(payload.exp);
+      return {
+        email: readOptionalString(payload.email) ?? readOptionalString(payload.user),
+        plan: readOptionalString(payload[PLAN_CLAIM]),
+        exp: Number.isFinite(exp) ? exp : undefined,
+      };
+    }
+  } catch {
+    // Not a readable JWT payload; the caller falls back to a generic marker.
+  }
+  return {};
+}
+
+/**
+ * Reads the ChatGPT login Codex holds in auth.json: whether a token exists,
+ * and the email and plan decoded from the id token. A missing or unreadable
+ * file is simply logged out.
+ */
+export async function readCodexLogin(
+  authPath = path.join(os.homedir(), '.codex', 'auth.json'),
+): Promise<CodexLogin> {
+  try {
+    const auth = readObjectRecord(JSON.parse(await readFile(authPath, 'utf8'))) ?? {};
+    const tokens = readObjectRecord(auth.tokens) ?? {};
+    const idToken = readOptionalString(tokens.id_token);
+    const accessToken = readOptionalString(tokens.access_token);
+    if (!idToken && !accessToken) {
+      return { loggedIn: false, email: null, plan: null, tokenExpiresAt: null };
+    }
+    const claims = idToken ? decodeCodexIdToken(idToken) : {};
+    return {
+      loggedIn: true,
+      email: claims.email ?? null,
+      plan: claims.plan ?? null,
+      tokenExpiresAt: claims.exp ?? null,
+    };
+  } catch {
+    return { loggedIn: false, email: null, plan: null, tokenExpiresAt: null };
+  }
+}
+
 export class CodexProviderAuth implements IProviderAuth {
   /**
    * Checks whether Codex is available to the server runtime.
@@ -85,16 +155,6 @@ export class CodexProviderAuth implements IProviderAuth {
    * Extracts the user email from a Codex id_token when a readable JWT payload exists.
    */
   private readEmailFromIdToken(idToken: string): string {
-    try {
-      const parts = idToken.split('.');
-      if (parts.length >= 2) {
-        const payload = readObjectRecord(JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')));
-        return readOptionalString(payload?.email) ?? readOptionalString(payload?.user) ?? 'Authenticated';
-      }
-    } catch {
-      // Fall back to a generic authenticated marker if the token payload is not readable.
-    }
-
-    return 'Authenticated';
+    return decodeCodexIdToken(idToken).email ?? 'Authenticated';
   }
 }

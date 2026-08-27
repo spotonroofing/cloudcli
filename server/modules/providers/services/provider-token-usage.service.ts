@@ -157,6 +157,64 @@ function readCodexTokenUsage(fileContent: string): TokenUsageResult {
   };
 }
 
+export type CodexRateLimitWindow = {
+  windowMinutes: number;
+  usedPercent: number;
+  /** Unix seconds. */
+  resetsAt: number;
+};
+
+export type CodexRateLimitReading = {
+  /** The rollout event's timestamp. */
+  at: string;
+  plan: string | null;
+  windows: CodexRateLimitWindow[];
+};
+
+function readCodexRateLimitWindow(value: unknown): CodexRateLimitWindow | null {
+  const window = value as AnyRecord | null;
+  const windowMinutes = Number(window?.window_minutes);
+  const usedPercent = Number(window?.used_percent);
+  const resetsAt = Number(window?.resets_at);
+  return Number.isFinite(windowMinutes) && Number.isFinite(usedPercent) && Number.isFinite(resetsAt)
+    ? { windowMinutes, usedPercent, resetsAt }
+    : null;
+}
+
+/**
+ * The newest `rate_limits` block a Codex rollout carries (on `token_count`
+ * events): the ChatGPT account's 5-hour / 7-day meters as Codex last saw
+ * them. Null when no event in the file carries a readable window.
+ */
+export function readCodexRateLimits(fileContent: string): CodexRateLimitReading | null {
+  const lines = fileContent.trim().split('\n');
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try {
+      const entry = JSON.parse(lines[index]) as AnyRecord;
+      const rateLimits = entry.type === 'event_msg' && entry.payload?.type === 'token_count'
+        ? (entry.payload.rate_limits as AnyRecord | null)
+        : null;
+      if (!rateLimits || typeof entry.timestamp !== 'string') {
+        continue;
+      }
+      const windows = [rateLimits.primary, rateLimits.secondary]
+        .map(readCodexRateLimitWindow)
+        .filter((window): window is CodexRateLimitWindow => window !== null);
+      if (windows.length === 0) {
+        continue;
+      }
+      return {
+        at: entry.timestamp,
+        plan: typeof rateLimits.plan_type === 'string' ? rateLimits.plan_type : null,
+        windows,
+      };
+    } catch {
+      // A provider may be writing the last JSONL line while this read happens.
+    }
+  }
+  return null;
+}
+
 function readClaudeTokenUsage(
   fileContent: string,
   configuredContextWindow: string | undefined,

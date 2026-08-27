@@ -6,6 +6,7 @@ import chokidar, { type FSWatcher } from 'chokidar';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { handleAutoMemoryFileEvent, handleSessionTranscriptEvent } from '@/modules/memory/index.js';
+import { noteCodexRollout } from '@/modules/providers/services/chatgpt-account.service.js';
 import { sessionSynchronizerService } from '@/modules/providers/services/session-synchronizer.service.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { LLMProvider } from '@/shared/types.js';
@@ -254,6 +255,15 @@ async function onUpdate(
 
   if (!isWatcherTargetFile(provider, filePath)) {
     return;
+  }
+
+  // Every Codex rollout event, sub-agent threads included, can carry the
+  // ChatGPT account's rate limits; the account switcher reads them from here
+  // (codex job 3). Lives on the watcher, not the synchronizer: the
+  // synchronizer is loaded by the provider registry, and the ChatGPT service
+  // reaches the websocket barrel, which would close an import cycle there.
+  if (provider === 'codex') {
+    void noteCodexRollout(filePath);
   }
 
   try {

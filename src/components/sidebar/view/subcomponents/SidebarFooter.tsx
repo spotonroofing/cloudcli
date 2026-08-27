@@ -298,7 +298,7 @@ export default function SidebarFooter({
         />
         <TaskbarButton
           icon={AtSign}
-          label={activeAccountEmail ?? t('accounts.title', 'Claude accounts')}
+          label={activeAccountEmail ?? t('accounts.title', 'Accounts')}
           onClick={() => toggleDrawer('accounts')}
           selected={openDrawer === 'accounts'}
           dimmed={anyOpen && openDrawer !== 'accounts'}

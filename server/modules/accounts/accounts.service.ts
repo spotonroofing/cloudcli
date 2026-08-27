@@ -4,6 +4,7 @@ import { promises as fsPromises } from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { getChatgptAccount } from '@/modules/providers/index.js';
 import { AppError } from '@/shared/utils.js';
 
 /**
@@ -102,8 +103,14 @@ export const assertAccountTarget = (value: unknown): string => {
   return target;
 };
 
-export const listAccounts = async (): Promise<unknown> =>
-  parseJson((await runCswap(['list', '--json'])).stdout);
+/** cswap's list plus the ChatGPT login (codex job 3) under `chatgpt`. */
+export const listAccounts = async (): Promise<unknown> => {
+  const [list, chatgpt] = await Promise.all([
+    runCswap(['list', '--json']).then((result) => parseJson(result.stdout)),
+    getChatgptAccount(),
+  ]);
+  return { ...(list as Record<string, unknown>), chatgpt };
+};
 
 export const getAccountStatus = async (): Promise<unknown> =>
   parseJson((await runCswap(['status', '--json'])).stdout);
