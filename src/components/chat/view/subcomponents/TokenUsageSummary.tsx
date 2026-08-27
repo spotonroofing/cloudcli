@@ -17,6 +17,12 @@ type TokenUsageSummaryProps = {
   usage: Record<string, unknown> | null;
 };
 
+type CodexUsageRow = {
+  key: string;
+  label: string;
+  tokens: number;
+};
+
 const readUsageNumber = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -82,6 +88,37 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
   const outputTokens = readUsageNumber(usage?.outputTokens ?? breakdown?.output);
   const usedTokens = readUsageNumber(usage?.used) || inputTokens + outputTokens;
   const totalTokens = readUsageNumber(usage?.total);
+  const isCodex = usage?.provider === 'codex';
+  const hasCodexReading = isCodex && usage?.readingAvailable === true;
+  const codexRows: CodexUsageRow[] = hasCodexReading
+    ? [
+      {
+        key: 'cached-input',
+        label: t('composer.contextCachedInput', { defaultValue: 'Input from cache' }),
+        tokens: readUsageNumber(usage?.cachedInputTokens),
+      },
+      {
+        key: 'fresh-input',
+        label: t('composer.contextFreshInput', { defaultValue: 'Fresh input' }),
+        tokens: readUsageNumber(usage?.freshInputTokens),
+      },
+      {
+        key: 'output',
+        label: t('composer.contextOutput', { defaultValue: 'Output' }),
+        tokens: outputTokens,
+      },
+      {
+        key: 'reasoning',
+        label: t('composer.contextReasoning', { defaultValue: 'Reasoning' }),
+        tokens: readUsageNumber(usage?.reasoningTokens),
+      },
+      {
+        key: 'window',
+        label: t('composer.contextWindow', { defaultValue: 'Context window' }),
+        tokens: totalTokens,
+      },
+    ]
+    : [];
   const percentUsed = totalTokens > 0
     ? Math.min(100, Math.round((usedTokens / totalTokens) * 100))
     : 0;
@@ -95,9 +132,12 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
     }))
     .filter((category) => category.name && category.tokens > 0);
 
-  const headerValue = totalTokens > 0
-    ? `${formatTokensShort(usedTokens)} / ${formatTokensShort(totalTokens)} (${percentUsed}%)`
-    : formatTokensShort(usedTokens);
+  const noReadingLabel = t('composer.contextNoReading', { defaultValue: 'No reading yet' });
+  const headerValue = isCodex && !hasCodexReading
+    ? noReadingLabel
+    : totalTokens > 0
+      ? `${formatTokensShort(usedTokens)} / ${formatTokensShort(totalTokens)} (${percentUsed}%)`
+      : formatTokensShort(usedTokens);
 
   const ariaLabel = t('composer.contextUsage', { defaultValue: 'Show context window usage' });
 
@@ -111,7 +151,9 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
           setIsOpen((current) => !current);
         }}
         className="touch-hit relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        title={`${percentUsed}% of context used (${usedTokens.toLocaleString()} tokens)`}
+        title={isCodex && !hasCodexReading
+          ? noReadingLabel
+          : `${percentUsed}% of context used (${usedTokens.toLocaleString()} tokens)`}
         aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={isOpen}
@@ -191,7 +233,29 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
           )}
 
           {isExpanded && (
-            categories.length > 0 ? (
+            isCodex ? (
+              hasCodexReading ? (
+                <div className="px-1 pb-1" data-codex-usage-breakdown>
+                  {codexRows.map((row) => (
+                    <div
+                      key={row.key}
+                      className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs"
+                      data-codex-usage-field={row.key}
+                      data-token-count={row.tokens}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-foreground/90">{row.label}</span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {row.tokens.toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="px-2.5 pb-2 text-xs leading-4 text-muted-foreground">
+                  {noReadingLabel}
+                </p>
+              )
+            ) : categories.length > 0 ? (
               <div className="px-1 pb-1">
                 {categories.map((category) => {
                   const categoryPercent = totalTokens > 0

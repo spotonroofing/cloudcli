@@ -183,6 +183,16 @@ export function useChatRealtimeHandlers({
         case 'loading_progress':
           return;
 
+        case 'session_token_usage': {
+          if (sid !== activeViewSessionId || !msg.tokenUsage || typeof msg.tokenUsage !== 'object') {
+            return;
+          }
+          setTokenBudget((previous) => (
+            mergeTokenBudget(previous, msg.tokenUsage as Record<string, unknown>)
+          ));
+          return;
+        }
+
         default:
           break;
       }

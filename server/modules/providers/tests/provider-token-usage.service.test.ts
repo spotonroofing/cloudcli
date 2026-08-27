@@ -118,7 +118,7 @@ test('Claude token usage skips trailing sidechain (subagent) rows', async () => 
   }
 });
 
-test('Codex token usage uses the latest token_count snapshot', async () => {
+test('Codex token usage uses the latest turn rather than cumulative rollout usage', async () => {
   const tempDirectory = await mkdtemp(path.join(tmpdir(), 'provider-token-usage-codex-'));
   const sessionFilePath = path.join(tempDirectory, 'rollout-provider-session.jsonl');
 
@@ -129,7 +129,14 @@ test('Codex token usage uses the latest token_count snapshot', async () => {
         payload: {
           type: 'token_count',
           info: {
-            total_token_usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
+            total_token_usage: { input_tokens: 110, output_tokens: 14, total_tokens: 124 },
+            last_token_usage: {
+              input_tokens: 10,
+              cached_input_tokens: 6,
+              output_tokens: 4,
+              reasoning_output_tokens: 1,
+              total_tokens: 14,
+            },
             model_context_window: 100_000,
           },
         },
@@ -139,7 +146,14 @@ test('Codex token usage uses the latest token_count snapshot', async () => {
         payload: {
           type: 'token_count',
           info: {
-            total_token_usage: { input_tokens: 40, output_tokens: 9, total_tokens: 49 },
+            total_token_usage: { input_tokens: 4_000, output_tokens: 900, total_tokens: 4_900 },
+            last_token_usage: {
+              input_tokens: 40,
+              cached_input_tokens: 25,
+              output_tokens: 9,
+              reasoning_output_tokens: 3,
+              total_tokens: 49,
+            },
             model_context_window: 250_000,
           },
         },
@@ -154,15 +168,40 @@ test('Codex token usage uses the latest token_count snapshot', async () => {
     });
 
     assert.deepEqual(await service.getSessionTokenUsage('app-session'), {
+      provider: 'codex',
+      readingAvailable: true,
       used: 49,
       total: 250_000,
       inputTokens: 40,
       outputTokens: 9,
+      cachedInputTokens: 25,
+      freshInputTokens: 15,
+      reasoningTokens: 3,
       breakdown: { input: 40, output: 9 },
     });
   } finally {
     await rm(tempDirectory, { recursive: true, force: true });
   }
+});
+
+test('Codex token usage reports no reading before the first token_count event', async () => {
+  const service = createProviderTokenUsageService({
+    getSessionById: () => createSessionRow({
+      provider: 'codex',
+      jsonl_path: '/tmp/codex-session.jsonl',
+    }),
+    fileExists: () => true,
+    readTextFile: async () => JSON.stringify({ type: 'session_meta', payload: { id: 'provider-session' } }),
+  });
+
+  assert.deepEqual(await service.getSessionTokenUsage('app-session'), {
+    provider: 'codex',
+    readingAvailable: false,
+    used: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    breakdown: { input: 0, output: 0 },
+  });
 });
 
 test('OpenCode token usage resolves its provider-native id from the session row', async () => {

@@ -29,11 +29,16 @@ type PersistedClaudeWindow = {
 };
 
 type TokenUsageResult = {
+  provider?: 'codex';
+  readingAvailable?: boolean;
   used: number;
   total?: number;
   totalIsUsableWindow?: boolean;
   inputTokens: number;
   outputTokens: number;
+  cachedInputTokens?: number;
+  freshInputTokens?: number;
+  reasoningTokens?: number;
   cacheReadTokens?: number;
   cacheCreationTokens?: number;
   cacheTokens?: number;
@@ -119,10 +124,6 @@ async function findCodexSessionFile(
 }
 
 function readCodexTokenUsage(fileContent: string): TokenUsageResult {
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let totalTokens = 0;
-  let contextWindow = 200_000;
   const lines = fileContent.trim().split('\n');
 
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -135,25 +136,42 @@ function readCodexTokenUsage(fileContent: string): TokenUsageResult {
         continue;
       }
 
-      if (tokenInfo.total_token_usage) {
-        inputTokens = readUsageNumber(tokenInfo.total_token_usage.input_tokens);
-        outputTokens = readUsageNumber(tokenInfo.total_token_usage.output_tokens);
-        totalTokens = readUsageNumber(tokenInfo.total_token_usage.total_tokens)
-          || inputTokens + outputTokens;
+      const usage = tokenInfo.last_token_usage as AnyRecord | null;
+      if (!usage) {
+        continue;
       }
-      contextWindow = readUsageNumber(tokenInfo.model_context_window) || contextWindow;
-      break;
+
+      const inputTokens = readUsageNumber(usage.input_tokens);
+      const cachedInputTokens = readUsageNumber(usage.cached_input_tokens);
+      const freshInputTokens = Math.max(0, inputTokens - cachedInputTokens);
+      const outputTokens = readUsageNumber(usage.output_tokens);
+      const reasoningTokens = readUsageNumber(usage.reasoning_output_tokens);
+      const used = readUsageNumber(usage.total_tokens) || inputTokens + outputTokens;
+
+      return {
+        provider: 'codex',
+        readingAvailable: true,
+        used,
+        total: readUsageNumber(tokenInfo.model_context_window) || undefined,
+        inputTokens,
+        outputTokens,
+        cachedInputTokens,
+        freshInputTokens,
+        reasoningTokens,
+        breakdown: { input: inputTokens, output: outputTokens },
+      };
     } catch {
       // A provider may be writing the last JSONL line while this read happens.
     }
   }
 
   return {
-    used: totalTokens,
-    total: contextWindow,
-    inputTokens,
-    outputTokens,
-    breakdown: { input: inputTokens, output: outputTokens },
+    provider: 'codex',
+    readingAvailable: false,
+    used: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    breakdown: { input: 0, output: 0 },
   };
 }
 

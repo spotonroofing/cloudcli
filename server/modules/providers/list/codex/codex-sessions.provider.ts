@@ -245,7 +245,6 @@ async function getCodexSessionMessages(
     }
 
     const messages: AnyRecord[] = [];
-    let tokenUsage: AnyRecord | null = null;
     const ignoredToolCallIds = new Set<string>();
     const execToolCallIds = new Set<string>();
     const execCallByCellId = new Map<string, string>();
@@ -267,17 +266,6 @@ async function getCodexSessionMessages(
 
       try {
         const entry = JSON.parse(line) as AnyRecord;
-        if (entry.type === 'event_msg' && entry.payload?.type === 'token_count' && entry.payload?.info) {
-          const info = entry.payload.info as AnyRecord;
-          if (info.total_token_usage) {
-            const usage = info.total_token_usage as AnyRecord;
-            tokenUsage = {
-              used: usage.total_tokens || 0,
-              total: info.model_context_window || 200000,
-            };
-          }
-        }
-
         if (
           entry.type === 'event_msg'
           && entry.payload?.type === 'sub_agent_activity'
@@ -607,11 +595,10 @@ async function getCodexSessionMessages(
         hasMore,
         offset,
         limit,
-        tokenUsage,
       };
     }
 
-    return { messages, tokenUsage };
+    return { messages };
   } catch (error) {
     console.error(`Error reading Codex session messages for ${sessionId}:`, error);
     return { messages: [], total: 0, hasMore: false };
@@ -872,10 +859,7 @@ export class CodexSessionsProvider implements IProviderSessions {
     return [];
   }
 
-  /**
-   * Loads Codex JSONL history and keeps token usage metadata when projects.js
-   * provides it.
-   */
+  /** Loads Codex JSONL history; context usage comes from the dedicated rollout reader. */
   async fetchHistory(
     sessionId: string,
     options: FetchHistoryOptions = {},
@@ -894,7 +878,6 @@ export class CodexSessionsProvider implements IProviderSessions {
     }
 
     const rawMessages = Array.isArray(result) ? result : (result.messages || []);
-    const tokenUsage = Array.isArray(result) ? undefined : result.tokenUsage;
 
     const normalized: NormalizedMessage[] = [];
     for (const raw of rawMessages) {
@@ -932,7 +915,6 @@ export class CodexSessionsProvider implements IProviderSessions {
       hasMore,
       offset: normalizedOffset,
       limit: normalizedLimit,
-      tokenUsage,
     };
   }
 }

@@ -7,6 +7,7 @@ import chokidar, { type FSWatcher } from 'chokidar';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { handleAutoMemoryFileEvent, handleSessionTranscriptEvent } from '@/modules/memory/index.js';
 import { noteCodexRollout } from '@/modules/providers/services/chatgpt-account.service.js';
+import { providerTokenUsageService } from '@/modules/providers/services/provider-token-usage.service.js';
 import { sessionSynchronizerService } from '@/modules/providers/services/session-synchronizer.service.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { LLMProvider } from '@/shared/types.js';
@@ -135,6 +136,39 @@ function queuePendingWatcherUpdate(
  */
 export function notifySessionRowChanged(provider: LLMProvider, sessionId: string): void {
   queuePendingWatcherUpdate('change', provider, sessionId);
+}
+
+/**
+ * Pushes the newest Codex context reading for one indexed app session. The
+ * rollout watcher is already active for transcript and ChatGPT-meter updates,
+ * so context usage adds no client or server polling of its own. With no open
+ * websocket clients, it also skips the extra rollout read.
+ */
+async function broadcastCodexContextUsage(sessionId: string): Promise<void> {
+  if (connectedClients.size === 0) {
+    return;
+  }
+
+  try {
+    const tokenUsage = await providerTokenUsageService.getSessionTokenUsage(sessionId);
+    const frame = JSON.stringify({
+      kind: 'session_token_usage',
+      sessionId,
+      tokenUsage,
+      timestamp: new Date().toISOString(),
+    });
+    connectedClients.forEach((client) => {
+      if (client.readyState === WS_OPEN_STATE) {
+        client.send(frame);
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Session watcher failed to broadcast Codex context usage', {
+      sessionId,
+      error: message,
+    });
+  }
 }
 
 /**
@@ -284,6 +318,9 @@ async function onUpdate(
     }
 
     queuePendingWatcherUpdate(eventType, provider, result.sessionId);
+    if (provider === 'codex' && result.sessionId) {
+      await broadcastCodexContextUsage(result.sessionId);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Session watcher sync failed for provider "${provider}"`, {
