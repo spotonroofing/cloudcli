@@ -1,6 +1,6 @@
 <!-- browser -->
 <!-- name: Usage alerts -->
-<!-- tasks: Gated 5h alerts per account | All-dry turns auto-retry at reset | Fleet-wide window aggregates | Thresholds in System settings -->
+<!-- tasks: Gated 5h alerts per account | Parking never disables accounts | Near-real-time usage in the switcher | All-dry turns auto-retry at reset | Fleet-wide window aggregates | Thresholds in System settings -->
 Execute Job 7 of PUNCHLIST_ui15.md in this repo (usage alerts). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read it and the recent git log; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 
