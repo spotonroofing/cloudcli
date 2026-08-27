@@ -46,12 +46,12 @@ type SettingsDependencies = {
 
 const WATCHDOG_DEFAULTS = {
   plannerRotation: false,
-  terminalWakes: false,
+  terminalWakes: true,
   livenessSweep: true,
   dispatchRunLiveness: true,
   resourceAlerts: true,
   weeklySelfTest: true,
-  weeklyMaintenance: false,
+  weeklyMaintenance: true,
   handoffAutomation: false,
   punchlistWatching: true,
   recoveryNotices: true,

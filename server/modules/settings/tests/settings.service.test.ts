@@ -35,16 +35,28 @@ function dependencies(overrides: Partial<Dependencies> = {}): Dependencies {
 test('watchdog automation defaults protect Willem sessions and stored values win', () => {
   const appConfig = storedConfig([
     ['watchdog_liveness_sweep', '0'],
-    ['watchdog_terminal_wakes', '1'],
+    ['watchdog_planner_rotation', '1'],
   ]);
   const service = createSettingsService(dependencies({ appConfig }));
 
   const initial = service.getWatchdogSettings();
-  assert.equal(initial.settings.plannerRotation, false);
-  assert.equal(initial.settings.weeklyMaintenance, false);
+  assert.deepEqual(initial.defaults, {
+    plannerRotation: false,
+    terminalWakes: true,
+    livenessSweep: true,
+    dispatchRunLiveness: true,
+    resourceAlerts: true,
+    weeklySelfTest: true,
+    weeklyMaintenance: true,
+    handoffAutomation: false,
+    punchlistWatching: true,
+    recoveryNotices: true,
+  });
+  assert.equal(initial.settings.plannerRotation, true);
   assert.equal(initial.settings.handoffAutomation, false);
   assert.equal(initial.settings.livenessSweep, false);
   assert.equal(initial.settings.terminalWakes, true);
+  assert.equal(initial.settings.weeklyMaintenance, true);
   assert.equal(initial.plannerRotationThreshold, 60);
 
   const updated = service.updateWatchdogSettings({ resourceAlerts: false }, 70);

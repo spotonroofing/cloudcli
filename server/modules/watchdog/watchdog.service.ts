@@ -251,6 +251,17 @@ class WatchdogService {
     this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: chain.slug });
   }
 
+  /** Posts the terminal notice, then queues the separately gated planner wake. */
+  private handleTerminalChain(chain: ChainRecord): void {
+    this.notify(
+      'decision-needed',
+      `Chain ${chain.slug} ${chain.status}`,
+      terminalWakePrompt(chain),
+      { chainSlug: chain.slug, projectPath: chain.projectPath, status: chain.status },
+    );
+    this.queueTerminalWake(chain);
+  }
+
   start(): void {
     if (this.sweeper) {
       return;
@@ -818,7 +829,7 @@ class WatchdogService {
         this.persistChain(chain);
         this.broadcastChainProgress(chain);
         this.syncPunchlistWatcher(chain);
-        this.queueTerminalWake(chain);
+        this.handleTerminalChain(chain);
       } else {
         this.persistChain(chain);
         this.broadcastChainProgress(chain);
@@ -877,7 +888,7 @@ class WatchdogService {
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
       this.syncPunchlistWatcher(chain);
-      this.queueTerminalWake(chain);
+      this.handleTerminalChain(chain);
     } else {
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
@@ -1333,6 +1344,7 @@ class WatchdogService {
         model: model || undefined,
         effort: effort || undefined,
         permissionMode: 'bypassPermissions',
+        mcpPolicy: 'none',
       },
       writer,
     );
@@ -1448,6 +1460,7 @@ class WatchdogService {
           effort: spawn.effort,
           permissionMode: 'bypassPermissions',
           bootPrompt: true,
+          mcpPolicy: 'none',
         },
         run.writer,
       );
@@ -1573,7 +1586,7 @@ class WatchdogService {
     this.broadcastChainProgress(chain);
     this.syncPunchlistWatcher(chain);
     log(`chain ${chain.slug}: stopped by the liveness sweep`, { reason });
-    this.queueTerminalWake(chain);
+    this.handleTerminalChain(chain);
   }
 
   // ----- planner auto-rotation (spec B7): /handoff at the context threshold -----

@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { closeConnection, initializeDatabase, projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { appConfigDb, closeConnection, initializeDatabase, projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { watchdogService } from '@/modules/watchdog/index.js';
+import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
+import type { RealtimeClientConnection } from '@/shared/types.js';
 
 async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promise<void> {
   const previousDatabasePath = process.env.DATABASE_PATH;
@@ -29,6 +31,13 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
 test('a running chain unit and its verify session feed the running-sessions poll; a finished unit does not', async () => {
   await withIsolatedDatabase(() => {
     const projectPath = '/workspace/beam-project';
+    const messages: string[] = [];
+    const notificationClient = {
+      readyState: WS_OPEN_STATE,
+      send: (message: string) => { messages.push(message); },
+    } as unknown as RealtimeClientConnection;
+    connectedClients.add(notificationClient);
+    appConfigDb.set('watchdog_terminal_wakes', '0');
     projectsDb.createProjectPath(projectPath);
     watchdogService.registerChain({
       slug: 'beamstub',
@@ -63,8 +72,16 @@ test('a running chain unit and its verify session feed the running-sessions poll
     assert.equal(sessionsDb.getSessionById('verify-1')?.custom_name, 'Verify: One');
 
     // A terminal chain has no live sessions.
-    watchdogService.chainEvent('beamstub', 'stopped', { phase: 2 });
-    assert.deepEqual(watchdogService.listActiveDispatchRuns(), []);
+    try {
+      watchdogService.chainEvent('beamstub', 'stopped', { phase: 2 });
+      assert.deepEqual(watchdogService.listActiveDispatchRuns(), []);
+      const terminalNotice = messages
+        .map((message) => JSON.parse(message) as { kind?: string; notificationKind?: string; title?: string })
+        .find((message) => message.kind === 'fleet_notification' && message.title === 'Chain beamstub stopped');
+      assert.equal(terminalNotice?.notificationKind, 'decision-needed');
+    } finally {
+      connectedClients.delete(notificationClient);
+    }
   });
 });
 

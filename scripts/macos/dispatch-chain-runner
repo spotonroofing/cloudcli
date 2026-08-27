@@ -24,7 +24,8 @@
 # whatever the build's engine (codex job 2; DISPATCH_VERIFY_ENGINE and
 # DISPATCH_VERIFY_MODEL exist only so stub chains and tests can pin it) —
 # that checks the committed job against its done check and answers
-# `VERIFY: PASS` or `VERIFY: FAIL: <reason>` on its last line; it runs in
+# `VERIFY: PASS`, `VERIFY: INCONCLUSIVE: <reason>`, or
+# `VERIFY: FAIL: <reason>` on its last line; it runs in
 # the background while the next unit's build starts, so the verify tail
 # leaves the critical path.
 # A phase file that carries `<!-- verify: no -->` in its header skips its
@@ -457,6 +458,7 @@ run_codex() {
     -m "$4" \
     -c model_reasoning_effort="$5" \
     -c features.multi_agent=false \
+    -c 'mcp_servers={}' \
     -o "$2.last" \
     - \
     < "$1" > "$2" 2>&1
@@ -614,6 +616,7 @@ VERIFY_PID=""
 VERIFY_NUM=0
 VERIFY_NAME=""
 VERIFY_FILE=""
+VERIFY_BASE_COMMIT=""
 VERIFY_COMMIT=""
 VERIFY_SUBJECT=""
 VERIFY_RETRY=0
@@ -709,9 +712,23 @@ write_verify_prompt() {
     cat "$VERIFY_FILE"
     print -r -- "----- end builder brief -----"
     print -r -- ""
-    print -r -- "Verify the job against its done check and every item it names, with concrete evidence: run the checks the done check calls for against the dev instance, and read the change through the commit (git show $VERIFY_COMMIT, and git show $VERIFY_COMMIT:<path> for any file the working tree may have moved past). Report what passed and what failed, each with the evidence you saw."
+    print -r -- "Verify the job's behavior in the tree at the phase-end commit $VERIFY_COMMIT. The phase's base commit is $VERIFY_BASE_COMMIT; the job's own commits are the commits landed by the builder between that base commit and the phase-end commit ($VERIFY_BASE_COMMIT..$VERIFY_COMMIT). Commits in that range whose subject starts with docs( are planner commits and are never a reason to fail. Read the exact tree and change through git show $VERIFY_COMMIT, git diff $VERIFY_BASE_COMMIT..$VERIFY_COMMIT, and git show $VERIFY_COMMIT:<path> for any file the working tree may have moved past."
     print -r -- ""
-    print -r -- "Your last line must be exactly one of: VERIFY: PASS or VERIFY: FAIL: <one-line reason>."
+    cat <<'VERIFY_AUTH_EOF'
+For authenticated checks against dev, mint a short-lived JWT from the dev database and send it as a Bearer token (the API-testing recipe from CLAUDE.md):
+
+  DEV_DB="$HOME/.cloudcli-dev/auth.db"
+  DEV_JWT_SECRET=$(/usr/bin/sqlite3 "$DEV_DB" "SELECT value FROM app_config WHERE key='jwt_secret';")
+  DEV_USER_ID=$(/usr/bin/sqlite3 "$DEV_DB" "SELECT id FROM users WHERE is_active=1 ORDER BY id LIMIT 1;")
+  DEV_USERNAME=$(/usr/bin/sqlite3 "$DEV_DB" "SELECT username FROM users WHERE id=$DEV_USER_ID;")
+  DEV_JWT=$(JWT_SECRET="$DEV_JWT_SECRET" JWT_USER_ID="$DEV_USER_ID" JWT_USERNAME="$DEV_USERNAME" node -e 'const jwt=require("jsonwebtoken"); process.stdout.write(jwt.sign({userId:Number(process.env.JWT_USER_ID),username:process.env.JWT_USERNAME},process.env.JWT_SECRET,{expiresIn:"5m"}))')
+  curl -H "Authorization: Bearer $DEV_JWT" http://127.0.0.1:4748/api/...
+  unset DEV_JWT DEV_JWT_SECRET DEV_USER_ID DEV_USERNAME
+
+Never print the secret or token. Verify the job against its done check and every item it names, with concrete evidence. Run the checks the done check calls for against dev and report what passed and what failed with the evidence you saw.
+VERIFY_AUTH_EOF
+    print -r -- ""
+    print -r -- "Use FAIL only for an observed defect. If login, tooling, or the environment prevented a check, do not call that a defect: list what you could not exercise and use INCONCLUSIVE. Your last line must be exactly one of: VERIFY: PASS, VERIFY: INCONCLUSIVE: <one-line list of what could not be exercised>, or VERIFY: FAIL: <one-line observed defect>."
   } > "$out"
   print -r -- "$out"
 }
@@ -741,9 +758,10 @@ start_verify() {
   fi
 }
 
-# Reads a finished verifier's verdict off its log. PASS clears the stage; a
+# Reads a finished verifier's verdict off its log. PASS and INCONCLUSIVE clear
+# the stage (the latter with a journal note and recovery notification); a
 # limit exit without a verdict marks the stage for a re-run once no build is
-# in flight (reconcile_verify); anything else is a FAIL and rewinds.
+# in flight (reconcile_verify); only an explicit FAIL rewinds.
 settle_verify() {
   local rc log="$JOURNAL_DIR/verify$VERIFY_NUM.log" verdict verdict_source
   wait $VERIFY_PID
@@ -754,7 +772,7 @@ settle_verify() {
   # (`**VERIFY: PASS**`, a backticked or indented line all count).
   verdict_source="$log"
   [[ "$VERIFY_ENGINE" == "codex" ]] && verdict_source="$log.last"
-  verdict=$(grep -oE 'VERIFY: (PASS|FAIL[^`*]*)' "$verdict_source" 2>/dev/null | tail -1 | sed 's/[[:space:]]*$//')
+  verdict=$(grep -oE 'VERIFY: (PASS|INCONCLUSIVE[^`*]*|FAIL[^`*]*)' "$verdict_source" 2>/dev/null | tail -1 | sed 's/[[:space:]]*$//')
   if [[ "$VERIFY_ENGINE" == "claude" && $rc -ne 0 && -z "$verdict" ]] && grep -qiE "$LIMIT_PATTERN" "$log"; then
     journal "verify $VERIFY_NUM/$TOTAL" "limit" "verifier exited $rc on the session limit; re-running once the build in flight has recovered"
     VERIFY_RETRY=1
@@ -771,7 +789,25 @@ settle_verify() {
     VERIFY_NUM=0
     return 0
   fi
-  rewind_after_verify_failure "${verdict:-VERIFY: FAIL: verifier exited $rc without a verdict (verify$VERIFY_NUM.log)}"
+  if [[ "$verdict" != "VERIFY: FAIL"* ]]; then
+    [[ -n "$verdict" ]] || verdict="VERIFY: INCONCLUSIVE: verifier exited $rc without a verdict (verify$VERIFY_NUM.log)"
+    local note="${verdict#VERIFY: INCONCLUSIVE: }"
+    journal "verify $VERIFY_NUM/$TOTAL" "end" "INCONCLUSIVE for $VERIFY_COMMIT: $note; continuing chain"
+    api_post "/api/watchdog/notify" "$(python3 - "$SLUG" "$VERIFY_NUM" "$TOTAL" "$VERIFY_NAME" "$VERIFY_COMMIT" "$note" <<'PYEOF'
+import json, sys
+slug, phase, total, name, commit_hash, note = sys.argv[1:7]
+print(json.dumps({
+    'kind': 'recovery',
+    'title': f'Chain {slug} verify was inconclusive',
+    'body': f'Job {phase} of {total} ({name}) could not be fully verified at {commit_hash}: {note}. The chain is continuing.',
+}))
+PYEOF
+)" 3
+    api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-end $VERIFY_NUM '')" 3
+    VERIFY_NUM=0
+    return 0
+  fi
+  rewind_after_verify_failure "$verdict"
 }
 
 # A failed verify stops the chain and rewinds: the in-flight build (unit
@@ -1006,6 +1042,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
     VERIFY_NUM=$PHASE_NUM
     VERIFY_NAME="$UNIT_NAME"
     VERIFY_FILE="$PHASE_FILE"
+    VERIFY_BASE_COMMIT="$BASE_COMMIT"
     VERIFY_COMMIT=$(git -C "$REPO" log -1 --format=%h)
     VERIFY_SUBJECT=$(git -C "$REPO" log -1 --format=%s)
     start_verify
