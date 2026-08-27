@@ -9,6 +9,7 @@ import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
 import { useChatRealtimeHandlers } from '../hooks/useChatRealtimeHandlers';
 import { useChatComposerState, type BootState } from '../hooks/useChatComposerState';
+import { createQueuedMessageId } from '../utils/chatStorage';
 import { useMemoryUpdates } from '../hooks/useMemoryUpdates';
 import { useMessageVersions } from '../hooks/useMessageVersions';
 import { findEditGroupId } from '../utils/messageVersions';
@@ -221,10 +222,14 @@ function ChatInterface({
     isDragActive,
     openAttachmentPicker,
     handleSubmit,
-    queuedDraft,
+    queuedDrafts,
     editQueuedDraft,
     deleteQueuedDraft,
     submitMessageEdit,
+    clearUndoPending,
+    clearComposer,
+    undoClearComposer,
+    loadPromptIntoComposer,
     handleVoiceTranscript,
     handleInputChange,
     handleKeyDown,
@@ -501,7 +506,7 @@ function ChatInterface({
   // Rerun action on assistant turns: resend the prompt that produced the turn
   // through the normal submit path, without touching the composer draft.
   const handleRerun = useCallback((content: string, event: React.MouseEvent) => {
-    void handleSubmit(event, { content, attachments: [], preserveComposer: true });
+    void handleSubmit(event, { id: createQueuedMessageId(), content, attachments: [], preserveComposer: true });
   }, [handleSubmit]);
 
   // Pencil on a user turn: turn that bubble into the inline transcript editor
@@ -566,7 +571,23 @@ function ChatInterface({
     <PermissionContext.Provider value={permissionContextValue}>
       {/* Inline transcript images resolve against this pane's project workspace. */}
       <ChatProjectContext.Provider value={selectedProject.projectId ?? null}>
-      <div ref={paneRef} className="relative flex h-full min-h-0 flex-col">
+      {/* The whole pane is the file-drop target (ui15 job 2): dropping
+          anywhere on it attaches to this pane's composer. getRootProps'
+          internal ref is unused (noClick + noKeyboard), so paneRef wins. */}
+      <div {...getRootProps()} ref={paneRef} data-slot="chat-pane" className="relative flex h-full min-h-0 flex-col">
+        {isDragActive && (
+          <div
+            data-slot="pane-drop-highlight"
+            className="pointer-events-none absolute inset-0 z-30 p-1"
+            aria-hidden
+          >
+            <div className="flex h-full w-full items-end justify-center rounded-lg border-2 border-dashed border-primary/40 bg-primary/[0.06] pb-24">
+              <span className="rounded-md border border-border/40 bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-sm">
+                {t('input.dropToAttach', { defaultValue: 'Drop to attach' })}
+              </span>
+            </div>
+          </div>
+        )}
         <ChatMessagesPane
           scrollContainerRef={scrollContainerRef}
           onWheel={handleScroll}
@@ -630,8 +651,7 @@ function ChatInterface({
           onHandoff={runHandoff}
           handoffAvailable={selectedSession ? selectedSession.origin === 'planner' : sessionOrigin === 'planner'}
           onSubmit={handleSubmit}
-          isDragActive={isDragActive}
-          queuedDraft={queuedDraft}
+          queuedDrafts={queuedDrafts}
           onEditQueuedDraft={editQueuedDraft}
           onDeleteQueuedDraft={deleteQueuedDraft}
           attachedFiles={attachedFiles}
@@ -652,7 +672,6 @@ function ChatInterface({
           onCloseCommandMenu={resetCommandMenuState}
           isCommandMenuOpen={showCommandMenu}
           frequentCommands={commandQuery ? [] : frequentCommands}
-          getRootProps={getRootProps as (...args: unknown[]) => Record<string, unknown>}
           getInputProps={getInputProps as (...args: unknown[]) => Record<string, unknown>}
           openAttachmentPicker={openAttachmentPicker}
           inputHighlightRef={inputHighlightRef}
@@ -669,6 +688,12 @@ function ChatInterface({
           onInputFocusChange={handleInputFocusChange}
           placeholder="Write a message..."
           isTextareaExpanded={isTextareaExpanded}
+          clearUndoPending={clearUndoPending}
+          onClearComposer={clearComposer}
+          onUndoClear={undoClearComposer}
+          historyProjectId={selectedProject.projectId ?? null}
+          historySessionId={activeSessionKey}
+          onUsePrompt={loadPromptIntoComposer}
         />
         </div>
       </div>

@@ -30,23 +30,30 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
   }
 }
 
-test('queuedMessagesDb upserts per session and remove claims exactly once', async () => {
+test('queuedMessagesDb stacks per session in append order and remove claims exactly once', async () => {
   await withIsolatedDatabase(() => {
     assert.deepEqual(queuedMessagesDb.listAll(), []);
 
-    queuedMessagesDb.upsert('s1', 'first', '{"model":"m"}', null, '2026-08-24T00:00:00.000Z');
-    queuedMessagesDb.upsert('s1', 'edited', null, '[{"path":"/tmp/a.png"}]', '2026-08-24T00:00:01.000Z');
-    queuedMessagesDb.upsert('s2', 'other', null, null, '2026-08-24T00:00:02.000Z');
+    queuedMessagesDb.upsert('s1', 'm1', 'first', '{"model":"m"}', null, '2026-08-24T00:00:00.000Z');
+    queuedMessagesDb.upsert('s1', 'm2', 'second', null, null, '2026-08-24T00:00:01.000Z');
+    queuedMessagesDb.upsert('s1', 'm1', 'edited', null, '[{"path":"/tmp/a.png"}]', '2026-08-24T00:00:02.000Z');
+    queuedMessagesDb.upsert('s2', 'm3', 'other', null, null, '2026-08-24T00:00:03.000Z');
 
-    const rows = queuedMessagesDb.listAll();
-    assert.equal(rows.length, 2);
-    const s1 = rows.find((row) => row.session_id === 's1');
-    assert.equal(s1?.content, 'edited');
-    assert.equal(s1?.options_json, null);
-    assert.equal(s1?.attachments_json, '[{"path":"/tmp/a.png"}]');
+    // Editing m1 keeps its place at the head; m2 stays queued behind it.
+    const s1 = queuedMessagesDb.listForSession('s1');
+    assert.deepEqual(s1.map((row) => row.id), ['m1', 'm2']);
+    assert.equal(s1[0].content, 'edited');
+    assert.equal(s1[0].options_json, null);
+    assert.equal(s1[0].attachments_json, '[{"path":"/tmp/a.png"}]');
+    assert.equal(queuedMessagesDb.getHead('s1')?.id, 'm1');
 
-    assert.equal(queuedMessagesDb.remove('s1'), true);
-    assert.equal(queuedMessagesDb.remove('s1'), false);
-    assert.equal(queuedMessagesDb.listAll().length, 1);
+    assert.equal(queuedMessagesDb.remove('s1', 'm1'), true);
+    assert.equal(queuedMessagesDb.remove('s1', 'm1'), false);
+    assert.equal(queuedMessagesDb.getHead('s1')?.id, 'm2');
+    assert.equal(queuedMessagesDb.listAll().length, 2);
+
+    // Appending after a pop lands behind the surviving tail.
+    queuedMessagesDb.upsert('s1', 'm4', 'third', null, null, '2026-08-24T00:00:04.000Z');
+    assert.deepEqual(queuedMessagesDb.listForSession('s1').map((row) => row.id), ['m2', 'm4']);
   });
 });

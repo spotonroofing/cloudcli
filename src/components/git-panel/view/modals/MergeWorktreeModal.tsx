@@ -115,6 +115,8 @@ export default function MergeWorktreeModal({
               Commit message
             </label>
             <textarea
+              spellCheck={false}
+              autoCorrect="off"
               id="merge-worktree-message"
               value={message}
               onChange={(event) => {

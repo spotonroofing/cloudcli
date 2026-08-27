@@ -2,7 +2,11 @@ import { queuedMessagesDb } from '@/modules/database/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
-import { broadcastQueuedMessageUpdated, parseQueuedMessageRow } from '@/modules/queued-messages/index.js';
+import {
+  broadcastQueuedMessagesUpdated,
+  listQueuedMessagePayloads,
+  parseQueuedMessageRow,
+} from '@/modules/queued-messages/index.js';
 import type { IProvider } from '@/shared/interfaces.js';
 import type {
   AnyRecord,
@@ -52,15 +56,15 @@ export function createProviderRuntimeService(
     resolveProviderSessionId: dependencies.resolveProviderSessionId,
     queuedMessages: {
       get(sessionId) {
-        const row = queuedMessagesDb.get(sessionId);
+        const row = queuedMessagesDb.getHead(sessionId);
         return row ? parseQueuedMessageRow(row) : null;
       },
-      claim(sessionId, updatedAt) {
-        const row = queuedMessagesDb.get(sessionId);
-        if (!row || row.updated_at !== updatedAt || !queuedMessagesDb.remove(sessionId)) {
+      claim(sessionId, id, updatedAt) {
+        const row = queuedMessagesDb.get(sessionId, id);
+        if (!row || row.updated_at !== updatedAt || !queuedMessagesDb.remove(sessionId, id)) {
           return false;
         }
-        broadcastQueuedMessageUpdated(sessionId, null, null);
+        broadcastQueuedMessagesUpdated(sessionId, listQueuedMessagePayloads(sessionId), null);
         return true;
       },
     },

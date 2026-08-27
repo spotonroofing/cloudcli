@@ -268,6 +268,8 @@ function UserMessageEditor({ initialText, onCancel, onSave }: {
     <div data-slot="message-edit" className="flex w-full flex-col gap-2">
       <div className="w-full rounded-lg border border-muted-foreground/40 bg-secondary shadow-md ring-1 ring-muted-foreground/20">
         <textarea
+          spellCheck={false}
+          autoCorrect="off"
           ref={textareaRef}
           value={text}
           dir="auto"

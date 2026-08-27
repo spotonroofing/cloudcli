@@ -535,6 +535,38 @@ const addMemoryUpdateDiffsColumn = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'memory_updates', columnNames, 'diffs_json', 'TEXT');
 };
 
+/**
+ * ui15 job 2: queued messages became a per-session stack. The old table keyed
+ * one row per session; rebuild it with client message ids and append order,
+ * carrying any live queued row over as position 1.
+ */
+const rebuildQueuedMessagesTableWithStackSchema = (db: Database): void => {
+  if (!tableExists(db, 'queued_messages')) {
+    return;
+  }
+  const columnNames = getTableInfo(db, 'queued_messages').map((column) => column.name);
+  if (columnNames.includes('id')) {
+    return;
+  }
+  console.log('Running migration: Rebuilding queued_messages as a per-session stack');
+  db.exec(`
+    CREATE TABLE queued_messages_next (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      options_json TEXT,
+      attachments_json TEXT,
+      position INTEGER NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    INSERT INTO queued_messages_next (id, session_id, content, options_json, attachments_json, position, updated_at)
+      SELECT ${SQLITE_UUID_SQL}, session_id, content, options_json, attachments_json, 1, updated_at
+      FROM queued_messages;
+    DROP TABLE queued_messages;
+    ALTER TABLE queued_messages_next RENAME TO queued_messages;
+  `);
+};
+
 const ensureProjectsForSessionPaths = (db: Database): void => {
   if (!tableExists(db, 'sessions')) {
     return;
@@ -584,6 +616,7 @@ export const runMigrations = (db: Database) => {
     `);
     db.exec(COMPOSER_DRAFTS_TABLE_SCHEMA_SQL);
     db.exec(USER_SETTINGS_TABLE_SCHEMA_SQL);
+    rebuildQueuedMessagesTableWithStackSchema(db);
     db.exec(QUEUED_MESSAGES_TABLE_SCHEMA_SQL);
     db.exec(WATCHDOG_CHAINS_TABLE_SCHEMA_SQL);
     addWatchdogChainManifestColumns(db);

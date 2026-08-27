@@ -204,6 +204,8 @@ export default function BranchesView({
       <div className="flex items-center gap-2 border-b border-border/40 px-4 py-2">
         <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <input
+          spellCheck={false}
+          autoCorrect="off"
           type="text"
           value={branchSearchQuery}
           onChange={(event) => setBranchSearchQuery(event.target.value)}

@@ -308,6 +308,8 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
               <div className="pl-[30px] pr-1">
                 <div className="relative">
                   <input
+                    spellCheck={false}
+                    autoCorrect="off"
                     ref={otherInputRef}
                     type="text"
                     value={otherTexts.get(currentStep) || ''}

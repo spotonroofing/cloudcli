@@ -99,6 +99,8 @@ export default function ChatRow({
       {isEditing ? (
         <span className="flex min-w-0 flex-1 items-center gap-1" onClick={(event) => event.preventDefault()}>
           <input
+            spellCheck={false}
+            autoCorrect="off"
             type="text"
             value={editingName}
             onChange={(event) => setEditingName(event.target.value)}

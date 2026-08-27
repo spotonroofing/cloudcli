@@ -101,6 +101,8 @@ export default function CommitComposer({
           )}
 
           <textarea
+            spellCheck={false}
+            autoCorrect="off"
             value={commitMessage}
             onChange={(event) => setCommitMessage(event.target.value)}
             placeholder="Message (Ctrl+Enter to commit)"

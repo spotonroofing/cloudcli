@@ -44,6 +44,7 @@ import { createWatchdogRouter, watchdogService } from './modules/watchdog/index.
 import { createDraftsRouter } from './modules/drafts/index.js';
 import { createMemoryRouter, initializeMemoryWatcher } from './modules/memory/index.js';
 import { createQueuedMessagesRouter } from './modules/queued-messages/index.js';
+import { createPromptHistoryRouter } from './modules/prompt-history/index.js';
 import { createAccountsRouter } from './modules/accounts/index.js';
 
 const __dirname = getModuleDirectory(import.meta.url);
@@ -195,6 +196,9 @@ app.use('/api/drafts', authenticateToken, createDraftsRouter());
 
 // Queued message persistence (protected, ui11 phase 1)
 app.use('/api/queued-messages', authenticateToken, createQueuedMessagesRouter());
+
+// Composer prompt history (ui15 job 2)
+app.use('/api/prompt-history', authenticateToken, createPromptHistoryRouter());
 
 // Memory-updated indicators + read-only memory viewer (protected, ui12 phase 7)
 app.use('/api/memory', authenticateToken, createMemoryRouter());

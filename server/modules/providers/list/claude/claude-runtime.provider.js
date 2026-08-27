@@ -870,8 +870,9 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
       }
       pendingSteer = {
         message: steer,
+        id: queued.id,
         updatedAt: queued.updatedAt,
-        fingerprint: `${queued.content}\u0000${JSON.stringify(queued.attachments)}`,
+        fingerprint: `${queued.id}\u0000${queued.content}\u0000${JSON.stringify(queued.attachments)}`,
         sawBoundary: false,
       };
     } finally {
@@ -887,7 +888,7 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
     void (async () => {
       if (pendingSteer) {
         const queued = sessionId ? context.queuedMessages.get(sessionId) : null;
-        if (queued && `${queued.content}\u0000${JSON.stringify(queued.attachments)}` === pendingSteer.fingerprint) {
+        if (queued && `${queued.id}\u0000${queued.content}\u0000${JSON.stringify(queued.attachments)}` === pendingSteer.fingerprint) {
           pendingSteer.updatedAt = queued.updatedAt;
           return;
         }
@@ -915,9 +916,15 @@ async function queryClaudeSDK(command, options = {}, ws, context) {
   const settleQueuedSteer = () => {
     const steer = pendingSteer;
     pendingSteer = null;
-    context.queuedMessages.claim(sessionId, steer.updatedAt);
+    context.queuedMessages.claim(sessionId, steer.id, steer.updatedAt);
     const sid = capturedSessionId || sessionId;
     for (const msg of context.normalizeMessage({ ...steer.message, uuid: createRequestId() }, sid)) {
+      // The bubble frame carries the queued row's id so the client clears the
+      // queued card in the same event that lands the bubble (ui15 job 2) —
+      // never waiting on the separate queued_message_updated broadcast.
+      if (msg.role === 'user') {
+        msg.queuedMessageId = steer.id;
+      }
       ws.send(msg);
     }
   };

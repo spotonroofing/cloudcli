@@ -132,6 +132,8 @@ export function PastedTextViewer({
         </div>
         {editable ? (
           <textarea
+            spellCheck={false}
+            autoCorrect="off"
             ref={editorRef}
             data-slot="pasted-text-editor"
             value={draft}

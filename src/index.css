@@ -1601,6 +1601,43 @@
     .bui-stream-caret-host .prose > :last-child::after { animation: none !important; }
   }
 
+  /* Composer clear-with-undo (ui15 job 2): the character counter crossfades
+     into the clear X on hover, and the Undo affordance's underline depletes
+     across the undo window on the ramped curve. */
+  .counter-swap {
+    transition: opacity 0.2s cubic-bezier(0.77, 0, 0.175, 1);
+  }
+
+  @keyframes undo-deplete {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+  }
+
+  .undo-deplete {
+    transform-origin: left;
+    animation: undo-deplete 4s cubic-bezier(0.77, 0, 0.175, 1) forwards;
+  }
+
+  /* Queued-message cards (ui15 job 2): a delivered or deleted card ramps
+     closed via the grid-rows collapse instead of blinking out. */
+  [data-slot='queued-card-shell'] {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition:
+      grid-template-rows 0.25s cubic-bezier(0.77, 0, 0.175, 1),
+      opacity 0.25s cubic-bezier(0.77, 0, 0.175, 1);
+  }
+
+  [data-slot='queued-card-shell'][data-leaving] {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .undo-deplete { animation: none !important; }
+    [data-slot='queued-card-shell'] { transition: none !important; }
+  }
+
   /* Search result highlight flash */
   .search-highlight-flash {
     animation: search-flash 4s ease-out;

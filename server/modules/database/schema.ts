@@ -267,19 +267,24 @@ CREATE TABLE IF NOT EXISTS user_settings (
 `;
 
 /**
- * Server-persisted queued messages (ui11 phase 1), one per session, mirroring
- * composer_drafts: `session_id` is the app session key (no FK, keys predate
- * session rows), `options_json` is the send-options snapshot taken at queue
- * time, `attachments_json` the uploaded-attachment descriptors.
+ * Server-persisted queued messages (ui11 phase 1; multi-message stack ui15
+ * job 2): any number of rows per session, ordered by `position` (append
+ * order). `id` is the client-generated message id, `session_id` the app
+ * session key (no FK, keys predate session rows), `options_json` the
+ * send-options snapshot taken at queue time, `attachments_json` the
+ * uploaded-attachment descriptors.
  */
 export const QUEUED_MESSAGES_TABLE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS queued_messages (
-    session_id TEXT PRIMARY KEY,
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
     content TEXT NOT NULL DEFAULT '',
     options_json TEXT,
     attachments_json TEXT,
+    position INTEGER NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_queued_messages_session ON queued_messages(session_id, position);
 `;
 
 /**

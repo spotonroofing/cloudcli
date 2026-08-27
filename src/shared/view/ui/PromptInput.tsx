@@ -108,6 +108,11 @@ export const PromptInputTextarea = React.forwardRef<
   <textarea
     ref={ref}
     rows={1}
+    // No browser spell/grammar squiggles anywhere prompts are typed (ui15 job
+    // 2); autocapitalize stays on sentences for phone dictation.
+    spellCheck={false}
+    autoCorrect="off"
+    autoCapitalize="sentences"
     data-slot="prompt-input-textarea"
     className={cn(
       // text-base below md keeps iOS Safari from zooming the viewport on focus.

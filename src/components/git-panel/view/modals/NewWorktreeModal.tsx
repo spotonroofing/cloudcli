@@ -104,6 +104,8 @@ export default function NewWorktreeModal({
               Branch
             </label>
             <input
+              spellCheck={false}
+              autoCorrect="off"
               id="worktree-branch-name"
               type="text"
               value={branchName}

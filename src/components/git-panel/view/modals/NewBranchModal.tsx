@@ -64,6 +64,8 @@ export default function NewBranchModal({
               Branch Name
             </label>
             <input
+              spellCheck={false}
+              autoCorrect="off"
               id="git-new-branch-name"
               type="text"
               value={newBranchName}

@@ -48,6 +48,8 @@ export default function AuthInputField({
           <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
         )}
         <input
+          spellCheck={false}
+          autoCorrect="off"
           id={id}
           type={resolvedType}
           name={name ?? id}

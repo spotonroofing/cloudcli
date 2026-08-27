@@ -10,6 +10,7 @@ import type { ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionStore, NormalizedMessage } from '../../../stores/useSessionStore';
 import { sessionUpsertRefreshTarget } from '../utils/messageHistoryRefreshCoordinator';
 import { mergeTokenBudget } from '../utils/tokenBudget';
+import { settleQueuedMessageDelivered } from '../utils/chatStorage';
 
 const isActionablePermissionRequest = (request: { toolName?: unknown } | null | undefined): boolean => {
   return request?.toolName !== 'ExitPlanMode' && request?.toolName !== 'exit_plan_mode';
@@ -223,6 +224,14 @@ export function useChatRealtimeHandlers({
         }
         accumulatedStreamRef.current = '';
         return;
+      }
+
+      // A steered queued message just landed as its user bubble: drop the
+      // local queued card in this same event (ui15 job 2), so card clear and
+      // bubble commit in one frame instead of waiting on the separate
+      // queued_message_updated broadcast.
+      if (sid && msg.role === 'user' && typeof msg.queuedMessageId === 'string') {
+        settleQueuedMessageDelivered(sid, msg.queuedMessageId);
       }
 
       // --- All other messages: route to store ---

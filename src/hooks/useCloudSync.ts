@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 import {
-  applyRemoteQueuedMessage,
+  applyRemoteQueuedMessages,
   hydrateQueuedMessages,
   queuedClientId,
   type StoredQueuedMessage,
@@ -50,7 +50,11 @@ export function useCloudSync({ subscribe, userId }: UseCloudSyncArgs) {
         if (event.clientId === queuedClientId || typeof event.sessionId !== 'string') {
           return;
         }
-        applyRemoteQueuedMessage(event.sessionId, (event.message as StoredQueuedMessage | null) ?? null);
+        // The broadcast carries the session's whole ordered stack (ui15 job 2).
+        applyRemoteQueuedMessages(
+          event.sessionId,
+          Array.isArray(event.messages) ? (event.messages as StoredQueuedMessage[]) : [],
+        );
       }
     });
   }, [subscribe, userId]);

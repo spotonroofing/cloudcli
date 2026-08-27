@@ -10,7 +10,7 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { Loader2, ArrowUpIcon } from 'lucide-react';
+import { Loader2, ArrowUpIcon, FileTextIcon, History, XIcon } from 'lucide-react';
 
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
@@ -21,6 +21,7 @@ import {
   PromptInput,
   PromptInputHeader,
   PromptInputBody,
+  PromptInputButton,
   PromptInputTextarea,
   PromptInputTools,
   PromptInputSubmit,
@@ -34,6 +35,7 @@ import TokenUsageSummary from './TokenUsageSummary';
 import QueuedMessageCard from './QueuedMessageCard';
 import ComposerModelMenu from './ComposerModelMenu';
 import ComposerPlusMenu from './ComposerPlusMenu';
+import PromptHistoryPanel from './PromptHistoryPanel';
 
 interface MentionableFile {
   name: string;
@@ -48,6 +50,47 @@ interface SlashCommand {
   type?: string;
   metadata?: Record<string, unknown>;
   [key: string]: unknown;
+}
+
+/** How long a removed queued card ramps closed before unmounting. */
+const QUEUED_CARD_COLLAPSE_MS = 250;
+
+/**
+ * Renders the live queued drafts plus recently removed ones held briefly in a
+ * leaving state, so a cleared card collapses on the ramp instead of blinking
+ * out (ui15 job 2).
+ */
+function useCollapsingQueuedCards(queuedDrafts: QueuedDraft[]) {
+  const [entries, setEntries] = useState<Array<{ draft: QueuedDraft; leaving: boolean }>>(
+    () => queuedDrafts.map((draft) => ({ draft, leaving: false })),
+  );
+
+  useEffect(() => {
+    setEntries((previous) => {
+      const kept = previous.map((entry) => {
+        const live = queuedDrafts.find((draft) => draft.id === entry.draft.id);
+        return live ? { draft: live, leaving: false } : { ...entry, leaving: true };
+      });
+      const knownIds = new Set(kept.map((entry) => entry.draft.id));
+      const added = queuedDrafts
+        .filter((draft) => !knownIds.has(draft.id))
+        .map((draft) => ({ draft, leaving: false }));
+      return [...kept, ...added];
+    });
+  }, [queuedDrafts]);
+
+  const hasLeaving = entries.some((entry) => entry.leaving);
+  useEffect(() => {
+    if (!hasLeaving) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setEntries((previous) => previous.filter((entry) => !entry.leaving));
+    }, QUEUED_CARD_COLLAPSE_MS);
+    return () => clearTimeout(timer);
+  }, [hasLeaving, entries.length]);
+
+  return entries;
 }
 
 interface ChatComposerProps {
@@ -74,10 +117,9 @@ interface ChatComposerProps {
   /** Handoff applies only to planner project chats, not worker/scratch surfaces. */
   handoffAvailable: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement> | MouseEvent<HTMLButtonElement> | TouchEvent<HTMLButtonElement>) => void;
-  isDragActive: boolean;
-  queuedDraft: QueuedDraft | null;
-  onEditQueuedDraft: () => void;
-  onDeleteQueuedDraft: () => void;
+  queuedDrafts: QueuedDraft[];
+  onEditQueuedDraft: (id: string) => void;
+  onDeleteQueuedDraft: (id: string) => void;
   attachedFiles: File[];
   onRemoveAttachment: (index: number) => void;
   onReplaceAttachmentText: (index: number, text: string) => void;
@@ -97,7 +139,6 @@ interface ChatComposerProps {
   onCloseCommandMenu: () => void;
   isCommandMenuOpen: boolean;
   frequentCommands: SlashCommand[];
-  getRootProps: (...args: unknown[]) => Record<string, unknown>;
   getInputProps: (...args: unknown[]) => Record<string, unknown>;
   openAttachmentPicker: () => void;
   inputHighlightRef: RefObject<HTMLDivElement>;
@@ -114,6 +155,14 @@ interface ChatComposerProps {
   onInputFocusChange?: (focused: boolean) => void;
   placeholder: string;
   isTextareaExpanded: boolean;
+  /** Clear-with-undo (ui15 job 2). */
+  clearUndoPending: boolean;
+  onClearComposer: () => void;
+  onUndoClear: () => void;
+  /** Prompt history (ui15 job 2). */
+  historyProjectId: string | null;
+  historySessionId: string | null;
+  onUsePrompt: (content: string, attachments: ChatAttachment[]) => void;
 }
 
 export default function ChatComposer({
@@ -135,8 +184,7 @@ export default function ChatComposer({
   onHandoff,
   handoffAvailable,
   onSubmit,
-  isDragActive,
-  queuedDraft,
+  queuedDrafts,
   onEditQueuedDraft,
   onDeleteQueuedDraft,
   attachedFiles,
@@ -157,7 +205,6 @@ export default function ChatComposer({
   onCloseCommandMenu,
   isCommandMenuOpen,
   frequentCommands,
-  getRootProps,
   getInputProps,
   openAttachmentPicker,
   inputHighlightRef,
@@ -174,10 +221,18 @@ export default function ChatComposer({
   onInputFocusChange,
   placeholder,
   isTextareaExpanded,
+  clearUndoPending,
+  onClearComposer,
+  onUndoClear,
+  historyProjectId,
+  historySessionId,
+  onUsePrompt,
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   const fileDropdownRef = useRef<HTMLDivElement | null>(null);
   const selectedFileRef = useRef<HTMLDivElement | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const closeHistory = useCallback(() => setHistoryOpen(false), []);
   const commandMenuPosition = useMemo(() => {
     if (!isCommandMenuOpen) {
       return { top: 0, left: 16, bottom: 90 };
@@ -235,12 +290,14 @@ export default function ChatComposer({
     (r) => r.toolName === 'AskUserQuestion'
   );
 
-  const hasQueuedDraft = Boolean(queuedDraft);
+  const queuedCardEntries = useCollapsingQueuedCards(queuedDrafts);
+  const hasQueuedDraft = queuedDrafts.length > 0;
   const hasAttachments = attachedFiles.length > 0 || draftAttachments.length > 0;
   const canQueueDraft = isLoading && Boolean(input.trim() || hasAttachments);
+  const canClear = Boolean(input.length > 0 || hasAttachments);
   const submitAriaLabel = canQueueDraft
     ? hasQueuedDraft
-      ? t('input.queue.update', { defaultValue: 'Update queued message' })
+      ? t('input.queue.addAnother', { defaultValue: 'Queue another message' })
       : t('input.queue.sendNext', { defaultValue: 'Queue next message' })
     : isLoading
       ? t('input.stop')
@@ -267,15 +324,29 @@ export default function ChatComposer({
         </div>
       )}
 
-      {queuedDraft && (
-        <QueuedMessageCard
-          content={queuedDraft.content}
-          attachmentCount={
-            queuedDraft.uploadedAttachments?.length ?? queuedDraft.attachments.length
-          }
-          onEdit={onEditQueuedDraft}
-          onDelete={onDeleteQueuedDraft}
-        />
+      {/* Queued messages stack in queue order above the composer (ui15 job
+          2), each its own card; a delivered or deleted card ramps closed. */}
+      {queuedCardEntries.length > 0 && (
+        <div className="mx-auto max-w-[54.25rem]">
+          {queuedCardEntries.map(({ draft, leaving }) => (
+            <div
+              key={draft.id}
+              data-slot="queued-card-shell"
+              data-leaving={leaving || undefined}
+            >
+              <div className="min-h-0 overflow-hidden pb-2">
+                <QueuedMessageCard
+                  content={draft.content}
+                  attachmentCount={
+                    draft.uploadedAttachments?.length ?? draft.attachments.length
+                  }
+                  onEdit={() => onEditQueuedDraft(draft.id)}
+                  onDelete={() => onDeleteQueuedDraft(draft.id)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {!hasQuestionPanel && <div className="relative mx-auto max-w-[54.25rem]">
@@ -320,33 +391,24 @@ export default function ChatComposer({
           frequentCommands={frequentCommands}
         />
 
+        <PromptHistoryPanel
+          open={historyOpen}
+          onClose={closeHistory}
+          projectId={historyProjectId}
+          sessionId={historySessionId}
+          onUsePrompt={onUsePrompt}
+        />
+
         <PromptInput
           onSubmit={onSubmit as (event: FormEvent<HTMLFormElement>) => void}
           status={isLoading ? 'streaming' : 'ready'}
           className={isTextareaExpanded ? 'chat-input-expanded' : ''}
-          {...getRootProps()}
         >
-          {isDragActive && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-primary/50 bg-primary/15">
-              <div className="rounded-lg border border-border/30 bg-card p-4 shadow-lg">
-                <svg className="mx-auto mb-2 h-8 w-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                  />
-                </svg>
-                <p className="text-sm font-medium">Drop files here</p>
-              </div>
-            </div>
-          )}
-
           {hasAttachments && (
             /* Inline attachment previews (claude.ai composer): bordered square
-               thumbnails sit directly above the text inside the enclosure — no
-               gray container. */
-            <PromptInputHeader className="flex flex-wrap gap-2">
+               thumbnails ride above the text inside the enclosure, left-aligned
+               with it, scrolling horizontally when they overflow the row. */
+            <PromptInputHeader className="flex gap-2 overflow-x-auto">
               {draftAttachments.map((attachment, index) => (
                 <ComposerAttachment
                   key={attachment.path || `${attachment.name}-${index}`}
@@ -370,100 +432,159 @@ export default function ChatComposer({
 
           <input {...getInputProps()} />
 
-          {/* Input row (Claude-desktop style): plus flanks the text left, send
-              flanks it right; items-end pins the controls to the last text line
-              so a long draft stacks above them. The plus opens the drawer menu
-              of composer actions (ui13 job 12): upload, slash commands, handoff. */}
-          <div data-slot="composer-input-row" className="flex items-end gap-1 px-2 pb-1.5 pt-1">
+          {/* Full-width text row above the controls row (ui15 job 2, the
+              claude.ai layout): the textarea spans the enclosure with no
+              flanking button columns. */}
+          <PromptInputBody className="w-full">
+            <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+              <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words px-3 pb-1 pt-2 text-base leading-6 text-transparent md:text-[13px] md:leading-5">
+                {renderInputWithMentions(input)}
+              </div>
+            </div>
+
+            <PromptInputTextarea
+              ref={textareaRef}
+              dir="auto"
+              value={input}
+              onChange={onInputChange}
+              onClick={onTextareaClick}
+              onKeyDown={onTextareaKeyDown}
+              onPaste={onTextareaPaste}
+              onScroll={(event) => onTextareaScrollSync(event.target as HTMLTextAreaElement)}
+              onFocus={() => onInputFocusChange?.(true)}
+              onBlur={() => onInputFocusChange?.(false)}
+              onInput={onTextareaInput}
+              placeholder={isBootLocked ? t('input.bootLocked', { defaultValue: 'Starting session...' }) : placeholder}
+              disabled={isBootLocked}
+              className="px-3 pb-1 pt-2 md:text-[13px] md:leading-5"
+            />
+          </PromptInputBody>
+
+          {/* Bottom controls row (ui15 job 2): plus left; handoff, prompt
+              history, the model switcher, then send on the right. */}
+          <div data-slot="composer-controls-row" className="flex items-center gap-1 px-2 pb-1.5 pt-0.5">
             <ComposerPlusMenu
               onUpload={openAttachmentPicker}
               onSlashCommands={onToggleCommandMenu}
-              onHandoff={onHandoff}
-              handoffAvailable={handoffAvailable}
-              className="mb-0.5 ml-0.5 h-7 w-7"
+              className="ml-0.5 h-7 w-7"
             />
 
-            <PromptInputBody className="min-w-0 flex-1">
-              <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
-                <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words px-2 py-1.5 text-base leading-6 text-transparent md:text-[13px] md:leading-5">
-                  {renderInputWithMentions(input)}
-                </div>
-              </div>
+            <div className="flex-1" />
 
-              <PromptInputTextarea
-                ref={textareaRef}
-                dir="auto"
-                value={input}
-                onChange={onInputChange}
-                onClick={onTextareaClick}
-                onKeyDown={onTextareaKeyDown}
-                onPaste={onTextareaPaste}
-                onScroll={(event) => onTextareaScrollSync(event.target as HTMLTextAreaElement)}
-                onFocus={() => onInputFocusChange?.(true)}
-                onBlur={() => onInputFocusChange?.(false)}
-                onInput={onTextareaInput}
-                placeholder={isBootLocked ? t('input.bootLocked', { defaultValue: 'Starting session...' }) : placeholder}
-                disabled={isBootLocked}
-                className="px-2 py-1.5 md:text-[13px] md:leading-5"
-              />
-            </PromptInputBody>
-
-            <div className="mb-0.5 flex shrink-0 items-center gap-1.5">
-              <PromptInputSubmit
+            {handoffAvailable && (
+              <PromptInputButton
+                onClick={onHandoff}
+                aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
+                tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
                 className="h-7 w-7"
-                onClick={
-                  canQueueDraft
-                    ? (e: MouseEvent<HTMLButtonElement>) => {
-                        e.preventDefault();
-                        onSubmit(e);
-                      }
-                    : isLoading
-                      ? onAbortSession
-                      : isRecording
-                        ? (e: MouseEvent<HTMLButtonElement>) => {
-                            e.preventDefault();
-                            voiceStop({ send: true });
-                          }
-                        : undefined
-                }
-                disabled={
-                  isLoading
-                    ? false
-                    : isRecording
-                      ? false
-                      : isTranscribing
-                        ? true
-                        : !input.trim() && !hasAttachments
-                }
-                aria-label={submitAriaLabel}
+                data-slot="composer-handoff"
               >
-                {isTranscribing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : canQueueDraft ? (
-                  <ArrowUpIcon className="h-4 w-4" />
-                ) : undefined}
-              </PromptInputSubmit>
-            </div>
+                <FileTextIcon />
+              </PromptInputButton>
+            )}
+
+            <PromptInputButton
+              onClick={() => setHistoryOpen((previous) => !previous)}
+              aria-label={t('input.history.title', { defaultValue: 'Prompt history' })}
+              aria-pressed={historyOpen}
+              tooltip={{ content: t('input.history.title', { defaultValue: 'Prompt history' }) }}
+              className={`h-7 w-7 ${historyOpen ? 'bg-accent/60 text-foreground' : ''}`}
+              data-slot="composer-history-toggle"
+            >
+              <History />
+            </PromptInputButton>
+
+            <ComposerModelMenu
+              effort={effort}
+              effortOptions={availableEffortOptions}
+              onSelectEffort={onSelectEffort}
+              model={model}
+              modelOptions={availableModelOptions}
+              onSelectModel={onSelectModel}
+              modelsLoading={modelsLoading}
+            />
+
+            <PromptInputSubmit
+              className="h-7 w-7"
+              onClick={
+                canQueueDraft
+                  ? (e: MouseEvent<HTMLButtonElement>) => {
+                      e.preventDefault();
+                      onSubmit(e);
+                    }
+                  : isLoading
+                    ? onAbortSession
+                    : isRecording
+                      ? (e: MouseEvent<HTMLButtonElement>) => {
+                          e.preventDefault();
+                          voiceStop({ send: true });
+                        }
+                      : undefined
+              }
+              disabled={
+                isLoading
+                  ? false
+                  : isRecording
+                    ? false
+                    : isTranscribing
+                      ? true
+                      : !input.trim() && !hasAttachments
+              }
+              aria-label={submitAriaLabel}
+            >
+              {isTranscribing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : canQueueDraft ? (
+                <ArrowUpIcon className="h-4 w-4" />
+              ) : undefined}
+            </PromptInputSubmit>
           </div>
       </PromptInput>
 
         {/* Slim secondary row (ui11 phase 5, ui12 phase 2, ui13 job 12, ui14
-            job 6): floats under the enclosure, outside its border. Left: the
-            character counter flush with the enclosure's left edge (plain
-            tabular text, always shown, "0" before typing), then voice. Right:
-            model selector + context ring, the ring flush with the right edge.
-            No horizontal padding on the row. */}
+            job 6, ui15 job 2): floats under the enclosure, outside its
+            border. Left: the character counter flush with the enclosure's
+            left edge (hover fades it into a clear X; clearing swaps in the
+            depleting Undo affordance), then voice. Right: the context ring
+            flush with the right edge (the model switcher moved up into the
+            controls row). No horizontal padding on the row. */}
         <div
           data-slot="composer-secondary-row"
           className="mt-1 flex items-center justify-between gap-2"
         >
             <PromptInputTools className="min-w-0 gap-1.5">
-              <span
-                data-slot="char-counter"
-                className="font-mono text-[10px] font-medium tabular-nums text-muted-foreground"
-              >
-                {input.length.toLocaleString('en-US')}
-              </span>
+              {clearUndoPending ? (
+                <button
+                  type="button"
+                  data-slot="composer-undo-clear"
+                  onClick={onUndoClear}
+                  className="touch-hit relative flex h-7 items-center rounded-md px-1.5 pb-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  {t('input.undoClear', { defaultValue: 'Undo?' })}
+                  <span aria-hidden className="absolute inset-x-1.5 bottom-1 h-0.5 overflow-hidden rounded-sm bg-muted-foreground/20">
+                    <span className="undo-deplete block h-full w-full rounded-sm bg-muted-foreground/60" />
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-slot="char-counter"
+                  onClick={canClear ? onClearComposer : undefined}
+                  disabled={!canClear}
+                  aria-label={t('input.clear', { defaultValue: 'Clear message' })}
+                  className="group/counter touch-hit relative grid h-7 min-w-5 place-items-center px-0.5 font-mono text-[10px] font-medium tabular-nums text-muted-foreground disabled:cursor-default"
+                >
+                  <span className={`col-start-1 row-start-1 counter-swap ${canClear ? 'group-hover/counter:opacity-0 group-focus-visible/counter:opacity-0' : ''}`}>
+                    {input.length.toLocaleString('en-US')}
+                  </span>
+                  {canClear && (
+                    <XIcon
+                      aria-hidden
+                      className="counter-swap col-start-1 row-start-1 h-3.5 w-3.5 opacity-0 group-hover/counter:opacity-100 group-focus-visible/counter:opacity-100"
+                    />
+                  )}
+                </button>
+              )}
 
               {onVoiceTranscript && voiceAvailable && (
                 <VoiceInputButton state={voiceState} onToggle={voiceToggle} errorMsg={voiceError} className="h-7 w-7" />
@@ -471,15 +592,6 @@ export default function ChatComposer({
             </PromptInputTools>
 
             <div className="flex shrink-0 items-center gap-1.5">
-              <ComposerModelMenu
-                effort={effort}
-                effortOptions={availableEffortOptions}
-                onSelectEffort={onSelectEffort}
-                model={model}
-                modelOptions={availableModelOptions}
-                onSelectModel={onSelectModel}
-                modelsLoading={modelsLoading}
-              />
               <TokenUsageSummary usage={tokenBudget} />
             </div>
         </div>

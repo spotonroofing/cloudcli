@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { PlusIcon, Paperclip, FileTextIcon } from 'lucide-react';
+import { PlusIcon, Paperclip } from 'lucide-react';
 import type { SVGProps } from 'react';
 
 import { useComposerMenuAnchor } from '../../hooks/useComposerMenuAnchor';
@@ -34,24 +34,20 @@ export function CommandSlashIcon(props: SVGProps<SVGSVGElement>) {
 interface ComposerPlusMenuProps {
   onUpload: () => void;
   onSlashCommands: () => void;
-  onHandoff: () => void;
-  /** Handoff applies only to planner project chats, not worker/scratch surfaces. */
-  handoffAvailable: boolean;
   className?: string;
 }
 
 /**
- * The composer's plus button (ui13 job 12): the attach, slash-commands, and
- * handoff actions collapse into one drawer menu of stacked rows above the
- * button. Opens with the standard popout grow and ramps closed (the exit
- * animation plays before unmount); closes on selection, outside press, or
- * Escape via the shared anchor hook.
+ * The composer's plus button (ui13 job 12): the attach and slash-commands
+ * actions collapse into one drawer menu of stacked rows above the button
+ * (Handoff moved back out to its own controls-row button, ui15 job 2). Opens
+ * with the standard popout grow and ramps closed (the exit animation plays
+ * before unmount); closes on selection, outside press, or Escape via the
+ * shared anchor hook.
  */
 export default function ComposerPlusMenu({
   onUpload,
   onSlashCommands,
-  onHandoff,
-  handoffAvailable,
   className,
 }: ComposerPlusMenuProps) {
   const { t } = useTranslation('chat');
@@ -128,16 +124,6 @@ export default function ComposerPlusMenu({
             onSelect={() => selectAndClose(onSlashCommands)}
             className="touch-hit relative py-2.5"
           />
-          {handoffAvailable && (
-            <ComposerMenuItem
-              role="menuitem"
-              label={t('input.handoff', { defaultValue: 'Handoff' })}
-              icon={<FileTextIcon className="h-4 w-4" />}
-              isSelected={false}
-              onSelect={() => selectAndClose(onHandoff)}
-              className="touch-hit relative py-2.5"
-            />
-          )}
         </div>,
         document.body,
       )}

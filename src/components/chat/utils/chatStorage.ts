@@ -53,6 +53,8 @@ export const safeLocalStorage = {
 export type QueuedSendOptions = Record<string, unknown>;
 
 export type StoredQueuedMessage = {
+  /** Client-generated message id; the server keys the row by it. */
+  id: string;
   content: string;
   options?: QueuedSendOptions;
   /** Legacy image-only descriptors retained for queued draft compatibility. */
@@ -65,11 +67,13 @@ export type StoredQueuedMessage = {
 };
 
 /**
- * Server-persisted queued messages (ui11 phase 1). The in-memory cache is the
- * synchronous view every reader uses; it is filled by `hydrateQueuedMessages`
- * at app load, kept current by `queued_message_updated` broadcasts, and
- * written through to `/api/queued-messages` on every local change. Network
- * calls are serialized per session so a write never overtakes its clear.
+ * Server-persisted queued messages (ui11 phase 1; a per-session stack since
+ * ui15 job 2). The in-memory cache is the synchronous view every reader uses;
+ * it is filled by `hydrateQueuedMessages` at app load, kept current by
+ * `queued_message_updated` broadcasts (which carry the session's whole
+ * ordered stack), and written through to `/api/queued-messages` on every
+ * local change. Network calls are serialized per session so a write never
+ * overtakes its clear.
  */
 
 export const queuedClientId =
@@ -77,18 +81,23 @@ export const queuedClientId =
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 
-const cache = new Map<string, StoredQueuedMessage>();
+export const createQueuedMessageId = (): string =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const cache = new Map<string, StoredQueuedMessage[]>();
 const listeners = new Set<(sessionId: string) => void>();
 const tails = new Map<string, Promise<unknown>>();
 /**
- * Sessions whose latest local write has not been acknowledged by the server
- * (the PUT failed, e.g. across a dev-server restart). Hydration preserves and
- * re-pushes these instead of wiping them to server state — they are a live
- * tab's own in-flight write, not a stale remnant, and dropping them would
- * lose the message. The set is in-memory only, so nothing here survives a
- * shutdown to ghost-send later.
+ * Message ids whose latest local write has not been acknowledged by the
+ * server (the PUT failed, e.g. across a dev-server restart). Hydration
+ * preserves and re-pushes these instead of wiping them to server state —
+ * they are a live tab's own in-flight write, not a stale remnant, and
+ * dropping them would lose the message. The set is in-memory only, so
+ * nothing here survives a shutdown to ghost-send later.
  */
-const pendingWrites = new Set<string>();
+const pendingWrites = new Map<string, Set<string>>();
 
 const notify = (sessionId: string) => {
   listeners.forEach((listener) => listener(sessionId));
@@ -101,17 +110,29 @@ const enqueue = <T>(sessionId: string, operation: () => Promise<T>): Promise<T> 
 };
 
 const normalize = (message: StoredQueuedMessage): StoredQueuedMessage => ({
+  id: message.id || createQueuedMessageId(),
   content: message.content,
   options: message.options,
   attachments: message.attachments ?? message.images ?? [],
 });
 
-const serialize = (message: StoredQueuedMessage) =>
-  JSON.stringify({ content: message.content, options: message.options ?? null, attachments: message.attachments ?? [] });
+const hasSubstance = (message: StoredQueuedMessage): boolean =>
+  Boolean(message.content.trim()) || (message.attachments?.length ?? 0) > 0;
 
-const endpoint = (sessionId: string) => `/api/queued-messages/${encodeURIComponent(sessionId)}`;
+const endpoint = (sessionId: string, id?: string) =>
+  `/api/queued-messages/${encodeURIComponent(sessionId)}${id ? `/${encodeURIComponent(id)}` : ''}`;
 
-/** Notified when another device (or hydration) changes a session's queued message. */
+const clearPendingWrite = (sessionId: string, id: string) => {
+  const ids = pendingWrites.get(sessionId);
+  if (ids) {
+    ids.delete(id);
+    if (ids.size === 0) {
+      pendingWrites.delete(sessionId);
+    }
+  }
+};
+
+/** Notified when another device (or hydration) changes a session's queued stack. */
 export function subscribeQueuedMessages(listener: (sessionId: string) => void): () => void {
   listeners.add(listener);
   return () => {
@@ -119,36 +140,35 @@ export function subscribeQueuedMessages(listener: (sessionId: string) => void): 
   };
 }
 
-export function readQueuedMessage(sessionId: string): StoredQueuedMessage | null {
-  const message = cache.get(sessionId);
-  if (!message) {
-    return null;
-  }
-  return message.content.trim() || (message.attachments?.length ?? 0) > 0 ? message : null;
+/** The session's queued messages in delivery order. */
+export function readQueuedMessages(sessionId: string): StoredQueuedMessage[] {
+  return (cache.get(sessionId) ?? []).filter(hasSubstance);
 }
 
 const pushQueuedMessage = (sessionId: string, message: StoredQueuedMessage): Promise<unknown> =>
   enqueue(sessionId, () =>
-    authenticatedFetch(endpoint(sessionId), {
+    authenticatedFetch(endpoint(sessionId, message.id), {
       method: 'PUT',
       body: JSON.stringify({ ...message, clientId: queuedClientId }),
     }).then((response) => {
       if (response.ok) {
-        pendingWrites.delete(sessionId);
+        clearPendingWrite(sessionId, message.id);
       }
     }).catch(() => {
       // Stays in pendingWrites; the next hydrate re-pushes it.
     }),
   );
 
+/** Appends a new queued message, or updates the one already holding its id in place. */
 export function writeQueuedMessage(sessionId: string, message: StoredQueuedMessage): void {
   const normalized = normalize(message);
-  const previous = cache.get(sessionId);
-  if (previous && serialize(previous) === serialize(normalized)) {
-    return;
-  }
-  cache.set(sessionId, normalized);
-  pendingWrites.add(sessionId);
+  const list = cache.get(sessionId) ?? [];
+  const index = list.findIndex((candidate) => candidate.id === normalized.id);
+  const next = index >= 0
+    ? list.map((candidate, currentIndex) => (currentIndex === index ? normalized : candidate))
+    : [...list, normalized];
+  cache.set(sessionId, next);
+  (pendingWrites.get(sessionId) ?? pendingWrites.set(sessionId, new Set()).get(sessionId)!).add(normalized.id);
   void pushQueuedMessage(sessionId, normalized);
 }
 
@@ -170,18 +190,20 @@ export function stashUndeliverableChatSend(frame: Record<string, unknown>): void
   if (!sessionId || (!content.trim() && attachments.length === 0)) {
     return;
   }
-  writeQueuedMessage(sessionId, { content, options, attachments });
+  writeQueuedMessage(sessionId, { id: createQueuedMessageId(), content, options, attachments });
   notify(sessionId);
 }
 
-export function clearQueuedMessage(sessionId: string): void {
-  if (!cache.has(sessionId)) {
+/** Deletes one queued message everywhere (card delete); no send follows. */
+export function clearQueuedMessage(sessionId: string, id: string): void {
+  const list = cache.get(sessionId);
+  if (!list?.some((candidate) => candidate.id === id)) {
     return;
   }
-  cache.delete(sessionId);
-  pendingWrites.delete(sessionId);
+  cache.set(sessionId, list.filter((candidate) => candidate.id !== id));
+  clearPendingWrite(sessionId, id);
   void enqueue(sessionId, () =>
-    authenticatedFetch(endpoint(sessionId), {
+    authenticatedFetch(endpoint(sessionId, id), {
       method: 'DELETE',
       body: JSON.stringify({ clientId: queuedClientId }),
     }).catch(() => {
@@ -191,16 +213,30 @@ export function clearQueuedMessage(sessionId: string): void {
 }
 
 /**
- * Atomically pops the session's queued message: resolves the removed server
- * row for the one client whose delete claimed it, null for everyone else.
- * Every sender (the viewing composer on any device, the app-level auto-send)
- * claims before sending and sends the popped copy, so a message queued on one
- * device and visible on three is sent exactly once — and always with the
- * server's content, never a stale local copy (ui12 phase 1).
+ * The server already claimed this message (the runtime steered it into the
+ * running turn) and its user bubble just landed: drop the local copy in the
+ * same event so the card clears in the same frame as the bubble (ui15 job 2).
+ * No network call — the row is already gone.
  */
-export function claimQueuedMessage(sessionId: string): Promise<StoredQueuedMessage | null> {
-  cache.delete(sessionId);
-  pendingWrites.delete(sessionId);
+export function settleQueuedMessageDelivered(sessionId: string, id: string): void {
+  const list = cache.get(sessionId);
+  if (!list?.some((candidate) => candidate.id === id)) {
+    return;
+  }
+  cache.set(sessionId, list.filter((candidate) => candidate.id !== id));
+  clearPendingWrite(sessionId, id);
+  notify(sessionId);
+}
+
+/**
+ * Atomically pops the session's next queued message: resolves the removed
+ * server row for the one client whose delete claimed it, null for everyone
+ * else. Every sender (the viewing composer on any device, the app-level
+ * auto-send) claims before sending and sends the popped copy, so a message
+ * queued on one device and visible on three is sent exactly once — and always
+ * with the server's content, never a stale local copy (ui12 phase 1).
+ */
+export function claimNextQueuedMessage(sessionId: string): Promise<StoredQueuedMessage | null> {
   return enqueue(sessionId, async () => {
     try {
       const response = await authenticatedFetch(endpoint(sessionId), {
@@ -212,18 +248,28 @@ export function claimQueuedMessage(sessionId: string): Promise<StoredQueuedMessa
       }
       const body = await response.json();
       const message = body?.data?.message as StoredQueuedMessage | null | undefined;
-      return body?.data?.claimed === true && message && typeof message.content === 'string'
-        ? normalize(message)
-        : null;
+      if (body?.data?.claimed !== true || !message || typeof message.content !== 'string') {
+        return null;
+      }
+      const normalized = normalize(message);
+      const list = cache.get(sessionId);
+      if (list) {
+        cache.set(sessionId, list.filter((candidate) => candidate.id !== normalized.id));
+      }
+      clearPendingWrite(sessionId, normalized.id);
+      return normalized;
     } catch {
       return null;
     }
   });
 }
 
-export function applyRemoteQueuedMessage(sessionId: string, message: StoredQueuedMessage | null): void {
-  if (message && typeof message.content === 'string') {
-    cache.set(sessionId, normalize(message));
+export function applyRemoteQueuedMessages(sessionId: string, messages: StoredQueuedMessage[]): void {
+  const normalized = messages
+    .filter((message) => message && typeof message.content === 'string')
+    .map(normalize);
+  if (normalized.length > 0) {
+    cache.set(sessionId, normalized);
   } else {
     cache.delete(sessionId);
   }
@@ -248,7 +294,7 @@ const purgeLegacyQueuedMessages = (): void => {
 
 export async function hydrateQueuedMessages(): Promise<void> {
   purgeLegacyQueuedMessages();
-  let messages: Record<string, StoredQueuedMessage>;
+  let messages: Record<string, StoredQueuedMessage[]>;
   try {
     const response = await authenticatedFetch('/api/queued-messages');
     if (!response.ok) {
@@ -263,22 +309,33 @@ export async function hydrateQueuedMessages(): Promise<void> {
   // A local write the server never acknowledged is this tab's own in-flight
   // message, not a stale remnant: keep it and re-push instead of adopting the
   // server's (missing) copy, or the message would silently evaporate.
-  const unacknowledged = new Map<string, StoredQueuedMessage>();
-  for (const sessionId of pendingWrites) {
-    const local = cache.get(sessionId);
-    if (local) {
+  const unacknowledged = new Map<string, StoredQueuedMessage[]>();
+  for (const [sessionId, ids] of pendingWrites) {
+    const local = (cache.get(sessionId) ?? []).filter((message) => ids.has(message.id));
+    if (local.length > 0) {
       unacknowledged.set(sessionId, local);
     }
   }
   cache.clear();
-  for (const [sessionId, message] of Object.entries(messages)) {
-    if (message && typeof message.content === 'string') {
-      cache.set(sessionId, normalize(message));
+  for (const [sessionId, sessionMessages] of Object.entries(messages)) {
+    if (Array.isArray(sessionMessages)) {
+      const normalized = sessionMessages
+        .filter((message) => message && typeof message.content === 'string')
+        .map(normalize);
+      if (normalized.length > 0) {
+        cache.set(sessionId, normalized);
+      }
     }
   }
-  for (const [sessionId, message] of unacknowledged) {
-    cache.set(sessionId, message);
-    void pushQueuedMessage(sessionId, message);
+  for (const [sessionId, localMessages] of unacknowledged) {
+    const list = cache.get(sessionId) ?? [];
+    for (const message of localMessages) {
+      if (!list.some((candidate) => candidate.id === message.id)) {
+        list.push(message);
+      }
+      void pushQueuedMessage(sessionId, message);
+    }
+    cache.set(sessionId, list);
   }
   touched.forEach(notify);
 }

@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react';
 
-import { claimQueuedMessage, readQueuedMessage } from '../components/chat/utils/chatStorage';
+import { claimNextQueuedMessage, readQueuedMessages } from '../components/chat/utils/chatStorage';
 
 import type { MarkSessionProcessing, SessionActivityMap } from './useSessionProtection';
 
 interface UseQueuedMessageAutoSendArgs {
   processingSessions: SessionActivityMap;
   /**
-   * The session currently open in the chat view. Its queued draft is owned by
-   * the composer (which also handles file attachments and slash commands),
+   * The session currently open in the chat view. Its queued drafts are owned
+   * by the composer (which also handles file attachments and slash commands),
    * so this hook never touches it.
    */
   activeSessionId: string | null;
@@ -23,11 +23,12 @@ interface UseQueuedMessageAutoSendArgs {
  * The composer persists each queued draft (text + send options snapshotted at
  * queue time) in the server-side queued-message store. When a session's run
  * leaves the processing map — its previous response completed — this hook
- * sends that session's queued message immediately instead of waiting for the
- * user to open the session again. Claiming (popping) the server row before
- * sending is what keeps the composer's own flush (on any device) from
- * double-sending, and sending the popped copy is what keeps a stale device
- * from sending outdated content.
+ * sends that session's next queued message immediately instead of waiting for
+ * the user to open the session again; any messages behind it flush the same
+ * way at the following turn ends, preserving order. Claiming (popping) the
+ * server row before sending is what keeps the composer's own flush (on any
+ * device) from double-sending, and sending the popped copy is what keeps a
+ * stale device from sending outdated content.
  */
 export function useQueuedMessageAutoSend({
   processingSessions,
@@ -48,8 +49,7 @@ export function useQueuedMessageAutoSend({
         continue;
       }
 
-      const queued = readQueuedMessage(sessionId);
-      if (!queued) {
+      if (readQueuedMessages(sessionId).length === 0) {
         continue;
       }
 
@@ -62,7 +62,7 @@ export function useQueuedMessageAutoSend({
       // The server row is the claim shared with the viewing composer on every
       // device: only the client whose delete popped it sends, and it sends the
       // popped server copy, not this tab's cached one.
-      void claimQueuedMessage(sessionId).then((popped) => {
+      void claimNextQueuedMessage(sessionId).then((popped) => {
         if (!popped) {
           return;
         }

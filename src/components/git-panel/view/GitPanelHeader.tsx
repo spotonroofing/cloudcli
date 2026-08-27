@@ -171,6 +171,8 @@ export default function GitPanelHeader({
               <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <input
+                  spellCheck={false}
+                  autoCorrect="off"
                   ref={branchSearchInputRef}
                   type="text"
                   value={branchSearchQuery}

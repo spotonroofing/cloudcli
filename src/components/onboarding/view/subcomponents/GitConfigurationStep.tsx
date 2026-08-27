@@ -34,6 +34,8 @@ export default function GitConfigurationStep({
             Git name <span className="text-destructive">*</span>
           </label>
           <input
+            spellCheck={false}
+            autoCorrect="off"
             type="text"
             id="gitName"
             value={gitName}
@@ -52,6 +54,8 @@ export default function GitConfigurationStep({
             Git email <span className="text-destructive">*</span>
           </label>
           <input
+            spellCheck={false}
+            autoCorrect="off"
             type="email"
             id="gitEmail"
             value={gitEmail}

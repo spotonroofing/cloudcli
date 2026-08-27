@@ -23,6 +23,8 @@ const CommandInput = React.forwardRef<
   <div className="flex items-center border-b px-3">
     <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
     <CommandPrimitive.Input
+      spellCheck={false}
+      autoCorrect="off"
       ref={ref}
       className={cn(
         'flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none',
