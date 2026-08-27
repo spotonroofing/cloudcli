@@ -16,7 +16,7 @@ import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/webs
 import { findUnpushedHandoff } from './handoff-push.js';
 import { UnitIdentityCache, hiddenTwinUnits, summarizeHidden, type TwinChain } from './chain-twins.js';
 
-type ChainStatus = 'running' | 'completed' | 'stopped' | 'failed';
+type ChainStatus = 'running' | 'paused' | 'completed' | 'stopped' | 'failed';
 
 /**
  * One unit of a dispatch manifest (ui9 B4), in run order. `kind` 'phase' is a
@@ -142,6 +142,7 @@ type ChainEventName =
   | 'verify-end'
   | 'verify-failed'
   | 'limit'
+  | 'paused'
   | 'completed'
   | 'stopped'
   | 'failed';
@@ -153,6 +154,7 @@ export const CHAIN_EVENT_NAMES: ChainEventName[] = [
   'verify-end',
   'verify-failed',
   'limit',
+  'paused',
   'completed',
   'stopped',
   'failed',
@@ -531,6 +533,71 @@ class WatchdogService {
   }
 
   /**
+   * Handles `dispatch pause` for the watchdog route: only a live runner for
+   * this project is signaled. The runner owns child shutdown and parking,
+   * then posts the `paused` chain event; this method waits for that event so
+   * the CLI does not return before the pause is durable.
+   */
+  async requestChainPause(
+    slug: string,
+    projectPath: string,
+  ): Promise<'paused' | 'not-running' | 'no-runner' | 'timeout'> {
+    const chain = this.chains.get(slug);
+    if (!chain || normalizeProjectPath(chain.projectPath) !== normalizeProjectPath(projectPath) || chain.status !== 'running') {
+      return 'not-running';
+    }
+    const runners = await listChainRunners();
+    const pid = runners?.get(slug);
+    if (pid == null) {
+      return 'no-runner';
+    }
+    try {
+      process.kill(pid, 'SIGUSR1');
+    } catch {
+      return 'no-runner';
+    }
+    for (let attempt = 0; attempt < 450; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const current = this.chains.get(slug);
+      if (current?.status === 'paused') {
+        return 'paused';
+      }
+      if (!current || current.status !== 'running') {
+        return 'not-running';
+      }
+    }
+    return 'timeout';
+  }
+
+  /**
+   * Handles `dispatch resume` for the watchdog route: transitions the same
+   * paused record back to running and returns the first job with no recorded
+   * commit. Manifest, job metadata, unit count, and chain identity stay put.
+   */
+  resumeChain(
+    slug: string,
+    projectPath: string,
+  ): { phase: number; phases: number } | null {
+    const chain = this.chains.get(slug);
+    if (!chain || normalizeProjectPath(chain.projectPath) !== normalizeProjectPath(projectPath) || chain.status !== 'paused') {
+      return null;
+    }
+    const phases = chain.manifest?.length ?? chain.phases ?? 0;
+    let phase = 1;
+    while (phase <= phases && chain.jobs[phase]?.commitHash) {
+      phase += 1;
+    }
+    chain.status = 'running';
+    chain.phaseActive = false;
+    chain.lastEventAt = Date.now();
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    this.syncPunchlistWatcher(chain);
+    log(`chain ${slug}: resumed`, { phase, phases });
+    return { phase, phases };
+  }
+
+  /**
    * Live task check-offs (ui14 job 8): a running chain's punch list file is
    * watched so a box ticked mid-job broadcasts fresh done counts within the
    * debounce, not only at the next event or 20s poll. The parent directory
@@ -712,6 +779,19 @@ class WatchdogService {
       return false;
     }
     chain.lastEventAt = Date.now();
+    if (event === 'paused') {
+      chain.status = 'paused';
+      chain.phaseActive = false;
+      settleRunningVerifies(chain);
+      if (detail?.summaryTail) {
+        chain.lastSummaryTail = detail.summaryTail.slice(-2000);
+      }
+      this.persistChain(chain);
+      this.broadcastChainProgress(chain);
+      this.syncPunchlistWatcher(chain);
+      log(`chain ${slug}: paused`, { phase: chain.currentPhase });
+      return true;
+    }
     // Verify-stage events (ui14 job 10) belong to a unit whose build already
     // ended; they never move currentPhase or phaseActive, which track the
     // build in flight. verify-failed is terminal: the runner has rewound and

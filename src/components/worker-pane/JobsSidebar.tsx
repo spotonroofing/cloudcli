@@ -1,4 +1,4 @@
-import { ChevronDown, Cpu, GitCommitHorizontal, MessageSquare } from 'lucide-react';
+import { ChevronDown, Cpu, GitCommitHorizontal, MessageSquare, Pause } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -43,7 +43,7 @@ export type ChainManifestEntry = {
 export type ChainSnapshot = {
   slug: string;
   projectPath: string;
-  status: 'running' | 'completed' | 'stopped' | 'failed';
+  status: 'running' | 'paused' | 'completed' | 'stopped' | 'failed';
   phases: number | null;
   currentPhase: number | null;
   phaseActive: boolean;
@@ -65,6 +65,8 @@ type Unit = {
   tasks: string[];
   kind: 'phase' | 'task';
   status: TodoListItemStatus;
+  /** True for the current job of a paused chain. */
+  paused?: boolean;
   /** Punch-list done count; null hides the row counter (no manifest counts). */
   done: number | null;
   /** Commit and timing metadata for the drawer footer (ui13 job 14). */
@@ -102,6 +104,7 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
     }
     const index = i + 1;
     let status: TodoListItemStatus = 'pending';
+    const paused = chain.status === 'paused' && index === current;
     if (chain.status === 'completed' || index < current) {
       status = 'completed';
     } else if (index === current) {
@@ -115,6 +118,7 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
       tasks: entry.tasks,
       kind: entry.kind,
       status,
+      paused,
       done: entry.done ?? null,
       startedAt: entry.startedAt,
       endedAt: entry.endedAt,
@@ -480,6 +484,7 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
               unit.status === 'in-progress' && 'text-foreground',
               unit.status === 'completed' && 'text-muted-foreground/60',
               unit.status === 'cancelled' && 'text-muted-foreground/55',
+              unit.paused && 'text-foreground',
               (hasDrawer || navigable) && 'group-hover/row:text-foreground',
             );
             return (
@@ -509,7 +514,7 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
                   data-job={unit.index}
                   data-chain={unit.chainSlug ?? undefined}
                   data-kind={unit.kind}
-                  data-status={unit.status}
+                  data-status={unit.paused ? 'paused' : unit.status}
                   data-drawer={hasDrawer ? (drawerOpen ? 'open' : 'closed') : undefined}
                   data-active={active ? 'true' : undefined}
                   onMouseEnter={() => setHoveredJob(unit.key)}
@@ -539,26 +544,36 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
                         unit.status === 'in-progress' && !reduce && 'animate-row-breathe',
                       )}
                     >
-                      <TodoStatusIcon
-                        status={unit.status}
-                        sweepOnComplete
-                        // Jobs mono, tasks semantic (ui13 job 1): the job
-                        // row's check and ring render in the foreground ink;
-                        // green stays on task icons and the counters.
-                        tone="mono"
-                        // The job ring is a static circle segmented per task
-                        // from the start (ui13 job 7): idle jobs show the
-                        // same ring muted and motionless; the active job's
-                        // fills as check-offs land, its working segment
-                        // glowing. A manifest-less job keeps a plain circle
-                        // (ramped spinner while working).
-                        segments={
-                          (unit.status === 'in-progress' || unit.status === 'pending')
-                          && unit.tasks.length > 0
-                            ? { done: displayedDone(unit), total: unit.tasks.length }
-                            : undefined
-                        }
-                      />
+                      {unit.paused ? (
+                        <span
+                          data-slot="jobs-sidebar-paused-icon"
+                          aria-label="Paused"
+                          className="flex h-4 w-4 items-center justify-center rounded-full border border-foreground/70 text-foreground"
+                        >
+                          <Pause className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
+                        </span>
+                      ) : (
+                        <TodoStatusIcon
+                          status={unit.status}
+                          sweepOnComplete
+                          // Jobs mono, tasks semantic (ui13 job 1): the job
+                          // row's check and ring render in the foreground ink;
+                          // green stays on task icons and the counters.
+                          tone="mono"
+                          // The job ring is a static circle segmented per task
+                          // from the start (ui13 job 7): idle jobs show the
+                          // same ring muted and motionless; the active job's
+                          // fills as check-offs land, its working segment
+                          // glowing. A manifest-less job keeps a plain circle
+                          // (ramped spinner while working).
+                          segments={
+                            (unit.status === 'in-progress' || unit.status === 'pending')
+                            && unit.tasks.length > 0
+                              ? { done: displayedDone(unit), total: unit.tasks.length }
+                              : undefined
+                          }
+                        />
+                      )}
                     </span>
                   </span>
                   {/* The title shrinks to its text: the leftover middle

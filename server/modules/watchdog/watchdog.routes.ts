@@ -226,6 +226,60 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
+  router.post(
+    '/chains/:slug/pause',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
+      if (!projectPath) {
+        throw new AppError('projectPath is required.', {
+          code: 'WATCHDOG_CHAIN_PROJECT_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const slug = String(req.params.slug);
+      const result = await watchdogService.requestChainPause(slug, projectPath);
+      if (result === 'not-running' || result === 'no-runner') {
+        throw new AppError(`Chain "${slug}" is not running.`, {
+          code: 'WATCHDOG_CHAIN_NOT_RUNNING',
+          statusCode: 409,
+        });
+      }
+      if (result === 'timeout') {
+        throw new AppError(`Chain "${slug}" did not finish pausing.`, {
+          code: 'WATCHDOG_CHAIN_PAUSE_TIMEOUT',
+          statusCode: 504,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, status: 'paused' }));
+    }),
+  );
+
+  router.post(
+    '/chains/:slug/resume',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
+      if (!projectPath) {
+        throw new AppError('projectPath is required.', {
+          code: 'WATCHDOG_CHAIN_PROJECT_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const slug = String(req.params.slug);
+      const resumed = watchdogService.resumeChain(slug, projectPath);
+      if (!resumed) {
+        throw new AppError(`Chain "${slug}" is not paused.`, {
+          code: 'WATCHDOG_CHAIN_NOT_PAUSED',
+          statusCode: 409,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, status: 'running', ...resumed }));
+    }),
+  );
+
   // Amend a queued unit's task list (ui14 job 8): the planner folds a small
   // addition into a not-yet-started job as an extra task and the jobs view
   // shows the row at once. The executing or finished unit is refused.

@@ -2,6 +2,8 @@
 # dispatch — the fire-once chain runner (spec B4).
 #
 #   dispatch <project> <slug> [phase-file ...]
+#   dispatch pause <project> <slug>
+#   dispatch resume <project> <slug>
 #   dispatch append <project> <slug> <file ...> [--phase]
 #   dispatch amend <project> <slug> <unit> --tasks "a | b | c" [--name N] [--anchor A]
 #
@@ -67,11 +69,104 @@ PYEOF
 
 usage() {
   print -u2 "usage: dispatch <project> <slug> [phase-file ...]"
+  print -u2 "       dispatch pause <project> <slug>"
+  print -u2 "       dispatch resume <project> <slug>"
   print -u2 "       dispatch append <project> <slug> <file ...> [--phase]"
   print -u2 "       dispatch amend <project> <slug> <unit> --tasks \"a | b | c\" [--name N] [--anchor A]"
   exit 64
 }
 [[ $# -ge 2 ]] || usage
+
+# ----- pause/resume: control one existing chain record -----
+if [[ "$1" == "pause" || "$1" == "resume" ]]; then
+  ACTION="$1"; shift
+  [[ $# -eq 2 ]] || usage
+  PROJECT_ARG="$1"; SLUG="$2"
+  if [[ "$PROJECT_ARG" == /* ]]; then
+    REPO="$PROJECT_ARG"
+  else
+    REPO="$PROJECTS_ROOT/$PROJECT_ARG"
+  fi
+  [[ -d "$REPO/.git" ]] || { print -u2 "dispatch: $REPO is not a git repo"; exit 66; }
+  REPO="${REPO:A}"
+
+  API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
+  [[ -n "$API_KEY" ]] || { print -u2 "dispatch: no active API key in server config"; exit 78; }
+  HEADER_FILE=$(mktemp)
+  chmod 600 "$HEADER_FILE"
+  print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
+  trap 'rm -f "$HEADER_FILE"' EXIT
+  BODY=$(python3 - "$REPO" <<'PYEOF'
+import json, sys
+print(json.dumps({'projectPath': sys.argv[1]}))
+PYEOF
+)
+
+  if [[ "$ACTION" == "resume" ]]; then
+    RUNNER="${0:A:h}/dispatch-chain-runner"
+    [[ -x "$RUNNER" ]] || { print -u2 "dispatch: runner missing at $RUNNER"; exit 70; }
+    RESUME_STATE="$HOME/forge-logs/$SLUG/resume.json"
+    [[ -r "$RESUME_STATE" ]] || { print -u2 "dispatch: chain $SLUG has no saved runner state to resume"; exit 66; }
+    python3 - "$RESUME_STATE" "$REPO" "$SLUG" <<'PYEOF'
+import json, os, sys
+state = json.load(open(sys.argv[1], encoding='utf-8'))
+if os.path.realpath(state.get('repo', '')) != os.path.realpath(sys.argv[2]) or state.get('slug') != sys.argv[3]:
+    raise SystemExit('dispatch: saved runner state does not match this project and slug')
+files = state.get('phaseFiles')
+if not isinstance(files, list) or not files or any(not os.path.isfile(path) for path in files):
+    raise SystemExit('dispatch: saved runner state names a missing phase file')
+PYEOF
+    [[ $? -eq 0 ]] || exit 66
+    [[ -z "$(git -C "$REPO" status --porcelain)" ]] \
+      || { print -u2 "dispatch: $REPO has uncommitted work; cannot restore paused work onto it"; exit 69; }
+  fi
+
+  RESPONSE=$(curl -s -K "$HEADER_FILE" -m 60 -X POST "$SERVER_URL/api/watchdog/chains/$SLUG/$ACTION" \
+    -H 'Content-Type: application/json' -d "$BODY" -w '\n%{http_code}' 2>/dev/null)
+  STATUS="${RESPONSE##*$'\n'}"
+  RESPONSE_BODY="${RESPONSE%$'\n'*}"
+  if [[ "$STATUS" == "409" ]]; then
+    print -r -- "dispatch: chain $SLUG is not $([[ "$ACTION" == pause ]] && print running || print paused); nothing changed"
+    exit 0
+  fi
+  if [[ "$STATUS" != "200" ]]; then
+    print -u2 "dispatch: could not $ACTION chain $SLUG (HTTP ${STATUS:-000}: $RESPONSE_BODY)"
+    exit 69
+  fi
+
+  if [[ "$ACTION" == "pause" ]]; then
+    print -r -- "dispatch: chain $SLUG paused; its runner and active stages have exited"
+    exit 0
+  fi
+
+  RESUME_PHASE=$(RESPONSE_BODY="$RESPONSE_BODY" python3 -c 'import json,os; print(json.loads(os.environ["RESPONSE_BODY"])["data"]["phase"])')
+  JOURNAL_DIR="$HOME/forge-logs/$SLUG"
+  RUNNER_PID=$(python3 - "$RUNNER" "$RESUME_STATE" "$RESUME_PHASE" "$JOURNAL_DIR/runner.log" <<'PYEOF'
+import json, os, subprocess, sys
+runner, state_path, phase, log = sys.argv[1:5]
+state = json.load(open(state_path, encoding='utf-8'))
+env = os.environ.copy()
+env.update({
+    'DISPATCH_ENGINE': state['engine'],
+    'DISPATCH_MODEL': state['model'],
+    'DISPATCH_EFFORT': state['effort'],
+    'DISPATCH_VERIFY_ENGINE': state['verifyEngine'],
+    'DISPATCH_VERIFY_MODEL': state['verifyModel'],
+    'DISPATCH_RESUME_FROM': phase,
+    'DISPATCH_RESUMING': '1',
+})
+with open(log, 'ab') as out:
+    proc = subprocess.Popen(
+        [runner, state['repo'], state['slug'], *state['phaseFiles']],
+        stdin=subprocess.DEVNULL, stdout=out, stderr=out,
+        start_new_session=True, cwd='/', env=env,
+    )
+print(proc.pid)
+PYEOF
+)
+  print -r -- "dispatch: chain $SLUG resumed at job $RESUME_PHASE (runner pid $RUNNER_PID); the watchdog wakes the planner only at the true end"
+  exit 0
+fi
 
 # ----- amend: replace a queued unit's task list on an active chain -----
 if [[ "$1" == "amend" ]]; then

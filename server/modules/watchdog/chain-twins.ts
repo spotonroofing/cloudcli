@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export type TwinChainStatus = 'running' | 'completed' | 'stopped' | 'failed';
+export type TwinChainStatus = 'running' | 'paused' | 'completed' | 'stopped' | 'failed';
 
 /** The chain fields twin grouping reads; a projection of the watchdog's record. */
 export type TwinChain = {
@@ -26,7 +26,7 @@ export type TwinChain = {
   units: number;
 };
 
-export type UnitStatus = 'completed' | 'in-progress' | 'cancelled' | 'pending';
+export type UnitStatus = 'completed' | 'in-progress' | 'paused' | 'cancelled' | 'pending';
 
 export type UnitIdentity = {
   /** `PUNCHLIST_ui15.md#3` — the punch list file and job section; null when unknown. */
@@ -47,7 +47,7 @@ export function unitStatus(chain: Pick<TwinChain, 'status' | 'currentPhase'>, in
     return 'completed';
   }
   if (index === current) {
-    return chain.status === 'running' ? 'in-progress' : 'cancelled';
+    return chain.status === 'running' ? 'in-progress' : chain.status === 'paused' ? 'paused' : 'cancelled';
   }
   return 'pending';
 }
@@ -193,7 +193,7 @@ export function hiddenTwinUnits(
         slug: chain.slug,
         index,
         status: unitStatus(chain, index),
-        chainRunning: chain.status === 'running',
+        chainRunning: chain.status === 'running' || chain.status === 'paused',
         chainStartedAt: chain.startedAt,
       });
       const identity = ids[index - 1] ?? EMPTY_IDENTITY;
@@ -221,7 +221,7 @@ export function hiddenTwinUnits(
     }
     const winner = [...group].sort(compareRepresentative)[0];
     for (const unit of group) {
-      if (unit === winner || unit.status === 'completed' || unit.status === 'in-progress') {
+      if (unit === winner || unit.status === 'completed' || unit.status === 'in-progress' || unit.status === 'paused') {
         continue;
       }
       hidden.push({ slug: unit.slug, index: unit.index, supersededBy: `${winner.slug}/${winner.index}` });
@@ -237,6 +237,7 @@ export function hiddenTwinUnits(
  */
 function rank(unit: TwinUnit): number {
   if (unit.status === 'in-progress') return 4;
+  if (unit.status === 'paused') return 4;
   if (unit.status === 'completed') return 3;
   return unit.chainRunning ? 2 : 1;
 }
