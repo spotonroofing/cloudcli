@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -152,6 +152,55 @@ test('Codex synchronizer leaves indexed sessions untitled when no name is availa
   }
 });
 
+test('Codex history row ids remain stable when rollout rows append', { concurrency: false }, async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'codex-stable-history-'));
+  const workspacePath = path.join(tempRoot, 'workspace');
+  await mkdir(workspacePath, { recursive: true });
+  const restoreHomeDir = patchHomeDir(tempRoot);
+
+  try {
+    const providerSessionId = 'codex-stable-1';
+    const transcriptPath = await writeCodexTranscript(
+      tempRoot,
+      providerSessionId,
+      workspacePath,
+      'First prompt',
+    );
+
+    await withIsolatedDatabase(async () => {
+      sessionsDb.createAppSession('app-stable-1', 'codex', workspacePath);
+      sessionsDb.assignProviderSessionId('app-stable-1', providerSessionId);
+      await new CodexSessionSynchronizer().synchronize();
+
+      const provider = new CodexSessionsProvider();
+      const before = await provider.fetchHistory('app-stable-1');
+      await appendFile(transcriptPath, `${JSON.stringify({
+        timestamp: '2026-08-27T12:00:00.000Z',
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: 'Appended answer' }],
+        },
+      })}\n`, 'utf8');
+      const after = await provider.fetchHistory('app-stable-1');
+      const repeated = await provider.fetchHistory('app-stable-1');
+
+      assert.equal(before.messages.length, 1);
+      assert.equal(after.messages.length, 2);
+      assert.equal(after.messages[0].id, before.messages[0].id);
+      assert.deepEqual(
+        repeated.messages.map((message) => message.id),
+        after.messages.map((message) => message.id),
+      );
+      assert.ok(after.messages.every((message) => message.id.startsWith('codex-rollout-app-stable-1-')));
+    });
+  } finally {
+    restoreHomeDir();
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('Codex history preserves wrapped exec tool calls and results', { concurrency: false }, async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'codex-exec-history-'));
   const workspacePath = path.join(tempRoot, 'workspace');
@@ -208,6 +257,7 @@ test('Codex history preserves wrapped exec tool calls and results', { concurrenc
       await new CodexSessionSynchronizer().synchronize();
 
       const history = await new CodexSessionsProvider().fetchHistory('app-exec-1');
+      const repeatedHistory = await new CodexSessionsProvider().fetchHistory('app-exec-1');
       const toolUses = history.messages.filter((message) => message.kind === 'tool_use');
       const toolResults = history.messages.filter((message) => message.kind === 'tool_result');
       const toolUsesById = new Map(toolUses.map((message) => [message.toolId, message]));
@@ -215,6 +265,10 @@ test('Codex history preserves wrapped exec tool calls and results', { concurrenc
 
       assert.equal(toolUses.length, wrappedCalls.length);
       assert.equal(toolResults.length, wrappedCalls.length);
+      assert.deepEqual(
+        repeatedHistory.messages.map((message) => message.id),
+        history.messages.map((message) => message.id),
+      );
       for (const call of wrappedCalls) {
         const toolUse = toolUsesById.get(call.callId);
         assert.ok(toolUse);

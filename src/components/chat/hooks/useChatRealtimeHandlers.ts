@@ -176,6 +176,13 @@ export function useChatRealtimeHandlers({
         case 'session_upserted': {
           const refreshSid = sessionUpsertRefreshTarget(msg, activeViewSessionId);
           if (refreshSid) {
+            // Filesystem-driven CLI runs do not have an in-server lifecycle.
+            // Mark the write active immediately so the newly fetched tool tail
+            // cannot flash an Interrupted marker before the 5s running poll
+            // observes the watcher's recent-activity window.
+            if (msg.externallyDriven === true) {
+              onSessionProcessing?.(refreshSid, { canInterrupt: false });
+            }
             void requestLatestMessages(refreshSid, isActiveRef.current);
           }
           return;

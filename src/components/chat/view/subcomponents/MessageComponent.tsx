@@ -408,6 +408,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
   return (
     <motion.div
       ref={messageRef}
+      data-message-id={message.id || undefined}
       data-message-timestamp={message.timestamp || undefined}
       initial={animateIn ? { opacity: 0, transform: 'translateY(8px) scale(0.95)' } : false}
       animate={animateIn ? { opacity: 1, transform: 'translateY(0px) scale(1)' } : undefined}
@@ -758,4 +759,3 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
 });
 
 export default MessageComponent;
-

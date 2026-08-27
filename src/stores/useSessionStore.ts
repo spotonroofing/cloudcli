@@ -440,6 +440,13 @@ function recomputeMergedIfNeeded(slot: SessionSlot): boolean {
   return true;
 }
 
+function reuseArrayWhenElementsMatch<T>(previous: T[], next: T[]): T[] {
+  return previous.length === next.length
+    && previous.every((item, index) => item === next[index])
+    ? previous
+    : next;
+}
+
 type LatestHistoryRefreshResult = {
   applied: boolean;
   changed: boolean;
@@ -493,10 +500,16 @@ async function refreshLatestSlotFromServer(
   let nextServerMessages: NormalizedMessage[] | null = null;
   let nextHasMore = previousHasMore;
 
-  // A page with no older rows is the complete authoritative transcript. This
-  // also removes cached rows after a provider-side truncation.
+  // A page with no older rows is the complete authoritative transcript. The
+  // common append-only case still reconciles against the cached sequence so
+  // existing row objects survive; a truncation or rewrite replaces it.
   if (!latestPage.hasMore) {
-    nextServerMessages = latestPage.messages;
+    const appendMerge = previousServerMessages.length > 0
+      ? mergeLatestServerPage(previousServerMessages, latestPage.messages)
+      : null;
+    nextServerMessages = appendMerge?.overlapLength === previousServerMessages.length
+      ? appendMerge.messages
+      : latestPage.messages;
     nextHasMore = false;
   } else if (previousServerMessages.length === 0) {
     nextServerMessages = latestPage.messages;
@@ -579,18 +592,31 @@ async function refreshLatestSlotFromServer(
     return { applied: false, changed, deferred: false };
   }
 
-  slot.serverMessages = nextServerMessages;
+  const retainedServerMessages = reuseArrayWhenElementsMatch(
+    previousServerMessages,
+    nextServerMessages,
+  );
+  const previousRealtimeMessages = slot.realtimeMessages;
+  const retainedRealtimeMessages = reuseArrayWhenElementsMatch(
+    previousRealtimeMessages,
+    pruneRealtimeSupersededByServer(retainedServerMessages, previousRealtimeMessages),
+  );
+
+  changed = changed
+    || retainedServerMessages !== previousServerMessages
+    || retainedRealtimeMessages !== previousRealtimeMessages
+    || slot.total !== latestPage.total
+    || slot.hasMore !== nextHasMore;
+
+  slot.serverMessages = retainedServerMessages;
   slot.total = latestPage.total;
-  slot.offset = nextServerMessages.length;
+  slot.offset = retainedServerMessages.length;
   slot.hasMore = nextHasMore;
   slot.fetchedAt = Date.now();
-  slot.realtimeMessages = pruneRealtimeSupersededByServer(
-    slot.serverMessages,
-    slot.realtimeMessages,
-  );
+  slot.realtimeMessages = retainedRealtimeMessages;
   recomputeMergedIfNeeded(slot);
 
-  return { applied: true, changed: true, deferred: false };
+  return { applied: true, changed, deferred: false };
 }
 
 // ─── Stale threshold ─────────────────────────────────────────────────────────

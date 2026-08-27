@@ -58,9 +58,25 @@ function serializedValue(value: unknown): string {
 }
 
 /**
- * Persisted IDs are preferred, but some provider readers (notably Codex)
- * generate fresh IDs on every read. The fallback uses stable transcript fields
- * and deliberately excludes enrichment such as toolResult, which may change
+ * Tail refreshes parse fresh objects even for rows already rendered. Keep the
+ * cached object when every persisted field except its provider-generated id is
+ * unchanged, so React retains that row's component and DOM identity. A row
+ * whose content was enriched in place (for example a completed tool result)
+ * still uses the fresh object and updates normally.
+ */
+function messagesHaveEquivalentStoredContent(
+  cached: NormalizedMessage,
+  fresh: NormalizedMessage,
+): boolean {
+  const { id: _cachedId, ...cachedFields } = cached;
+  const { id: _freshId, ...freshFields } = fresh;
+  return serializedValue(cachedFields) === serializedValue(freshFields);
+}
+
+/**
+ * Persisted IDs are preferred. The fallback keeps legacy cached rows from
+ * providers that once regenerated IDs stitchable by stable transcript fields;
+ * it deliberately excludes enrichment such as toolResult, which may change
  * when the provider finishes writing a turn.
  */
 export function messagesRepresentSamePersistedRow(
@@ -190,10 +206,19 @@ export function mergeLatestServerPage(
     return { messages: cachedMessages, overlapLength: 0 };
   }
 
+  const cachedOverlapStart = cachedMessages.length - overlapLength;
+  const reconciledOverlap = latestMessages
+    .slice(0, overlapLength)
+    .map((fresh, index) => {
+      const cached = cachedMessages[cachedOverlapStart + index];
+      return messagesHaveEquivalentStoredContent(cached, fresh) ? cached : fresh;
+    });
+
   return {
     messages: [
-      ...cachedMessages.slice(0, cachedMessages.length - overlapLength),
-      ...latestMessages,
+      ...cachedMessages.slice(0, cachedOverlapStart),
+      ...reconciledOverlap,
+      ...latestMessages.slice(overlapLength),
     ],
     overlapLength,
   };

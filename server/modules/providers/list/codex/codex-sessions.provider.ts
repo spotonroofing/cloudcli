@@ -259,13 +259,23 @@ async function getCodexSessionMessages(
       crlfDelay: Infinity,
     });
 
+    let rolloutLineNumber = 0;
     for await (const line of rl) {
+      rolloutLineNumber += 1;
       if (!line.trim()) {
         continue;
       }
 
       try {
         const entry = JSON.parse(line) as AnyRecord;
+        // Codex rollout entries do not consistently persist a message UUID.
+        // The file is append-only, so the source line plus row kind is the
+        // stable identity for every rendered row across tail refreshes.
+        const rolloutRowId = (kind: string) => (
+          `codex-rollout-${sessionId}-${rolloutLineNumber}-${kind}`
+        );
+        const entryTimestamp = readNonEmptyString(entry.timestamp)
+          ?? new Date(rolloutLineNumber).toISOString();
         if (
           entry.type === 'event_msg'
           && entry.payload?.type === 'sub_agent_activity'
@@ -282,8 +292,9 @@ async function getCodexSessionMessages(
 
         if (entry.type === 'event_msg' && isVisibleCodexUserMessage(entry.payload as AnyRecord)) {
           messages.push({
+            uuid: rolloutRowId('user'),
             type: 'user',
-            timestamp: entry.timestamp,
+            timestamp: entryTimestamp,
             message: {
               role: 'user',
               content: entry.payload.message,
@@ -300,8 +311,9 @@ async function getCodexSessionMessages(
           const textContent = extractCodexTextContent(entry.payload.content);
           if (textContent.trim()) {
             messages.push({
+              uuid: rolloutRowId('assistant'),
               type: 'assistant',
-              timestamp: entry.timestamp,
+              timestamp: entryTimestamp,
               message: {
                 role: 'assistant',
                 content: textContent,
@@ -320,8 +332,9 @@ async function getCodexSessionMessages(
 
           if (summaryText.trim()) {
             messages.push({
+              uuid: rolloutRowId('thinking'),
               type: 'thinking',
-              timestamp: entry.timestamp,
+              timestamp: entryTimestamp,
               message: {
                 role: 'assistant',
                 content: summaryText,
@@ -335,12 +348,12 @@ async function getCodexSessionMessages(
           if (agentMessage && agentMessage.messageType === 'FINAL_ANSWER' && agentMessage.result) {
             let subagent = subagentsByPath.get(agentMessage.author);
             if (!subagent) {
-              const fallbackCallId = entry.payload.id || generateMessageId('codex-subagent');
+              const fallbackCallId = entry.payload.id || rolloutRowId('subagent-call');
               const taskName = agentMessage.author.split('/').filter(Boolean).pop() || 'agent';
               const taskMessage: AnyRecord = {
-                uuid: fallbackCallId,
+                uuid: rolloutRowId(`subagent-${fallbackCallId}`),
                 type: 'tool_use',
-                timestamp: entry.timestamp,
+                timestamp: entryTimestamp,
                 toolName: 'Task',
                 toolInput: JSON.stringify({
                   subagent_type: 'Codex',
@@ -361,8 +374,9 @@ async function getCodexSessionMessages(
 
             if (!subagent.isComplete) {
               messages.push({
+                uuid: rolloutRowId(`subagent-result-${subagent.toolCallId}`),
                 type: 'tool_result',
-                timestamp: entry.timestamp,
+                timestamp: entryTimestamp,
                 toolCallId: subagent.toolCallId,
                 output: agentMessage.result,
               });
@@ -385,9 +399,9 @@ async function getCodexSessionMessages(
             }
 
             const taskMessage: AnyRecord = {
-              uuid: entry.payload.call_id,
+              uuid: rolloutRowId(`tool-${entry.payload.call_id}`),
               type: 'tool_use',
-              timestamp: entry.timestamp,
+              timestamp: entryTimestamp,
               toolName: 'Task',
               toolInput: JSON.stringify({
                 subagent_type: 'Codex',
@@ -436,8 +450,9 @@ async function getCodexSessionMessages(
           }
 
           messages.push({
+            uuid: rolloutRowId(`tool-${entry.payload.call_id}`),
             type: 'tool_use',
-            timestamp: entry.timestamp,
+            timestamp: entryTimestamp,
             toolName,
             toolInput,
             toolCallId: entry.payload.call_id,
@@ -454,8 +469,9 @@ async function getCodexSessionMessages(
 
             if (!runningOutput && !completedExecCalls.has(waitExecCallId)) {
               messages.push({
+                uuid: rolloutRowId(`tool-result-${waitExecCallId}`),
                 type: 'tool_result',
-                timestamp: entry.timestamp,
+                timestamp: entryTimestamp,
                 toolCallId: waitExecCallId,
                 output: accumulatedOutput,
               });
@@ -484,8 +500,9 @@ async function getCodexSessionMessages(
           }
 
           messages.push({
+            uuid: rolloutRowId(`tool-result-${entry.payload.call_id}`),
             type: 'tool_result',
-            timestamp: entry.timestamp,
+            timestamp: entryTimestamp,
             toolCallId: entry.payload.call_id,
             output: extractCodexToolOutput(entry.payload.output),
           });
@@ -503,8 +520,9 @@ async function getCodexSessionMessages(
               toolInput = translated.toolInput;
             }
             messages.push({
+              uuid: rolloutRowId(`tool-${entry.payload.call_id}`),
               type: 'tool_use',
-              timestamp: entry.timestamp,
+              timestamp: entryTimestamp,
               toolName,
               toolInput,
               toolCallId: entry.payload.call_id,
@@ -529,8 +547,9 @@ async function getCodexSessionMessages(
             }
 
             messages.push({
+              uuid: rolloutRowId(`tool-${entry.payload.call_id}`),
               type: 'tool_use',
-              timestamp: entry.timestamp,
+              timestamp: entryTimestamp,
               toolName: 'Edit',
               toolInput: JSON.stringify({
                 file_path: filePath,
@@ -541,8 +560,9 @@ async function getCodexSessionMessages(
             });
           } else {
             messages.push({
+              uuid: rolloutRowId(`tool-${entry.payload.call_id}`),
               type: 'tool_use',
-              timestamp: entry.timestamp,
+              timestamp: entryTimestamp,
               toolName,
               toolInput: input,
               toolCallId: entry.payload.call_id,
@@ -567,8 +587,9 @@ async function getCodexSessionMessages(
           }
 
           messages.push({
+            uuid: rolloutRowId(`tool-result-${entry.payload.call_id}`),
             type: 'tool_result',
-            timestamp: entry.timestamp,
+            timestamp: entryTimestamp,
             toolCallId: entry.payload.call_id,
             output,
           });

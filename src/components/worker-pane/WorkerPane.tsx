@@ -19,6 +19,12 @@ import type { Project, ProjectSession } from '../../types/app';
 import { titleFromPrompt } from '../../../shared/sessionTitle.js';
 
 import JobsSidebar, { type ChainSnapshot, type JobGroup } from './JobsSidebar';
+import {
+  findWorkerFollowTarget,
+  preserveWorkerSessionSelection,
+  selectedRunKeepsAutoFollow,
+  sessionUpsertNeedsRunRefresh,
+} from './workerRunFollow';
 
 const JOBS_VIEW_PREFERENCE_KEY = 'worker-jobs-view-open-v1';
 
@@ -155,6 +161,8 @@ export default function WorkerPane({
   const [shellOpen, setShellOpen] = useState(false);
   const [paneSession, setPaneSession] = useState<ProjectSession | null>(null);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
+  const knownRunIdsRef = useRef<ReadonlySet<string>>(new Set());
+  knownRunIdsRef.current = new Set(runs.map((run) => run.sessionId));
   // False until the first run fetch for this project settles; the top bar
   // holds its space with a skeleton meanwhile (ui11 phase 11).
   const [runsLoaded, setRunsLoaded] = useState(false);
@@ -224,6 +232,10 @@ export default function WorkerPane({
     void refreshRuns();
   }, [refreshRuns]);
 
+  // The server sorts worker runs newest-first. Verifier rows remain in the
+  // jobs navigator but never become the pane's implicit follow target.
+  const followTarget = findWorkerFollowTarget(runs);
+
   // Watcher deltas plus a slow poll keep the run list and its states honest
   // even when a dispatched chain starts sessions with no browser involved.
   // chain_progress is the watchdog streaming per-phase progress: merge the
@@ -231,12 +243,17 @@ export default function WorkerPane({
   useEffect(() => {
     const unsubscribe = subscribe?.((event: {
       kind?: string;
+      sessionId?: string;
       chain?: ChainSnapshot;
       project?: { projectId?: string } | null;
     } | null) => {
       // Only this project's sessions can change its run list (ui13 job 15):
       // another project's transcript writes used to refetch every open pane.
-      if (event?.kind === 'session_upserted' && event.project?.projectId === selectedProject.projectId) {
+      if (
+        event?.kind === 'session_upserted'
+        && event.project?.projectId === selectedProject.projectId
+        && sessionUpsertNeedsRunRefresh(event.sessionId ?? null, knownRunIdsRef.current)
+      ) {
         void refreshRuns();
       }
       if (event?.kind === 'chain_progress' && event.chain) {
@@ -258,21 +275,25 @@ export default function WorkerPane({
     };
   }, [subscribe, refreshRuns, projectPath, selectedProject.projectId]);
 
-  // Auto-follow: the newest run is selected until the user pins another one.
-  // Held off while the composer is focused; it catches up on blur.
-  const latest = runs[0] ?? null;
+  // Auto-follow: the newest non-verifier run is selected until the user pins
+  // another one. Held off while the composer is focused; it catches up on blur.
   useEffect(() => {
-    if (!latest || !followLatestRef.current || composerFocused || paneSession?.id === latest.sessionId) {
+    if (
+      !followTarget
+      || !followLatestRef.current
+      || composerFocused
+      || paneSession?.id === followTarget.sessionId
+    ) {
       return;
     }
-    setPaneSession({
-      id: latest.sessionId,
-      __provider: (latest.provider || 'claude') as ProjectSession['__provider'],
-      summary: latest.title ?? undefined,
-      origin: latest.origin ?? null,
-      booted: Boolean(latest.booted),
-    });
-  }, [latest, paneSession?.id, composerFocused]);
+    setPaneSession((previous) => preserveWorkerSessionSelection(previous, {
+      id: followTarget.sessionId,
+      __provider: (followTarget.provider || 'claude') as ProjectSession['__provider'],
+      summary: followTarget.title ?? undefined,
+      origin: followTarget.origin ?? null,
+      booted: Boolean(followTarget.booted),
+    }));
+  }, [followTarget, paneSession?.id, composerFocused]);
 
   const handleComposerFocusChange = useCallback(
     (focused: boolean) => {
@@ -283,18 +304,17 @@ export default function WorkerPane({
   );
 
   const handleSelectRun = (run: WorkerRun) => {
-    // Picking the newest run resumes auto-follow; anything older pins it.
-    followLatestRef.current = run.sessionId === runs[0]?.sessionId;
+    // Picking the current build/direct target resumes auto-follow; an older
+    // run or a verifier is an intentional pin.
+    followLatestRef.current = selectedRunKeepsAutoFollow(run, followTarget);
     setPaneSession((previous) =>
-      previous?.id === run.sessionId
-        ? previous
-        : {
-            id: run.sessionId,
-            __provider: (run.provider || 'claude') as ProjectSession['__provider'],
-            summary: run.title ?? undefined,
-            origin: run.origin ?? null,
-            booted: Boolean(run.booted),
-          },
+      preserveWorkerSessionSelection(previous, {
+        id: run.sessionId,
+        __provider: (run.provider || 'claude') as ProjectSession['__provider'],
+        summary: run.title ?? undefined,
+        origin: run.origin ?? null,
+        booted: Boolean(run.booted),
+      }),
     );
   };
 
@@ -458,19 +478,26 @@ export default function WorkerPane({
             processingSessions={processingSessions}
             onNavigateToSession={(targetSessionId: string) => {
               // The pane never changes the app URL; it swaps its own session.
-              followLatestRef.current = true;
+              const targetRun = runs.find((run) => run.sessionId === targetSessionId) ?? null;
+              followLatestRef.current = Boolean(
+                targetRun && selectedRunKeepsAutoFollow(targetRun, followTarget),
+              );
               setPaneSession((previous) =>
-                previous?.id === targetSessionId
-                  ? previous
-                  : { id: targetSessionId, __provider: 'claude', origin: 'direct' },
+                preserveWorkerSessionSelection(previous, {
+                  id: targetSessionId,
+                  __provider: (targetRun?.provider || previous?.__provider || 'claude') as ProjectSession['__provider'],
+                  origin: targetRun?.origin ?? previous?.origin ?? 'direct',
+                }),
               );
             }}
             onSessionEstablished={(targetSessionId: string, context) => {
               followLatestRef.current = true;
               setPaneSession((previous) =>
-                previous?.id === targetSessionId
-                  ? previous
-                  : { id: targetSessionId, __provider: context.provider, origin: 'direct' },
+                preserveWorkerSessionSelection(previous, {
+                  id: targetSessionId,
+                  __provider: context.provider,
+                  origin: 'direct',
+                }),
               );
               void refreshRuns();
             }}

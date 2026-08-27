@@ -88,10 +88,6 @@ function ChatMessagesPane({
   onSelectVersion,
 }: ChatMessagesPaneProps) {
   const { t } = useTranslation('chat');
-  const groupedVisibleMessages = useMemo(
-    () => groupConsecutiveTools(visibleMessages, Boolean(showThinking)),
-    [visibleMessages, showThinking],
-  );
 
   // Live-edge epoch for enter animations (beUI Message pattern): only rows
   // that arrive after this pane last switched sessions pop up; loaded history
@@ -102,6 +98,40 @@ function ChatMessagesPane({
     animateEpochRef.current = { key: sessionKey, at: Date.now() };
   }
   const animateFrom = animateEpochRef.current.at;
+
+  // Freeze grouping to the rows present when this session first hydrates.
+  // Promoting an already-rendered single tool row into a group when its next
+  // live sibling arrives would replace that row's DOM node. Live arrivals stay
+  // individual until a deliberate session reopen, when loaded history may be
+  // grouped statically from its first render.
+  const groupingBaselineRef = useRef<{
+    key: string | null;
+    ids: Set<string>;
+    sealed: boolean;
+  }>({ key: sessionKey, ids: new Set(), sealed: false });
+  if (groupingBaselineRef.current.key !== sessionKey) {
+    groupingBaselineRef.current = { key: sessionKey, ids: new Set(), sealed: false };
+  }
+  if (!groupingBaselineRef.current.sealed && visibleMessages.length > 0) {
+    groupingBaselineRef.current.ids = new Set(
+      visibleMessages
+        .map((message) => getIntrinsicMessageKey(message))
+        .filter((id): id is string => Boolean(id)),
+    );
+    groupingBaselineRef.current.sealed = true;
+  }
+  const groupingBaselineIds = groupingBaselineRef.current.ids;
+  const groupedVisibleMessages = useMemo(
+    () => groupConsecutiveTools(
+      visibleMessages,
+      Boolean(showThinking),
+      (message) => {
+        const id = getIntrinsicMessageKey(message);
+        return Boolean(id && groupingBaselineIds.has(id));
+      },
+    ),
+    [groupingBaselineIds, visibleMessages, showThinking],
+  );
 
   // Replay guard: a message whose content this pane has already shown must not
   // pop in again. Mid-turn the same logical row remounts under a new React key
@@ -238,6 +268,7 @@ function ChatMessagesPane({
   return (
     <MessageScroller
       className="relative min-h-0 flex-1"
+      data-session-id={selectedSession?.id || undefined}
       viewportRef={scrollContainerRef as unknown as RefObject<HTMLElement>}
       viewportClassName="chat-messages-pane overflow-x-hidden pt-3 sm:pt-4"
       viewportProps={{ onWheel, onTouchMove }}

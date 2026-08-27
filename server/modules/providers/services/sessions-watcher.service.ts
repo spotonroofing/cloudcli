@@ -49,6 +49,7 @@ const WATCHER_IGNORED_PATTERNS = [
 
 const PROJECTS_UPDATE_DEBOUNCE_MS = 500;
 const PROJECTS_UPDATE_MAX_WAIT_MS = 2_000;
+const WATCHED_SESSION_ACTIVITY_TTL_MS = 15_000;
 
 const watchers: FSWatcher[] = [];
 
@@ -68,6 +69,32 @@ let pendingWatcherUpdateStartedAt: number | null = null;
 let pendingWatcherFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let watcherRefreshInFlight = false;
 let watcherRescheduleAfterRefresh = false;
+const recentWatchedSessionActivity = new Map<string, {
+  provider: LLMProvider;
+  startedAt: number;
+  lastWriteAt: number;
+}>();
+
+/**
+ * Provider routes merge these recently-written external sessions into the
+ * running-sessions poll. This covers CLI runs that never entered the in-server
+ * run registry and prevents an incomplete live tail from reading as dead.
+ */
+export function listRecentlyActiveWatchedSessions(now = Date.now()): Array<{
+  sessionId: string;
+  provider: LLMProvider;
+  startedAt: number;
+}> {
+  const active: Array<{ sessionId: string; provider: LLMProvider; startedAt: number }> = [];
+  for (const [sessionId, activity] of recentWatchedSessionActivity) {
+    if (now - activity.lastWriteAt >= WATCHED_SESSION_ACTIVITY_TTL_MS) {
+      recentWatchedSessionActivity.delete(sessionId);
+      continue;
+    }
+    active.push({ sessionId, provider: activity.provider, startedAt: activity.startedAt });
+  }
+  return active;
+}
 
 /**
  * Filters watcher events to provider-specific session artifact file types.
@@ -200,6 +227,9 @@ async function buildSessionUpsertedEvent(updatedProviderSessionId: string): Prom
     kind: 'session_upserted',
     sessionId: row.session_id,
     provider: row.provider,
+    externallyDriven: Boolean(
+      row.provider_session_id && row.provider_session_id === row.session_id,
+    ),
     session: {
       id: row.session_id,
       summary: row.custom_name || '',
@@ -311,6 +341,21 @@ async function onUpdate(
       sessionId: result.sessionId,
     });
 
+    const synchronizedRow = result.sessionId ? sessionsDb.getSessionById(result.sessionId) : null;
+    if (
+      result.sessionId
+      && synchronizedRow?.provider_session_id
+      && synchronizedRow.provider_session_id === synchronizedRow.session_id
+    ) {
+      const now = Date.now();
+      const previous = recentWatchedSessionActivity.get(result.sessionId);
+      recentWatchedSessionActivity.set(result.sessionId, {
+        provider,
+        startedAt: previous?.startedAt ?? now,
+        lastWriteAt: now,
+      });
+    }
+
     // Per-session memory-write detection (ui13 job 8): the changed transcript
     // tail names the file-tool calls this exact session made.
     if (provider === 'claude' && result.sessionId) {
@@ -402,4 +447,5 @@ export async function closeSessionsWatcher(): Promise<void> {
   pendingWatcherUpdateStartedAt = null;
   watcherRefreshInFlight = false;
   watcherRescheduleAfterRefresh = false;
+  recentWatchedSessionActivity.clear();
 }

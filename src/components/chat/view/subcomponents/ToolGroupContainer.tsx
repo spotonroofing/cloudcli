@@ -112,6 +112,7 @@ export default function ToolGroupContainer({
   return (
     <motion.div
       className="chat-message tool tool-row px-3 sm:px-0"
+      data-message-id={getMessageKey(group.messages[0])}
       data-message-timestamp={group.timestamp || undefined}
       initial={animateIn ? { opacity: 0, transform: 'translateY(8px) scale(0.95)' } : false}
       animate={animateIn ? { opacity: 1, transform: 'translateY(0px) scale(1)' } : undefined}

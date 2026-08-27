@@ -66,7 +66,12 @@ const appendTurn = (lines = 1) => {
 };
 
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
-const page = targets.find((t) => t.type === 'page' && /127\.0\.0\.1:47\d\d/.test(t.url));
+const devPages = targets.filter((t) => t.type === 'page' && /127\.0\.0\.1:47\d\d/.test(t.url));
+// A shared verification browser can have several dev tabs. Prefer the tab
+// already displaying the requested session so the append check never samples
+// an unrelated transcript merely because CDP returned that target first.
+const page = devPages.find((t) => t.url.includes(`/session/${encodeURIComponent(sessionId)}`))
+  ?? devPages[0];
 if (!page) {
   console.error('no dev app page found in the CDP browser');
   process.exit(2);
@@ -90,6 +95,10 @@ const send = (method, params) => new Promise((resolve) => {
 const evaluate = (expression) => send('Runtime.evaluate', { expression, returnByValue: true })
   .then((result) => result?.result?.value);
 
+// ResizeObserver delivery is suspended for a background tab in headless
+// Chrome. Make the chosen session target active before sampling the follow
+// engine, especially when the shared verification browser has another tab.
+await send('Page.bringToFront', {});
 // The follow engine re-pins with a smooth scroll unless the OS asks for
 // reduced motion; the smooth path is the one under test, so pin the media
 // feature for the life of this CDP session (it resets on detach).

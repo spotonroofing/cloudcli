@@ -37,6 +37,7 @@ function rendersNothing(message: ChatMessage, showThinking: boolean): boolean {
 export function groupConsecutiveTools(
   messages: ChatMessage[],
   showThinking: boolean = true,
+  canJoinGroup: (message: ChatMessage) => boolean = () => true,
 ): MessageListItem[] {
   const items: MessageListItem[] = [];
   let index = 0;
@@ -44,7 +45,7 @@ export function groupConsecutiveTools(
   while (index < messages.length) {
     const message = messages[index];
 
-    if (!isGroupableToolMessage(message)) {
+    if (!isGroupableToolMessage(message) || !canJoinGroup(message)) {
       items.push(message);
       index += 1;
       continue;
@@ -62,7 +63,11 @@ export function groupConsecutiveTools(
         continue;
       }
 
-      if (isGroupableToolMessage(candidate) && candidate.toolName === message.toolName) {
+      if (
+        isGroupableToolMessage(candidate)
+        && canJoinGroup(candidate)
+        && candidate.toolName === message.toolName
+      ) {
         run.push(candidate);
         nextIndex += 1;
         continue;

@@ -173,11 +173,17 @@ export const sessionsService = {
     // the registry so the worker pane's activity indicator covers them too.
     // A chain-backed row becomes interruptible below because its stop action
     // routes to dispatch pause; free-standing external runs stay read-only.
-    const registryIds = new Set(registryRuns.map((run: { sessionId: string }) => run.sessionId));
+    const seenIds = new Set(registryRuns.map((run: { sessionId: string }) => run.sessionId));
     const merged = [
       ...registryRuns.map((run) => ({ ...run, canInterrupt: true })),
       ...extraRuns
-        .filter((run) => !registryIds.has(run.sessionId))
+        .filter((run) => {
+          if (seenIds.has(run.sessionId)) {
+            return false;
+          }
+          seenIds.add(run.sessionId);
+          return true;
+        })
         .map((run) => ({ ...run, provider: run.provider as LLMProvider, lastSeq: 0, canInterrupt: undefined })),
     ];
     return merged.map((run) => {

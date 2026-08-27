@@ -49,6 +49,8 @@ test('overlapping latest page retains loaded older messages and replaces the tai
   assert.equal(result.overlapLength, 10);
   assert.deepEqual(result.messages.map((item) => item.id), range(21, 50).map((item) => item.id));
   assert.equal(result.messages[10].content, 'fresh persisted value');
+  assert.equal(result.messages[10], latest[0], 'changed overlap row uses fresh content');
+  assert.equal(result.messages[11], cached[11], 'unchanged overlap row keeps object identity');
   assert.equal(new Set(result.messages.map((item) => item.id)).size, result.messages.length);
 });
 
@@ -71,6 +73,13 @@ test('Codex rows with regenerated IDs overlap by stable transcript fields', () =
     merged.messages.slice(0, 10).map((item) => item.id),
     cached.slice(0, 10).map((item) => item.id),
   );
+  for (let index = 0; index < 10; index++) {
+    assert.equal(
+      merged.messages[10 + index],
+      cached[10 + index],
+      'an unchanged Codex overlap row keeps the rendered object',
+    );
+  }
 });
 
 test('large appended turns request only the missing bridge and one anchor', () => {

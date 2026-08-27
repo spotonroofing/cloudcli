@@ -7,6 +7,7 @@ import { providerModelsService } from '@/modules/providers/services/provider-mod
 import { providerTokenUsageService } from '@/modules/providers/services/provider-token-usage.service.js';
 import { providerSkillsService } from '@/modules/providers/services/skills.service.js';
 import { sessionConversationsSearchService } from '@/modules/providers/services/session-conversations-search.service.js';
+import { listRecentlyActiveWatchedSessions } from '@/modules/providers/services/sessions-watcher.service.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
 import { messageVersionsDb } from '@/modules/database/index.js';
 import { watchdogService } from '@/modules/watchdog/index.js';
@@ -728,7 +729,11 @@ router.get(
     // barrel; the reverse import would be a cycle. Live dispatched runs merge
     // in for the same reason (ui13 job 13) — without them the worker pane
     // shows a silent gap for the whole dispatched run.
-    const sessions = sessionsService.listRunningSessions(watchdogService.listActiveDispatchRuns()).map((session) => ({
+    const externalRuns = [
+      ...watchdogService.listActiveDispatchRuns(),
+      ...listRecentlyActiveWatchedSessions(),
+    ];
+    const sessions = sessionsService.listRunningSessions(externalRuns).map((session) => ({
       ...session,
       chainPhaseName: session.chainSlug && session.chainPhase
         ? watchdogService.getChainPhaseName(session.chainSlug, session.chainPhase)
