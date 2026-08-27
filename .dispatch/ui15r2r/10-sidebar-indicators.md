@@ -4,7 +4,7 @@
 <!-- effort: high -->
 <!-- supersedes: ui15r2/9, ui15r/8, ui15/10 -->
 <!-- name: Sidebar and indicators -->
-<!-- tasks: Row shifts as one, title gains width | Quiet planner and worker indicators | Beam distinguishes planner vs worker | Verify spinner in the ring center | Worker pane follows one session | Account drawer stays open | One footer button, sectioned drawer -->
+<!-- tasks: Row shifts as one, title gains width | Quiet planner and worker indicators | Beam distinguishes planner vs worker | Verify spinner in the ring center | Worker pane follows one session | Account drawer stays open | Switcher: Claude header, one anatomy | One footer button, sectioned drawer -->
 Execute Job 10 of PUNCHLIST_ui15.md in this repo (sidebar and indicators). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read only that job's section plus the whole-file rules block at the top (including the rerun rules), the recent git log, and the files the job names; items already checked stay done; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 Before running a command that changes state (restarts, deletes, config edits), check that the evidence supports that specific action; a signal that matches a known failure can have a different cause. Rebuild and restart dev only when the done check needs the running instance to show the change, and never twice when once serves.
