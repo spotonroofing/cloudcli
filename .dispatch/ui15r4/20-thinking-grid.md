@@ -4,7 +4,7 @@
 <!-- model: gpt-5.6-sol -->
 <!-- effort: high -->
 <!-- name: Thinking grid -->
-<!-- tasks: Middle row shift fixed | Stray patterns found and fixed | Ten word and pattern pairs | Cross-fade between pairs | Catalog in DESIGN -->
+<!-- tasks: Row alignment checked | Stray patterns checked | Ten word and pattern pairs | Cross-fade between pairs | Catalog in DESIGN -->
 Execute Job 22 of PUNCHLIST_ui15.md in this repo (the thinking indicator's pixel grid: glitches fixed, a real pattern vocabulary). The goal and items are that job's section and checkboxes in PUNCHLIST_ui15.md; read only that job's section plus the whole-file rules block at the top (including the rerun rules), the recent git log, and the files the job names; trust repo state over this prompt when they disagree, and check each item off in the file as verified. Done when the job's done check passes against the dev instance.
 
 Before running a command that changes state (restarts, deletes, config edits), check that the evidence supports that specific action; a signal that matches a known failure can have a different cause. Rebuild and restart dev only when the done check needs the running instance to show the change, and never twice when once serves.
