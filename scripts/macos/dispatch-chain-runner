@@ -49,6 +49,8 @@ CLAUDE_BIN=$(command -v claude)
 # Session-limit resilience (ui10 phase 1): a limit-exit never trips the commit
 # gate. CSWAP_PATH override mirrors server/modules/accounts.
 CSWAP_BIN="${CSWAP_PATH:-$HOME/.local/bin/cswap}"
+MCP_EMPTY="$HOME/forge-logs/mcp-empty.json"
+[ -f "$MCP_EMPTY" ] || printf '{"mcpServers":{}}' > "$MCP_EMPTY"
 LIMIT_PATTERN='hit your session limit|session limit reached|usage limit reached|reached your .* limit|out of usage credits|spend limit'
 # A monthly spend cap (claude.ai billing) is invisible to cswap's usage
 # percentages, so a capped account looks fresh and recovery would bounce
