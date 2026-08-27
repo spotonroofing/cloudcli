@@ -20,7 +20,7 @@
 #
 # Pipelined verification (ui14 job 10): every unit is two stages. The build
 # stage is the phase prompt itself, ending at the commit gate. The verify
-# stage is a second fresh-context session — Codex gpt-5.6-luna at high
+# stage is a second fresh-context session — Codex gpt-5.6-terra at high
 # whatever the build's engine (codex job 2; DISPATCH_VERIFY_ENGINE and
 # DISPATCH_VERIFY_MODEL exist only so stub chains and tests can pin it) —
 # that checks the committed job against its done check and answers
@@ -66,7 +66,7 @@ VERIFY_ENGINE="${DISPATCH_VERIFY_ENGINE:-codex}"
 [[ "$VERIFY_ENGINE" == "claude" || "$VERIFY_ENGINE" == "codex" ]] \
   || { print -u2 "dispatch-chain-runner: DISPATCH_VERIFY_ENGINE must be claude or codex"; exit 64; }
 if [[ "$VERIFY_ENGINE" == "codex" ]]; then
-  VERIFY_MODEL="${DISPATCH_VERIFY_MODEL:-gpt-5.6-luna}"
+  VERIFY_MODEL="${DISPATCH_VERIFY_MODEL:-gpt-5.6-terra}"
 else
   VERIFY_MODEL="${DISPATCH_VERIFY_MODEL:-$CLAUDE_DEFAULT_MODEL}"
 fi
@@ -142,6 +142,33 @@ JOURNAL="$JOURNAL_DIR/JOURNAL.md"
 journal() { print -r -- "$(date +%H:%M) | $1 | $2 | $3" >> "$JOURNAL"; }
 
 TOTAL=${#PHASE_FILES[@]}
+RESUME_FROM="${DISPATCH_RESUME_FROM:-1}"
+[[ "$RESUME_FROM" == <1-> ]] || { print -u2 "dispatch-chain-runner: DISPATCH_RESUME_FROM must be a 1-based index"; exit 64; }
+RESUME_STATE="$JOURNAL_DIR/resume.json"
+
+# Persist the exact prompt list and runner settings for `dispatch resume`.
+# Appended prompts extend this file when the runner consumes them.
+save_resume_state() {
+  python3 - "$RESUME_STATE.tmp" "$REPO" "$SLUG" "$CHAIN_ENGINE" "$CHAIN_MODEL" "$CHAIN_EFFORT" \
+      "$VERIFY_ENGINE" "$VERIFY_MODEL" "${PHASE_FILES[@]}" <<'PYEOF'
+import json, os, sys
+out, repo, slug, engine, model, effort, verify_engine, verify_model, *files = sys.argv[1:]
+with open(out, 'w', encoding='utf-8') as handle:
+    json.dump({
+        'repo': repo,
+        'slug': slug,
+        'engine': engine,
+        'model': model,
+        'effort': effort,
+        'verifyEngine': verify_engine,
+        'verifyModel': verify_model,
+        'phaseFiles': files,
+    }, handle)
+    handle.write('\n')
+os.replace(out, os.path.join(os.path.dirname(out), 'resume.json'))
+PYEOF
+}
+save_resume_state
 
 # POST an event body to a watchdog path, retrying while the server is down
 # (promote restart). $3 is the attempt budget; boundary events use a short
@@ -591,6 +618,80 @@ VERIFY_COMMIT=""
 VERIFY_SUBJECT=""
 VERIFY_RETRY=0
 VERIFY_THREAD=""
+PAUSING=0
+PHASE_NUM=$((RESUME_FROM - 1))
+
+# Stops one stage and everything it spawned. Build and verify sessions each
+# run in their own process group, so TERM reaches the whole stage before the
+# same bounded KILL fallback the verify rewind uses.
+stop_stage_for_pause() {
+  local pid="$1" i=0
+  [[ -n "$pid" ]] || return 0
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -TERM -- -$pid 2>/dev/null || kill -TERM "$pid" 2>/dev/null
+    while kill -0 "$pid" 2>/dev/null && [[ $i -lt 30 ]]; do sleep 1; i=$((i + 1)); done
+    kill -0 "$pid" 2>/dev/null && { kill -KILL -- -$pid 2>/dev/null || kill -KILL "$pid" 2>/dev/null; }
+  fi
+  wait "$pid" 2>/dev/null
+}
+
+# Parks the interrupted job on its stable pause branch, using the same WIP
+# commit shape as a verify rewind, then returns the checkout to its prior
+# branch. Repeated pauses of the same job replace the branch only after its
+# earlier WIP has been restored into the tree.
+park_paused_work() {
+  local head main_branch branch state
+  head=$(git -C "$REPO" rev-parse --short HEAD)
+  main_branch=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
+  branch="dispatch/$SLUG/job$PHASE_NUM-paused"
+  if [[ -n "$(git -C "$REPO" status --porcelain)" ]]; then
+    if git -C "$REPO" checkout -q -B "$branch" \
+      && git -C "$REPO" add -A \
+      && git -C "$REPO" commit -q --no-verify -m "wip(dispatch): job $PHASE_NUM parked on pause"; then
+      state="job $PHASE_NUM's uncommitted work is parked as a WIP commit on branch $branch; $main_branch is untouched at $head"
+    else
+      state="job $PHASE_NUM's uncommitted work could not be parked; the tree is left as it stands"
+    fi
+    git -C "$REPO" checkout -q "$main_branch" 2>/dev/null
+  else
+    state="job $PHASE_NUM left no uncommitted work; $main_branch remains at $head"
+  fi
+  print -r -- "$state"
+}
+
+# SIGUSR1 is reserved for `dispatch pause`. The runner, rather than the CLI,
+# owns stage shutdown, parking, the PAUSED journal boundary, and the watchdog
+# event, so a normal pause can never be mistaken for a liveness crash.
+pause_chain() {
+  [[ $PAUSING -eq 0 ]] || return 0
+  PAUSING=1
+  trap - USR1
+  stop_stage_for_pause "$BUILD_PID"
+  stop_stage_for_pause "$VERIFY_PID"
+  BUILD_PID=""
+  VERIFY_PID=""
+  local state
+  state=$(park_paused_work)
+  journal "phase $PHASE_NUM/$TOTAL" "PAUSED" "$state"
+  api_post "/api/watchdog/chains/$SLUG/events" \
+    "$(event_body paused "$PHASE_NUM" "$(print -rn -- "$state" | json_string)")" 80
+  exit 0
+}
+TRAPUSR1() { pause_chain; }
+
+# Restores the paused WIP without creating a commit on the main branch. The
+# resumed worker receives the same dirty tree the interrupted worker left.
+restore_paused_work() {
+  local branch="dispatch/$SLUG/job$RESUME_FROM-paused"
+  git -C "$REPO" show-ref --verify --quiet "refs/heads/$branch" || return 0
+  if ! git -C "$REPO" cherry-pick --no-commit "$branch"; then
+    journal "phase $RESUME_FROM/$TOTAL" "FAILED" "could not restore paused work from $branch"
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body failed "$RESUME_FROM" "$(print -rn -- "Resume could not restore paused work from $branch." | json_string)")" 80
+    exit 1
+  fi
+  journal "phase $RESUME_FROM/$TOTAL" "restore" "paused work restored from $branch"
+}
 
 verify_wanted() { ! grep -qiE '<!--[[:space:]]*verify:[[:space:]]*no' "$1" 2>/dev/null; }
 
@@ -753,7 +854,7 @@ watch_build() {
     if [[ -n "$VERIFY_PID" ]] && ! kill -0 $VERIFY_PID 2>/dev/null; then
       settle_verify
     fi
-    sleep 5
+    sleep 1
   done
   wait $BUILD_PID
 }
@@ -764,9 +865,10 @@ CHAIN_BASE=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
 # registration; the watchdog stores it and the phase navigator renders it.
 MANIFEST_PATH="${DISPATCH_MANIFEST:-}"
 
-journal run "start" "chain $SLUG in $REPO ($TOTAL phases; default engine $CHAIN_ENGINE, verify on $VERIFY_ENGINE $VERIFY_MODEL)"
+journal run "$([[ $RESUME_FROM -gt 1 ]] && print resume || print start)" "chain $SLUG in $REPO from job $RESUME_FROM ($TOTAL phases; default engine $CHAIN_ENGINE, verify on $VERIFY_ENGINE $VERIFY_MODEL)"
 [[ -x "$CSWAP_BIN" ]] && unpark_stale
-api_post "/api/watchdog/chains" "$(python3 - "$SLUG" "$REPO" "$TOTAL" "$MANIFEST_PATH" <<'PYEOF'
+if [[ $RESUME_FROM -eq 1 && -z "${DISPATCH_RESUMING:-}" ]]; then
+  api_post "/api/watchdog/chains" "$(python3 - "$SLUG" "$REPO" "$TOTAL" "$MANIFEST_PATH" <<'PYEOF'
 import json, sys
 slug, repo, total, manifest_path = sys.argv[1:5]
 body = {'slug': slug, 'projectPath': repo, 'phases': int(total)}
@@ -778,6 +880,9 @@ if manifest_path:
 print(json.dumps(body))
 PYEOF
 )" 3
+else
+  restore_paused_work
+fi
 
 # Append queue (ui9 B4): `dispatch append` drops prompt files here; they are
 # picked up after each phase's commit gate and run as additional units.
@@ -792,9 +897,9 @@ pickup_appends() {
     journal append "queued" "${f:t} picked up as unit ${#PHASE_FILES[@]}"
   done
   TOTAL=${#PHASE_FILES[@]}
+  save_resume_state
 }
 
-PHASE_NUM=0
 while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   PHASE_NUM=$((PHASE_NUM + 1))
   PHASE_FILE="${PHASE_FILES[$PHASE_NUM]}"
