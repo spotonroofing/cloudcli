@@ -27,7 +27,7 @@ import {
     validateApiKey,
 } from './modules/auth/index.js';
 import { commandsRoutes } from './modules/commands/index.js';
-import { settingsRoutes } from './modules/settings/index.js';
+import { settingsRoutes, settingsService } from './modules/settings/index.js';
 import { createSystemModule } from './modules/system/index.js';
 import { createAgentModule } from './modules/agent/index.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
@@ -108,6 +108,8 @@ const wss = createWebSocketServer(server, {
         onPlannerHandoffTurnComplete: ({ projectPath }) => {
             watchdogService.plannerHandoffComplete(projectPath);
         },
+        resolveBootSelection: ({ role, provider, projectPath, sessionId }) =>
+            settingsService.resolveSpawnSelection(role, provider, projectPath, sessionId),
     },
     shell: {
         resolveProviderSessionId: (sessionId, provider) => {

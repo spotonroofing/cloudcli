@@ -3,6 +3,7 @@ import {
   credentialsDb,
   notificationPreferencesDb,
   pushSubscriptionsDb,
+  sessionsDb,
 } from '@/modules/database/index.js';
 import {
   createNotificationEvent,
@@ -18,6 +19,11 @@ export const settingsService = createSettingsService({
   appConfig: {
     get: (key) => appConfigDb.get(key),
     set: (key, value) => appConfigDb.set(key, value),
+    remove: (key) => appConfigDb.remove(key),
+  },
+  sessions: {
+    latestByOrigin: (projectPath, origin, excludeSessionId) =>
+      sessionsDb.getLatestSessionByOrigin(projectPath, origin, excludeSessionId),
   },
   credentials: {
     list: (userId, type) => credentialsDb.getCredentials(userId, type),

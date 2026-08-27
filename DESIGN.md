@@ -9,6 +9,6 @@ Start here before UI work. Read only the areas your files touch. Reuse the close
 - [Transcript rows](design/transcript-rows.md) — messages, tools, thinking, citations, errors, images, and scrolling.
 - [Composer](design/composer.md) — prompt input, attachments, queueing, history, file drop, and spellcheck.
 - [Worker pane and jobs](design/worker-pane-and-jobs.md) — pane headers, workspace layout, windows, dividers, and job history.
-- [Settings](design/settings.md) — settings surface, tabs, cards, rows, and controls.
+- [Settings](design/settings.md) — settings surface, tabs, cards, rows, controls, System switches, and model defaults.
 - [Motion](design/motion.md) — ramps, status animation, completion effects, and reduced-motion rules.
 - [Mobile](design/mobile.md) — parity, touch targets, safe areas, phone chrome, keyboard, and pane switching.

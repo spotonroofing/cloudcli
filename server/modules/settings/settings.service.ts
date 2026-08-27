@@ -8,6 +8,15 @@ type SettingsDependencies = {
   appConfig: {
     get(key: string): string | null;
     set(key: string, value: string): void;
+    remove(key: string): void;
+  };
+  sessions: {
+    /** Newest unarchived session of one origin in a project, excluding one id. */
+    latestByOrigin(
+      projectPath: string,
+      origin: 'planner' | 'direct',
+      excludeSessionId: string | null,
+    ): { session_id: string; provider: string; model: string | null; effort: string | null } | null;
   };
   credentials: {
     list(userId: number, credentialType: string | null): unknown[];
@@ -48,10 +57,30 @@ const WATCHDOG_DEFAULTS = {
   recoveryNotices: true,
 } as const;
 
-type WatchdogBehavior = keyof typeof WATCHDOG_DEFAULTS;
+export type WatchdogBehavior = keyof typeof WATCHDOG_DEFAULTS;
 
 const watchdogSettingKey = (behavior: WatchdogBehavior): string =>
   `watchdog_${behavior.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)}`;
+
+/** Pre-System-tab rotation key (absent meant on); folded into watchdog_planner_rotation once. */
+const LEGACY_ROTATION_KEY = 'planner_rotation_enabled';
+const ROTATION_THRESHOLD_KEY = 'planner_rotation_threshold';
+const ROTATION_THRESHOLD_DEFAULT = 60;
+
+export type ModelRole = 'planner' | 'worker';
+export type ModelSelection = { provider: string; model: string; effort: string };
+
+/** Seeds for the Models section: what a new session of each role starts with. */
+const MODEL_ROLE_DEFAULTS: Record<ModelRole, ModelSelection> = {
+  planner: { provider: 'claude', model: 'claude-fable-5', effort: 'medium' },
+  worker: { provider: 'claude', model: 'claude-fable-5', effort: 'high' },
+};
+
+const modelSettingKey = (role: ModelRole): string => `model_default_${role}`;
+
+const settingsLog = (message: string) => {
+  console.log(`[Settings] ${message}`);
+};
 
 function requiredString(value: unknown, fieldName: string, code: string): string {
   const normalizedValue = typeof value === 'string' ? value.trim() : '';
@@ -69,11 +98,33 @@ function assertFound(found: boolean, resourceName: string, code: string): void {
 
 /** Creates settings workflows with repositories and notification effects injected. */
 export function createSettingsService(dependencies: SettingsDependencies) {
+  // One key for planner rotation: a legacy value moves to the System-tab key
+  // the first time the service loads, then the legacy row is gone for good.
+  const legacyRotation = dependencies.appConfig.get(LEGACY_ROTATION_KEY);
+  if (legacyRotation !== null) {
+    if (dependencies.appConfig.get(watchdogSettingKey('plannerRotation')) === null) {
+      dependencies.appConfig.set(watchdogSettingKey('plannerRotation'), legacyRotation === '0' ? '0' : '1');
+    }
+    dependencies.appConfig.remove(LEGACY_ROTATION_KEY);
+  }
+
+  const readModelDefault = (role: ModelRole): ModelSelection => {
+    const stored = dependencies.appConfig.get(modelSettingKey(role));
+    if (stored === null) {
+      return MODEL_ROLE_DEFAULTS[role];
+    }
+    return JSON.parse(stored) as ModelSelection;
+  };
+
   return {
     /** Watchdog module reads the stored automation policy before acting. */
     isWatchdogBehaviorEnabled(behavior: WatchdogBehavior): boolean {
       const stored = dependencies.appConfig.get(watchdogSettingKey(behavior));
       return stored === null ? WATCHDOG_DEFAULTS[behavior] : stored === '1';
+    },
+    /** Context-usage percentage at which the rotation sweep runs a handoff. */
+    plannerRotationThreshold(): number {
+      return Number(dependencies.appConfig.get(ROTATION_THRESHOLD_KEY) ?? ROTATION_THRESHOLD_DEFAULT);
     },
     /** Settings System tab reads every behavior and its explicit default. */
     getWatchdogSettings() {
@@ -86,7 +137,7 @@ export function createSettingsService(dependencies: SettingsDependencies) {
       return {
         settings,
         defaults: WATCHDOG_DEFAULTS,
-        plannerRotationThreshold: Number(dependencies.appConfig.get('planner_rotation_threshold') ?? 60),
+        plannerRotationThreshold: this.plannerRotationThreshold(),
       };
     },
     /** Settings route persists only values Willem explicitly changed. */
@@ -98,9 +149,52 @@ export function createSettingsService(dependencies: SettingsDependencies) {
         dependencies.appConfig.set(watchdogSettingKey(behavior), enabled ? '1' : '0');
       }
       if (plannerRotationThreshold !== undefined) {
-        dependencies.appConfig.set('planner_rotation_threshold', String(plannerRotationThreshold));
+        dependencies.appConfig.set(ROTATION_THRESHOLD_KEY, String(plannerRotationThreshold));
       }
       return this.getWatchdogSettings();
+    },
+    /** Models section: the model and effort a new session of each role starts with. */
+    getModelDefaults() {
+      return {
+        roles: {
+          planner: readModelDefault('planner'),
+          worker: readModelDefault('worker'),
+        },
+        defaults: MODEL_ROLE_DEFAULTS,
+      };
+    },
+    updateModelDefaults(roles: Partial<Record<ModelRole, ModelSelection>>) {
+      for (const [role, selection] of Object.entries(roles) as [ModelRole, ModelSelection][]) {
+        dependencies.appConfig.set(modelSettingKey(role), JSON.stringify(selection));
+      }
+      return this.getModelDefaults();
+    },
+    /**
+     * What a spawned planner or direct worker session runs with: the newest
+     * previous row of the same role and provider in the project carries its
+     * model and effort forward; the Models default covers a project with no
+     * such row (or a row that never recorded one of the two).
+     */
+    resolveSpawnSelection(
+      role: ModelRole,
+      provider: string,
+      projectPath: string,
+      excludeSessionId: string | null,
+    ): { model: string; effort: string; source: string } {
+      const fallback = readModelDefault(role);
+      const previous = dependencies.sessions.latestByOrigin(
+        projectPath,
+        role === 'planner' ? 'planner' : 'direct',
+        excludeSessionId,
+      );
+      const carried = previous && previous.provider === provider ? previous : null;
+      const model = carried?.model ?? (fallback.provider === provider ? fallback.model : '');
+      const effort = carried?.effort ?? fallback.effort;
+      const source = carried
+        ? `previous ${role} row ${carried.session_id}`
+        : `Models default (no previous ${role} row on ${provider})`;
+      settingsLog(`${role} spawn selection: model=${model || '(runtime default)'} effort=${effort} from ${source}`);
+      return { model, effort, source };
     },
     listCredentials(userId: number, credentialType: string | null) {
       return { credentials: dependencies.credentials.list(userId, credentialType) };

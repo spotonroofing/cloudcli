@@ -4,10 +4,11 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { appConfigDb, projectsDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
+import { projectsDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
 import { PLANNER_MEMORY_ROOT } from '@/modules/memory/index.js';
 import { providerRuntimeService, providerTokenUsageService, sessionsService } from '@/modules/providers/index.js';
 import { sendFleetNotification } from '@/modules/notifications/index.js';
+import { settingsService, type WatchdogBehavior } from '@/modules/settings/index.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
 import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/websocket/index.js';
 
@@ -215,6 +216,30 @@ class WatchdogService {
   /** One directory watcher per running chain with a punch list (ui14 job 8). */
   private punchlistWatchers = new Map<string, { watcher: fs.FSWatcher; timer: ReturnType<typeof setTimeout> | null; mtimeMs: number }>();
 
+  /**
+   * Every automatic behavior asks the System tab's stored policy at its
+   * action point (the settings service answers from the store, its own
+   * default only when nothing is stored). A skip is logged with the switch
+   * that gated it, so a stubbed event shows which read decided.
+   */
+  private policy(behavior: WatchdogBehavior, action: string): boolean {
+    const enabled = settingsService.isWatchdogBehaviorEnabled(behavior);
+    if (!enabled) {
+      log(`policy ${behavior} is off; skipped ${action}`);
+    }
+    return enabled;
+  }
+
+  /** A chain's terminal wake, owed only while the terminal-wakes switch is on. */
+  private queueTerminalWake(chain: ChainRecord): void {
+    if (!this.policy('terminalWakes', `terminal wake for chain ${chain.slug}`)) {
+      return;
+    }
+    chain.wakePending = true;
+    this.persistChain(chain);
+    this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: chain.slug });
+  }
+
   start(): void {
     if (this.sweeper) {
       return;
@@ -277,7 +302,8 @@ class WatchdogService {
       // A terminal wake that was queued but never delivered before the last
       // restart (the queue is in-memory) is re-derived from the chain record.
       for (const chain of this.chains.values()) {
-        if (chain.status !== 'running' && chain.wakePending) {
+        if (chain.status !== 'running' && chain.wakePending
+          && this.policy('terminalWakes', `re-derived terminal wake for chain ${chain.slug}`)) {
           log(`chain ${chain.slug}: re-deriving its undelivered ${chain.status} wake after restart`);
           this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: chain.slug });
         }
@@ -488,7 +514,8 @@ class WatchdogService {
    */
   private syncPunchlistWatcher(chain: ChainRecord): void {
     const active = this.punchlistWatchers.get(chain.slug);
-    if (chain.status !== 'running' || !chain.punchlist) {
+    if (chain.status !== 'running' || !chain.punchlist
+      || !this.policy('punchlistWatching', `punch list watch for chain ${chain.slug}`)) {
       if (active) {
         active.watcher.close();
         if (active.timer) {
@@ -638,11 +665,10 @@ class WatchdogService {
       if (event === 'verify-failed') {
         chain.status = 'failed';
         chain.phaseActive = false;
-        chain.wakePending = true;
         this.persistChain(chain);
         this.broadcastChainProgress(chain);
         this.syncPunchlistWatcher(chain);
-        this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: slug });
+        this.queueTerminalWake(chain);
       } else {
         this.persistChain(chain);
         this.broadcastChainProgress(chain);
@@ -681,6 +707,9 @@ class WatchdogService {
     if (event === 'limit') {
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
+      if (!this.policy('recoveryNotices', `limit recovery wake for chain ${slug}`)) {
+        return true;
+      }
       const tail = chain.lastSummaryTail ? `\n\nRecovery detail:\n${chain.lastSummaryTail}` : '';
       this.queueWake(
         chain.projectPath,
@@ -693,11 +722,10 @@ class WatchdogService {
     if (event === 'completed' || event === 'stopped' || event === 'failed') {
       chain.status = event === 'completed' ? 'completed' : event === 'stopped' ? 'stopped' : 'failed';
       settleRunningVerifies(chain);
-      chain.wakePending = true;
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
       this.syncPunchlistWatcher(chain);
-      this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: slug });
+      this.queueTerminalWake(chain);
     } else {
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
@@ -747,7 +775,7 @@ class WatchdogService {
     // Chain phases end at the chain runner's commit gate; the chain-end event
     // is the planner's wake for those. Only free-standing dispatched runs wake
     // the planner per run.
-    if (!chainSlug) {
+    if (!chainSlug && this.policy('terminalWakes', `run-ended wake for session ${sessionId}`)) {
       this.queueWake(
         projectPath,
         `Watchdog: a dispatched run (session ${sessionId}) ended. `
@@ -1005,7 +1033,7 @@ class WatchdogService {
         // switch. A failed boot persists as boot_state 'failed' (Willem
         // retries from the UI) instead of retrying into more session rows.
         if (item.freshBoot) {
-          await this.bootFreshPlanner(projectPath, planner.session_id, planner.model, item.prompt);
+          await this.bootFreshPlanner(projectPath, planner.session_id, item.prompt);
           queue.prompts.shift();
           this.wakeSettled(item);
           continue;
@@ -1016,10 +1044,11 @@ class WatchdogService {
           // exists on disk; otherwise boot a fresh planner session — the
           // planner is stateless by design and re-grounds from STATE.md.
           const resumeId = planner.jsonl_path ? planner.provider_session_id : null;
-          const result = await this.runPlannerTurn(resumeId, planner.model, projectPath, item.prompt);
+          const result = await this.runPlannerTurn(resumeId, planner.model, planner.effort, projectPath, item.prompt);
           if (result.errored && resumeId && /no conversation found/i.test(result.errorMessage ?? '')) {
             log(`planner session ${planner.session_id} is dead; booting a fresh planner`);
-            const fresh = await this.runPlannerTurn(null, planner.model, projectPath, item.prompt);
+            const spawn = settingsService.resolveSpawnSelection('planner', 'claude', projectPath, null);
+            const fresh = await this.runPlannerTurn(null, spawn.model || null, spawn.effort, projectPath, item.prompt);
             if (fresh.errored) {
               throw new Error(fresh.errorMessage ?? 'fresh planner boot failed');
             }
@@ -1064,6 +1093,7 @@ class WatchdogService {
   private async runPlannerTurn(
     providerSessionId: string | null,
     model: string | null,
+    effort: string | null,
     projectPath: string,
     prompt: string,
     onAnnounced?: (announcedSessionId: string) => void,
@@ -1094,6 +1124,7 @@ class WatchdogService {
         cwd: projectPath,
         sessionId: providerSessionId,
         model: model || undefined,
+        effort: effort || undefined,
         permissionMode: 'bypassPermissions',
       },
       writer,
@@ -1107,6 +1138,9 @@ class WatchdogService {
    * fresh-boot wake the rotation uses.
    */
   plannerHandoffComplete(projectPath: string): void {
+    if (!this.policy('handoffAutomation', `handoff follow-through for ${projectPath}`)) {
+      return;
+    }
     this.checkHandoffPushed(projectPath).catch((error) => {
       log(`handoff push check failed for ${projectPath}: ${error instanceof Error ? error.message : String(error)}`);
     });
@@ -1146,13 +1180,21 @@ class WatchdogService {
   private async bootFreshPlanner(
     projectPath: string,
     fromSessionId: string,
-    model: string | null,
     prompt: string,
   ): Promise<void> {
     let sessionId: string;
+    let spawn: { model: string; effort: string; source: string };
     try {
       sessionId = sessionsService.createAppSession('claude', projectPath, prompt, 'planner', true).sessionId;
       sessionsDb.markSessionBooted(sessionId);
+      // Sticky model and effort: the previous planner row's pair, else the
+      // Models default. Recorded on the new row so its successor inherits it.
+      spawn = settingsService.resolveSpawnSelection('planner', 'claude', projectPath, sessionId);
+      if (spawn.model) {
+        sessionsDb.setSessionModel(sessionId, spawn.model);
+      }
+      sessionsDb.setSessionEffort(sessionId, spawn.effort);
+      log(`fresh planner ${sessionId} spawn options: model=${spawn.model || '(runtime default)'} effort=${spawn.effort} (${spawn.source})`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log(`fresh planner boot setup failed for ${projectPath}: ${message}`);
@@ -1191,7 +1233,8 @@ class WatchdogService {
           sessionId,
           cwd: projectPath,
           projectPath,
-          model: model || undefined,
+          model: spawn.model || undefined,
+          effort: spawn.effort,
           permissionMode: 'bypassPermissions',
           bootPrompt: true,
         },
@@ -1233,6 +1276,9 @@ class WatchdogService {
         continue;
       }
       if (now - run.lastEventAt > STUCK_SILENCE_MS) {
+        if (!this.policy('dispatchRunLiveness', `silence wake for dispatched run ${run.sessionId}`)) {
+          continue;
+        }
         run.stuckWakeSent = true;
         this.persistDispatchRun(run);
         log(`dispatched run ${run.sessionId} silent for 30m; waking planner to assess`);
@@ -1273,7 +1319,7 @@ class WatchdogService {
    */
   private async sweepChains(now: number): Promise<void> {
     const running = [...this.chains.values()].filter((chain) => chain.status === 'running');
-    if (!running.length) {
+    if (!running.length || !this.policy('livenessSweep', `liveness sweep of ${running.length} running chain(s)`)) {
       return;
     }
     const runners = await listChainRunners();
@@ -1312,21 +1358,17 @@ class WatchdogService {
     settleRunningVerifies(chain);
     chain.lastEventAt = Date.now();
     chain.lastSummaryTail = reason;
-    chain.wakePending = true;
     this.persistChain(chain);
     this.broadcastChainProgress(chain);
     this.syncPunchlistWatcher(chain);
     log(`chain ${chain.slug}: stopped by the liveness sweep`, { reason });
-    this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: chain.slug });
+    this.queueTerminalWake(chain);
   }
 
   // ----- planner auto-rotation (spec B7): /handoff at the context threshold -----
 
   private async checkPlannerRotation(): Promise<void> {
-    if (appConfigDb.get('planner_rotation_enabled') === '0') {
-      return;
-    }
-    const threshold = Number(appConfigDb.get('planner_rotation_threshold') ?? 60);
+    const threshold = settingsService.plannerRotationThreshold();
 
     for (const planner of sessionsDb.listPlannerSessions()) {
       if (this.rotatedSessions.has(planner.session_id) || !planner.project_path) {
@@ -1344,6 +1386,9 @@ class WatchdogService {
         }
         const pct = (used / total) * 100;
         if (pct < threshold) {
+          continue;
+        }
+        if (!this.policy('plannerRotation', `rotation of planner ${planner.session_id} at ${pct.toFixed(0)}%`)) {
           continue;
         }
         this.rotatedSessions.add(planner.session_id);
@@ -1365,7 +1410,7 @@ class WatchdogService {
     try {
       const stats = await fsp.statfs('/');
       const freeGb = (stats.bavail * stats.bsize) / 1024 ** 3;
-      if (freeGb < MIN_FREE_DISK_GB && this.shouldAlert('disk', now)) {
+      if (freeGb < MIN_FREE_DISK_GB && this.policy('resourceAlerts', 'low disk alert') && this.shouldAlert('disk', now)) {
         this.notify(
           'decision-needed',
           'Mini disk space low',
@@ -1378,7 +1423,7 @@ class WatchdogService {
 
     try {
       const freePct = await readMemoryFreePercentage();
-      if (freePct !== null && freePct < MIN_FREE_MEM_PCT && this.shouldAlert('memory', now)) {
+      if (freePct !== null && freePct < MIN_FREE_MEM_PCT && this.policy('resourceAlerts', 'memory pressure alert') && this.shouldAlert('memory', now)) {
         this.notify(
           'decision-needed',
           'Mini memory pressure high',
@@ -1434,7 +1479,7 @@ class WatchdogService {
     };
     void (async () => {
       try {
-        const result = await this.runPlannerTurn(null, null, repo, prompt, tagMaintenanceSession);
+        const result = await this.runPlannerTurn(null, null, null, repo, prompt, tagMaintenanceSession);
         if (result.announcedSessionId) {
           tagMaintenanceSession(result.announcedSessionId);
         }
@@ -1463,7 +1508,9 @@ class WatchdogService {
     next.setHours(9, 5, 0, 0);
     const delay = Math.max(next.getTime() - Date.now(), 60 * 1000);
     setTimeout(() => {
-      void this.runMaintenance(false);
+      if (this.policy('weeklyMaintenance', 'the Monday maintenance run')) {
+        void this.runMaintenance(false);
+      }
       this.scheduleWeeklyMaintenance();
     }, delay).unref?.();
     log(`weekly maintenance scheduled for ${next.toISOString()}`);
@@ -1478,11 +1525,13 @@ class WatchdogService {
     next.setHours(9, 0, 0, 0);
     const delay = Math.max(next.getTime() - Date.now(), 60 * 1000);
     this.selfTestTimer = setTimeout(() => {
-      this.notify(
-        'verified-done',
-        'Weekly push self-test',
-        'If you can read this on your device, push delivery is alive.',
-      );
+      if (this.policy('weeklySelfTest', 'the Monday push self-test')) {
+        this.notify(
+          'verified-done',
+          'Weekly push self-test',
+          'If you can read this on your device, push delivery is alive.',
+        );
+      }
       this.scheduleWeeklySelfTest();
     }, delay);
     this.selfTestTimer.unref?.();

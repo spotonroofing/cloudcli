@@ -92,6 +92,17 @@ type ChatWebSocketDependencies = {
    * cycle through the websocket barrel).
    */
   onPlannerHandoffTurnComplete?: (input: { sessionId: string; projectPath: string }) => void;
+  /**
+   * Model and effort a booted planner or direct worker session starts with
+   * (sticky to the project's previous row of that role, else the Models
+   * default). Injected for the same cycle reason as the handoff hook.
+   */
+  resolveBootSelection?: (input: {
+    role: 'planner' | 'worker';
+    provider: LLMProvider;
+    projectPath: string;
+    sessionId: string;
+  }) => { model: string; effort: string };
 };
 
 /**
@@ -231,6 +242,20 @@ async function handleChatSend(
   // a session whose first message was typed never gets its first turn hidden.
   if (clientOptions.bootPrompt === true) {
     sessionsDb.markSessionBooted(sessionId);
+    // A planner or direct worker boot runs with the project's sticky
+    // selection, not whatever the composer happened to hold.
+    if ((session.origin === 'planner' || session.origin === 'direct') && dependencies.resolveBootSelection) {
+      const selection = dependencies.resolveBootSelection({
+        role: session.origin === 'planner' ? 'planner' : 'worker',
+        provider,
+        projectPath: session.project_path ?? '',
+        sessionId,
+      });
+      if (selection.model) {
+        clientOptions.model = selection.model;
+      }
+      clientOptions.effort = selection.effort;
+    }
   }
 
   // Record what this turn runs with so reopening the session later restores the

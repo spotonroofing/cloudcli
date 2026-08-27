@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 
-import { Skeleton } from '../../../../shared/view/ui';
+import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../../shared/view/beui/BeuiSelect';
+import { Input, Skeleton } from '../../../../shared/view/ui';
+import type { LLMProvider, ProviderModelsDefinition } from '../../../../types/app';
 import { authenticatedFetch } from '../../../../utils/api';
 import SettingsCard from '../SettingsCard';
 import SettingsRow from '../SettingsRow';
@@ -25,6 +34,10 @@ type WatchdogSettings = {
   plannerRotationThreshold: number;
 };
 
+type ModelRole = 'planner' | 'worker';
+type ModelSelection = { provider: LLMProvider; model: string; effort: string };
+type ModelDefaults = { roles: Record<ModelRole, ModelSelection> };
+
 const behaviors: Array<{
   key: Behavior;
   label: string;
@@ -43,44 +56,133 @@ const behaviors: Array<{
   { key: 'weeklyMaintenance', label: 'Weekly maintenance run', description: 'Spawns the Monday CloudCLI maintenance session.', section: 'Machine' },
 ];
 
-/** System tab: Willem-owned switches for every automatic watchdog behavior. */
+/** Providers whose catalogs the Models section offers, in menu order. */
+const MODEL_PROVIDERS: LLMProvider[] = ['claude', 'codex'];
+
+const modelRoles: Array<{ key: ModelRole; label: string; description: string }> = [
+  { key: 'planner', label: 'Planner sessions', description: 'Model and effort a new planner starts with when the project has no earlier planner.' },
+  { key: 'worker', label: 'Direct worker sessions', description: 'Model and effort a new direct worker starts with when the project has no earlier worker.' },
+];
+
+const EFFORT_LABELS: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra',
+  max: 'Max',
+  ultra: 'Ultra',
+};
+
+const effortLabelFor = (value: string): string => (
+  EFFORT_LABELS[value] ?? value.charAt(0).toUpperCase() + value.slice(1)
+);
+
+const modelKey = (provider: string, model: string): string => `${provider}:${model}`;
+
+/** System tab: Willem-owned switches for every automatic watchdog behavior, and the Models defaults. */
 export default function SystemSettingsTab() {
   const [state, setState] = useState<WatchdogSettings | null>(null);
-  const [saving, setSaving] = useState<Behavior | null>(null);
+  const [saving, setSaving] = useState<Behavior | 'threshold' | ModelRole | null>(null);
+  const [thresholdDraft, setThresholdDraft] = useState('');
+  const [models, setModels] = useState<ModelDefaults | null>(null);
+  const [catalogs, setCatalogs] = useState<Partial<Record<LLMProvider, ProviderModelsDefinition>>>({});
 
   useEffect(() => {
     let cancelled = false;
     void authenticatedFetch('/api/settings/watchdog')
       .then((response) => response.json())
       .then((body: WatchdogSettings) => {
-        if (!cancelled) setState(body);
+        if (cancelled) return;
+        setState(body);
+        setThresholdDraft(String(body.plannerRotationThreshold));
       });
+    void authenticatedFetch('/api/settings/models')
+      .then((response) => response.json())
+      .then((body: ModelDefaults) => {
+        if (!cancelled) setModels(body);
+      });
+    for (const provider of MODEL_PROVIDERS) {
+      void authenticatedFetch(`/api/providers/${provider}/models`)
+        .then((response) => response.json())
+        .then((body: { data?: { models?: ProviderModelsDefinition } }) => {
+          const catalog = body.data?.models;
+          if (!cancelled && catalog) {
+            setCatalogs((previous) => ({ ...previous, [provider]: catalog }));
+          }
+        });
+    }
     return () => { cancelled = true; };
   }, []);
 
-  const save = async (key: Behavior, value: boolean) => {
-    if (!state) return;
+  const putWatchdog = async (
+    key: Behavior | 'threshold',
+    body: { settings?: Partial<Record<Behavior, boolean>>; plannerRotationThreshold?: number },
+    optimistic: WatchdogSettings,
+  ) => {
     const previous = state;
-    const next = { ...state, settings: { ...state.settings, [key]: value } };
-    setState(next);
+    setState(optimistic);
     setSaving(key);
     try {
       const response = await authenticatedFetch('/api/settings/watchdog', {
         method: 'PUT',
-        body: JSON.stringify({ settings: { [key]: value } }),
+        body: JSON.stringify({ settings: {}, ...body }),
       });
-      setState(await response.json() as WatchdogSettings);
+      if (!response.ok) throw new Error('save failed');
+      const saved = await response.json() as WatchdogSettings;
+      setState(saved);
+      setThresholdDraft(String(saved.plannerRotationThreshold));
     } catch {
       setState(previous);
+      if (previous) setThresholdDraft(String(previous.plannerRotationThreshold));
     } finally {
       setSaving(null);
     }
   };
 
-  if (!state) {
+  const save = (key: Behavior, value: boolean) => {
+    if (!state) return;
+    void putWatchdog(key, { settings: { [key]: value } }, { ...state, settings: { ...state.settings, [key]: value } });
+  };
+
+  const commitThreshold = () => {
+    if (!state) return;
+    const next = Math.round(Number(thresholdDraft));
+    if (!Number.isFinite(next) || next < 5 || next > 95) {
+      setThresholdDraft(String(state.plannerRotationThreshold));
+      return;
+    }
+    if (next === state.plannerRotationThreshold) return;
+    void putWatchdog('threshold', { plannerRotationThreshold: next }, { ...state, plannerRotationThreshold: next });
+  };
+
+  const saveModel = async (role: ModelRole, selection: ModelSelection) => {
+    if (!models) return;
+    const previous = models;
+    setModels({ ...models, roles: { ...models.roles, [role]: selection } });
+    setSaving(role);
+    try {
+      const response = await authenticatedFetch('/api/settings/models', {
+        method: 'PUT',
+        body: JSON.stringify({ roles: { [role]: selection } }),
+      });
+      if (!response.ok) throw new Error('save failed');
+      setModels(await response.json() as ModelDefaults);
+    } catch {
+      setModels(previous);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const effortValuesFor = (selection: ModelSelection): string[] => {
+    const option = catalogs[selection.provider]?.OPTIONS.find((candidate) => candidate.value === selection.model);
+    return option?.effort?.values.map((value) => value.value) ?? [];
+  };
+
+  if (!state || !models) {
     return (
       <div className="space-y-5" aria-busy="true">
-        {[0, 1, 2].map((section) => (
+        {[0, 1, 2, 3].map((section) => (
           <div key={section} className="space-y-1.5">
             <Skeleton className="ml-1 h-3 w-24 rounded-sm" />
             <Skeleton className="h-24 w-full rounded-lg" />
@@ -97,27 +199,119 @@ export default function SystemSettingsTab() {
           <SettingsCard divided>
             {behaviors.filter((behavior) => behavior.section === section).map((behavior) => {
               const defaultLabel = state.defaults[behavior.key] ? 'on' : 'off';
-              const threshold = behavior.key === 'plannerRotation'
-                ? ` Threshold ${state.plannerRotationThreshold}%.`
-                : '';
               return (
                 <SettingsRow
                   key={behavior.key}
                   label={behavior.label}
-                  description={`${behavior.description}${threshold} Default ${defaultLabel}.`}
+                  description={`${behavior.description} Default ${defaultLabel}.`}
                 >
                   <SettingsToggle
                     checked={state.settings[behavior.key]}
-                    onChange={(value) => { void save(behavior.key, value); }}
+                    onChange={(value) => { save(behavior.key, value); }}
                     ariaLabel={behavior.label}
                     disabled={saving === behavior.key}
                   />
                 </SettingsRow>
               );
             })}
+            {section === 'Sessions' && (
+              <SettingsRow
+                label="Rotation threshold"
+                description="Context usage that triggers the handoff, as a percent of the model's window."
+              >
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={5}
+                  max={95}
+                  aria-label="Rotation threshold"
+                  className="h-7 w-16 px-2 text-xs md:text-xs"
+                  value={thresholdDraft}
+                  disabled={saving === 'threshold'}
+                  onChange={(event) => setThresholdDraft(event.target.value)}
+                  onBlur={commitThreshold}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.currentTarget.blur();
+                  }}
+                />
+              </SettingsRow>
+            )}
           </SettingsCard>
         </SettingsSection>
       ))}
+      <SettingsSection title="Models">
+        <SettingsCard divided>
+          {modelRoles.map((role) => {
+            const selection = models.roles[role.key];
+            const efforts = effortValuesFor(selection);
+            return (
+              <SettingsRow key={role.key} label={role.label} description={role.description}>
+                <div className="flex items-center gap-1.5" data-slot="model-default-pickers">
+                  <Select
+                    value={modelKey(selection.provider, selection.model)}
+                    onValueChange={(value) => {
+                      const [provider, ...rest] = value.split(':');
+                      const model = rest.join(':');
+                      const next = { provider: provider as LLMProvider, model };
+                      const option = catalogs[next.provider]?.OPTIONS.find((candidate) => candidate.value === model);
+                      const allowed = option?.effort?.values.map((entry) => entry.value) ?? [];
+                      const effort = allowed.includes(selection.effort)
+                        ? selection.effort
+                        : option?.effort?.default ?? selection.effort;
+                      void saveModel(role.key, { ...next, effort });
+                    }}
+                    disabled={saving === role.key}
+                    className="w-40"
+                  >
+                    <SelectTrigger className="h-7 px-2 py-0 text-xs">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <LLMProviderLogo provider={selection.provider} className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                        <SelectValue />
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MODEL_PROVIDERS.flatMap((provider) => (catalogs[provider]?.OPTIONS ?? []).map((option) => (
+                        <SelectItem
+                          key={modelKey(provider, option.value)}
+                          value={modelKey(provider, option.value)}
+                          textValue={option.label}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <LLMProviderLogo provider={provider} className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                            <span className="truncate">{option.label}</span>
+                          </span>
+                        </SelectItem>
+                      )))}
+                      {!MODEL_PROVIDERS.some((provider) => catalogs[provider]) && (
+                        <SelectItem value={modelKey(selection.provider, selection.model)} textValue={selection.model}>
+                          {selection.model}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={selection.effort}
+                    onValueChange={(effort) => { void saveModel(role.key, { ...selection, effort }); }}
+                    disabled={saving === role.key || efforts.length === 0}
+                    className="w-24"
+                  >
+                    <SelectTrigger className="h-7 px-2 py-0 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(efforts.length ? efforts : [selection.effort]).map((effort) => (
+                        <SelectItem key={effort} value={effort} textValue={effortLabelFor(effort)}>
+                          {effortLabelFor(effort)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </SettingsRow>
+            );
+          })}
+        </SettingsCard>
+      </SettingsSection>
     </div>
   );
 }

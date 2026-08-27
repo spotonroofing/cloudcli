@@ -4,7 +4,10 @@ import { userSettingsDb } from '@/modules/database/index.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/index.js';
 import { AppError } from '@/shared/utils.js';
 
-import type { createSettingsService } from './settings.service.js';
+import type { ModelRole, ModelSelection, createSettingsService } from './settings.service.js';
+
+const MODEL_ROLES: ModelRole[] = ['planner', 'worker'];
+const MODEL_PROVIDERS = ['claude', 'codex', 'cursor', 'opencode'];
 
 type AuthenticatedRequest = express.Request & { user?: { id?: number | string } };
 
@@ -58,6 +61,33 @@ export function createSettingsRouter(
       success: true,
       ...service.updateWatchdogSettings(settings, threshold === undefined ? undefined : Math.round(threshold)),
     };
+  }));
+
+  // Models section: per-role model and effort defaults. The dispatch CLI and
+  // the spawn paths read the same store this GET serves.
+  router.get('/models', respond(() => ({ success: true, ...service.getModelDefaults() })));
+  router.put('/models', respond((req) => {
+    const body = (req.body ?? {}) as { roles?: unknown };
+    if (!body.roles || typeof body.roles !== 'object' || Array.isArray(body.roles)) {
+      throw new AppError('roles must be an object.', { code: 'MODEL_ROLES_REQUIRED', statusCode: 400 });
+    }
+    const roles: Partial<Record<ModelRole, ModelSelection>> = {};
+    for (const [role, value] of Object.entries(body.roles as Record<string, unknown>)) {
+      const selection = (value ?? {}) as Partial<ModelSelection>;
+      const valid = MODEL_ROLES.includes(role as ModelRole)
+        && typeof selection.provider === 'string' && MODEL_PROVIDERS.includes(selection.provider)
+        && typeof selection.model === 'string' && selection.model.trim()
+        && typeof selection.effort === 'string' && selection.effort.trim();
+      if (!valid) {
+        throw new AppError(`Invalid model default for "${role}".`, { code: 'MODEL_DEFAULT_INVALID', statusCode: 400 });
+      }
+      roles[role as ModelRole] = {
+        provider: selection.provider as string,
+        model: (selection.model as string).trim(),
+        effort: (selection.effort as string).trim(),
+      };
+    }
+    return { success: true, ...service.updateModelDefaults(roles) };
   }));
 
   // Synced client preferences (ui11 phase 1): every localStorage preference the

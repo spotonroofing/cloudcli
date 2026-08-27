@@ -313,6 +313,35 @@ export const sessionsDb = {
   },
 
   /**
+   * Newest unarchived session of one origin in a project that recorded a
+   * model or effort, skipping one id: the spawn paths read the row a new
+   * planner or direct worker inherits its selection from (the last pick,
+   * never a row that booted and recorded nothing), excluding the session
+   * being spawned.
+   */
+  getLatestSessionByOrigin(
+    projectPath: string,
+    origin: 'planner' | 'direct',
+    excludeSessionId: string | null,
+  ): SessionRow | null {
+    const db = getConnection();
+    const row = db
+      .prepare(
+        `SELECT ${SESSION_ROW_COLUMNS}
+         FROM sessions
+         WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+           AND origin = ?
+           AND isArchived = 0
+           AND session_id <> ?
+           AND (model IS NOT NULL OR effort IS NOT NULL)
+         ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
+         LIMIT 1`
+      )
+      .get(normalizeProjectPath(projectPath), origin, excludeSessionId ?? '') as SessionRow | undefined;
+    return normalizeSessionRow(row) ?? null;
+  },
+
+  /**
    * Latest explicitly-tagged planner session per project (rotation sweep).
    */
   listPlannerSessions(): SessionRow[] {
