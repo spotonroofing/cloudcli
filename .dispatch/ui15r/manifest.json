@@ -1,0 +1,63 @@
+[
+ {
+  "name": "Jobs view polish",
+  "tasks": [
+   "Less indent, wider sidebar, commit tooltip",
+   "Per-task durations and live counters",
+   "Mono text, red failures with reason",
+   "Month and year grouping"
+  ]
+ },
+ {
+  "name": "Memory diff preview for real",
+  "tasks": [
+   "Expansion shows the changed lines",
+   "Popout padding equal, Iterate memory copy"
+  ]
+ },
+ {
+  "name": "System tab and sounds",
+  "tasks": [
+   "System tab first with rotation",
+   "Per-pane completion sounds",
+   "Missing-settings pass"
+  ]
+ },
+ {
+  "name": "Themes with depth",
+  "tasks": [
+   "Dots right-aligned, hover-only, bigger",
+   "New fully-layered themes"
+  ]
+ },
+ {
+  "name": "Usage alerts",
+  "tasks": [
+   "Gated 5h alerts per account",
+   "Fleet-wide window aggregates",
+   "Thresholds in System settings"
+  ]
+ },
+ {
+  "name": "Images end to end",
+  "tasks": [
+   "Inline images verified and polished",
+   "Remote URL cards documented"
+  ]
+ },
+ {
+  "name": "Seasonal touches",
+  "tasks": [
+   "Date-gated surprises, no spoilers"
+  ]
+ },
+ {
+  "name": "Sidebar alignment and indicators",
+  "tasks": [
+   "Row shifts as one, gap kept",
+   "Quiet response indicators, beam split",
+   "Supersede failed twins, verify spinner",
+   "One footer button, drawer stays open"
+  ]
+ }
+]
