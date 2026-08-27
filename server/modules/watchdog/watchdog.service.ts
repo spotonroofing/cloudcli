@@ -55,6 +55,9 @@ export type ChainJobMeta = {
   verifyEndedAt?: number;
   /** The verifier's session id, pre-announced by the runner. */
   verifySessionId?: string;
+  /** The build stage's engine and model, from the runner's announce (codex job 2). */
+  engine?: string;
+  model?: string;
 };
 
 /**
@@ -413,6 +416,22 @@ class WatchdogService {
     return true;
   }
 
+  /** Records the build stage's engine and model on the unit's job metadata. */
+  setChainJobEngine(slug: string, phase: number, engine: string, model: string | null): boolean {
+    const chain = this.chains.get(slug);
+    if (!chain) {
+      return false;
+    }
+    const meta = chain.jobs[phase] ?? (chain.jobs[phase] = {});
+    meta.engine = engine;
+    if (model) {
+      meta.model = model;
+    }
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    return true;
+  }
+
   updateChainManifest(slug: string, manifest: ChainManifestEntry[]): boolean {
     const chain = this.chains.get(slug);
     if (!chain) {
@@ -635,7 +654,7 @@ class WatchdogService {
   chainEvent(
     slug: string,
     event: ChainEventName,
-    detail?: { phase?: number; summaryTail?: string; commit?: { hash: string; subject: string } },
+    detail?: { phase?: number; summaryTail?: string; commit?: { hash: string; subject: string }; quiet?: boolean },
   ): boolean {
     const chain = this.chains.get(slug);
     if (!chain) {
@@ -707,7 +726,9 @@ class WatchdogService {
     if (event === 'limit') {
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
-      if (!this.policy('recoveryNotices', `limit recovery wake for chain ${slug}`)) {
+      // A Codex usage-limit wait (codex job 2) is announced through a
+      // recovery notification instead; the event only records the wait.
+      if (detail?.quiet || !this.policy('recoveryNotices', `limit recovery wake for chain ${slug}`)) {
         return true;
       }
       const tail = chain.lastSummaryTail ? `\n\nRecovery detail:\n${chain.lastSummaryTail}` : '';
@@ -931,10 +952,11 @@ class WatchdogService {
     );
   }
 
-  // ----- notifications (spec B8: exactly two kinds, broadcast everywhere) -----
+  // ----- notifications (spec B8: decision-needed and verified-done broadcast
+  // everywhere; recovery (codex job 2) is the quiet third for limit waits) -----
 
   notify(
-    kind: 'decision-needed' | 'verified-done',
+    kind: 'decision-needed' | 'verified-done' | 'recovery',
     title: string,
     body: string,
     data: Record<string, unknown> = {},

@@ -27,6 +27,11 @@ install_agent() {
 chmod +x "$SCRIPT_DIR/cloudcli-backup.sh" "$SCRIPT_DIR/transcript-scrub.mjs" "$SCRIPT_DIR/dispatch" "$SCRIPT_DIR/dispatch-chain-runner" "$SCRIPT_DIR/cloudcli-dev-start.sh"
 mkdir -p "$HOME/.local/bin"
 ln -sf "$SCRIPT_DIR/dispatch" "$HOME/.local/bin/dispatch"
+# The tool guard (codex job 2) is one script for both engines: Codex's hook
+# calls it in place; Claude's PreToolUse hook reads the synced copy under
+# ~/.claude/hooks (the user settings.json must keep a ~/.claude path so the
+# hook survives ccsync's canonicalization on every machine).
+cp "$SCRIPT_DIR/tool-guard.cjs" "$HOME/.claude/hooks/git-guard.js"
 chmod +x "$SCRIPT_DIR/promote.sh"
 ln -sf "$SCRIPT_DIR/promote.sh" "$HOME/.local/bin/promote"
 mkdir -p "$HOME/.cloudcli-dev" "$HOME/.claude-dev/projects"

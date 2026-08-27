@@ -1,4 +1,4 @@
-import { ChevronDown, GitCommitHorizontal, MessageSquare } from 'lucide-react';
+import { ChevronDown, Cpu, GitCommitHorizontal, MessageSquare } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -31,6 +31,9 @@ export type ChainManifestEntry = {
   verifyStartedAt?: number;
   verifyEndedAt?: number;
   verifySessionId?: string;
+  /** The build stage's engine and model (codex job 2), from the runner's announce. */
+  engine?: string;
+  model?: string;
 };
 
 /** The watchdog's live chain snapshot (worker-runs response / chain_progress). */
@@ -72,6 +75,9 @@ type Unit = {
   verifyStartedAt?: number;
   verifyEndedAt?: number;
   verifySessionId?: string;
+  /** Engine and model the unit ran on (codex job 2). */
+  engine?: string;
+  model?: string;
 };
 
 function chainUnits(chain: ChainSnapshot): Unit[] {
@@ -110,6 +116,8 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
       verifyStartedAt: entry.verifyStartedAt,
       verifyEndedAt: entry.verifyEndedAt,
       verifySessionId: entry.verifySessionId,
+      engine: entry.engine,
+      model: entry.model,
     };
   });
 }
@@ -216,6 +224,31 @@ function JobFooter({ unit }: { unit: Unit }) {
         )}
         {showElapsed ? <LiveElapsed startedAt={unit.startedAt!} /> : duration != null ? formatDuration(duration) : null}
       </span>
+    </li>
+  );
+}
+
+/**
+ * Engine row on a job's drawer (codex job 2), before the commit footer: the
+ * engine and model the unit's build ran on, in the footer's meta style.
+ * Absent until the runner announces the unit's session.
+ */
+function EngineRow({ unit }: { unit: Unit }) {
+  if (!unit.engine) {
+    return null;
+  }
+  return (
+    <li
+      data-slot="jobs-sidebar-job-engine"
+      data-engine={unit.engine}
+      data-model={unit.model}
+      className="flex min-h-5 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground/60"
+    >
+      <Cpu className="h-3 w-3 flex-shrink-0 scale-[0.9]" aria-hidden="true" />
+      <span className="min-w-0 truncate">{unit.engine}</span>
+      {unit.model && (
+        <span className="ml-auto flex-shrink-0 pl-2 font-mono text-[10px] text-muted-foreground/50">{unit.model}</span>
+      )}
     </li>
   );
 }
@@ -646,6 +679,7 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
                           </li>
                         );
                       })}
+                      <EngineRow unit={unit} />
                       <JobFooter unit={unit} />
                       <VerifyRow unit={unit} onOpenSession={onOpenSession} />
                     </ul>

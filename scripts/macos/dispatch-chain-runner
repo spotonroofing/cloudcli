@@ -5,17 +5,28 @@
 #
 # Spawned fully detached (own session) by the dispatch CLI, so a CloudCLI
 # server restart or promote mid-chain never touches a running chain. Each
-# phase runs as a fresh headless `claude -p` session in the repo, with the
-# same commit gate, journal lines, and watchdog boundary events as before.
-# Phase transcripts land in ~/.claude/projects and surface in the worker
-# pane through external-session discovery.
+# phase runs as a fresh headless session in the repo — `claude -p` or
+# `codex exec`, per unit (codex job 2) — with the same commit gate, journal
+# lines, and watchdog boundary events. Claude transcripts land in
+# ~/.claude/projects, Codex rollouts in ~/.codex/sessions; both surface in
+# the worker pane through the session synchronizers.
+#
+# Per-unit engine (codex job 2): a prompt file may carry `<!-- engine:
+# claude|codex -->`, `<!-- model: <id> -->` and `<!-- effort: <level> -->`
+# in its header; each overrides the chain's DISPATCH_ENGINE / DISPATCH_MODEL
+# / DISPATCH_EFFORT for that unit only, and a missing header falls back to
+# the env, then the engine default (Claude: claude-fable-5 at high with the
+# claude-opus-4-8 capacity fallback; Codex: gpt-5.6-sol at high).
 #
 # Pipelined verification (ui14 job 10): every unit is two stages. The build
 # stage is the phase prompt itself, ending at the commit gate. The verify
-# stage is a second fresh-context `claude -p` session that checks the
-# committed job against its done check and answers `VERIFY: PASS` or
-# `VERIFY: FAIL: <reason>` on its last line; it runs in the background while
-# the next unit's build starts, so the verify tail leaves the critical path.
+# stage is a second fresh-context session — Codex gpt-5.6-luna at high
+# whatever the build's engine (codex job 2; DISPATCH_VERIFY_ENGINE and
+# DISPATCH_VERIFY_MODEL exist only so stub chains and tests can pin it) —
+# that checks the committed job against its done check and answers
+# `VERIFY: PASS` or `VERIFY: FAIL: <reason>` on its last line; it runs in
+# the background while the next unit's build starts, so the verify tail
+# leaves the critical path.
 # A phase file that carries `<!-- verify: no -->` in its header skips its
 # verify stage. A failing verify rewinds: the in-flight build is killed, its
 # work is parked as a WIP commit on a branch (main is never rewritten), and
@@ -37,27 +48,63 @@ PHASE_FILES=("$@")
 
 cd "$REPO" || { print -u2 "dispatch-chain-runner: cannot cd to $REPO"; exit 66; }
 
-# Phase engine/model/effort per runner doctrine: Claude with Fable by default;
-# DISPATCH_ENGINE=codex selects Codex CLI, whose default model is GPT-5.6 Sol.
-# DISPATCH_MODEL/DISPATCH_EFFORT pin every phase when set.
-ENGINE="${DISPATCH_ENGINE:-claude}"
-[[ "$ENGINE" == "claude" || "$ENGINE" == "codex" ]] \
+# Chain-level engine/model/effort from the env: the fallback for units whose
+# header names none. DISPATCH_MODEL applies only to units on the chain's
+# engine (a Claude model id means nothing to a Codex unit and vice versa).
+CHAIN_ENGINE="${DISPATCH_ENGINE:-claude}"
+[[ "$CHAIN_ENGINE" == "claude" || "$CHAIN_ENGINE" == "codex" ]] \
   || { print -u2 "dispatch-chain-runner: DISPATCH_ENGINE must be claude or codex"; exit 64; }
-if [[ "$ENGINE" == "codex" ]]; then
-  MODEL="${DISPATCH_MODEL:-gpt-5.6-sol}"
-else
-  MODEL="${DISPATCH_MODEL:-claude-fable-5}"
-fi
-EFFORT="${DISPATCH_EFFORT:-high}"
+CHAIN_MODEL="${DISPATCH_MODEL:-}"
+CHAIN_EFFORT="${DISPATCH_EFFORT:-high}"
 FALLBACK_MODEL="claude-opus-4-8"
+CLAUDE_DEFAULT_MODEL="claude-fable-5"
+CODEX_DEFAULT_MODEL="gpt-5.6-sol"
 
-if [[ "$ENGINE" == "codex" ]]; then
-  CODEX_BIN=$(command -v codex)
-  [[ -n "$CODEX_BIN" ]] || { print -u2 "dispatch-chain-runner: codex CLI not on PATH"; exit 69; }
+# The verify stage runs on Luna regardless of the build's engine; the two
+# overrides exist only for stub chains and tests.
+VERIFY_ENGINE="${DISPATCH_VERIFY_ENGINE:-codex}"
+[[ "$VERIFY_ENGINE" == "claude" || "$VERIFY_ENGINE" == "codex" ]] \
+  || { print -u2 "dispatch-chain-runner: DISPATCH_VERIFY_ENGINE must be claude or codex"; exit 64; }
+if [[ "$VERIFY_ENGINE" == "codex" ]]; then
+  VERIFY_MODEL="${DISPATCH_VERIFY_MODEL:-gpt-5.6-luna}"
 else
-  CLAUDE_BIN=$(command -v claude)
-  [[ -n "$CLAUDE_BIN" ]] || { print -u2 "dispatch-chain-runner: claude CLI not on PATH"; exit 69; }
+  VERIFY_MODEL="${DISPATCH_VERIFY_MODEL:-$CLAUDE_DEFAULT_MODEL}"
 fi
+VERIFY_EFFORT=high
+
+# Both CLIs resolve up front; a unit whose engine is missing stops the chain
+# at that unit with a journal line instead of at launch.
+CLAUDE_BIN=$(command -v claude)
+CODEX_BIN=$(command -v codex)
+
+# Header value `<!-- key: value -->` from a prompt file's first 4 KB, or empty.
+header_value() {
+  python3 - "$1" "$2" <<'PYEOF'
+import re, sys
+head = open(sys.argv[1], encoding='utf-8', errors='replace').read(4096)
+m = re.search(r'<!--\s*' + re.escape(sys.argv[2]) + r':\s*(.*?)\s*-->', head, re.I)
+print(m.group(1) if m else '')
+PYEOF
+}
+
+# Per-unit engine, model and effort: header, then env, then engine default.
+# Sets UNIT_ENGINE, UNIT_MODEL, UNIT_EFFORT, UNIT_BIN for the prompt file $1.
+unit_settings() {
+  local engine model effort
+  engine=$(header_value "$1" engine | tr '[:upper:]' '[:lower:]')
+  UNIT_ENGINE="${engine:-$CHAIN_ENGINE}"
+  model=$(header_value "$1" model)
+  if [[ -z "$model" && "$UNIT_ENGINE" == "$CHAIN_ENGINE" ]]; then
+    model="$CHAIN_MODEL"
+  fi
+  if [[ -z "$model" ]]; then
+    [[ "$UNIT_ENGINE" == "codex" ]] && model="$CODEX_DEFAULT_MODEL" || model="$CLAUDE_DEFAULT_MODEL"
+  fi
+  UNIT_MODEL="$model"
+  effort=$(header_value "$1" effort | tr '[:upper:]' '[:lower:]')
+  UNIT_EFFORT="${effort:-$CHAIN_EFFORT}"
+  [[ "$UNIT_ENGINE" == "codex" ]] && UNIT_BIN="$CODEX_BIN" || UNIT_BIN="$CLAUDE_BIN"
+}
 
 # Session-limit resilience (ui10 phase 1): a limit-exit never trips the commit
 # gate. CSWAP_PATH override mirrors server/modules/accounts.
@@ -65,6 +112,13 @@ CSWAP_BIN="${CSWAP_PATH:-$HOME/.local/bin/cswap}"
 MCP_EMPTY="$HOME/forge-logs/mcp-empty.json"
 [ -f "$MCP_EMPTY" ] || printf '{"mcpServers":{}}' > "$MCP_EMPTY"
 LIMIT_PATTERN='hit your session limit|session limit reached|usage limit reached|reached your .* limit|out of usage credits|spend limit'
+# Codex usage-limit exits (codex job 2): the "hit your usage limit" message
+# family. The runner waits for the reset in the unit's own rollout, or
+# DISPATCH_CODEX_LIMIT_BACKOFF seconds when no reading exists, then retries;
+# a reset further out than 12 hours (a weekly cap) stops the chain instead.
+CODEX_LIMIT_PATTERN='usage limit|usage_limit'
+CODEX_LIMIT_BACKOFF="${DISPATCH_CODEX_LIMIT_BACKOFF:-1800}"
+CODEX_LIMIT_STOP_SECS=$((12 * 3600))
 # A monthly spend cap (claude.ai billing) is invisible to cswap's usage
 # percentages, so a capped account looks fresh and recovery would bounce
 # straight back to it. Spend-cap exits park the account (ui14 job 8).
@@ -337,64 +391,193 @@ PYEOF
   fi
 }
 
-# One headless claude session: $1 prompt file, $2 log, $3 session id. exec'd
-# so a caller running it in the background holds claude's own pid (killable
-# on a rewind). The two CLAUDE_CODE_ lines are load-bearing (runner
-# doctrine): the first forces subagents synchronous so a turn cannot end
-# while work runs, the second makes anything that slips through be waited on
-# uncapped. Empty ANTHROPIC_API_KEY pins subscription auth. Fable phases
-# carry the Opus 4.8 capacity fallback; a chain pinned to 4.8 carries none.
+# One headless claude session: $1 prompt file, $2 log, $3 session id, $4
+# model, $5 effort. exec'd so a caller running it in the background holds
+# claude's own pid (killable on a rewind). The two CLAUDE_CODE_ lines are
+# load-bearing (runner doctrine): the first forces subagents synchronous so a
+# turn cannot end while work runs, the second makes anything that slips
+# through be waited on uncapped. Empty ANTHROPIC_API_KEY pins subscription
+# auth. Fable phases carry the Opus 4.8 capacity fallback; a unit pinned to
+# 4.8 carries none.
 run_claude() {
   typeset -a fallback_args
   fallback_args=()
-  [[ "$MODEL" != "$FALLBACK_MODEL" ]] && fallback_args=(--fallback-model "$FALLBACK_MODEL")
+  [[ "$4" != "$FALLBACK_MODEL" ]] && fallback_args=(--fallback-model "$FALLBACK_MODEL")
   # setsid puts the session in its own process group (pid == pgid, since the
   # exec keeps the pid) so a rewind can kill claude and everything it spawned.
   ANTHROPIC_API_KEY="" \
   CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 \
   CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
     exec python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' \
-    "$CLAUDE_BIN" -p --strict-mcp-config --mcp-config "$MCP_EMPTY" --model "$MODEL" --effort "$EFFORT" "${fallback_args[@]}" \
+    "$CLAUDE_BIN" -p --strict-mcp-config --mcp-config "$MCP_EMPTY" --model "$4" --effort "$5" "${fallback_args[@]}" \
     --session-id "$3" \
     --dangerously-skip-permissions \
     < "$1" > "$2" 2>&1
 }
 
-# One headless Codex session with the same prompt/log/session-id contract as
-# run_claude. Codex assigns its own rollout id, so $3 is announced to the
-# watchdog while the CLI receives the long prompt on stdin. The final message
-# is kept separately for the verifier's exact VERIFY line.
+# One headless Codex session with the same prompt/log/model/effort contract
+# as run_claude ($3 is unused: Codex assigns its own thread id, which the
+# runner reads back off the `--json` event stream in the log and announces).
+# The prompt arrives on stdin; the final message lands in $2.last for the
+# verifier's exact VERIFY line. Subagents stay off by explicit override so a
+# config edit cannot turn them back on for dispatched units (codex job 2).
 run_codex() {
   exec python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' \
     "$CODEX_BIN" exec \
     --dangerously-bypass-approvals-and-sandbox \
+    --json \
     -C "$REPO" \
-    -m "$MODEL" \
-    -c model_reasoning_effort="$EFFORT" \
+    -m "$4" \
+    -c model_reasoning_effort="$5" \
+    -c features.multi_agent=false \
     -o "$2.last" \
     - \
     < "$1" > "$2" 2>&1
 }
 
+# $1 engine, then the run_claude contract: prompt, log, session id, model, effort.
 run_engine() {
-  if [[ "$ENGINE" == "codex" ]]; then
+  local engine="$1"; shift
+  if [[ "$engine" == "codex" ]]; then
     run_codex "$@"
   else
     run_claude "$@"
   fi
 }
 
-# Pre-tag a stage session: the id is chosen here and announced to the server
-# before claude starts, so the row exists tagged origin=dispatch (with the
-# chain slug and unit) before transcript discovery can index it untagged.
-# $1 session id, $2 base commit, $3 unit, $4 stage (build|verify).
+# Pre-tag a stage session: the id is announced to the server so the row
+# exists tagged origin=dispatch (with the chain slug, unit, engine and model)
+# before transcript discovery can index it untagged — before claude starts
+# for Claude units, and the moment Codex reports its thread id for Codex
+# units (the same id the rollout synchronizer indexes, so both are one row).
+# $1 session id, $2 base commit, $3 unit, $4 stage (build|verify), $5
+# provider, $6 model.
 announce_session() {
-  api_post "/api/watchdog/chains/$SLUG/sessions" "$(python3 - "$1" "$REPO" "$2" "$MODEL" "$3" "$4" <<'PYEOF'
+  api_post "/api/watchdog/chains/$SLUG/sessions" "$(python3 - "$1" "$REPO" "$2" "$6" "$3" "$4" "$5" <<'PYEOF'
 import json, sys
-sid, repo, base, model, phase, stage = sys.argv[1:7]
-print(json.dumps({'sessionId': sid, 'projectPath': repo, 'baseCommit': base, 'model': model, 'phase': int(phase), 'stage': stage}))
+sid, repo, base, model, phase, stage, provider = sys.argv[1:8]
+print(json.dumps({'sessionId': sid, 'projectPath': repo, 'baseCommit': base, 'model': model, 'phase': int(phase), 'stage': stage, 'provider': provider}))
 PYEOF
 )" 3
+}
+
+# Codex thread id off a `codex exec --json` log: waits up to 90 s for the
+# thread.started event while the process ($2) lives. Prints the id or nothing.
+wait_thread_id() {
+  local i=0 id=""
+  while [[ $i -lt 90 ]]; do
+    id=$(grep -o '"thread_id":"[^"]*"' "$1" 2>/dev/null | head -1 | cut -d'"' -f4)
+    [[ -n "$id" ]] && break
+    kill -0 "$2" 2>/dev/null || break
+    sleep 1
+    i=$((i + 1))
+  done
+  print -r -- "$id"
+}
+
+# ----- Codex usage-limit wait (codex job 2) --------------------------------
+# Decision from the rate_limits block of the unit's own rollout (by thread
+# id), else the newest rollout: prints "wait <secs> <until>" or "stop <until>
+# <window-minutes>" (a reset past the 12 h ceiling: the weekly cap), or the
+# fixed backoff when nothing is readable.
+codex_limit_decision() {
+  CODEX_THREAD="${1:-}" BACKOFF="$CODEX_LIMIT_BACKOFF" STOP_SECS="$CODEX_LIMIT_STOP_SECS" python3 - <<'PYEOF'
+import datetime, glob, json, os, sys
+home = os.path.expanduser('~/.codex/sessions')
+thread = os.environ.get('CODEX_THREAD') or ''
+files = glob.glob(os.path.join(home, '**', f'rollout-*{thread}.jsonl'), recursive=True) if thread else []
+if not files:
+    files = glob.glob(os.path.join(home, '**', 'rollout-*.jsonl'), recursive=True)
+files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+limits = None
+for path in files[:1]:
+    try:
+        lines = open(path, encoding='utf-8', errors='replace').read().splitlines()
+    except OSError:
+        continue
+    for line in reversed(lines):
+        if '"rate_limits"' not in line:
+            continue
+        try:
+            payload = json.loads(line).get('payload') or {}
+        except ValueError:
+            continue
+        if payload.get('type') == 'token_count' and isinstance(payload.get('rate_limits'), dict):
+            limits = payload['rate_limits']
+            break
+if not limits:
+    print(f"wait {os.environ['BACKOFF']} unknown-no-rate-limits-readable")
+    sys.exit(0)
+# The exhausted window is the one the reading names, else any at 100%; a
+# reading that shows headroom everywhere does not explain the exit, so the
+# fixed backoff applies rather than a guess at a reset.
+named = str(limits.get('rate_limit_reached_type') or '').lower()
+windows = []
+for key in ('primary', 'secondary'):
+    w = limits.get(key)
+    if not (isinstance(w, dict) and w.get('resets_at')):
+        continue
+    if key in named or (w.get('used_percent') or 0) >= 99:
+        windows.append(w)
+if not windows:
+    print(f"wait {os.environ['BACKOFF']} unknown-no-exhausted-window")
+    sys.exit(0)
+hit = min(windows, key=lambda w: int(w['resets_at']))
+reset = datetime.datetime.fromtimestamp(int(hit['resets_at']), datetime.timezone.utc)
+now = datetime.datetime.now(datetime.timezone.utc)
+secs = int((reset - now).total_seconds()) + 60
+if secs > int(os.environ['STOP_SECS']):
+    print(f"stop {reset.isoformat()} {hit.get('window_minutes') or '?'}")
+else:
+    print(f"wait {max(60, secs)} {reset.isoformat()}")
+PYEOF
+}
+
+# A Codex unit exited on its usage limit: journal, a recovery notification
+# (never a planner wake), then wait for the reset and let the caller re-run
+# the stage on the uncommitted tree. Models and accounts are never switched.
+# A weekly cap with no reset inside 12 hours stops the chain with a
+# decision-needed notification naming Terra as the manual fallback.
+# $1 journal label, $2 unit, $3 name, $4 stage (build|verify), $5 thread id.
+wait_codex_limit() {
+  local label="$1" unit="$2" name="$3" stage="${4:-build}" thread="${5:-}"
+  local decision kind secs until what event_phase="$unit"
+  what="Job $unit ($name)"
+  [[ "$stage" == verify ]] && { what="The verify of job $unit ($name)"; event_phase=""; }
+  decision=$(codex_limit_decision "$thread")
+  kind="${decision%% *}"
+  secs=$(print -r -- "$decision" | awk '{print $2}')
+  until=$(print -r -- "$decision" | awk '{print $3}')
+  if [[ "$kind" == stop ]]; then
+    journal "$label" "STOPPED" "codex usage limit with no reset inside 12 h (window ${until}m resets $secs); weekly cap, Terra is the manual fallback"
+    api_post "/api/watchdog/notify" "$(python3 - "$SLUG" "$unit" "$TOTAL" "$name" "$secs" <<'PYEOF'
+import json, sys
+slug, phase, total, name, until = sys.argv[1:6]
+print(json.dumps({
+    'kind': 'decision-needed',
+    'title': f'Chain {slug} stopped on the Codex weekly cap',
+    'body': f'Job {phase} of {total} ({name}) hit a Codex usage limit that does not reset until {until}. Re-dispatch on gpt-5.6-terra by hand, or wait for the reset.',
+}))
+PYEOF
+)" 3
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body stopped "$unit" "$(print -rn -- "$what hit the Codex weekly usage cap (resets $secs); stopped, Terra is the manual fallback." | json_string)")" 80
+    exit 2
+  fi
+  journal "$label" "limit" "codex exited on its usage limit; waiting ${secs}s until $until, then retrying"
+  api_post "/api/watchdog/notify" "$(python3 - "$SLUG" "$unit" "$TOTAL" "$name" "$secs" "$until" <<'PYEOF'
+import json, sys
+slug, phase, total, name, secs, until = sys.argv[1:7]
+print(json.dumps({
+    'kind': 'recovery',
+    'title': f'Chain {slug} waiting on a Codex usage limit',
+    'body': f'Job {phase} of {total} ({name}) hit the Codex usage limit; retrying after {until} (about {round(int(secs) / 60)} min). No action needed.',
+}))
+PYEOF
+)" 3
+  api_post "/api/watchdog/chains/$SLUG/events" \
+    "$(event_body limit "$event_phase" "$(print -rn -- "$what hit the Codex usage limit; retrying after $until." | json_string)" | python3 -c 'import json,sys; b=json.load(sys.stdin); b["quiet"]=True; print(json.dumps(b))')" 3
+  sleep "$secs"
 }
 
 # ----- verify stage (ui14 job 10) ------------------------------------------
@@ -406,6 +589,7 @@ VERIFY_FILE=""
 VERIFY_COMMIT=""
 VERIFY_SUBJECT=""
 VERIFY_RETRY=0
+VERIFY_THREAD=""
 
 verify_wanted() { ! grep -qiE '<!--[[:space:]]*verify:[[:space:]]*no' "$1" 2>/dev/null; }
 
@@ -431,16 +615,28 @@ write_verify_prompt() {
 }
 
 # Launches the verify stage for the unit whose build just committed, in the
-# background; the caller goes straight on to the next build.
+# background; the caller goes straight on to the next build. A Codex
+# verifier is announced once its thread id shows in the log.
 start_verify() {
-  local prompt session
+  local prompt session log="$JOURNAL_DIR/verify$VERIFY_NUM.log"
   prompt=$(write_verify_prompt)
   session=$(uuidgen | tr '[:upper:]' '[:lower:]')
-  announce_session "$session" "$VERIFY_COMMIT" "$VERIFY_NUM" verify
-  journal "verify $VERIFY_NUM/$TOTAL" "start" "$VERIFY_NAME against $VERIFY_COMMIT"
+  if [[ "$VERIFY_ENGINE" == "claude" ]]; then
+    announce_session "$session" "$VERIFY_COMMIT" "$VERIFY_NUM" verify claude "$VERIFY_MODEL"
+  fi
+  journal "verify $VERIFY_NUM/$TOTAL" "start" "$VERIFY_NAME against $VERIFY_COMMIT ($VERIFY_ENGINE $VERIFY_MODEL)"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-start $VERIFY_NUM '')" 3
-  run_engine "$prompt" "$JOURNAL_DIR/verify$VERIFY_NUM.log" "$session" &
+  : > "$log"
+  run_engine "$VERIFY_ENGINE" "$prompt" "$log" "$session" "$VERIFY_MODEL" "$VERIFY_EFFORT" &
   VERIFY_PID=$!
+  if [[ "$VERIFY_ENGINE" == "codex" ]]; then
+    VERIFY_THREAD=$(wait_thread_id "$log" "$VERIFY_PID")
+    if [[ -n "$VERIFY_THREAD" ]]; then
+      announce_session "$VERIFY_THREAD" "$VERIFY_COMMIT" "$VERIFY_NUM" verify codex "$VERIFY_MODEL"
+    else
+      journal "verify $VERIFY_NUM/$TOTAL" "announce" "codex reported no thread id; the verifier's rollout stays unlinked"
+    fi
+  fi
 }
 
 # Reads a finished verifier's verdict off its log. PASS clears the stage; a
@@ -455,10 +651,15 @@ settle_verify() {
   # in the session log. The verdict is the last VERIFY: line, wherever markdown wrapped it
   # (`**VERIFY: PASS**`, a backticked or indented line all count).
   verdict_source="$log"
-  [[ "$ENGINE" == "codex" ]] && verdict_source="$log.last"
+  [[ "$VERIFY_ENGINE" == "codex" ]] && verdict_source="$log.last"
   verdict=$(grep -oE 'VERIFY: (PASS|FAIL[^`*]*)' "$verdict_source" 2>/dev/null | tail -1 | sed 's/[[:space:]]*$//')
-  if [[ "$ENGINE" == "claude" && $rc -ne 0 && -z "$verdict" ]] && grep -qiE "$LIMIT_PATTERN" "$log"; then
+  if [[ "$VERIFY_ENGINE" == "claude" && $rc -ne 0 && -z "$verdict" ]] && grep -qiE "$LIMIT_PATTERN" "$log"; then
     journal "verify $VERIFY_NUM/$TOTAL" "limit" "verifier exited $rc on the session limit; re-running once the build in flight has recovered"
+    VERIFY_RETRY=1
+    return 0
+  fi
+  if [[ "$VERIFY_ENGINE" == "codex" && $rc -ne 0 && -z "$verdict" ]] && grep -qiE "$CODEX_LIMIT_PATTERN" "$log"; then
+    journal "verify $VERIFY_NUM/$TOTAL" "limit" "verifier exited $rc on the codex usage limit; re-running once the build in flight has finished"
     VERIFY_RETRY=1
     return 0
   fi
@@ -531,7 +732,11 @@ reconcile_verify() {
     fi
     if [[ $VERIFY_RETRY -eq 1 ]]; then
       VERIFY_RETRY=0
-      recover_from_limit "verify $VERIFY_NUM/$TOTAL" "$VERIFY_NUM" "$VERIFY_NAME" "$JOURNAL_DIR/verify$VERIFY_NUM.log" verify
+      if [[ "$VERIFY_ENGINE" == "codex" ]]; then
+        wait_codex_limit "verify $VERIFY_NUM/$TOTAL" "$VERIFY_NUM" "$VERIFY_NAME" verify "${VERIFY_THREAD:-}"
+      else
+        recover_from_limit "verify $VERIFY_NUM/$TOTAL" "$VERIFY_NUM" "$VERIFY_NAME" "$JOURNAL_DIR/verify$VERIFY_NUM.log" verify
+      fi
       journal "verify $VERIFY_NUM/$TOTAL" "retry" "re-running the verify of $VERIFY_NAME after limit recovery"
       start_verify
       continue
@@ -558,8 +763,8 @@ CHAIN_BASE=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
 # registration; the watchdog stores it and the phase navigator renders it.
 MANIFEST_PATH="${DISPATCH_MANIFEST:-}"
 
-journal run "start" "chain $SLUG in $REPO ($TOTAL phases)"
-[[ "$ENGINE" == "claude" && -x "$CSWAP_BIN" ]] && unpark_stale
+journal run "start" "chain $SLUG in $REPO ($TOTAL phases; default engine $CHAIN_ENGINE, verify on $VERIFY_ENGINE $VERIFY_MODEL)"
+[[ -x "$CSWAP_BIN" ]] && unpark_stale
 api_post "/api/watchdog/chains" "$(python3 - "$SLUG" "$REPO" "$TOTAL" "$MANIFEST_PATH" <<'PYEOF'
 import json, sys
 slug, repo, total, manifest_path = sys.argv[1:5]
@@ -599,16 +804,36 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
     wait_for_chrome_slot
   fi
 
-  journal "phase $PHASE_NUM/$TOTAL" "start" "$PHASE_NAME"
+  unit_settings "$PHASE_FILE"
+  if [[ -z "$UNIT_BIN" ]]; then
+    reconcile_verify
+    journal "phase $PHASE_NUM/$TOTAL" "FAILED" "$PHASE_NAME needs the $UNIT_ENGINE CLI, which is not on PATH; stopping chain"
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) needs the $UNIT_ENGINE CLI, which is not on PATH." | json_string)")" 80
+    exit 1
+  fi
+  journal "phase $PHASE_NUM/$TOTAL" "start" "$PHASE_NAME ($UNIT_ENGINE $UNIT_MODEL, effort $UNIT_EFFORT)"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body phase-start $PHASE_NUM '')" 3
 
   SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-  announce_session "$SESSION_ID" "$BASE_COMMIT" "$PHASE_NUM" build
+  if [[ "$UNIT_ENGINE" == "claude" ]]; then
+    announce_session "$SESSION_ID" "$BASE_COMMIT" "$PHASE_NUM" build claude "$UNIT_MODEL"
+  fi
 
   # The build stage: a fresh headless session in the repo, run in the
   # background so the previous unit's verify can be settled while it works.
-  run_engine "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" &
+  : > "$JOURNAL_DIR/phase$PHASE_NUM.log"
+  run_engine "$UNIT_ENGINE" "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" "$UNIT_MODEL" "$UNIT_EFFORT" &
   BUILD_PID=$!
+  BUILD_THREAD=""
+  if [[ "$UNIT_ENGINE" == "codex" ]]; then
+    BUILD_THREAD=$(wait_thread_id "$JOURNAL_DIR/phase$PHASE_NUM.log" "$BUILD_PID")
+    if [[ -n "$BUILD_THREAD" ]]; then
+      announce_session "$BUILD_THREAD" "$BASE_COMMIT" "$PHASE_NUM" build codex "$UNIT_MODEL"
+    else
+      journal "phase $PHASE_NUM/$TOTAL" "announce" "codex reported no thread id; the unit's rollout stays unlinked"
+    fi
+  fi
   watch_build
   RC=$?
   BUILD_PID=""
@@ -617,9 +842,17 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
 
   # Limit-exit: recover (switch or wait) and retry the phase instead of
   # tripping the commit gate.
-  if [[ "$ENGINE" == "claude" && $RC -ne 0 ]] && grep -qiE "$LIMIT_PATTERN" "$JOURNAL_DIR/phase$PHASE_NUM.log"; then
+  if [[ "$UNIT_ENGINE" == "claude" && $RC -ne 0 ]] && grep -qiE "$LIMIT_PATTERN" "$JOURNAL_DIR/phase$PHASE_NUM.log"; then
     recover_from_limit "phase $PHASE_NUM/$TOTAL" "$PHASE_NUM" "$PHASE_NAME" "$JOURNAL_DIR/phase$PHASE_NUM.log"
     journal "phase $PHASE_NUM/$TOTAL" "retry" "re-running $PHASE_NAME after limit recovery"
+    PHASE_NUM=$((PHASE_NUM - 1))
+    continue
+  fi
+  # A Codex usage limit is a wait, never a defect: the unit re-runs on the
+  # uncommitted tree after the reset (codex job 2).
+  if [[ "$UNIT_ENGINE" == "codex" && $RC -ne 0 ]] && grep -qiE "$CODEX_LIMIT_PATTERN" "$JOURNAL_DIR/phase$PHASE_NUM.log"; then
+    wait_codex_limit "phase $PHASE_NUM/$TOTAL" "$PHASE_NUM" "$PHASE_NAME" build "$BUILD_THREAD"
+    journal "phase $PHASE_NUM/$TOTAL" "retry" "re-running $PHASE_NAME after the codex limit wait"
     PHASE_NUM=$((PHASE_NUM - 1))
     continue
   fi
@@ -630,18 +863,18 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
 
   if [[ $RC -ne 0 ]]; then
     reconcile_verify
-    journal "phase $PHASE_NUM/$TOTAL" "FAILED" "$ENGINE exited $RC; stopping chain (phase$PHASE_NUM.log)"
+    journal "phase $PHASE_NUM/$TOTAL" "FAILED" "$UNIT_ENGINE exited $RC; stopping chain (phase$PHASE_NUM.log)"
     api_post "/api/watchdog/chains/$SLUG/events" \
-      "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) failed: $ENGINE exited $RC." | json_string)")" 80
+      "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) failed: $UNIT_ENGINE exited $RC." | json_string)")" 80
     exit 1
   fi
 
   # Commit gate: a phase that lands no commit stops the chain right here.
   if [[ "$NEW_COMMIT" == "$BASE_COMMIT" ]]; then
     reconcile_verify
-    if [[ "$ENGINE" == "codex" ]]; then
-      LOG_TAIL=$(tail -n 3 "$JOURNAL_DIR/phase$PHASE_NUM.log" | /usr/bin/awk 'BEGIN { sep = "" } { printf "%s%s", sep, $0; sep = " | " } END { print "" }')
-      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME; log tail: $LOG_TAIL"
+    if [[ "$UNIT_ENGINE" == "codex" ]]; then
+      LOG_TAIL=$(head -c 300 "$JOURNAL_DIR/phase$PHASE_NUM.log.last" 2>/dev/null | tr '\n' ' ')
+      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME; last message: ${LOG_TAIL:-none}"
     else
       journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME"
     fi

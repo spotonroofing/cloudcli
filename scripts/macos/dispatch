@@ -36,6 +36,12 @@
 # are "tasks" (lighter navigator rows) unless --phase marks a full compiled
 # unit.
 #
+# Per-unit engine (codex job 2): any prompt file, dispatched or appended, may
+# carry `<!-- engine: claude|codex -->`, `<!-- model: <id> -->` and
+# `<!-- effort: <level> -->` in its header; the runner applies them to that
+# unit only, over the chain's DISPATCH_ENGINE / DISPATCH_MODEL /
+# DISPATCH_EFFORT. An engine header naming anything else is refused here.
+#
 # `dispatch amend` rewrites a not-yet-started unit's stored task list (ui14
 # job 8) so a fold-in the planner made to the prompt file and punch list also
 # reaches the jobs view; the executing or finished unit is refused.
@@ -44,6 +50,20 @@ set -u
 PROJECTS_ROOT="$HOME/Projects"
 SERVER_URL="${DISPATCH_SERVER_URL:-http://127.0.0.1:4747}"
 DB_PATH="${DISPATCH_DB_PATH:-$HOME/.cloudcli/auth.db}"
+
+# Refuses a prompt file whose engine header names an engine the runner lacks.
+check_engine_header() {
+  local engine
+  engine=$(python3 - "$1" <<'PYEOF'
+import re, sys
+head = open(sys.argv[1], encoding='utf-8', errors='replace').read(4096)
+m = re.search(r'<!--\s*engine:\s*(.*?)\s*-->', head, re.I)
+print((m.group(1) if m else '').lower())
+PYEOF
+)
+  [[ -z "$engine" || "$engine" == "claude" || "$engine" == "codex" ]] \
+    || { print -u2 "dispatch: $1 names engine '$engine'; must be claude or codex"; exit 65; }
+}
 
 usage() {
   print -u2 "usage: dispatch <project> <slug> [phase-file ...]"
@@ -121,6 +141,7 @@ if [[ "$1" == "append" ]]; then
   [[ ${#APPEND_FILES[@]} -gt 0 ]] || usage
   for f in "${APPEND_FILES[@]}"; do
     [[ -r "$f" ]] || { print -u2 "dispatch: cannot read append file $f"; exit 66; }
+    check_engine_header "$f"
   done
 
   API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
@@ -193,6 +214,7 @@ typeset -a ABS_PHASE_FILES
 ABS_PHASE_FILES=()
 for f in "${PHASE_FILES[@]}"; do
   [[ -r "$f" ]] || { print -u2 "dispatch: cannot read phase file $f"; exit 66; }
+  check_engine_header "$f"
   ABS_PHASE_FILES+=("${f:A}")
 done
 

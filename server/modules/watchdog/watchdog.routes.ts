@@ -78,6 +78,8 @@ export function createWatchdogRouter(): express.Router {
         phase: Number.isFinite(Number(body.phase)) ? Number(body.phase) : undefined,
         summaryTail: typeof body.summaryTail === 'string' ? body.summaryTail : undefined,
         commit,
+        // A quiet limit event (codex job 2) records the wait without a planner wake.
+        quiet: body.quiet === true,
       };
       const eventName = event as (typeof CHAIN_EVENT_NAMES)[number];
       let known = watchdogService.chainEvent(slug, eventName, detail);
@@ -105,10 +107,13 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
-  // The dispatch runner announces each phase's session id before launching
-  // the phase, so the row exists tagged origin 'dispatch' (with its chain
-  // slug) before transcript discovery can index it untagged. The upsert path
-  // in setSessionOrigin creates the row when discovery has not seen it yet.
+  // The dispatch runner announces each stage's session id — chosen up front
+  // for Claude, the Codex thread id as soon as `codex exec` reports it — so
+  // the row exists tagged origin 'dispatch' (with its chain slug, engine and
+  // model) before transcript discovery can index it untagged. The upsert path
+  // in setSessionOrigin creates the row when discovery has not seen it yet;
+  // a Codex row is keyed by the thread id, the same key the rollout
+  // synchronizer upserts on, so runner and synchronizer share one row.
   router.post(
     '/chains/:slug/sessions',
     requireApiKey,
@@ -116,22 +121,27 @@ export function createWatchdogRouter(): express.Router {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
       const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
-      if (!sessionId || !projectPath) {
-        throw new AppError('sessionId and projectPath are required.', {
+      const provider = typeof body.provider === 'string' ? body.provider.trim() : '';
+      if (!sessionId || !projectPath || !provider) {
+        throw new AppError('sessionId, projectPath and provider are required.', {
           code: 'WATCHDOG_CHAIN_SESSION_FIELDS_REQUIRED',
           statusCode: 400,
         });
       }
       const slug = String(req.params.slug);
-      const provider = typeof body.provider === 'string' && body.provider.trim() ? body.provider.trim() : 'claude';
       const baseCommit = typeof body.baseCommit === 'string' && body.baseCommit.trim() ? body.baseCommit.trim() : null;
       const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : null;
       const phase = Number.isFinite(Number(body.phase)) ? Number(body.phase) : null;
       sessionsDb.setSessionOrigin(sessionId, 'dispatch', baseCommit, slug, model, { provider, projectPath }, phase);
       // The verify stage's session (ui14 job 10) is the same row shape, tagged
-      // on the chain's job metadata so the UI can tell it from the build.
-      if (body.stage === 'verify' && phase != null) {
-        watchdogService.setChainVerifySession(slug, phase, sessionId);
+      // on the chain's job metadata so the UI can tell it from the build; a
+      // build announce records the unit's engine and model for the jobs column.
+      if (phase != null) {
+        if (body.stage === 'verify') {
+          watchdogService.setChainVerifySession(slug, phase, sessionId);
+        } else {
+          watchdogService.setChainJobEngine(slug, phase, provider, model);
+        }
       }
       res.status(201).json(createApiSuccessResponse({ slug, sessionId }));
     }),
@@ -263,11 +273,13 @@ export function createWatchdogRouter(): express.Router {
     requireApiKey,
     asyncHandler(async (req: Request, res: Response) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      const kind = body.kind === 'decision-needed' || body.kind === 'verified-done' ? body.kind : null;
+      const kind = body.kind === 'decision-needed' || body.kind === 'verified-done' || body.kind === 'recovery'
+        ? body.kind
+        : null;
       const title = typeof body.title === 'string' ? body.title.trim() : '';
       const message = typeof body.body === 'string' ? body.body.trim() : '';
       if (!kind || !title) {
-        throw new AppError('kind (decision-needed|verified-done) and title are required.', {
+        throw new AppError('kind (decision-needed|verified-done|recovery) and title are required.', {
           code: 'WATCHDOG_NOTIFY_FIELDS_REQUIRED',
           statusCode: 400,
         });
