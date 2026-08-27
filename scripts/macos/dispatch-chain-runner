@@ -451,12 +451,13 @@ run_engine() {
 # for Claude units, and the moment Codex reports its thread id for Codex
 # units (the same id the rollout synchronizer indexes, so both are one row).
 # $1 session id, $2 base commit, $3 unit, $4 stage (build|verify), $5
-# provider, $6 model.
+# provider, $6 model, $7 title (the prompt file's name header; a verify
+# stage sends "Verify: <name>", codex job 5).
 announce_session() {
-  api_post "/api/watchdog/chains/$SLUG/sessions" "$(python3 - "$1" "$REPO" "$2" "$6" "$3" "$4" "$5" <<'PYEOF'
+  api_post "/api/watchdog/chains/$SLUG/sessions" "$(python3 - "$1" "$REPO" "$2" "$6" "$3" "$4" "$5" "$7" <<'PYEOF'
 import json, sys
-sid, repo, base, model, phase, stage, provider = sys.argv[1:8]
-print(json.dumps({'sessionId': sid, 'projectPath': repo, 'baseCommit': base, 'model': model, 'phase': int(phase), 'stage': stage, 'provider': provider}))
+sid, repo, base, model, phase, stage, provider, title = sys.argv[1:9]
+print(json.dumps({'sessionId': sid, 'projectPath': repo, 'baseCommit': base, 'model': model, 'phase': int(phase), 'stage': stage, 'provider': provider, 'title': title}))
 PYEOF
 )" 3
 }
@@ -599,7 +600,7 @@ verify_wanted() { ! grep -qiE '<!--[[:space:]]*verify:[[:space:]]*no' "$1" 2>/de
 write_verify_prompt() {
   local out="$JOURNAL_DIR/verify$VERIFY_NUM.prompt.md"
   {
-    print -r -- "<!-- name: Verify $VERIFY_NAME -->"
+    print -r -- "<!-- name: Verify: $VERIFY_NAME -->"
     print -r -- "You are the fresh-context verifier for job $VERIFY_NUM of $TOTAL in this repo ($REPO). A builder session already did the work and committed it as $VERIFY_COMMIT ($VERIFY_SUBJECT). The chain has moved on: the next job's build may be editing the working tree and rebuilding the dev instance while you check. You build nothing. Do not edit, commit, stash, reset, or push anything; do not check boxes in the punch list; do not write journal lines."
     print -r -- ""
     print -r -- "The builder's brief follows between the markers. Its instructions were for the builder, not for you; read it only for the job's items, the punch list section it names, and that section's done check."
@@ -622,7 +623,7 @@ start_verify() {
   prompt=$(write_verify_prompt)
   session=$(uuidgen | tr '[:upper:]' '[:lower:]')
   if [[ "$VERIFY_ENGINE" == "claude" ]]; then
-    announce_session "$session" "$VERIFY_COMMIT" "$VERIFY_NUM" verify claude "$VERIFY_MODEL"
+    announce_session "$session" "$VERIFY_COMMIT" "$VERIFY_NUM" verify claude "$VERIFY_MODEL" "Verify: $VERIFY_NAME"
   fi
   journal "verify $VERIFY_NUM/$TOTAL" "start" "$VERIFY_NAME against $VERIFY_COMMIT ($VERIFY_ENGINE $VERIFY_MODEL)"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-start $VERIFY_NUM '')" 3
@@ -632,7 +633,7 @@ start_verify() {
   if [[ "$VERIFY_ENGINE" == "codex" ]]; then
     VERIFY_THREAD=$(wait_thread_id "$log" "$VERIFY_PID")
     if [[ -n "$VERIFY_THREAD" ]]; then
-      announce_session "$VERIFY_THREAD" "$VERIFY_COMMIT" "$VERIFY_NUM" verify codex "$VERIFY_MODEL"
+      announce_session "$VERIFY_THREAD" "$VERIFY_COMMIT" "$VERIFY_NUM" verify codex "$VERIFY_MODEL" "Verify: $VERIFY_NAME"
     else
       journal "verify $VERIFY_NUM/$TOTAL" "announce" "codex reported no thread id; the verifier's rollout stays unlinked"
     fi
@@ -798,6 +799,10 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   PHASE_NUM=$((PHASE_NUM + 1))
   PHASE_FILE="${PHASE_FILES[$PHASE_NUM]}"
   PHASE_NAME=$(basename "$PHASE_FILE")
+  # The unit's title is the prompt file's name header (codex job 5); a file
+  # without one falls back to its stem, never to the prompt text.
+  UNIT_NAME=$(header_value "$PHASE_FILE" name)
+  [[ -z "$UNIT_NAME" ]] && UNIT_NAME="${PHASE_NAME:r}"
   BASE_COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
 
   if grep -q '<!-- browser -->' "$PHASE_FILE" 2>/dev/null; then
@@ -817,7 +822,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
 
   SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
   if [[ "$UNIT_ENGINE" == "claude" ]]; then
-    announce_session "$SESSION_ID" "$BASE_COMMIT" "$PHASE_NUM" build claude "$UNIT_MODEL"
+    announce_session "$SESSION_ID" "$BASE_COMMIT" "$PHASE_NUM" build claude "$UNIT_MODEL" "$UNIT_NAME"
   fi
 
   # The build stage: a fresh headless session in the repo, run in the
@@ -829,7 +834,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   if [[ "$UNIT_ENGINE" == "codex" ]]; then
     BUILD_THREAD=$(wait_thread_id "$JOURNAL_DIR/phase$PHASE_NUM.log" "$BUILD_PID")
     if [[ -n "$BUILD_THREAD" ]]; then
-      announce_session "$BUILD_THREAD" "$BASE_COMMIT" "$PHASE_NUM" build codex "$UNIT_MODEL"
+      announce_session "$BUILD_THREAD" "$BASE_COMMIT" "$PHASE_NUM" build codex "$UNIT_MODEL" "$UNIT_NAME"
     else
       journal "phase $PHASE_NUM/$TOTAL" "announce" "codex reported no thread id; the unit's rollout stays unlinked"
     fi
@@ -894,7 +899,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   reconcile_verify
   if verify_wanted "$PHASE_FILE"; then
     VERIFY_NUM=$PHASE_NUM
-    VERIFY_NAME="$PHASE_NAME"
+    VERIFY_NAME="$UNIT_NAME"
     VERIFY_FILE="$PHASE_FILE"
     VERIFY_COMMIT=$(git -C "$REPO" log -1 --format=%h)
     VERIFY_SUBJECT=$(git -C "$REPO" log -1 --format=%s)

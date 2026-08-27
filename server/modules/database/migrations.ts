@@ -18,6 +18,9 @@ import {
   WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL,
 } from '@/modules/database/schema.js';
 
+import { isCommentShapedTitle, titleFromPrompt } from '../../../shared/sessionTitle.js';
+
+
 const SQLITE_UUID_SQL = `
 lower(hex(randomblob(4))) || '-' ||
 lower(hex(randomblob(2))) || '-' ||
@@ -519,6 +522,28 @@ const addSessionBootStateColumn = (db: Database): void => {
 };
 
 /**
+ * Retitles sessions whose stored name still carries a prompt-file header
+ * comment (codex job 5): rows discovery named from the raw prompt before the
+ * name-header rule existed. Idempotent — nothing matches after the first pass.
+ */
+const retitleCommentShapedSessionNames = (db: Database): void => {
+  const rows = db
+    .prepare("SELECT session_id, custom_name FROM sessions WHERE custom_name LIKE '%<!--%'")
+    .all() as { session_id: string; custom_name: string }[];
+  if (!rows.length) {
+    return;
+  }
+  const update = db.prepare('UPDATE sessions SET custom_name = ? WHERE session_id = ?');
+  for (const row of rows) {
+    if (!isCommentShapedTitle(row.custom_name)) {
+      continue;
+    }
+    update.run(titleFromPrompt(row.custom_name).slice(0, 120) || null, row.session_id);
+  }
+  console.log(`Running migration: retitled ${rows.length} comment-shaped session name(s)`);
+};
+
+/**
  * Adds `planner_memory_name`: the per-project planner identity injected into
  * every session as PLANNER_PROJECT. NULL means "use the project path basename".
  */
@@ -637,6 +662,7 @@ export const runMigrations = (db: Database) => {
     addSessionWorkerColumns(db);
     addSessionBootedColumn(db);
     addSessionBootStateColumn(db);
+    retitleCommentShapedSessionNames(db);
     addProjectPlannerMemoryColumn(db);
     addMemoryUpdateDiffsColumn(db);
     ensureProjectsForSessionPaths(db);

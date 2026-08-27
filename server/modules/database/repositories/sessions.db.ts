@@ -264,17 +264,21 @@ export const sessionsDb = {
     model?: string | null,
     upsertContext?: { provider: string; projectPath: string },
     chainPhase?: number | null,
+    title?: string | null,
   ): void {
     const db = getConnection();
+    // The announced title (codex job 5: the prompt file's name header) is
+    // authoritative — it replaces anything discovery derived from the prompt.
     const result = db.prepare(
       `UPDATE sessions
        SET origin = ?,
            base_commit = COALESCE(?, base_commit),
            chain_slug = COALESCE(?, chain_slug),
            chain_phase = COALESCE(?, chain_phase),
-           model = COALESCE(?, model)
+           model = COALESCE(?, model),
+           custom_name = COALESCE(?, custom_name)
        WHERE session_id = ? OR provider_session_id = ?`
-    ).run(origin, baseCommit ?? null, chainSlug ?? null, chainPhase ?? null, model ?? null, sessionId, sessionId);
+    ).run(origin, baseCommit ?? null, chainSlug ?? null, chainPhase ?? null, model ?? null, title ?? null, sessionId, sessionId);
 
     if (result.changes > 0 || !upsertContext) {
       return;
@@ -283,8 +287,8 @@ export const sessionsDb = {
     const effectiveProjectPath = resolveExistingProjectPath(normalizeProjectPath(upsertContext.projectPath));
     db.prepare(
       `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, origin, base_commit, chain_slug, chain_phase, model, jsonl_path, isArchived, created_at, updated_at)
-       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).run(sessionId, upsertContext.provider, sessionId, effectiveProjectPath, origin, baseCommit ?? null, chainSlug ?? null, chainPhase ?? null, model ?? null);
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).run(sessionId, upsertContext.provider, sessionId, title ?? null, effectiveProjectPath, origin, baseCommit ?? null, chainSlug ?? null, chainPhase ?? null, model ?? null);
   },
 
   /**
@@ -385,6 +389,25 @@ export const sessionsDb = {
          LIMIT ?`
       )
       .all(normalizedProjectPath, limit) as SessionRow[];
+
+    return normalizeSessionRows(rows);
+  },
+
+  /**
+   * Every session announced for a dispatch chain, any stage (codex job 5):
+   * the watchdog reads a running unit's build and verify sessions off these
+   * rows for the running-sessions poll.
+   */
+  listChainSessions(chainSlug: string): SessionRow[] {
+    const db = getConnection();
+    const rows = db
+      .prepare(
+        `SELECT ${SESSION_ROW_COLUMNS}
+         FROM sessions
+         WHERE chain_slug = ?
+           AND isArchived = 0`
+      )
+      .all(chainSlug) as SessionRow[];
 
     return normalizeSessionRows(rows);
   },

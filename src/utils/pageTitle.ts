@@ -1,13 +1,14 @@
 import type { Project, ProjectSession } from '../types/app';
+import { titleFromPrompt } from '../../shared/sessionTitle.js';
 
 const DEFAULT_PAGE_TITLE = 'Command Center';
 
 export const getSessionTitle = (session: ProjectSession): string => {
   if (session.__provider === 'cursor') {
-    return (session.name as string) || 'Untitled Session';
+    return titleFromPrompt(session.name as string) || 'Untitled Session';
   }
 
-  return (session.summary as string) || 'New Session';
+  return titleFromPrompt(session.summary as string) || 'New Session';
 };
 
 export const getPageTitle = (

@@ -32,6 +32,8 @@ export type SidebarProjectListProps = {
   activeSessions: SessionActivityMap;
   /** Live-run count per projectId; drives the project-row activity shimmer. */
   runningByProject: ReadonlyMap<string, number>;
+  /** Live runs per projectId with no chat row to carry the beam (worker sessions). */
+  unlistedRunningByProject: ReadonlyMap<string, number>;
   /** Projects open as multi-project workspace rows (desktop only). */
   workspaceProjectIds?: string[];
   /** Closes a project's workspace row (sidebar hover-close). */
@@ -82,6 +84,7 @@ export default function SidebarProjectList({
   loadingMoreProjects,
   activeSessions,
   runningByProject,
+  unlistedRunningByProject,
   workspaceProjectIds,
   onCloseWorkspaceProject,
   selectedSessionId,
@@ -164,6 +167,7 @@ export default function SidebarProjectList({
               onLoadMoreSessions={onLoadMoreSessions}
               activeSessions={activeSessions}
               runningSessionCount={runningByProject.get(project.projectId) ?? 0}
+              unlistedRunningCount={unlistedRunningByProject.get(project.projectId) ?? 0}
               // The workspace only renders with 2+ rows; a persisted lone
               // entry must not read as "open in workspace" in the sidebar.
               isInWorkspace={Boolean(

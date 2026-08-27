@@ -34,6 +34,9 @@ export type ChainManifestEntry = {
   /** The build stage's engine and model (codex job 2), from the runner's announce. */
   engine?: string;
   model?: string;
+  /** A twin of another chain's unit (codex job 5): hidden from the list, row kept. */
+  hidden?: boolean;
+  supersededBy?: string;
 };
 
 /** The watchdog's live chain snapshot (worker-runs response / chain_progress). */
@@ -90,7 +93,13 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
       kind: 'phase' as const,
     }));
   const current = chain.currentPhase ?? 0;
-  return entries.map((entry, i) => {
+  // Twins the watchdog marked hidden (codex job 5) leave the list here, so
+  // the column, the full-pane view and every drawer read one filtered list;
+  // the index keeps the chain's own numbering.
+  return entries.flatMap((entry, i) => {
+    if (entry.hidden) {
+      return [];
+    }
     const index = i + 1;
     let status: TodoListItemStatus = 'pending';
     if (chain.status === 'completed' || index < current) {
@@ -98,7 +107,7 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
     } else if (index === current) {
       status = chain.status === 'running' ? 'in-progress' : 'cancelled';
     }
-    return {
+    return [{
       key: `${chain.slug}:${index}`,
       chainSlug: chain.slug,
       index,
@@ -118,7 +127,7 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
       verifySessionId: entry.verifySessionId,
       engine: entry.engine,
       model: entry.model,
-    };
+    }];
   });
 }
 

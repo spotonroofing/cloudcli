@@ -14,6 +14,7 @@ import { normalizeProjectPath } from '@/shared/utils.js';
 import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/websocket/index.js';
 
 import { findUnpushedHandoff } from './handoff-push.js';
+import { UnitIdentityCache, hiddenTwinUnits, summarizeHidden, type TwinChain } from './chain-twins.js';
 
 type ChainStatus = 'running' | 'completed' | 'stopped' | 'failed';
 
@@ -166,8 +167,9 @@ type ChainSnapshot = {
   currentPhase: number | null;
   phaseActive: boolean;
   /** Manifest entries with the punch-list `done` count and the unit's commit
-   *  and timing metadata (ui13 job 14) folded in per unit. */
-  manifest: (ChainManifestEntry & { done: number | null } & ChainJobMeta)[] | null;
+   *  and timing metadata (ui13 job 14) folded in per unit; a twin superseded
+   *  by another chain's unit (codex job 5) is marked hidden with its winner. */
+  manifest: (ChainManifestEntry & { done: number | null; hidden?: true; supersededBy?: string } & ChainJobMeta)[] | null;
   startedAt: number;
   lastEventAt: number;
 };
@@ -219,6 +221,9 @@ class WatchdogService {
   private selfTestTimer: ReturnType<typeof setTimeout> | null = null;
   /** One directory watcher per running chain with a punch list (ui14 job 8). */
   private punchlistWatchers = new Map<string, { watcher: fs.FSWatcher; timer: ReturnType<typeof setTimeout> | null; mtimeMs: number }>();
+  /** Twin grouping (codex job 5): prompt-file identities and the last result per project. */
+  private twinIdentities = new UnitIdentityCache();
+  private twinResults = new Map<string, { signature: string; hidden: Map<string, Map<number, string>>; summary: string }>();
 
   /**
    * Every automatic behavior asks the System tab's stored policy at its
@@ -621,12 +626,52 @@ class WatchdogService {
     }
   }
 
+  /**
+   * Units hidden as twins across a project's chains (codex job 5), keyed
+   * slug → unit → winner. Recomputed when any chain's state changes; the
+   * hidden-row counts are logged once per change, and no row is deleted.
+   */
+  private hiddenTwins(projectPath: string): Map<string, Map<number, string>> {
+    const chains: TwinChain[] = [];
+    for (const chain of this.chains.values()) {
+      if (chain.projectPath === projectPath) {
+        chains.push({
+          slug: chain.slug,
+          projectPath: chain.projectPath,
+          status: chain.status,
+          currentPhase: chain.currentPhase,
+          startedAt: chain.startedAt,
+          units: chain.manifest?.length ?? Math.max(chain.phases ?? 0, chain.currentPhase ?? 0),
+        });
+      }
+    }
+    const signature = chains.map((chain) => `${chain.slug}:${chain.status}:${chain.currentPhase}:${chain.units}`).join('|');
+    const cached = this.twinResults.get(projectPath);
+    if (cached && cached.signature === signature) {
+      return cached.hidden;
+    }
+    const hiddenUnits = hiddenTwinUnits(chains, (chain) => this.twinIdentities.identities(chain));
+    const hidden = new Map<string, Map<number, string>>();
+    for (const unit of hiddenUnits) {
+      const bySlug = hidden.get(unit.slug) ?? new Map<number, string>();
+      bySlug.set(unit.index, unit.supersededBy);
+      hidden.set(unit.slug, bySlug);
+    }
+    const summary = summarizeHidden(hiddenUnits);
+    if (summary !== cached?.summary) {
+      log(`twins hidden for ${projectPath}: ${summary || 'none'} (${hiddenUnits.length} rows hidden, 0 deleted)`);
+    }
+    this.twinResults.set(projectPath, { signature, hidden, summary });
+    return hidden;
+  }
+
   private chainSnapshot(chain: ChainRecord): ChainSnapshot {
     // Per-unit done counts come from the punch list file, re-read here on
     // every snapshot — so each chain event's broadcast and each worker-runs
     // fetch (the 20s poll catches mid-phase commits) carries fresh counts.
     const doneCounts = punchlistDoneCounts(chain.punchlist, chain.manifest);
     this.observeTaskCheckoffs(chain, doneCounts);
+    const hidden = this.hiddenTwins(chain.projectPath).get(chain.slug);
     return {
       slug: chain.slug,
       projectPath: chain.projectPath,
@@ -635,7 +680,12 @@ class WatchdogService {
       currentPhase: chain.currentPhase,
       phaseActive: chain.phaseActive,
       manifest: chain.manifest
-        ? chain.manifest.map((entry, i) => ({ ...entry, done: doneCounts?.[i] ?? null, ...(chain.jobs[i + 1] ?? {}) }))
+        ? chain.manifest.map((entry, i) => ({
+            ...entry,
+            done: doneCounts?.[i] ?? null,
+            ...(chain.jobs[i + 1] ?? {}),
+            ...(hidden?.has(i + 1) ? { hidden: true as const, supersededBy: hidden.get(i + 1) } : {}),
+          }))
         : null,
       startedAt: chain.startedAt,
       lastEventAt: chain.lastEventAt,
@@ -937,9 +987,48 @@ class WatchdogService {
    */
   listActiveDispatchRuns(): Array<{ sessionId: string; provider: string; startedAt: number }> {
     const now = Date.now();
-    return [...this.dispatchRuns.values()]
+    const runs = [...this.dispatchRuns.values()]
       .filter((run) => !run.ended && now - run.lastEventAt < STUCK_SILENCE_MS)
       .map((run) => ({ sessionId: run.sessionId, provider: run.provider, startedAt: run.startedAt }));
+    // Chain-runner sessions (codex job 5) never pass through the in-server
+    // run registry, so the beam and counters read them off the chain
+    // registry with the worker pane's liveness rule: the current unit's
+    // build session while the phase is active, and any unit's verify session
+    // while its verify runs. A dead runner is settled by the liveness sweep.
+    const seen = new Set(runs.map((run) => run.sessionId));
+    for (const chain of this.chains.values()) {
+      if (chain.status !== 'running') {
+        continue;
+      }
+      const verifying = new Map<string, number>();
+      for (const [unit, meta] of Object.entries(chain.jobs)) {
+        if (meta.verify === 'running' && meta.verifySessionId) {
+          verifying.set(meta.verifySessionId, Number(unit));
+        }
+      }
+      const buildLive = chain.phaseActive && chain.currentPhase != null;
+      if (!buildLive && !verifying.size) {
+        continue;
+      }
+      for (const row of sessionsDb.listChainSessions(chain.slug)) {
+        if (seen.has(row.session_id)) {
+          continue;
+        }
+        const verifyUnit = verifying.get(row.session_id);
+        let startedAt: number | null = null;
+        if (verifyUnit != null) {
+          startedAt = chain.jobs[verifyUnit]?.verifyStartedAt ?? chain.lastEventAt;
+        } else if (buildLive && row.chain_phase === chain.currentPhase) {
+          startedAt = chain.jobs[chain.currentPhase as number]?.startedAt ?? chain.lastEventAt;
+        }
+        if (startedAt == null) {
+          continue;
+        }
+        seen.add(row.session_id);
+        runs.push({ sessionId: row.session_id, provider: row.provider, startedAt });
+      }
+    }
+    return runs;
   }
 
   permissionEvent(sessionId: string, kind: 'permission_request' | 'interactive_prompt', detail?: string): void {

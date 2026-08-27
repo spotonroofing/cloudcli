@@ -37,6 +37,8 @@ type SidebarProjectItemProps = {
   currentTime: Date;
   /** Live runs inside this project; the row shimmers while nonzero and collapsed. */
   runningSessionCount: number;
+  /** Live runs with no chat row of their own (dispatched, direct, verify sessions). */
+  unlistedRunningCount: number;
   /** True when the project is open as a multi-project workspace row. */
   isInWorkspace: boolean;
   /** Closes the project's workspace row (hover-revealed X on rows that have one). */
@@ -107,6 +109,7 @@ export default function SidebarProjectItem({
   isLoadingMoreSessions,
   currentTime,
   runningSessionCount,
+  unlistedRunningCount,
   onEditingNameChange,
   onEditingPlannerNameChange,
   onEditingPathChange,
@@ -136,8 +139,10 @@ export default function SidebarProjectItem({
   const [hovered, setHovered] = useState(false);
   // Activity shimmer: the project row carries the beam while any of its
   // sessions runs; expanding hands the shimmer to the running chat rows —
-  // every hand-off is the engine's fade, never a hard cutoff.
-  const beam = useBeamPresence(runningSessionCount > 0 && !isExpanded);
+  // every hand-off is the engine's fade, never a hard cutoff. A worker
+  // session (dispatched, direct, verify) has no chat row to hand off to, so
+  // the project row keeps the beam for it while expanded (codex job 5).
+  const beam = useBeamPresence(runningSessionCount > 0 && (!isExpanded || unlistedRunningCount > 0));
   // A subtle row highlight stands in for the bounce dot whenever the dot's
   // destination row isn't rendered (ui9 B5 dot rules: never a dot on a
   // collapsed/closed project row): the open chat's project is collapsed, or

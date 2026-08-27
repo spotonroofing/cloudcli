@@ -30,6 +30,8 @@ import type {
   WorkspacePathValidationResult,
 } from '@/shared/types.js';
 
+import { promptHeaderName, stripHeaderComments } from '../../shared/sessionTitle.js';
+
 //----------------- ENVIRONMENT UTILITIES ------------
 /**
  * Indicates whether the backend is running in hosted Platform mode rather than
@@ -159,7 +161,13 @@ const MAX_SESSION_TITLE_WORDS = 4;
  * Derives a CloudCLI session title from a message: its first four whole words.
  */
 export function buildSessionTitleFromMessage(message: string): string {
-  const words = message.trim().split(/\s+/).filter(Boolean);
+  // A prompt-file message (codex job 5) is titled by its name header, never
+  // by its header comments or the raw prompt text.
+  const headerName = promptHeaderName(message);
+  if (headerName) {
+    return headerName;
+  }
+  const words = stripHeaderComments(message).split(/\s+/).filter(Boolean);
   return words.slice(0, MAX_SESSION_TITLE_WORDS).join(' ') || 'Untitled Session';
 }
 
@@ -847,7 +855,9 @@ export function readProviderSkillMarkdownDefinitionFromContent(
  * If the normalized input is empty, it returns the supplied fallback title.
  */
 export function normalizeSessionName(rawValue: string | undefined, fallback: string): string {
-  const normalized = (rawValue ?? '').replace(/\s+/g, ' ').trim();
+  // Provider-native names can be the raw prompt a headless run was fed
+  // (codex job 5): a name header wins, and header comments never survive.
+  const normalized = promptHeaderName(rawValue) ?? stripHeaderComments(rawValue);
   if (!normalized) {
     return fallback;
   }

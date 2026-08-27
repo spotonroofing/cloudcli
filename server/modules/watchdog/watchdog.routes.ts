@@ -132,7 +132,10 @@ export function createWatchdogRouter(): express.Router {
       const baseCommit = typeof body.baseCommit === 'string' && body.baseCommit.trim() ? body.baseCommit.trim() : null;
       const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : null;
       const phase = Number.isFinite(Number(body.phase)) ? Number(body.phase) : null;
-      sessionsDb.setSessionOrigin(sessionId, 'dispatch', baseCommit, slug, model, { provider, projectPath }, phase);
+      // The runner names the session from the prompt file's name header
+      // (codex job 5): "<name>" for a build, "Verify: <name>" for a verify.
+      const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 120) : null;
+      sessionsDb.setSessionOrigin(sessionId, 'dispatch', baseCommit, slug, model, { provider, projectPath }, phase, title);
       // The verify stage's session (ui14 job 10) is the same row shape, tagged
       // on the chain's job metadata so the UI can tell it from the build; a
       // build announce records the unit's engine and model for the jobs column.

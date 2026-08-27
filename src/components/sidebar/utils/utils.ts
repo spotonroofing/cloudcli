@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next';
 
 import type { LLMProvider, Project, ProjectSession } from '../../../types/app';
 import type { SessionViewModel, SessionWithProvider } from '../types/types';
+import { titleFromPrompt } from '../../../../shared/sessionTitle.js';
 
 export const formatCompactAge = (
   dateString: string | null | undefined,
@@ -76,7 +77,11 @@ export const getSessionDate = (session: SessionWithProvider): Date => {
 };
 
 export const getSessionName = (session: SessionWithProvider, t: TFunction): string => {
-  return session.summary || session.name || t('projects.newSession');
+  // Header comments never reach a row title (codex job 5): a stale
+  // prompt-shaped name still reads as its name header until the refetch.
+  return titleFromPrompt(session.summary as string | undefined)
+    || titleFromPrompt(session.name as string | undefined)
+    || t('projects.newSession');
 };
 
 export const getSessionTime = (session: SessionWithProvider): string => {

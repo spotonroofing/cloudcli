@@ -9,6 +9,7 @@ import { useSidebarController } from '../hooks/useSidebarController';
 import { usePaletteOps } from '../../../contexts/PaletteOpsContext';
 import type { LLMProvider } from '../../../types/app';
 import type { ActiveSessionRow, RunningRunInfo, SidebarProps } from '../types/types';
+import { titleFromPrompt } from '../../../../shared/sessionTitle.js';
 
 import SidebarCollapsed from './subcomponents/SidebarCollapsed';
 import SidebarContent from './subcomponents/SidebarContent';
@@ -166,7 +167,7 @@ function Sidebar({
   // (ui11 phase 12). Live-run identity comes from the enriched run registry
   // poll; sessions the UI already loaded fill the gap between polls
   // (activeSessions flips instantly on websocket events).
-  const { plannerRunningCount, workerRunningCount, runningByProject, activeSessionRows } = useMemo(() => {
+  const { plannerRunningCount, workerRunningCount, runningByProject, unlistedRunningByProject, activeSessionRows } = useMemo(() => {
     type SessionInfo = {
       origin: string | null;
       projectId: string | null;
@@ -176,13 +177,17 @@ function Sidebar({
       run: RunningRunInfo | null;
     };
     const infoBySession = new Map<string, SessionInfo>();
+    // Sessions the chat list renders; a running session outside this set
+    // (worker-origin rows never list as chats) has no row to carry a beam.
+    const listedIds = new Set<string>();
     for (const project of projects) {
       for (const session of project.sessions ?? []) {
+        listedIds.add(String(session.id));
         infoBySession.set(String(session.id), {
           origin: (session.origin as string | null) ?? null,
           projectId: project.projectId,
           projectDisplayName: project.displayName ?? null,
-          title: (session.summary || session.title || session.name || null) as string | null,
+          title: titleFromPrompt((session.summary || session.title || session.name || null) as string | null) || null,
           provider: session.__provider ?? session.provider ?? 'claude',
           run: null,
         });
@@ -194,7 +199,7 @@ function Sidebar({
         origin: run.origin,
         projectId: run.projectId,
         projectDisplayName: run.projectDisplayName ?? loaded?.projectDisplayName ?? null,
-        title: run.title ?? loaded?.title ?? null,
+        title: titleFromPrompt(run.title) || loaded?.title || null,
         provider: run.provider,
         run,
       });
@@ -208,6 +213,7 @@ function Sidebar({
     let planner = 0;
     let worker = 0;
     const byProject = new Map<string, number>();
+    const unlistedByProject = new Map<string, number>();
     const rows: ActiveSessionRow[] = [];
     for (const sessionId of runningIds) {
       const info = infoBySession.get(sessionId);
@@ -218,6 +224,9 @@ function Sidebar({
       else worker += 1;
       if (info?.projectId) {
         byProject.set(info.projectId, (byProject.get(info.projectId) ?? 0) + 1);
+        if (!listedIds.has(sessionId)) {
+          unlistedByProject.set(info.projectId, (unlistedByProject.get(info.projectId) ?? 0) + 1);
+        }
       }
 
       // Worker rows carry the run switcher's label; planner rows the session
@@ -257,6 +266,7 @@ function Sidebar({
       plannerRunningCount: planner,
       workerRunningCount: worker,
       runningByProject: byProject,
+      unlistedRunningByProject: unlistedByProject,
       activeSessionRows: rows,
     };
   }, [projects, runningRuns, activeSessions, attentionSessionIds, t]);
@@ -311,6 +321,7 @@ function Sidebar({
     loadingMoreProjects,
     activeSessions,
     runningByProject,
+    unlistedRunningByProject,
     workspaceProjectIds,
     onCloseWorkspaceProject,
     selectedSessionId: selectedSession ? String(selectedSession.id) : null,

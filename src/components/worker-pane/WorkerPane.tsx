@@ -15,6 +15,7 @@ import { Badge, Button, Skeleton, Tooltip } from '../../shared/view/ui';
 import { ActionSwapIcon } from '../../shared/view/beui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
+import { titleFromPrompt } from '../../../shared/sessionTitle.js';
 
 import JobsSidebar, { type ChainSnapshot, type JobGroup } from './JobsSidebar';
 
@@ -55,7 +56,7 @@ const runLabel = (run: WorkerRun, chains: Record<string, ChainSnapshot>): string
     }
     return run.chainSlug;
   }
-  return run.title || `run ${run.sessionId.slice(0, 8)}`;
+  return titleFromPrompt(run.title) || `run ${run.sessionId.slice(0, 8)}`;
 };
 
 type WorkerPaneProps = {
@@ -274,8 +275,8 @@ export default function WorkerPane({
   // run's own session title, else the chain label ("slug Job N - name"); a
   // fresh, unsent pane session has none yet.
   const paneTitle = selectedRun
-    ? (selectedRun.title || runLabel(selectedRun, chains))
-    : (paneSession?.summary ?? '').trim();
+    ? (titleFromPrompt(selectedRun.title) || runLabel(selectedRun, chains))
+    : titleFromPrompt(paneSession?.summary);
 
   // Jobs are the navigation (ui13 job 2) and the list spans every run of the
   // project (ui14 job 1): each chain is a group carrying the sessions its
