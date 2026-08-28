@@ -146,3 +146,12 @@ Goal: appended units of kind "task" render as smaller, indented, lighter rows in
 - [ ] The area file documents that units have one row style.
 
 Done check: on dev with a stub chain that has one phase unit and one task-kind unit, both rows measure the same height, indent and font size and carry the same ring; `dispatch append` without `--phase` stores kind phase; tests pass. Commit.
+
+## Job 12 — Fast mode shows as a bolt, not a word (2026-08-28, Willem). Verify: no
+
+Goal: with fast mode on, the composer's model trigger shows a small muted `fast` text tag beside the model and effort; Willem wants a lightning bolt icon instead, nothing else changes. Files: the composer model trigger and menu (`src/components/chat/view/subcomponents/ComposerModelMenu.tsx` and the trigger it renders), `design/composer.md`.
+
+- [ ] When fast mode is enabled the trigger shows a small lightning bolt icon (the app's icon set, same muted ink and size as the trigger's chevron) in place of the `fast` text; nothing renders when it is off; the switch row inside the menu keeps its label and cost line.
+- [ ] Both panes, phone holds; `design/composer.md` updated.
+
+Done check: on dev with fast mode on for a GPT-5.6 session the trigger contains the bolt icon and no `fast` text; off shows neither; 390px holds; tests pass. Commit.
