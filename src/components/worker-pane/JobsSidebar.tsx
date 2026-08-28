@@ -1,6 +1,6 @@
 import { ChevronDown, Cpu, GitCommitHorizontal, Hash, MessageSquare, Pause } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { cn } from '../../lib/utils';
 import { AgentDisclosure } from '../../shared/view/beui/AgentDisclosure';
