@@ -13,6 +13,7 @@ import type {
 import { STANDALONE_PROJECT_ID } from '../types/app';
 import { writeSetting } from '../utils/cloudSettings';
 import { findLatestPlannerSession } from '../utils/plannerSessions';
+import type { ResponseIndicatorInfo, RunningRunInfo } from '../components/sidebar/types/types';
 
 import type { SessionActivityMap } from './useSessionProtection';
 
@@ -27,6 +28,7 @@ type UseProjectsStateArgs = {
   subscribe: (listener: (event: ServerEvent) => void) => () => void;
   isMobile: boolean;
   activeSessions: SessionActivityMap;
+  runningRuns: RunningRunInfo[];
 };
 
 /**
@@ -361,6 +363,7 @@ export function useProjectsState({
   subscribe,
   isMobile,
   activeSessions,
+  runningRuns,
 }: UseProjectsStateArgs) {
   // In a scoped tab every in-app navigation stays under the project prefix so
   // the tab never escapes its project.
@@ -371,9 +374,12 @@ export function useProjectsState({
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSession, setSelectedSession] = useState<ProjectSession | null>(null);
   const [attentionSessionIds, setAttentionSessionIds] = useState<Set<string>>(new Set());
+  const [responseIndicators, setResponseIndicators] = useState<Map<string, ResponseIndicatorInfo>>(new Map());
   // Desktop is chat-only (phase 2 chrome strip): ignore a persisted non-chat
   // tab so removed views never mount, even for one frame, on load.
   const [activeTab, setActiveTab] = useState<AppTab>(() => (isMobile ? readPersistedTab() : 'chat'));
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
 
   useEffect(() => {
     try {
@@ -429,6 +435,12 @@ export function useProjectsState({
   selectedProjectRef.current = selectedProject;
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
+  // Live-run rows disappear after completion, so retain their last known
+  // identity long enough to classify the unseen response that replaces them.
+  const runIdentityRef = useRef(new Map<string, Pick<RunningRunInfo, 'origin' | 'projectId'>>());
+  for (const run of runningRuns) {
+    runIdentityRef.current.set(run.sessionId, { origin: run.origin, projectId: run.projectId });
+  }
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
   /** URL session id whose backend lookup already ran (or is in flight) — one attempt per id. */
@@ -438,42 +450,94 @@ export function useProjectsState({
     sessionLookupRef.current = null;
   }, [sessionId]);
 
-  const markSessionAttention = useCallback((targetSessionId?: string | null) => {
+  const markResponseIndicator = useCallback((targetSessionId?: string | null) => {
     if (!targetSessionId) {
       return;
     }
 
     const viewedSessionId = selectedSessionRef.current?.id ?? sessionId ?? null;
-    if (targetSessionId === viewedSessionId) {
+    const visibleHere = targetSessionId === viewedSessionId
+      && activeTabRef.current === 'chat'
+      && (typeof document === 'undefined' || document.visibilityState === 'visible');
+    if (visibleHere) {
       return;
     }
 
-    setAttentionSessionIds((previous) => {
+    const cachedRun = runIdentityRef.current.get(targetSessionId);
+    let origin: string | null = cachedRun?.origin ?? null;
+    let projectId = cachedRun?.projectId ?? null;
+    if (!cachedRun) {
+      for (const project of projectsRef.current) {
+        const session = project.sessions?.find((candidate) => String(candidate.id) === targetSessionId);
+        if (!session) continue;
+        origin = session.origin ?? null;
+        projectId = project.projectId;
+        break;
+      }
+    }
+    const kind: ResponseIndicatorInfo['kind'] = origin === null || origin === 'planner' ? 'planner' : 'worker';
+
+    setResponseIndicators((previous) => {
       if (previous.has(targetSessionId)) {
         return previous;
       }
 
+      const next = new Map(previous);
+      next.set(targetSessionId, { kind, projectId });
+      return next;
+    });
+  }, [sessionId]);
+
+  const clearResponseIndicator = useCallback((targetSessionId?: string | null) => {
+    if (!targetSessionId) {
+      return;
+    }
+
+    setResponseIndicators((previous) => {
+      if (!previous.has(targetSessionId)) {
+        return previous;
+      }
+
+      const next = new Map(previous);
+      next.delete(targetSessionId);
+      return next;
+    });
+  }, []);
+
+  const markSessionAttention = useCallback((targetSessionId?: string | null) => {
+    if (!targetSessionId) return;
+    const viewedSessionId = selectedSessionRef.current?.id ?? sessionId ?? null;
+    if (targetSessionId === viewedSessionId) return;
+    setAttentionSessionIds((previous) => {
+      if (previous.has(targetSessionId)) return previous;
       const next = new Set(previous);
       next.add(targetSessionId);
       return next;
     });
   }, [sessionId]);
 
-  const clearSessionAttention = useCallback((targetSessionId?: string | null) => {
-    if (!targetSessionId) {
-      return;
-    }
-
+  const clearSessionIndicators = useCallback((targetSessionId?: string | null) => {
+    if (!targetSessionId) return;
+    clearResponseIndicator(targetSessionId);
     setAttentionSessionIds((previous) => {
-      if (!previous.has(targetSessionId)) {
-        return previous;
-      }
-
+      if (!previous.has(targetSessionId)) return previous;
       const next = new Set(previous);
       next.delete(targetSessionId);
       return next;
     });
-  }, []);
+  }, [clearResponseIndicator]);
+
+  // Poll-driven and websocket-driven runs share the same completion edge.
+  // Watching the activity map covers dispatch/direct sessions whose runtime
+  // does not stream into the currently open chat socket.
+  const previousActiveSessionIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const current = new Set(activeSessions.keys());
+    for (const previousId of previousActiveSessionIdsRef.current) {
+      if (!current.has(previousId)) markResponseIndicator(previousId);
+    }
+    previousActiveSessionIdsRef.current = current;
+  }, [activeSessions, markResponseIndicator]);
 
   const fetchProjects = useCallback(async ({ showLoadingState = true }: FetchProjectsOptions = {}) => {
     try {
@@ -716,11 +780,12 @@ export function useProjectsState({
       const eventSessionId = typeof event.sessionId === 'string' && event.sessionId
         ? event.sessionId
         : null;
-      const viewedSessionId = selectedSessionRef.current?.id ?? sessionId ?? null;
 
+      if (event.kind === 'complete' && event.aborted !== true) {
+        markResponseIndicator(eventSessionId);
+      }
       if (
         eventSessionId
-        && eventSessionId !== viewedSessionId
         && event.kind !== 'chat_subscribed'
         && event.kind !== 'loading_progress'
         && event.kind !== 'session_upserted'
@@ -869,7 +934,7 @@ export function useProjectsState({
     };
 
     return subscribe(handleEvent);
-  }, [basePath, markSessionAttention, navigate, sessionId, subscribe]);
+  }, [basePath, markResponseIndicator, markSessionAttention, navigate, sessionId, subscribe]);
 
   useEffect(() => {
     return () => {
@@ -881,8 +946,8 @@ export function useProjectsState({
   }, []);
 
   useEffect(() => {
-    clearSessionAttention(selectedSession?.id ?? sessionId ?? null);
-  }, [clearSessionAttention, selectedSession?.id, sessionId]);
+    clearSessionIndicators(selectedSession?.id ?? sessionId ?? null);
+  }, [clearSessionIndicators, selectedSession?.id, sessionId]);
 
   useEffect(() => {
     if (!sessionId) {
@@ -1051,7 +1116,7 @@ export function useProjectsState({
 
   const handleSessionSelect = useCallback(
     (session: ProjectSession) => {
-      clearSessionAttention(session.id);
+      clearSessionIndicators(session.id);
       setSelectedSession(session);
 
       if (isMobile) {
@@ -1062,7 +1127,7 @@ export function useProjectsState({
 
       navigate(`${basePath}/session/${session.id}`);
     },
-    [activeTab, basePath, clearSessionAttention, isMobile, navigate],
+    [basePath, clearSessionIndicators, isMobile, navigate],
   );
 
   const handleNewSession = useCallback(
@@ -1082,7 +1147,7 @@ export function useProjectsState({
 
   const handleSessionDelete = useCallback(
     (sessionIdToDelete: string) => {
-      clearSessionAttention(sessionIdToDelete);
+      clearSessionIndicators(sessionIdToDelete);
 
       if (selectedSession?.id === sessionIdToDelete) {
         setSelectedSession(null);
@@ -1093,7 +1158,7 @@ export function useProjectsState({
         prevProjects.map((project) => removeSessionFromProject(project, sessionIdToDelete)),
       );
     },
-    [clearSessionAttention, navigate, rootPath, selectedSession?.id],
+    [clearSessionIndicators, navigate, rootPath, selectedSession?.id],
   );
 
   const handleSidebarRefresh = useCallback(async () => {
@@ -1221,6 +1286,8 @@ export function useProjectsState({
       selectedSession,
       activeSessions,
       attentionSessionIds,
+      responseIndicators,
+      onSessionViewed: clearSessionIndicators,
       onProjectSelect: handleProjectSelect,
       onSessionSelect: handleSessionSelect,
       onNewSession: handleNewSession,
@@ -1237,7 +1304,9 @@ export function useProjectsState({
       isMobile,
     }),
     [
+      responseIndicators,
       attentionSessionIds,
+      clearSessionIndicators,
       handleNewSession,
       handleProjectDelete,
       handleProjectSelect,

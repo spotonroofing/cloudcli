@@ -6,6 +6,7 @@ import { cn } from '../../../../lib/utils';
 import { MarqueeLabel } from '../../../../shared/view/beui';
 
 import ChatRowMenu, { type ChatRowMenuProps } from './ChatRowMenu';
+import ResponseSignal, { type ActivityKinds } from './ResponseSignal';
 
 type ChatRowProps = {
   href: string;
@@ -23,6 +24,7 @@ type ChatRowProps = {
   onSelect: () => void;
   /** Renders inside the row's relative box (the activity border beam). */
   overlay?: ReactNode;
+  responseKinds?: ActivityKinds;
   /** Saves an inline rename; the row owns the editing state. */
   onRename: (name: string) => void | Promise<void>;
   menu: Omit<ChatRowMenuProps, 'onRename'>;
@@ -48,6 +50,7 @@ export default function ChatRow({
   isSelected,
   onSelect,
   overlay,
+  responseKinds = { planner: false, worker: false },
   onRename,
   menu,
   dataTestId,
@@ -90,7 +93,7 @@ export default function ChatRow({
       onMouseEnter={() => setRowHovered(true)}
       onMouseLeave={() => setRowHovered(false)}
       className={cn(
-        'group relative flex min-w-0 items-center gap-2 rounded-lg py-2 pl-4 pr-3 text-left transition-colors',
+        'group relative flex min-w-0 items-center gap-2 rounded-lg py-2 pl-3 pr-3 text-left transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
         isSelected ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
       )}
@@ -110,7 +113,7 @@ export default function ChatRow({
               else if (event.key === 'Escape') setIsEditing(false);
             }}
             onClick={(event) => event.stopPropagation()}
-            className="w-full min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-base text-foreground md:text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-base text-foreground focus:outline-none focus:ring-1 focus:ring-primary md:text-xs"
             autoFocus
           />
           <button
@@ -158,6 +161,8 @@ export default function ChatRow({
           </span>
         </span>
       )}
+
+      <ResponseSignal kinds={responseKinds} />
 
       {/* Trailing control: the arrow is the resting state; on row hover it
           morphs into the three-dots trigger for the shared menu. */}

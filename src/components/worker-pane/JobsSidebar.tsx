@@ -555,7 +555,8 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
                       ) : (
                         <TodoStatusIcon
                           status={unit.status}
-                          sweepOnComplete
+                          sweepOnComplete={unit.verify !== 'running'}
+                          centerSpinner={unit.verify === 'running' && Boolean(unit.commitHash)}
                           // Jobs mono, tasks semantic (ui13 job 1): the job
                           // row's check and ring render in the foreground ink;
                           // green stays on task icons and the counters.
@@ -567,9 +568,12 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
                           // glowing. A manifest-less job keeps a plain circle
                           // (ramped spinner while working).
                           segments={
-                            (unit.status === 'in-progress' || unit.status === 'pending')
-                            && unit.tasks.length > 0
-                              ? { done: displayedDone(unit), total: unit.tasks.length }
+                            unit.tasks.length > 0
+                            && (unit.status === 'in-progress' || unit.status === 'pending' || unit.verify === 'running')
+                              ? {
+                                  done: unit.verify === 'running' ? unit.tasks.length : displayedDone(unit),
+                                  total: unit.tasks.length,
+                                }
                               : undefined
                           }
                         />

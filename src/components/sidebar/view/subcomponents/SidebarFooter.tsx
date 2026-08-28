@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Compass, Hammer, Settings, AlertTriangle, AtSign, BookMarked } from 'lucide-react';
+import { Settings, AlertTriangle, AtSign, BookMarked } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { NumberTicker } from '../../../../shared/view/beui';
 import { cn } from '../../../../lib/utils';
 import { authenticatedFetch } from '../../../../utils/api';
 import type { ActiveSessionRow } from '../../types/types';
 
 import AccountsPanel from './AccountsPanel';
 import ActiveSessionsDrawer from './ActiveSessionsDrawer';
+import ActivityCounterButton from './ActivityCounterButton';
+import type { ActivityKinds } from './ResponseSignal';
 
 type SidebarFooterProps = {
   restartRequired: boolean;
@@ -27,6 +28,8 @@ type SidebarFooterProps = {
   plannerRunningCount: number;
   /** Live worker-origin runs (direct, dispatch, external). */
   workerRunningCount: number;
+  /** Unseen completed responses, using the same planner/worker identity. */
+  responseKinds: ActivityKinds;
   /** Labeled active-session rows the counter drawers list (ui11 phase 12). */
   activeSessionRows: ActiveSessionRow[];
   /** Opens a drawer row's session in the pane. */
@@ -35,49 +38,6 @@ type SidebarFooterProps = {
   isMobile: boolean;
   t: TFunction;
 };
-
-/**
- * One column of the bottom activity bar (ui8 phase 3): icon, label, rolling
- * count on the planner/worker colorway. The column breathes (opacity/filter
- * swell) while its count is nonzero; the whole bar hides when both are zero.
- * A click opens that kind's drawer (ui11 phase 12) — also at count zero, so
- * the behavior never special-cases into a jump.
- */
-function ActivityCounterColumn({
-  kind,
-  count,
-  label,
-  onOpen,
-}: {
-  kind: 'planner' | 'worker';
-  count: number;
-  label: string;
-  onOpen: () => void;
-}) {
-  const Icon = kind === 'planner' ? Compass : Hammer;
-  const active = count > 0;
-
-  return (
-    <button
-      type="button"
-      data-slot={`${kind}-counter`}
-      data-count={count}
-      onClick={onOpen}
-      className={cn(
-        'flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-medium outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
-        active
-          ? kind === 'planner'
-            ? 'animate-counter-breathe text-primary'
-            : 'animate-counter-breathe text-emerald-700 dark:text-emerald-300'
-          : 'text-muted-foreground',
-      )}
-    >
-      <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-      <span className="truncate">{label}</span>
-      <NumberTicker value={count} className="tabular-nums" />
-    </button>
-  );
-}
 
 /**
  * One taskbar icon (ui13 job 4): icon-only, 44px hit area via touch-hit. The
@@ -131,6 +91,7 @@ export default function SidebarFooter({
   onDrawerOpened,
   plannerRunningCount,
   workerRunningCount,
+  responseKinds,
   activeSessionRows,
   onOpenActiveSession,
   isMobile,
@@ -142,8 +103,8 @@ export default function SidebarFooter({
   // ui11 phase 5) or a counter drawer (ui11 phase 12). Both unfold in-flow
   // above the taskbar (ui13 job 4); Settings and Memory left for full-sidebar
   // surfaces the parent owns (ui13 job 5).
-  const [openDrawer, setOpenDrawer] = useState<'accounts' | 'planner' | 'worker' | null>(null);
-  const toggleDrawer = (drawer: 'accounts' | 'planner' | 'worker') =>
+  const [openDrawer, setOpenDrawer] = useState<'accounts' | 'activity' | null>(null);
+  const toggleDrawer = (drawer: 'accounts' | 'activity') =>
     setOpenDrawer((current) => {
       if (current === drawer) return null;
       onDrawerOpened();
@@ -163,6 +124,10 @@ export default function SidebarFooter({
   useEffect(() => {
     if (settingsOpen || memoryOpen) setOpenDrawer(null);
   }, [settingsOpen, memoryOpen]);
+
+  useEffect(() => {
+    if (!showCounterBar && openDrawer === 'activity') setOpenDrawer(null);
+  }, [openDrawer, showCounterBar]);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,7 +152,7 @@ export default function SidebarFooter({
   // drawer; presses inside stay with the triggers so a second tap toggles.
   // Mobile sheets close through their own scrim.
   useEffect(() => {
-    if (openDrawer === null || isMobile) return;
+    if (openDrawer === null || openDrawer === 'accounts' || isMobile) return;
     const onPointerDown = (event: PointerEvent) => {
       if (footerRef.current && !footerRef.current.contains(event.target as Node)) {
         setOpenDrawer(null);
@@ -228,19 +193,15 @@ export default function SidebarFooter({
           <div className="px-2 py-1.5">
             <div
               data-slot="activity-counter-bar"
-              className="grid grid-cols-2 divide-x divide-border/60 rounded-lg border border-border/60 bg-muted/30"
+              className="rounded-lg border border-border/60 bg-muted/30"
             >
-              <ActivityCounterColumn
-                kind="planner"
-                count={plannerRunningCount}
-                label={t('running.plannerCounter', 'Planner')}
-                onOpen={() => toggleDrawer('planner')}
-              />
-              <ActivityCounterColumn
-                kind="worker"
-                count={workerRunningCount}
-                label={t('running.workerCounter', 'Worker')}
-                onOpen={() => toggleDrawer('worker')}
+              <ActivityCounterButton
+                plannerCount={plannerRunningCount}
+                workerCount={workerRunningCount}
+                plannerLabel={t('running.plannerCounter', 'Planner')}
+                workerLabel={t('running.workerCounter', 'Worker')}
+                responseKinds={responseKinds}
+                onOpen={() => toggleDrawer('activity')}
               />
             </div>
           </div>
@@ -265,24 +226,25 @@ export default function SidebarFooter({
         onOpenChange={(open) => setOpenDrawer(open ? 'accounts' : null)}
         onActiveChange={setActiveAccountEmail}
         isMobile={isMobile}
+        dismissOnOutside={false}
         t={t}
       />
 
-      {(['planner', 'worker'] as const).map((kind) => (
-        <ActiveSessionsDrawer
-          key={kind}
-          kind={kind}
-          open={openDrawer === kind}
-          onClose={() => setOpenDrawer(null)}
-          rows={activeSessionRows}
-          onSelect={(row) => {
-            setOpenDrawer(null);
-            onOpenActiveSession(row);
-          }}
-          isMobile={isMobile}
-          t={t}
-        />
-      ))}
+      <ActiveSessionsDrawer
+        kinds={([
+          plannerRunningCount > 0 ? 'planner' : null,
+          workerRunningCount > 0 ? 'worker' : null,
+        ].filter(Boolean) as Array<'planner' | 'worker'>)}
+        open={openDrawer === 'activity'}
+        onClose={() => setOpenDrawer(null)}
+        rows={activeSessionRows}
+        onSelect={(row) => {
+          setOpenDrawer(null);
+          onOpenActiveSession(row);
+        }}
+        isMobile={isMobile}
+        t={t}
+      />
 
       {/* The footer taskbar (ui13 job 4): one left-aligned row of icon-only
           controls — Settings, account, Memory. */}

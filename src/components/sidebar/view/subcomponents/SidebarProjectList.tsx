@@ -5,8 +5,9 @@ import { BounceIndicator } from '../../../../shared/view/beui';
 import type { LoadingProgress, Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { SessionActivityMap } from '../../../../hooks/useSessionProtection';
 import { getPageTitle } from '../../../../utils/pageTitle';
-import type { SessionWithProvider } from '../../types/types';
+import type { ResponseIndicatorInfo, SessionWithProvider } from '../../types/types';
 
+import type { ActivityKinds } from './ResponseSignal';
 import SidebarProjectItem from './SidebarProjectItem';
 import SidebarProjectsState from './SidebarProjectsState';
 
@@ -30,10 +31,13 @@ export type SidebarProjectListProps = {
   onLoadMoreSessions: (projectId: string) => void;
   loadingMoreProjects: Set<string>;
   activeSessions: SessionActivityMap;
-  /** Live-run count per projectId; drives the project-row activity shimmer. */
-  runningByProject: ReadonlyMap<string, number>;
-  /** Live runs per projectId with no chat row to carry the beam (worker sessions). */
-  unlistedRunningByProject: ReadonlyMap<string, number>;
+  /** Live-run counts per projectId and identity; drives the project-row beam. */
+  runningByProject: ReadonlyMap<string, { planner: number; worker: number }>;
+  /** Live runs per projectId with no chat row to carry the beam. */
+  unlistedRunningByProject: ReadonlyMap<string, { planner: number; worker: number }>;
+  responseIndicators: ReadonlyMap<string, ResponseIndicatorInfo>;
+  responseKindsByProject: ReadonlyMap<string, ActivityKinds>;
+  onSessionViewed: (sessionId: string) => void;
   /** Projects open as multi-project workspace rows (desktop only). */
   workspaceProjectIds?: string[];
   /** Closes a project's workspace row (sidebar hover-close). */
@@ -85,6 +89,9 @@ export default function SidebarProjectList({
   activeSessions,
   runningByProject,
   unlistedRunningByProject,
+  responseIndicators,
+  responseKindsByProject,
+  onSessionViewed,
   workspaceProjectIds,
   onCloseWorkspaceProject,
   selectedSessionId,
@@ -166,8 +173,11 @@ export default function SidebarProjectList({
               onDeleteSession={onDeleteSession}
               onLoadMoreSessions={onLoadMoreSessions}
               activeSessions={activeSessions}
-              runningSessionCount={runningByProject.get(project.projectId) ?? 0}
-              unlistedRunningCount={unlistedRunningByProject.get(project.projectId) ?? 0}
+              runningKinds={runningByProject.get(project.projectId) ?? { planner: 0, worker: 0 }}
+              unlistedRunningKinds={unlistedRunningByProject.get(project.projectId) ?? { planner: 0, worker: 0 }}
+              responseIndicators={responseIndicators}
+              responseKinds={responseKindsByProject.get(project.projectId) ?? { planner: false, worker: false }}
+              onSessionViewed={onSessionViewed}
               // The workspace only renders with 2+ rows; a persisted lone
               // entry must not read as "open in workspace" in the sidebar.
               isInWorkspace={Boolean(

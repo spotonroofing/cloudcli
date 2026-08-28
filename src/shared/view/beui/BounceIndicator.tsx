@@ -216,7 +216,7 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
       aria-hidden="true"
       style={{ x, y, opacity }}
       className={cn(
-        'pointer-events-none absolute left-1 top-0 h-1.5 w-1.5 rounded-full bg-primary',
+        'pointer-events-none absolute left-0 top-0 h-1.5 w-1.5 rounded-full bg-primary',
         className,
       )}
     />

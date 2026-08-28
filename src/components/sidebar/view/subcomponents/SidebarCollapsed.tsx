@@ -91,16 +91,20 @@ export default function SidebarCollapsed({
           hidden entirely while nothing runs. */}
       {showCounters && (
         <div className="mt-auto flex flex-col items-center gap-1" data-slot="rail-activity-counters">
-          <RailCounter
-            kind="planner"
-            count={plannerRunningCount}
-            label={t('running.plannerCounter', 'Planner')}
-          />
-          <RailCounter
-            kind="worker"
-            count={workerRunningCount}
-            label={t('running.workerCounter', 'Worker')}
-          />
+          {plannerRunningCount > 0 && (
+            <RailCounter
+              kind="planner"
+              count={plannerRunningCount}
+              label={t('running.plannerCounter', 'Planner')}
+            />
+          )}
+          {workerRunningCount > 0 && (
+            <RailCounter
+              kind="worker"
+              count={workerRunningCount}
+              label={t('running.workerCounter', 'Worker')}
+            />
+          )}
         </div>
       )}
 

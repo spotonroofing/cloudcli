@@ -3,6 +3,7 @@ import { Ban, ChevronDown, ChevronUp, Loader2, LogIn, Plus, Power, Terminal, Und
 import type { TFunction } from 'i18next';
 
 import ProviderLoginModal from '../../../provider-auth/view/ProviderLoginModal';
+import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
 import { useWebSocket } from '../../../../contexts/WebSocketContext';
 import { Button } from '../../../../shared/view/ui';
 import { authenticatedFetch } from '../../../../utils/api';
@@ -53,6 +54,7 @@ export type CswapAccount = {
   lastGoodUsage?: CswapUsage | null;
   usageFetchedAt?: string;
   parkedUntil?: string;
+  plan?: string;
 };
 
 export type ChatgptAccount = {
@@ -72,6 +74,7 @@ type AccountsPanelProps = {
   /** Phone renders a full-width bottom sheet; desktop unfolds in-flow above
       the footer taskbar (ui13 job 4). */
   isMobile: boolean;
+  dismissOnOutside?: boolean;
   t: TFunction;
 };
 
@@ -146,7 +149,17 @@ const ROW_ACTION_CLASS =
   'touch-hit relative flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-30';
 
 /** One usage meter: label, the bar, percent, reset countdown. */
-function UsageBar({ label, kind, window: win }: { label: string; kind: string; window: CswapWindow | undefined }) {
+function UsageBar({
+  label,
+  kind,
+  window: win,
+  emptyLabel,
+}: {
+  label: string;
+  kind: string;
+  window: CswapWindow | undefined;
+  emptyLabel?: string;
+}) {
   const pct = typeof win?.pct === 'number' ? Math.max(0, Math.min(100, win.pct)) : null;
   const reset = win?.countdown || win?.clock || null;
 
@@ -160,6 +173,12 @@ function UsageBar({ label, kind, window: win }: { label: string; kind: string; w
       <span className="w-9 flex-shrink-0 truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </span>
+      {pct === null && emptyLabel ? (
+        <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" data-slot="account-usage-empty">
+          {emptyLabel}
+        </span>
+      ) : (
+        <>
       <span className="h-1 min-w-0 flex-1 overflow-hidden rounded-sm bg-muted">
         {pct !== null && (
           <span
@@ -177,11 +196,42 @@ function UsageBar({ label, kind, window: win }: { label: string; kind: string; w
       <span className="w-10 flex-shrink-0 whitespace-nowrap text-right text-[10px] tabular-nums text-muted-foreground">
         {reset ?? ''}
       </span>
+        </>
+      )}
     </div>
   );
 }
 
-export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMobile, t }: AccountsPanelProps) {
+function PlanTag({ plan }: { plan?: string | null }) {
+  if (!plan) return null;
+  return (
+    <span
+      className="flex-shrink-0 rounded-sm border border-border px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground"
+      data-slot="account-plan"
+    >
+      {plan}
+    </span>
+  );
+}
+
+function ProviderGroupHeader({ provider }: { provider: 'claude' | 'chatgpt' }) {
+  return (
+    <li
+      className="flex items-center gap-2 px-2 pb-1 pt-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+      data-slot="account-group-header"
+      data-provider={provider}
+    >
+      <span className="flex w-4 flex-shrink-0 justify-end" aria-hidden="true">
+        {provider === 'claude'
+          ? <LLMProviderLogo provider="claude" className="h-3.5 w-3.5" />
+          : <OpenAIMark className="h-3.5 w-3.5" />}
+      </span>
+      <span>{provider === 'claude' ? 'Claude' : 'ChatGPT'}</span>
+    </li>
+  );
+}
+
+export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMobile, dismissOnOutside = false, t }: AccountsPanelProps) {
   const [accounts, setAccounts] = useState<CswapAccount[] | null>(null);
   const [chatgpt, setChatgpt] = useState<ChatgptAccount | null>(null);
   /** Ticks while open so the ChatGPT "updated ago" hint stays honest. */
@@ -336,6 +386,7 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
       open={open}
       onClose={() => onOpenChange(false)}
       isMobile={isMobile}
+      dismissOnOutside={dismissOnOutside}
       ariaLabel={t('accounts.title', 'Accounts')}
       dataSlot="accounts-panel"
     >
@@ -346,6 +397,7 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </li>
         )}
+        <ProviderGroupHeader provider="claude" />
         {sorted.map((account, index) => {
           const usage = account.usage ?? account.lastGoodUsage ?? undefined;
           const scoped = Array.isArray(usage?.scoped) ? usage.scoped : [];
@@ -382,6 +434,7 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
                     {t('accounts.disabledTag', 'disabled')}
                   </span>
                 )}
+                <PlanTag plan={account.plan} />
                 {/* Actions take no width at rest on desktop, so the name has
                     the whole row; they appear (and the name truncates) only
                     on hover or focus. Touch shows them always. */}
@@ -557,12 +610,7 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
         {/* The ChatGPT group (codex job 3): one login, no controls. */}
         {chatgpt && (
           <>
-            <li
-              className="px-2 pb-1 pt-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-              data-slot="account-group-chatgpt"
-            >
-              ChatGPT
-            </li>
+            <ProviderGroupHeader provider="chatgpt" />
             <li
               className="rounded-lg px-2 py-2.5"
               data-slot="account-row"
@@ -576,18 +624,16 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
                 <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground" data-slot="account-name">
                   {chatgpt.email ?? 'ChatGPT'}
                 </span>
-                {chatgpt.plan && (
-                  <span
-                    className="flex-shrink-0 rounded-sm border border-border px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground"
-                    data-slot="account-plan"
-                  >
-                    {chatgpt.plan}
-                  </span>
-                )}
+                <PlanTag plan={chatgpt.plan} />
               </div>
               {chatgpt.state === 'ok' ? (
                 <div className="mt-1.5 space-y-1 pl-6">
-                  <UsageBar label={t('accounts.fiveHour', '5h')} kind="5h" window={chatgpt.usage?.fiveHour} />
+                  <UsageBar
+                    label={t('accounts.fiveHour', '5h')}
+                    kind="5h"
+                    window={chatgpt.usage?.fiveHour}
+                    emptyLabel={t('accounts.noFiveHourWindow', 'no 5-hour window on this plan')}
+                  />
                   <UsageBar label={t('accounts.sevenDay', '7d')} kind="7d" window={chatgpt.usage?.sevenDay} />
                   <p className="text-[10px] text-muted-foreground" data-slot="account-usage-meta">
                     {chatgpt.usage

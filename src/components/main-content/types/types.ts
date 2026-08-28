@@ -23,6 +23,7 @@ export type MainContentProps = {
   onSessionProcessing: MarkSessionProcessing;
   onSessionIdle: MarkSessionIdle;
   processingSessions: SessionActivityMap;
+  onSessionViewed: (sessionId: string) => void;
   onNavigateToSession: (targetSessionId: string, options?: SessionNavigationOptions) => void;
   onSessionEstablished: (sessionId: string, context: SessionEstablishedContext) => void;
   onShowSettings: (tab?: SettingsMainTab) => void;

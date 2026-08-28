@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, HTMLAttributes } from 'react';
+import type { CSSProperties } from 'react';
 import {
   BorderBeam as BeamEngine,
   type BorderBeamProps as BeamEngineProps,
@@ -36,10 +36,20 @@ const MONO_GAIN: Record<'light' | 'dark', { stroke: number; inner: number; bloom
 };
 
 /** One angular comet conic in the ink color, phase-aligned with the engine's rotating mask. */
-function rotateOverrideCss(id: string): string {
-  const ink = 'hsl(var(--beam-ink))';
+type BorderBeamIdentity = 'neutral' | 'planner' | 'worker';
+
+function rotateOverrideCss(id: string, identity: BorderBeamIdentity): string {
+  const ink = identity === 'planner'
+    ? 'hsl(var(--primary))'
+    : identity === 'worker'
+      ? 'rgb(16 185 129)'
+      : 'hsl(var(--beam-ink))';
   const at = (pct: number) => `color-mix(in srgb, ${ink} ${pct}%, transparent)`;
-  const comet = `conic-gradient(from var(--beam-angle-${id}), transparent 0%, transparent 46%, ${at(12)} 58%, ${at(36)} 68%, ${at(72)} 75%, ${ink} 78%, ${ink} 80%, ${at(26)} 86%, transparent 92%, transparent 100%)`;
+  // Worker uses a shorter split tail while planner keeps the long single
+  // comet. When both overlays run together they remain legible as two lanes.
+  const comet = identity === 'worker'
+    ? `conic-gradient(from var(--beam-angle-${id}), transparent 0%, transparent 58%, ${at(28)} 63%, ${ink} 67%, transparent 70%, ${at(50)} 74%, ${ink} 78%, ${at(18)} 83%, transparent 87%, transparent 100%)`
+    : `conic-gradient(from var(--beam-angle-${id}), transparent 0%, transparent 46%, ${at(12)} 58%, ${at(36)} 68%, ${at(72)} 75%, ${ink} 78%, ${ink} 80%, ${at(26)} 86%, transparent 92%, transparent 100%)`;
   return `
 [data-beam="${id}"][data-active]::after,
 [data-beam="${id}"][data-fading]::after,
@@ -68,10 +78,12 @@ export interface BorderBeamProps
   extends Omit<BeamEngineProps, 'size' | 'colorVariant' | 'theme' | 'strength' | 'staticColors'> {
   /** 0-1 strength override; defaults to the ambient 0.4 ceiling. */
   strength?: number;
+  /** Sidebar activity identity; neutral preserves the established mono beam. */
+  identity?: BorderBeamIdentity;
 }
 
 export const BorderBeam = forwardRef<HTMLDivElement, BorderBeamProps>(
-  function BorderBeam({ strength, children, style, ...props }, ref) {
+  function BorderBeam({ strength, identity = 'neutral', children, style, ...props }, ref) {
     const theme = useAppTheme();
     const hostRef = useRef<HTMLDivElement | null>(null);
     const setRefs = useCallback(
@@ -99,6 +111,7 @@ export const BorderBeam = forwardRef<HTMLDivElement, BorderBeamProps>(
       <>
         <BeamEngine
           ref={setRefs}
+          data-activity-kind={identity === 'neutral' ? undefined : identity}
           size="md"
           strength={strength ?? AMBIENT_STRENGTH}
           colorVariant="mono"
@@ -109,7 +122,7 @@ export const BorderBeam = forwardRef<HTMLDivElement, BorderBeamProps>(
         >
           {children}
         </BeamEngine>
-        {engineId ? <style>{rotateOverrideCss(engineId)}</style> : null}
+        {engineId ? <style>{rotateOverrideCss(engineId, identity)}</style> : null}
       </>
     );
   },

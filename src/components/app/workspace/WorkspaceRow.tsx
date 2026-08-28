@@ -53,6 +53,7 @@ type WorkspaceRowProps = {
   onSessionProcessing: MarkSessionProcessing;
   onSessionIdle: MarkSessionIdle;
   processingSessions: SessionActivityMap;
+  onSessionViewed: (sessionId: string) => void;
   onShowSettings: (tab?: SettingsMainTab) => void;
   onProjectSelect: (project: Project) => void;
   onProjectsRefresh: () => void;
@@ -91,6 +92,7 @@ export default function WorkspaceRow({
   onSessionProcessing,
   onSessionIdle,
   processingSessions,
+  onSessionViewed,
   onShowSettings,
   onProjectSelect,
   onProjectsRefresh,
@@ -345,7 +347,10 @@ export default function WorkspaceRow({
             newSessionTrigger={rowTrigger}
             onStartNewSession={handleNewSession}
             sessionOrigin="planner"
-            onRenderedSessionChange={setRenderedSessionId}
+            onRenderedSessionChange={(renderedId) => {
+              setRenderedSessionId(renderedId);
+              if (renderedId) onSessionViewed(renderedId);
+            }}
           />
         </ErrorBoundary>
       </div>
@@ -364,6 +369,7 @@ export default function WorkspaceRow({
       onSessionProcessing={onSessionProcessing}
       onSessionIdle={onSessionIdle}
       processingSessions={processingSessions}
+      onSessionViewed={onSessionViewed}
       onShowSettings={onShowSettings}
       onClose={onCloseRow}
       closeLabel={`Close ${project.displayName} row`}

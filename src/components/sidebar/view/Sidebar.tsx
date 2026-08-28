@@ -15,6 +15,7 @@ import SidebarCollapsed from './subcomponents/SidebarCollapsed';
 import SidebarContent from './subcomponents/SidebarContent';
 import SidebarModals from './subcomponents/SidebarModals';
 import type { SidebarProjectListProps } from './subcomponents/SidebarProjectList';
+import type { ActivityKinds } from './subcomponents/ResponseSignal';
 
 function Sidebar({
   projects,
@@ -23,6 +24,8 @@ function Sidebar({
   selectedSession,
   activeSessions,
   attentionSessionIds,
+  responseIndicators,
+  onSessionViewed,
   runningRuns,
   workspaceProjectIds,
   onCloseWorkspaceProject,
@@ -167,7 +170,15 @@ function Sidebar({
   // (ui11 phase 12). Live-run identity comes from the enriched run registry
   // poll; sessions the UI already loaded fill the gap between polls
   // (activeSessions flips instantly on websocket events).
-  const { plannerRunningCount, workerRunningCount, runningByProject, unlistedRunningByProject, activeSessionRows } = useMemo(() => {
+  const {
+    plannerRunningCount,
+    workerRunningCount,
+    runningByProject,
+    unlistedRunningByProject,
+    responseKindsByProject,
+    footerResponseKinds,
+    activeSessionRows,
+  } = useMemo(() => {
     type SessionInfo = {
       origin: string | null;
       projectId: string | null;
@@ -212,8 +223,16 @@ function Sidebar({
 
     let planner = 0;
     let worker = 0;
-    const byProject = new Map<string, number>();
-    const unlistedByProject = new Map<string, number>();
+    const byProject = new Map<string, { planner: number; worker: number }>();
+    const unlistedByProject = new Map<string, { planner: number; worker: number }>();
+    const increment = (
+      map: Map<string, { planner: number; worker: number }>,
+      projectId: string,
+      kind: 'planner' | 'worker',
+    ) => {
+      const counts = map.get(projectId) ?? { planner: 0, worker: 0 };
+      map.set(projectId, { ...counts, [kind]: counts[kind] + 1 });
+    };
     const rows: ActiveSessionRow[] = [];
     for (const sessionId of runningIds) {
       const info = infoBySession.get(sessionId);
@@ -223,9 +242,9 @@ function Sidebar({
       if (kind === 'planner') planner += 1;
       else worker += 1;
       if (info?.projectId) {
-        byProject.set(info.projectId, (byProject.get(info.projectId) ?? 0) + 1);
+        increment(byProject, info.projectId, kind);
         if (!listedIds.has(sessionId)) {
-          unlistedByProject.set(info.projectId, (unlistedByProject.get(info.projectId) ?? 0) + 1);
+          increment(unlistedByProject, info.projectId, kind);
         }
       }
 
@@ -262,20 +281,32 @@ function Sidebar({
       });
     }
 
+    const byProjectResponses = new Map<string, ActivityKinds>();
+    const footerResponses: ActivityKinds = { planner: false, worker: false };
+    for (const response of responseIndicators.values()) {
+      footerResponses[response.kind] = true;
+      if (!response.projectId) continue;
+      const kinds = byProjectResponses.get(response.projectId) ?? { planner: false, worker: false };
+      byProjectResponses.set(response.projectId, { ...kinds, [response.kind]: true });
+    }
+
     return {
       plannerRunningCount: planner,
       workerRunningCount: worker,
       runningByProject: byProject,
       unlistedRunningByProject: unlistedByProject,
+      responseKindsByProject: byProjectResponses,
+      footerResponseKinds: footerResponses,
       activeSessionRows: rows,
     };
-  }, [projects, runningRuns, activeSessions, attentionSessionIds, t]);
+  }, [projects, runningRuns, activeSessions, attentionSessionIds, responseIndicators, t]);
 
   // Opens a drawer row's session. Sessions the sidebar has not loaded open
   // through a constructed session object, the same way conversation search
   // hits do — the old counter jump silently no-opped on unloaded sessions.
   const handleOpenActiveSession = useCallback(
     (row: ActiveSessionRow) => {
+      onSessionViewed(row.sessionId);
       const project = row.projectId ? projects.find((p) => p.projectId === row.projectId) : null;
       const loaded = project?.sessions?.find((s) => String(s.id) === row.sessionId);
       if (loaded) {
@@ -287,7 +318,7 @@ function Sidebar({
         row.projectId ?? '',
       );
     },
-    [projects, handleSessionClick],
+    [projects, handleSessionClick, onSessionViewed],
   );
 
   const handleProjectCreated = () => {
@@ -322,6 +353,9 @@ function Sidebar({
     activeSessions,
     runningByProject,
     unlistedRunningByProject,
+    responseIndicators,
+    responseKindsByProject,
+    onSessionViewed,
     workspaceProjectIds,
     onCloseWorkspaceProject,
     selectedSessionId: selectedSession ? String(selectedSession.id) : null,
@@ -385,6 +419,9 @@ function Sidebar({
             runningSessionsCount={runningSessionsCount}
             plannerRunningCount={plannerRunningCount}
             workerRunningCount={workerRunningCount}
+            responseKinds={footerResponseKinds}
+            responseIndicators={responseIndicators}
+            onSessionViewed={onSessionViewed}
             activeSessionRows={activeSessionRows}
             onOpenActiveSession={handleOpenActiveSession}
             archivedProjects={archivedProjects}

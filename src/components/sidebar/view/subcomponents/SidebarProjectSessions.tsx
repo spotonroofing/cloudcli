@@ -21,6 +21,8 @@ type SidebarProjectSessionsProps = {
   hasMoreSessions: boolean;
   isLoadingMoreSessions: boolean;
   activeSessions: SessionActivityMap;
+  responseIndicators: ReadonlyMap<string, { kind: 'planner' | 'worker'; projectId: string | null }>;
+  onSessionViewed: (sessionId: string) => void;
   currentTime: Date;
   onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
@@ -66,6 +68,8 @@ export default function SidebarProjectSessions({
   hasMoreSessions,
   isLoadingMoreSessions,
   activeSessions,
+  responseIndicators,
+  onSessionViewed,
   currentTime,
   onMoveSessionToProject,
   onSaveEditingSession,
@@ -123,6 +127,8 @@ export default function SidebarProjectSessions({
               session={session}
               selectedSession={selectedSession}
               isProcessing={activeSessions.has(session.id)}
+              responseKind={responseIndicators.get(String(session.id))?.kind ?? null}
+              onSessionViewed={onSessionViewed}
               currentTime={currentTime}
               onMoveSessionToProject={onMoveSessionToProject}
               onSaveEditingSession={onSaveEditingSession}

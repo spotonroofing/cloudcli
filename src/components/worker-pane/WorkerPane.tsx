@@ -97,6 +97,7 @@ type WorkerPaneProps = {
   onSessionProcessing?: MarkSessionProcessing;
   onSessionIdle?: MarkSessionIdle;
   processingSessions?: SessionActivityMap;
+  onSessionViewed?: (sessionId: string) => void;
   onShowSettings?: () => void;
   /** Desktop split only: hides the pane. Omitted on the mobile tab. */
   onClose?: () => void;
@@ -130,6 +131,7 @@ export default function WorkerPane({
   onSessionProcessing,
   onSessionIdle,
   processingSessions,
+  onSessionViewed,
   onShowSettings,
   onClose,
   closeLabel,
@@ -235,6 +237,13 @@ export default function WorkerPane({
   // The server sorts worker runs newest-first. Verifier rows remain in the
   // jobs navigator but never become the pane's implicit follow target.
   const followTarget = findWorkerFollowTarget(runs);
+
+  // A visible worker transcript counts as seen. Including the processing map
+  // makes the completion render clear a response mark that may have landed in
+  // the same websocket turn, without waiting for another navigation.
+  useEffect(() => {
+    if (isActive && paneSession?.id) onSessionViewed?.(String(paneSession.id));
+  }, [isActive, paneSession?.id, processingSessions, onSessionViewed]);
 
   // Watcher deltas plus a slow poll keep the run list and its states honest
   // even when a dispatched chain starts sessions with no browser involved.

@@ -7,11 +7,12 @@ import { Loader } from '../../../../shared/view/beui/Loader';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import type { LLMProvider, Project } from '../../../../types/app';
 import type { ConversationSearchResults, SearchProgress } from '../../hooks/useSidebarController';
-import type { ActiveSessionRow, ArchivedProjectListItem, ArchivedSessionListItem, RecentConversationListItem, SidebarSearchMode } from '../../types/types';
+import type { ActiveSessionRow, ArchivedProjectListItem, ArchivedSessionListItem, RecentConversationListItem, ResponseIndicatorInfo, SidebarSearchMode } from '../../types/types';
 import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
 import { formatCompactAge, getAllSessions } from '../../utils/utils';
 import Settings from '../../../settings/view/Settings';
 
+import type { ActivityKinds } from './ResponseSignal';
 import MemorySurface from './MemorySurface';
 import SidebarFooter from './SidebarFooter';
 import SidebarHeader from './SidebarHeader';
@@ -97,6 +98,9 @@ type SidebarContentProps = {
   runningSessionsCount: number;
   plannerRunningCount: number;
   workerRunningCount: number;
+  responseKinds: ActivityKinds;
+  responseIndicators: ReadonlyMap<string, ResponseIndicatorInfo>;
+  onSessionViewed: (sessionId: string) => void;
   activeSessionRows: ActiveSessionRow[];
   onOpenActiveSession: (row: ActiveSessionRow) => void;
   archivedProjects: ArchivedProjectListItem[];
@@ -157,6 +161,9 @@ export default function SidebarContent({
   runningSessionsCount,
   plannerRunningCount,
   workerRunningCount,
+  responseKinds,
+  responseIndicators,
+  onSessionViewed,
   activeSessionRows,
   onOpenActiveSession,
   archivedProjects,
@@ -476,6 +483,8 @@ export default function SidebarContent({
             selectedSession={projectListProps.selectedSession}
             currentTime={projectListProps.currentTime}
             projects={projects}
+            responseIndicators={responseIndicators}
+            onSessionViewed={onSessionViewed}
             onConversationSelect={onConversationResultClick}
             onLoadMore={onLoadMoreRecentConversations}
             onRetry={onRetryRecentConversations}
@@ -755,7 +764,8 @@ export default function SidebarContent({
           onToggleMemory={toggleMemory}
           onDrawerOpened={closeSurfaces}
           plannerRunningCount={plannerRunningCount}
-          workerRunningCount={workerRunningCount}
+        workerRunningCount={workerRunningCount}
+        responseKinds={responseKinds}
           activeSessionRows={activeSessionRows}
           onOpenActiveSession={onOpenActiveSession}
           isMobile={isMobile}

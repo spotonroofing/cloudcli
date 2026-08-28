@@ -117,6 +117,7 @@ export function TodoStatusIcon({
   segments,
   sweepOnComplete = false,
   tone = 'semantic',
+  centerSpinner = false,
 }: {
   status: TodoListItemStatus;
   progress?: number;
@@ -137,6 +138,8 @@ export function TodoStatusIcon({
    * segments — in the foreground ink (job level).
    */
   tone?: 'semantic' | 'mono';
+  /** Hold a committed job's check while its verify stage is still running. */
+  centerSpinner?: boolean;
 }) {
   const reduce = useReducedMotion() ?? false;
   const normalizedProgress =
@@ -145,7 +148,7 @@ export function TodoStatusIcon({
   // its segmented ring from the start — muted and motionless while pending,
   // alive (fills, working-segment glow) once in progress.
   const hasSegments =
-    (status === 'in-progress' || status === 'pending')
+    (status === 'in-progress' || status === 'pending' || centerSpinner)
     && segments !== undefined
     && segments.total > 0;
 
@@ -275,8 +278,8 @@ export function TodoStatusIcon({
         strokeLinejoin="round"
         initial={false}
         animate={{
-          pathLength: status === 'completed' ? 1 : 0,
-          opacity: status === 'completed' ? 1 : 0,
+          pathLength: status === 'completed' && !centerSpinner ? 1 : 0,
+          opacity: status === 'completed' && !centerSpinner ? 1 : 0,
         }}
         transition={
           reduce
@@ -284,6 +287,25 @@ export function TodoStatusIcon({
             : { duration: 0.24, ease: EASE_OUT, delay: sweeping ? 0.42 : 0 }
         }
       />
+      {centerSpinner && (
+        <g
+          data-slot="job-verify-spinner"
+          className="animate-spinner-ramp"
+          style={{ transformOrigin: '12px 12px', transform: 'rotate(-90deg)' }}
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="3.25"
+            pathLength="1"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeDasharray="0.62 0.38"
+          />
+        </g>
+      )}
       <motion.path
         d="M8.5 8.5 15.5 15.5M15.5 8.5 8.5 15.5"
         fill="none"
@@ -329,7 +351,7 @@ export function JobRingSegments({
       {Array.from({ length: segments.total }, (_, i) => {
         const frac = 1 / segments.total;
         const gap = Math.min(0.05, frac / 3);
-        const done = status === 'in-progress' && i < segments.done;
+        const done = (status === 'in-progress' || status === 'completed') && i < segments.done;
         const working =
           status === 'in-progress' && i === segments.done && segments.done < segments.total;
         return (

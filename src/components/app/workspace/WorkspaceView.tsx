@@ -64,6 +64,7 @@ export default function WorkspaceView({
     onSessionProcessing,
     onSessionIdle,
     processingSessions,
+    onSessionViewed,
     onNavigateToSession,
     onSessionEstablished,
     onShowSettings,
@@ -378,6 +379,7 @@ export default function WorkspaceView({
               onSessionProcessing={onSessionProcessing}
               onSessionIdle={onSessionIdle}
               processingSessions={processingSessions}
+              onSessionViewed={onSessionViewed}
               onShowSettings={onShowSettings}
               onProjectSelect={onProjectSelect}
               onProjectsRefresh={onProjectsRefresh}

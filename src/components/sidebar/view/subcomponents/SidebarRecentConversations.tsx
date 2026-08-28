@@ -28,6 +28,8 @@ type SidebarRecentConversationsProps = {
   currentTime: Date;
   /** Move-to-project targets for the shared row menu's drawer. */
   projects: Project[];
+  responseIndicators: ReadonlyMap<string, { kind: 'planner' | 'worker'; projectId: string | null }>;
+  onSessionViewed: (sessionId: string) => void;
   onConversationSelect: (
     projectId: string | null,
     sessionId: string,
@@ -73,6 +75,8 @@ export default function SidebarRecentConversations({
   selectedSession,
   currentTime,
   projects,
+  responseIndicators,
+  onSessionViewed,
   onConversationSelect,
   onLoadMore,
   onRetry,
@@ -165,11 +169,18 @@ export default function SidebarRecentConversations({
               timestamp={conversation.lastActivity}
               age={age}
               isSelected={isSelected}
-              onSelect={() => onConversationSelect(
-                conversation.projectId,
-                conversation.sessionId,
-                conversation.provider,
-              )}
+              responseKinds={{
+                planner: responseIndicators.get(conversation.sessionId)?.kind === 'planner',
+                worker: responseIndicators.get(conversation.sessionId)?.kind === 'worker',
+              }}
+              onSelect={() => {
+                onSessionViewed(conversation.sessionId);
+                onConversationSelect(
+                  conversation.projectId,
+                  conversation.sessionId,
+                  conversation.provider,
+                );
+              }}
               onRename={(name) => onRenameConversation(conversation.sessionId, name)}
               menu={{
                 sessionId: conversation.sessionId,

@@ -17,6 +17,7 @@ import { PROJECT_DRAG_TYPE } from '../../../app/workspace/useWorkspace';
 
 import ProjectEditDialog from './ProjectEditDialog';
 import SidebarProjectSessions from './SidebarProjectSessions';
+import ResponseSignal, { type ActivityKinds } from './ResponseSignal';
 
 type SidebarProjectItemProps = {
   project: Project;
@@ -35,10 +36,14 @@ type SidebarProjectItemProps = {
   initialSessionsLoaded: boolean;
   isLoadingMoreSessions: boolean;
   currentTime: Date;
-  /** Live runs inside this project; the row shimmers while nonzero and collapsed. */
-  runningSessionCount: number;
+  /** Live runs inside this project, split so the beam identifies its source. */
+  runningKinds: { planner: number; worker: number };
   /** Live runs with no chat row of their own (dispatched, direct, verify sessions). */
-  unlistedRunningCount: number;
+  unlistedRunningKinds: { planner: number; worker: number };
+  /** Completed responses not yet opened, aggregated for the collapsed row. */
+  responseKinds: ActivityKinds;
+  responseIndicators: ReadonlyMap<string, { kind: 'planner' | 'worker'; projectId: string | null }>;
+  onSessionViewed: (sessionId: string) => void;
   /** True when the project is open as a multi-project workspace row. */
   isInWorkspace: boolean;
   /** Closes the project's workspace row (hover-revealed X on rows that have one). */
@@ -108,8 +113,11 @@ export default function SidebarProjectItem({
   initialSessionsLoaded,
   isLoadingMoreSessions,
   currentTime,
-  runningSessionCount,
-  unlistedRunningCount,
+  runningKinds,
+  unlistedRunningKinds,
+  responseKinds,
+  responseIndicators,
+  onSessionViewed,
   onEditingNameChange,
   onEditingPlannerNameChange,
   onEditingPathChange,
@@ -142,7 +150,12 @@ export default function SidebarProjectItem({
   // every hand-off is the engine's fade, never a hard cutoff. A worker
   // session (dispatched, direct, verify) has no chat row to hand off to, so
   // the project row keeps the beam for it while expanded (codex job 5).
-  const beam = useBeamPresence(runningSessionCount > 0 && (!isExpanded || unlistedRunningCount > 0));
+  const plannerBeam = useBeamPresence(
+    runningKinds.planner > 0 && (!isExpanded || unlistedRunningKinds.planner > 0),
+  );
+  const workerBeam = useBeamPresence(
+    runningKinds.worker > 0 && (!isExpanded || unlistedRunningKinds.worker > 0),
+  );
   // A subtle row highlight stands in for the bounce dot whenever the dot's
   // destination row isn't rendered (ui9 B5 dot rules: never a dot on a
   // collapsed/closed project row): the open chat's project is collapsed, or
@@ -181,7 +194,8 @@ export default function SidebarProjectItem({
               showOpenHighlight && 'bg-accent/50 text-foreground',
             )}
           >
-            {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
+            {plannerBeam.mounted && <BorderBeamOverlay identity="planner" strength={0.3} {...plannerBeam.beamProps} />}
+            {workerBeam.mounted && <BorderBeamOverlay identity="worker" strength={0.34} {...workerBeam.beamProps} />}
             <ProjectIcon project={project} expanded={isExpanded} />
 
             <span className="flex min-w-0 flex-1 items-center">
@@ -192,6 +206,7 @@ export default function SidebarProjectItem({
             </span>
 
             <div className="flex flex-shrink-0 items-center gap-1">
+              {!isExpanded && <ResponseSignal kinds={responseKinds} className="mr-0.5" />}
               <button
                 className="touch-hit relative flex h-8 w-8 items-center justify-center rounded transition-colors active:bg-accent"
                 onClick={(event) => {
@@ -254,7 +269,8 @@ export default function SidebarProjectItem({
             showOpenHighlight && 'bg-accent/50 text-foreground',
           )}
         >
-          {beam.mounted && <BorderBeamOverlay {...beam.beamProps} />}
+          {plannerBeam.mounted && <BorderBeamOverlay identity="planner" strength={0.3} {...plannerBeam.beamProps} />}
+          {workerBeam.mounted && <BorderBeamOverlay identity="worker" strength={0.34} {...workerBeam.beamProps} />}
           <ProjectIcon project={project} expanded={isExpanded} />
 
           <span className="flex min-w-0 flex-1 items-center">
@@ -269,6 +285,7 @@ export default function SidebarProjectItem({
               free width; on hover the actions appear and the marquee covers
               any genuine overflow. */}
           <div className="flex flex-shrink-0 items-center gap-1">
+            {!isExpanded && <ResponseSignal kinds={responseKinds} className="mr-0.5" />}
             {onCloseWorkspaceProject && isInWorkspace && (
               <div
                 className="touch:flex hidden h-6 w-6 cursor-pointer items-center justify-center rounded hover:bg-accent group-hover/project:flex"
@@ -340,6 +357,8 @@ export default function SidebarProjectItem({
         hasMoreSessions={Boolean(project.sessionMeta?.hasMore)}
         isLoadingMoreSessions={isLoadingMoreSessions}
         activeSessions={activeSessions}
+        responseIndicators={responseIndicators}
+        onSessionViewed={onSessionViewed}
         currentTime={currentTime}
         onMoveSessionToProject={onMoveSessionToProject}
         onSaveEditingSession={onSaveEditingSession}

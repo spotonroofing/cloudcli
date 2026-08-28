@@ -41,6 +41,7 @@ function MainContent({
   onSessionProcessing,
   onSessionIdle,
   processingSessions,
+  onSessionViewed,
   onNavigateToSession,
   onSessionEstablished,
   onShowSettings,
@@ -176,7 +177,10 @@ function MainContent({
         newSessionTrigger={newSessionTrigger}
         onStartNewSession={selectedProject ? () => onNewProjectSession(selectedProject) : undefined}
         sessionOrigin={workerPaneAvailable ? 'planner' : null}
-        onRenderedSessionChange={setRenderedSessionId}
+        onRenderedSessionChange={(renderedId) => {
+          setRenderedSessionId(renderedId);
+          if (renderedId && activeTab === 'chat') onSessionViewed(renderedId);
+        }}
         holdQueuedFlush={isMobile && plannerShellOpen}
       />
     </ErrorBoundary>
@@ -272,6 +276,7 @@ function MainContent({
         onSessionProcessing={onSessionProcessing}
         onSessionIdle={onSessionIdle}
         processingSessions={processingSessions}
+        onSessionViewed={onSessionViewed}
         onShowSettings={onShowSettings}
         onClose={() => windows.setWindowState('worker', 'rail')}
       />
@@ -415,6 +420,7 @@ function MainContent({
                 onSessionProcessing={onSessionProcessing}
                 onSessionIdle={onSessionIdle}
                 processingSessions={processingSessions}
+                onSessionViewed={onSessionViewed}
                 onShowSettings={onShowSettings}
                 onMenuClick={onMenuClick}
                 windowSelector={mobileSelector}

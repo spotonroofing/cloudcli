@@ -76,6 +76,11 @@ export type ActiveSessionRow = {
   provider: LLMProvider;
 };
 
+export type ResponseIndicatorInfo = {
+  kind: 'planner' | 'worker';
+  projectId: string | null;
+};
+
 export type SidebarProps = {
   projects: Project[];
   selectedProject: Project | null;
@@ -83,7 +88,12 @@ export type SidebarProps = {
   scopedProjectId?: string | null;
   selectedSession: ProjectSession | null;
   activeSessions: SessionActivityMap;
+  /** Permission and other live events waiting on Willem. */
   attentionSessionIds: ReadonlySet<string>;
+  /** Completed responses that have not yet been opened, keyed by session. */
+  responseIndicators: ReadonlyMap<string, ResponseIndicatorInfo>;
+  /** Opening a planner or worker chat clears its completed-response mark. */
+  onSessionViewed: (sessionId: string) => void;
   /** Live runs enriched with origin/project (5s poll of the run registry). */
   runningRuns: RunningRunInfo[];
   /** Projects open as multi-project workspace rows (desktop only). */
@@ -116,4 +126,3 @@ export type SessionViewModel = {
   sessionTime: string;
   messageCount: number;
 };
-

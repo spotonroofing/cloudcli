@@ -13,6 +13,8 @@ type SidebarFooterDrawerProps = {
   isMobile: boolean;
   ariaLabel: string;
   dataSlot: string;
+  /** Whether the phone scrim dismisses this drawer. */
+  dismissOnOutside?: boolean;
   children: ReactNode;
 };
 
@@ -33,6 +35,7 @@ export default function SidebarFooterDrawer({
   isMobile,
   ariaLabel,
   dataSlot,
+  dismissOnOutside = true,
   children,
 }: SidebarFooterDrawerProps) {
   const reduceMotion = useReducedMotion();
@@ -74,12 +77,12 @@ export default function SidebarFooterDrawer({
       {open && (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm"
+            className={`fixed inset-0 z-40 bg-background/60 backdrop-blur-sm ${dismissOnOutside ? '' : 'pointer-events-none'}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.15 }}
-            onClick={onClose}
+            onClick={dismissOnOutside ? onClose : undefined}
             aria-hidden
           />
           <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50">

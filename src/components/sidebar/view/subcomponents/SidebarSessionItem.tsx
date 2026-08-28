@@ -14,6 +14,8 @@ type SidebarSessionItemProps = {
   session: SessionWithProvider;
   selectedSession: ProjectSession | null;
   isProcessing: boolean;
+  responseKind: 'planner' | 'worker' | null;
+  onSessionViewed: (sessionId: string) => void;
   currentTime: Date;
   onMoveSessionToProject: (sessionId: string, projectPath: string | null) => void;
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
@@ -42,6 +44,8 @@ export default function SidebarSessionItem({
   session,
   selectedSession,
   isProcessing,
+  responseKind,
+  onSessionViewed,
   currentTime,
   onMoveSessionToProject,
   onSaveEditingSession,
@@ -60,6 +64,7 @@ export default function SidebarSessionItem({
   const beam = useBeamPresence(isProcessing);
 
   const selectSession = () => {
+    onSessionViewed(String(session.id));
     // Mobile needs the project selected too (chat-view context + sidebar
     // collapse), matching the Chats tab's select flow; desktop keeps the
     // session-only selection so the docked project route stays put.
@@ -82,7 +87,8 @@ export default function SidebarSessionItem({
         age={compactSessionAge}
         isSelected={isSelected}
         onSelect={selectSession}
-        overlay={beam.mounted ? <BorderBeamOverlay {...beam.beamProps} /> : null}
+        overlay={beam.mounted ? <BorderBeamOverlay identity="planner" strength={0.3} {...beam.beamProps} /> : null}
+        responseKinds={{ planner: responseKind === 'planner', worker: responseKind === 'worker' }}
         onRename={(name) => onSaveEditingSession(project.projectId, session.id, name, session.__provider)}
         menu={{
           sessionId: session.id,

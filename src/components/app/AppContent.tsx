@@ -122,6 +122,7 @@ function AppContentInner() {
     subscribe,
     isMobile,
     activeSessions: processingSessions,
+    runningRuns,
   });
 
   // Multi-project workspace (phase 7): which projects are open as stacked
@@ -440,6 +441,7 @@ function AppContentInner() {
           onSessionProcessing={markSessionProcessing}
           onSessionIdle={markSessionIdle}
           processingSessions={processingSessions}
+          onSessionViewed={sidebarSharedProps.onSessionViewed}
           onNavigateToSession={(targetSessionId: string, options) =>
             navigate(`${projectBasePath}/session/${targetSessionId}`, { replace: Boolean(options?.replace) })
           }
