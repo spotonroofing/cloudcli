@@ -4,7 +4,7 @@
 <!-- model: claude-opus-5 -->
 <!-- effort: high -->
 <!-- name: Account switcher look -->
-<!-- tasks: Original Claude mark, no background | Add account removed | One row anatomy for both providers -->
+<!-- tasks: Original Claude mark, no background | Add account removed | One row anatomy for both providers | Phone: tap above closes it -->
 Execute Job 4 of PUNCHLIST_ui17.md in this repo (account switcher: one look for both lists, the real Claude mark, no Add account). The goal and items are that job's section and checkboxes in PUNCHLIST_ui17.md; read only that job's section plus the whole-file rules block at the top (including the run rules), the recent git log, and the files the job names; trust repo state over this prompt when they disagree, and check each item off in the file the moment it is verified. Done when the job's done check passes against the dev instance.
 
 Before running a command that changes state (restarts, deletes, config edits), check that the evidence supports that specific action; a signal that matches a known failure can have a different cause. Rebuild and restart dev only when the done check needs the running instance to show the change, and never twice when once serves.

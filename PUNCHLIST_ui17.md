@@ -73,9 +73,10 @@ Goal: the account switcher drawer got provider headers with logos, but the Claud
 - [ ] The Claude header uses the same Claude mark the model switcher uses (the app's original one), rendered as a plain white monochrome glyph with no background disc, plate or tint behind it; the ChatGPT header mark gets the same treatment (plain monochrome glyph, no background) so the two headers match in size and weight.
 - [ ] The Add account button is removed entirely (accounts are added by hand on the mini); nothing else in the drawer shifts to fill its place awkwardly, the sections just stack.
 - [ ] The ChatGPT account list copies the Claude list's row anatomy exactly: a number on the left instead of a logo, the email, the plan tag where the Claude rows put theirs, the same meter rows (5H, 7D, and the model window where one exists), the same "updated" line; one shared row component for both providers so they cannot drift again.
-- [ ] Phone holds; `design/sidebar.md` documents the drawer as one anatomy for both providers.
+- [ ] On the phone the drawer closes on a tap anywhere above it (the sidebar area outside the drawer), the same way the other footer drawers dismiss; today it cannot be closed that way (added 2026-08-28 7:45 pm, Willem). `SidebarFooter.tsx` mounts `AccountsPanel` with `dismissOnOutside={false}`; find why that was set, keep desktop behavior as it is if the reason still holds there, and make the phone dismiss on an outside tap; a tap inside the drawer never closes it.
+- [ ] Phone holds; `design/sidebar.md` documents the drawer as one anatomy for both providers and the outside-tap dismiss on the phone.
 
-Done check: on dev with agent-browser, both provider headers render the same mark component with no background element behind the glyph; no "Add account" text exists in the drawer; the ChatGPT row is the same component as the Claude rows and starts with a number; 390px holds. Commit.
+Done check: on dev with agent-browser, both provider headers render the same mark component with no background element behind the glyph; no "Add account" text exists in the drawer; the ChatGPT row is the same component as the Claude rows and starts with a number; at 390px opening the drawer then dispatching a tap on the sidebar above it closes the drawer (aria-expanded false on the trigger), and a tap inside it leaves it open. Commit.
 
 ## Job 5 — Durations on status rows, thought through (2026-08-28, Willem, widened). Verify: no
 
