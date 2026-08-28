@@ -1,7 +1,7 @@
 import { MessageSquare, Plus } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { Button } from '../../../../shared/view/ui';
+import { Button, Skeleton } from '../../../../shared/view/ui';
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { RecentConversationListItem } from '../../types/types';
 import { formatCompactAge } from '../../utils/utils';
@@ -50,12 +50,12 @@ type SidebarRecentConversationsProps = {
 
 function RecentConversationSkeleton() {
   return (
-    <div className="space-y-1 px-1" aria-label="Loading recent conversations">
+    <div className="space-y-1 px-1" data-slot="recent-conversations-skeleton" aria-label="Loading recent conversations" aria-busy="true">
       {Array.from({ length: 8 }).map((_, index) => (
         <div key={index} className="flex items-center gap-2 rounded-lg px-2 py-2.5">
           <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="h-3 animate-pulse rounded bg-muted" style={{ width: `${72 - index * 3}%` }} />
-            <div className="h-2.5 w-1/2 animate-pulse rounded bg-muted/70" />
+            <Skeleton className="h-3 rounded-sm" style={{ width: `${72 - index * 3}%` }} />
+            <Skeleton className="h-2.5 w-1/2 rounded-sm" />
           </div>
         </div>
       ))}

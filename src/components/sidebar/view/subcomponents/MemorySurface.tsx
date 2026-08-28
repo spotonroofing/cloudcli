@@ -3,7 +3,7 @@ import type { FormEvent, KeyboardEvent } from 'react';
 import { BookMarked, Check, Loader2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { PromptInput, PromptInputBody, PromptInputSubmit, PromptInputTextarea } from '../../../../shared/view/ui';
+import { PromptInput, PromptInputBody, PromptInputSubmit, PromptInputTextarea, Skeleton } from '../../../../shared/view/ui';
 import { Markdown } from '../../../chat/view/subcomponents/Markdown';
 import { api } from '../../../../utils/api';
 
@@ -132,7 +132,19 @@ export default function MemorySurface({ open, onClose, isMobile, t }: MemorySurf
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3" data-slot="memory-surface-body">
         {loading && content === null ? (
-          <p className="px-1 py-1 text-xs text-muted-foreground/70">{t('memory.loading', 'Loading memory...')}</p>
+          <div className="space-y-4 px-1 py-1" data-slot="memory-skeleton" aria-busy="true">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-2/5 rounded-sm" />
+              <Skeleton className="h-3 w-full rounded-sm" />
+              <Skeleton className="h-3 w-11/12 rounded-sm" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-1/3 rounded-sm" />
+              <Skeleton className="h-3 w-5/6 rounded-sm" />
+              <Skeleton className="h-3 w-3/4 rounded-sm" />
+              <Skeleton className="h-3 w-4/5 rounded-sm" />
+            </div>
+          </div>
         ) : content === null ? (
           <p className="px-1 py-1 text-xs text-muted-foreground/70">
             {t('memory.noCurated', 'Nothing remembered yet.')}

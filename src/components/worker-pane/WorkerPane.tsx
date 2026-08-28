@@ -544,6 +544,7 @@ export default function WorkerPane({
           >
             <JobsSidebar
               groups={jobGroups}
+              loading={!runsLoaded}
               activeSessionId={paneSession?.id ?? null}
               onOpenSession={(sessionId) => {
                 handleOpenSession(sessionId);

@@ -186,10 +186,10 @@ Done check: on dev: DOM order of the bottom row's right group is handoff, histor
 
 Goal: nothing in the app needs a refresh to show what already happened. Files: the worker pane's context window control for Claude sessions (Codex landed in pauseresume job 2), the worker message loader and follow logic, a shared loading skeleton, `design/transcript-rows.md`, `design/motion.md`. Dependencies: none.
 
-- [ ] Worker context window figure updates live for Claude sessions, on every turn boundary at least, without a refresh.
-- [ ] Worker messages load in as they happen: no refresh and no manual scroll to the bottom to see new rows; reproduce the stale case with a running stub session and fix the actual cause (subscription, pagination window, or follow logic); regression check.
-- [ ] Codex transcripts update incrementally: a rollout write appends the new rows to the rendered transcript (arrival animation on the new rows only) instead of reloading and re-animating the whole session; measured on a live Codex session: no full re-render on a rollout write.
-- [ ] App-wide loading state: anything that loads in (transcript pages, jobs column, sidebar lists, drawers, settings) shows a skeleton or a blur-until-loaded treatment in the design language, ramped, reduced-motion respected; no content pops from empty; one shared primitive, appended to its design area file.
+- [x] Worker context window figure updates live for Claude sessions, on every turn boundary at least, without a refresh.
+- [x] Worker messages load in as they happen: no refresh and no manual scroll to the bottom to see new rows; reproduce the stale case with a running stub session and fix the actual cause (subscription, pagination window, or follow logic); regression check.
+- [x] Codex transcripts update incrementally: a rollout write appends the new rows to the rendered transcript (arrival animation on the new rows only) instead of reloading and re-animating the whole session; measured on a live Codex session: no full re-render on a rollout write.
+- [x] App-wide loading state: anything that loads in (transcript pages, jobs column, sidebar lists, drawers, settings) shows a skeleton or a blur-until-loaded treatment in the design language, ramped, reduced-motion respected; no content pops from empty; one shared primitive, appended to its design area file.
 
 Done check: on dev: a stub running session's context figure changes without reload; new rows appear without reload or scroll; skeletons render on a throttled network (agent-browser network delay) for each surface listed and clear when data lands. Commit.
 

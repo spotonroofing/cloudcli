@@ -335,9 +335,12 @@ export function useChatSessionState({
   activeSessionIdRef.current = activeSessionId;
 
   // Externally-driven runs (dispatched chains, terminal sessions) never
-  // stream token_budget frames, so their ring only advances by re-reading the
-  // persisted usage snapshot after a tail refresh lands new rows. Live runs
-  // stream fresher SDK budgets and skip this path entirely.
+  // stream token_budget frames, so their ring advances by re-reading the
+  // persisted usage snapshot after a tail refresh lands new rows. Do this even
+  // while watcher activity marks the session processing: that flag arrives
+  // before the refreshed tail and used to suppress every boundary update for
+  // externally driven Claude runs. mergeTokenBudget keeps richer SDK window
+  // metadata when an in-server run also streams a fresher budget.
   const refreshTokenUsageSnapshot = useCallback(async (sessionId: string) => {
     try {
       const url = `/api/providers/sessions/${encodeURIComponent(sessionId)}/token-usage`;
@@ -373,7 +376,7 @@ export function useChatSessionState({
       if (slot.tokenUsage != null) {
         setTokenBudget(slot.tokenUsage as Record<string, unknown>);
       }
-      if (result.changed && !processingSessionsRef.current?.has(sessionId)) {
+      if (result.changed) {
         void refreshTokenUsageSnapshot(sessionId);
       }
     }

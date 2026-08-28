@@ -5,7 +5,7 @@ import type { TFunction } from 'i18next';
 import ProviderLoginModal from '../../../provider-auth/view/ProviderLoginModal';
 import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
 import { useWebSocket } from '../../../../contexts/WebSocketContext';
-import { Button } from '../../../../shared/view/ui';
+import { Button, Skeleton } from '../../../../shared/view/ui';
 import { authenticatedFetch } from '../../../../utils/api';
 import { cn } from '../../../../lib/utils';
 import { addCompleted, captureAddBaseline } from '../../utils/accountsAdd';
@@ -393,11 +393,20 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
       {/* Top padding, not a divider, separates the panel from the list above. */}
       <ul className="max-h-[60dvh] space-y-1 overflow-y-auto px-2 pb-2 pt-3">
         {loading && accounts === null && (
-          <li className="flex justify-center px-1 py-2">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <li className="space-y-2 px-2 py-2" data-slot="accounts-skeleton" aria-busy="true">
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="space-y-2 rounded-lg py-1">
+                <div className="flex h-7 items-center gap-2">
+                  <Skeleton className="h-3 w-4 rounded-sm" />
+                  <Skeleton className="h-3 rounded-sm" style={{ width: `${[62, 48, 70][row]}%` }} />
+                </div>
+                <Skeleton className="ml-6 h-1 w-[calc(100%_-_1.5rem)] rounded-sm" />
+                <Skeleton className="ml-6 h-1 w-[calc(100%_-_1.5rem)] rounded-sm" />
+              </div>
+            ))}
           </li>
         )}
-        <ProviderGroupHeader provider="claude" />
+        {accounts !== null && <ProviderGroupHeader provider="claude" />}
         {sorted.map((account, index) => {
           const usage = account.usage ?? account.lastGoodUsage ?? undefined;
           const scoped = Array.isArray(usage?.scoped) ? usage.scoped : [];
@@ -547,7 +556,7 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
           </li>
         )}
 
-        <li data-slot="account-add-row">
+        {accounts !== null && <li data-slot="account-add-row">
           {showAdd ? (
             <div className="rounded-lg bg-muted/30 px-2 py-2.5" data-slot="account-add-steps">
               <ol className="space-y-1.5">
@@ -605,7 +614,7 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
               {t('accounts.add', 'Add account')}
             </button>
           )}
-        </li>
+        </li>}
 
         {/* The ChatGPT group (codex job 3): one login, no controls. */}
         {chatgpt && (

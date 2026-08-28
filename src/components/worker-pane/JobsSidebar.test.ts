@@ -6,6 +6,18 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import JobsSidebar, { type ChainSnapshot, type JobGroup } from './JobsSidebar';
 
+test('the jobs column holds its rows with the shared skeleton while the first snapshot loads', () => {
+  const markup = renderToStaticMarkup(createElement(JobsSidebar, {
+    groups: [],
+    loading: true,
+    activeSessionId: null,
+    onOpenSession: () => undefined,
+  }));
+
+  assert.match(markup, /data-slot="jobs-sidebar-skeleton"/);
+  assert.equal((markup.match(/data-slot="skeleton"/g) ?? []).length, 12);
+});
+
 test('the jobs column renders the paused state on the current chain row', () => {
   const chain: ChainSnapshot = {
     slug: 'pause-stub',

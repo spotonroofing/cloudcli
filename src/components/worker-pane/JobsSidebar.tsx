@@ -8,6 +8,7 @@ import { MarqueeLabel } from '../../shared/view/beui/MarqueeLabel';
 import { SwapText } from '../../shared/view/beui/SwapText';
 import { TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
 import { EASE_OUT, SPRING_SWAP } from '../../shared/view/beui/ease';
+import { Skeleton } from '../../shared/view/ui';
 
 /** One unit of a dispatch manifest: a compiled job or an appended task. */
 export type ChainManifestEntry = {
@@ -412,6 +413,8 @@ type PositionedUnit = Unit & { position: number };
 type JobsSidebarProps = {
   /** Every run of the project, newest first. */
   groups: JobGroup[];
+  /** The first worker-runs snapshot is still in flight. */
+  loading?: boolean;
   /** The session the pane is showing; marks its row. */
   activeSessionId: string | null;
   /** Navigate the worker pane to a unit's session. */
@@ -429,7 +432,7 @@ type JobsSidebarProps = {
  * the job row's ring advances with its done/total counter, and entries
  * stagger in as a manifest (or an append) lands.
  */
-export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: JobsSidebarProps) {
+export default function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }: JobsSidebarProps) {
   const reduce = useReducedMotion() ?? false;
 
   // Newest group first, each group's newest unit first — the flat list is
@@ -491,6 +494,23 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
       data-slot="jobs-sidebar"
       className="flex h-full min-w-0 flex-col bg-muted/20"
     >
+      {loading && groups.length === 0 ? (
+        <div
+          className="min-h-0 flex-1 space-y-2 overflow-hidden px-2 py-2"
+          data-slot="jobs-sidebar-skeleton"
+          aria-busy="true"
+        >
+          {[0, 1, 2, 3, 4, 5].map((row) => (
+            <div key={row} className="flex min-h-8 items-center gap-2 px-1.5">
+              <Skeleton className="size-4 shrink-0 rounded-full" />
+              <Skeleton
+                className="h-3 rounded-sm"
+                style={{ width: `${[72, 56, 80, 64, 48, 68][row]}%` }}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
       <ol ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <AnimatePresence initial={false}>
           {stacked.map((unit) => {
@@ -760,6 +780,7 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
           })}
         </AnimatePresence>
       </ol>
+      )}
     </section>
   );
 }
