@@ -118,6 +118,8 @@ export function TodoStatusIcon({
   sweepOnComplete = false,
   tone = 'semantic',
   centerSpinner = false,
+  compactTerminalMarks = false,
+  fullFailureRing = false,
 }: {
   status: TodoListItemStatus;
   progress?: number;
@@ -140,6 +142,10 @@ export function TodoStatusIcon({
   tone?: 'semantic' | 'mono';
   /** Hold a committed job's check while its verify stage is still running. */
   centerSpinner?: boolean;
+  /** Jobs use smaller centered terminal marks without shrinking the ring. */
+  compactTerminalMarks?: boolean;
+  /** A terminal job failure paints every segment red, regardless of progress. */
+  fullFailureRing?: boolean;
 }) {
   const reduce = useReducedMotion() ?? false;
   const normalizedProgress =
@@ -174,6 +180,7 @@ export function TodoStatusIcon({
   return (
     <motion.svg
       aria-hidden="true"
+      data-terminal-mark={status === 'completed' ? 'check' : status === 'cancelled' ? 'x' : undefined}
       viewBox="0 0 24 24"
       initial={false}
       className={cn(
@@ -244,6 +251,7 @@ export function TodoStatusIcon({
           r={9}
           strokeWidth={2}
           reduce={reduce}
+          fullFailureRing={fullFailureRing}
         />
       )}
       {sweeping && status === 'completed' && (
@@ -267,10 +275,10 @@ export function TodoStatusIcon({
         />
       )}
       <motion.path
-        d="M7.5 12.25 10.5 15.25 16.75 8.75"
+        d={compactTerminalMarks ? 'M9 12.2 11 14.2 15.2 9.8' : 'M7.5 12.25 10.5 15.25 16.75 8.75'}
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={compactTerminalMarks ? 1.75 : 2}
         strokeLinecap="round"
         strokeLinejoin="round"
         initial={false}
@@ -304,10 +312,10 @@ export function TodoStatusIcon({
         </g>
       )}
       <motion.path
-        d="M8.5 8.5 15.5 15.5M15.5 8.5 8.5 15.5"
+        d={compactTerminalMarks ? 'M9 9 15.2 15.2M15.2 9 9 15.2' : 'M8.5 8.5 15.5 15.5M15.5 8.5 8.5 15.5'}
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={compactTerminalMarks ? 1.75 : 2}
         strokeLinecap="round"
         initial={false}
         animate={{
@@ -335,6 +343,7 @@ export function JobRingSegments({
   r,
   strokeWidth,
   reduce,
+  fullFailureRing = false,
 }: {
   segments: { done: number; total: number };
   status: TodoListItemStatus;
@@ -342,6 +351,8 @@ export function JobRingSegments({
   r: number;
   strokeWidth: number;
   reduce: boolean;
+  /** Job rows use a wholly red segmented ring for a terminal failure. */
+  fullFailureRing?: boolean;
 }) {
   return (
     <g style={{ transformOrigin: '12px 12px', transform: 'rotate(-90deg)' }}>
@@ -351,13 +362,14 @@ export function JobRingSegments({
         const done = i < segments.done;
         const working =
           status === 'in-progress' && i === segments.done && segments.done < segments.total;
-        const failed = status === 'cancelled' && !done;
+        const failed = status === 'cancelled' && (fullFailureRing || !done);
         return (
           <circle
             key={i}
             data-slot="job-ring-segment"
             data-done={done}
             data-working={working || undefined}
+            data-failed={failed || undefined}
             cx="12"
             cy="12"
             r={r}
@@ -369,7 +381,7 @@ export function JobRingSegments({
             strokeDashoffset={-(i * frac + gap / 2)}
             className={cn(
               'transition-[color,opacity] duration-300',
-              done && (tone === 'mono' ? 'text-foreground' : 'text-status-done'),
+              done && !failed && (tone === 'mono' ? 'text-foreground' : 'text-status-done'),
               failed && 'text-rose-600 dark:text-rose-400',
               working
                 && cn(

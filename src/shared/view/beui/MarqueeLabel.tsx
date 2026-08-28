@@ -20,12 +20,18 @@ export function MarqueeLabel({
   children,
   className,
   mode = 'loop',
+  startDelay = 0,
+  stopImmediately = false,
 }: {
   active: boolean;
   children: string;
   className?: string;
   /** Jobs task rows scan to the end once, then return; navigation rows loop. */
   mode?: 'loop' | 'once';
+  /** Hover-driven labels can pause briefly before motion begins. */
+  startDelay?: number;
+  /** Pointer-leave can snap a hover scan to rest in the same frame. */
+  stopImmediately?: boolean;
 }) {
   const reduce = useReducedMotion() ?? false;
   const viewportRef = useRef<HTMLSpanElement>(null);
@@ -70,14 +76,16 @@ export function MarqueeLabel({
                   duration: Math.max(2.4, distance / 28) * 2,
                   ease: EASE_IN_OUT,
                   times: [0, 0.5, 1],
+                  delay: startDelay,
                 }
               : {
                 duration: Math.max(2.4, distance / 34),
                 ease: 'linear',
                 repeat: Number.POSITIVE_INFINITY,
                 repeatDelay: 2,
+                delay: startDelay,
               }
-            : ROW_RETURN
+            : stopImmediately ? { duration: 0 } : ROW_RETURN
         }
       >
         <span ref={labelRef}>{children}</span>

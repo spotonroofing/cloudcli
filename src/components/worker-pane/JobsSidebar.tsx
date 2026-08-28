@@ -5,7 +5,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { AgentDisclosure } from '../../shared/view/beui/AgentDisclosure';
 import { MarqueeLabel } from '../../shared/view/beui/MarqueeLabel';
-import { SwapText } from '../../shared/view/beui/SwapText';
 import { TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
 import { EASE_OUT, SPRING_SWAP } from '../../shared/view/beui/ease';
 import { Skeleton, Tooltip } from '../../shared/view/ui';
@@ -92,9 +91,66 @@ type Unit = {
   model?: string;
   /** Whole build-session token cost from its provider-native source. */
   tokenCount?: number | null;
+  /** A landed verify failure repaired by this named superseding unit. */
+  verifyFixedIn?: string;
 };
 
-function chainUnits(chain: ChainSnapshot): Unit[] {
+type RepairTruth = {
+  fixedFailures: ReadonlyMap<string, string>;
+  repairWinners: ReadonlySet<string>;
+};
+
+const unitKey = (slug: string, index: number): string => `${slug}:${index}`;
+const unitRefKey = (reference: string): string => reference.replace(/\/(\d+)$/, ':$1');
+
+function baseUnitStatus(chain: ChainSnapshot, entry: ChainManifestEntry, index: number): TodoListItemStatus {
+  const current = chain.currentPhase ?? 0;
+  if (entry.verify === 'failed') return 'cancelled';
+  if (chain.status === 'completed' || index < current) return 'completed';
+  if (index === current) return chain.status === 'running' ? 'in-progress' : 'cancelled';
+  return 'pending';
+}
+
+/**
+ * A committed build whose failed verifier was repaired by a landed
+ * superseding unit stays as the one logical row. The server's twin metadata
+ * already names that repair, so no punch-list-specific exception is needed.
+ */
+function repairedFailureTruth(groups: JobGroup[]): RepairTruth {
+  const entries = new Map<string, { chain: ChainSnapshot; entry: ChainManifestEntry; index: number }>();
+  for (const group of groups) {
+    group.chain?.manifest?.forEach((entry, entryIndex) => {
+      const index = entryIndex + 1;
+      entries.set(unitKey(group.chain!.slug, index), { chain: group.chain!, entry, index });
+    });
+  }
+
+  const candidatesByWinner = new Map<string, { key: string; startedAt: number }[]>();
+  for (const [key, value] of entries) {
+    const { chain, entry } = value;
+    if (!entry.hidden || !entry.supersededBy || !entry.commitHash || entry.verify !== 'failed') continue;
+    const winnerKey = unitRefKey(entry.supersededBy);
+    const winner = entries.get(winnerKey);
+    if (!winner || winner.entry.hidden || winner.entry.verify === 'failed' || winner.entry.verify === 'stopped') continue;
+    if (baseUnitStatus(winner.chain, winner.entry, winner.index) !== 'completed') continue;
+    const candidates = candidatesByWinner.get(winnerKey) ?? [];
+    candidates.push({ key, startedAt: chain.startedAt });
+    candidatesByWinner.set(winnerKey, candidates);
+  }
+
+  const fixedFailures = new Map<string, string>();
+  const repairWinners = new Set<string>();
+  for (const [winnerKey, candidates] of candidatesByWinner) {
+    const repaired = [...candidates].sort((a, b) => a.startedAt - b.startedAt)[0];
+    const winner = entries.get(winnerKey);
+    if (!repaired || !winner) continue;
+    fixedFailures.set(repaired.key, winner.entry.name);
+    repairWinners.add(winnerKey);
+  }
+  return { fixedFailures, repairWinners };
+}
+
+function chainUnits(chain: ChainSnapshot, repairTruth: RepairTruth): Unit[] {
   // A manifest-less chain still lists: synthesize numbered jobs from the
   // runner-reported count.
   const entries: ChainManifestEntry[] = chain.manifest
@@ -108,21 +164,16 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
   // the column, the full-pane view and every drawer read one filtered list;
   // the index keeps the chain's own numbering.
   return entries.flatMap((entry, i) => {
-    if (entry.hidden) {
+    const index = i + 1;
+    const key = unitKey(chain.slug, index);
+    const verifyFixedIn = repairTruth.fixedFailures.get(key);
+    if ((entry.hidden && !verifyFixedIn) || repairTruth.repairWinners.has(key)) {
       return [];
     }
-    const index = i + 1;
-    let status: TodoListItemStatus = 'pending';
+    const status: TodoListItemStatus = verifyFixedIn ? 'completed' : baseUnitStatus(chain, entry, index);
     const paused = chain.status === 'paused' && index === current;
-    if (entry.verify === 'failed') {
-      status = 'cancelled';
-    } else if (chain.status === 'completed' || index < current) {
-      status = 'completed';
-    } else if (index === current) {
-      status = chain.status === 'running' ? 'in-progress' : 'cancelled';
-    }
     return [{
-      key: `${chain.slug}:${index}`,
+      key,
       chainSlug: chain.slug,
       index,
       name: entry.name,
@@ -136,13 +187,14 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
       commitHash: entry.commitHash,
       commitSubject: entry.commitSubject,
       taskTimes: entry.taskTimes,
-      failureReason: entry.failureReason,
-      verify: entry.verify,
+      failureReason: verifyFixedIn ? undefined : entry.failureReason,
+      verify: verifyFixedIn ? undefined : entry.verify,
       verifyStartedAt: entry.verifyStartedAt,
       verifyEndedAt: entry.verifyEndedAt,
       verifySessionId: entry.verifySessionId,
       engine: entry.engine,
       model: entry.model,
+      verifyFixedIn,
     }];
   });
 }
@@ -239,13 +291,14 @@ function JobCommitRow({ unit }: { unit: Unit }) {
   );
 }
 
-/** Job total at the drawer's bottom, live while building and fixed afterward. */
+/** Drawer-bottom token figure beside the live or fixed total time. */
 function JobTotalRow({ unit }: { unit: Unit }) {
   const running = unit.status === 'in-progress' && unit.endedAt == null;
-  if (unit.startedAt == null || (!running && unit.endedAt == null)) {
+  const hasTime = unit.startedAt != null && (running || unit.endedAt != null);
+  if (!hasTime && unit.tokenCount == null) {
     return null;
   }
-  const duration = unit.endedAt != null ? unit.endedAt - unit.startedAt : null;
+  const duration = unit.endedAt != null && unit.startedAt != null ? unit.endedAt - unit.startedAt : null;
   const date = unit.endedAt != null ? formatJobDate(unit.endedAt) : null;
   return (
     <li
@@ -253,15 +306,28 @@ function JobTotalRow({ unit }: { unit: Unit }) {
       data-live={running ? 'true' : undefined}
       className="flex min-h-5 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground/60"
     >
-      <Clock3 className="h-3 w-3 flex-shrink-0 scale-[0.9]" aria-hidden="true" />
-      <span>Total</span>
-      <span className="ml-auto flex-shrink-0 pl-2 font-mono text-[10px] tabular-nums text-muted-foreground/50">
-        {date && (
-          <span data-slot="jobs-sidebar-job-date" className="pr-1.5">
-            {date}
+      {hasTime ? (
+        <Clock3 className="h-3 w-3 flex-shrink-0 scale-[0.9]" aria-hidden="true" />
+      ) : (
+        <Hash className="h-3 w-3 flex-shrink-0 scale-[0.9]" aria-hidden="true" />
+      )}
+      <span>{hasTime ? 'Total' : 'Tokens'}</span>
+      <span className="ml-auto flex flex-shrink-0 items-center gap-2 pl-2 font-mono text-[10px] tabular-nums text-muted-foreground/50">
+        {unit.tokenCount != null && (
+          <span data-slot="jobs-sidebar-token-total" data-token-count={unit.tokenCount}>
+            {formatTokenCount(unit.tokenCount)}
           </span>
         )}
-        {running ? <LiveElapsed startedAt={unit.startedAt} /> : formatDuration(duration!)}
+        {hasTime && (
+          <span>
+            {date && (
+              <span data-slot="jobs-sidebar-job-date" className="pr-1.5">
+                {date}
+              </span>
+            )}
+            {running ? <LiveElapsed startedAt={unit.startedAt!} /> : formatDuration(duration!)}
+          </span>
+        )}
       </span>
     </li>
   );
@@ -288,24 +354,6 @@ function EngineRow({ unit }: { unit: Unit }) {
       {unit.model && (
         <span className="ml-auto flex-shrink-0 pl-2 font-mono text-[10px] text-muted-foreground/50">{unit.model}</span>
       )}
-    </li>
-  );
-}
-
-/** Provider-source token total in the drawer's muted metadata anatomy. */
-function JobTokenRow({ tokenCount }: { tokenCount: number | null | undefined }) {
-  if (tokenCount == null) return null;
-  return (
-    <li
-      data-slot="jobs-sidebar-token-total"
-      data-token-count={tokenCount}
-      className="flex min-h-5 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground/60"
-    >
-      <Hash className="h-3 w-3 flex-shrink-0 scale-[0.9]" aria-hidden="true" />
-      <span>Tokens</span>
-      <span className="ml-auto flex-shrink-0 pl-2 font-mono text-[10px] tabular-nums text-muted-foreground/50">
-        {formatTokenCount(tokenCount)}
-      </span>
     </li>
   );
 }
@@ -371,6 +419,19 @@ function FailureReason({ unit }: { unit: Unit }) {
       className="min-h-5 truncate text-[11px] leading-4 text-rose-600 dark:text-rose-400"
     >
       {reason}
+    </li>
+  );
+}
+
+/** Repair truth for a landed job, kept to one quiet line in the drawer. */
+function VerifyFixedNote({ unit }: { unit: Unit }) {
+  if (!unit.verifyFixedIn) return null;
+  return (
+    <li
+      data-slot="jobs-sidebar-verify-fixed"
+      className="min-h-5 truncate text-[11px] leading-4 text-muted-foreground/60"
+    >
+      Verify fixed in {unit.verifyFixedIn}
     </li>
   );
 }
@@ -472,13 +533,14 @@ type JobsSidebarProps = {
  */
 export default function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }: JobsSidebarProps) {
   const reduce = useReducedMotion() ?? false;
+  const repairTruth = repairedFailureTruth(groups);
 
   // Newest group first, each group's newest unit first — the flat list is
   // already top-to-bottom; positions count from the bottom for the stagger.
   const stacked: PositionedUnit[] = [];
   for (const group of groups) {
     const units: Unit[] = group.chain
-      ? chainUnits(group.chain)
+      ? chainUnits(group.chain, repairTruth)
       : group.run
         ? [{
             key: `run:${group.sessions[1] ?? group.run.label}`,
@@ -513,8 +575,8 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
     ? `${newest.chain.slug}:${newest.chain.currentPhase ?? 1}`
     : null;
   const [drawerOverrides, setDrawerOverrides] = useState<Record<string, boolean>>({});
-  // Hover marquee on job rows (ui13 job 3): mouse enter/leave is effectively
-  // fine-pointer only — touch taps act before hover matters.
+  // Hover state is list-wide rather than timer-per-row. Marquee measurement
+  // stays in effects and pointer leave cancels label motion immediately.
   const [hoveredJob, setHoveredJob] = useState<string | null>(null);
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
   const [tappedTask, setTappedTask] = useState<string | null>(null);
@@ -570,12 +632,12 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
               || unit.engine != null
               || unit.commitHash != null
               || unit.status === 'cancelled'
-              || unit.verify != null;
+              || unit.verify != null
+              || unit.verifyFixedIn != null;
             const drawerOpen = hasDrawer
               && (drawerOverrides[unit.key] ?? unit.key === defaultOpenKey);
-            // Jobs are the navigation (ui13 job 2): a unit with a session
-            // navigates the pane on row click; the title alone toggles the
-            // drawer. Units without sessions keep the whole-row toggle.
+            // Disclosure owns the row and title. Navigation is deliberately
+            // isolated to the explicit chat affordance in the trailing slot.
             const navigable = Boolean(unit.sessionId);
             const open = () => {
               if (unit.sessionId) {
@@ -593,7 +655,7 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
               unit.status === 'completed' && 'text-muted-foreground/60',
               unit.status === 'cancelled' && 'text-muted-foreground/55',
               unit.paused && 'text-foreground',
-              (hasDrawer || navigable) && 'group-hover/row:text-foreground',
+              hasDrawer && 'group-hover/row:text-foreground',
             );
             const period = periods[unitIndex];
             const previousPeriod = unitIndex > 0 ? periods[unitIndex - 1] : null;
@@ -637,15 +699,10 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                         delay: unit.position > seenCount ? (unit.position - seenCount - 1) * 0.07 : 0,
                       }
                 }
+                style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}
               >
                 <div
-                  onClick={
-                    navigable
-                      ? open
-                      : hasDrawer
-                        ? toggleDrawer
-                        : undefined
-                  }
+                  onClick={hasDrawer ? toggleDrawer : undefined}
                   data-slot="jobs-sidebar-row"
                   data-job={unit.index}
                   data-chain={unit.chainSlug ?? undefined}
@@ -658,8 +715,8 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                   className={cn(
                     'group/row relative flex w-full items-center gap-2 rounded-md px-1.5 text-left',
                     unit.kind === 'task' ? 'min-h-7 pl-4' : 'min-h-8',
-                    (hasDrawer || navigable) && 'cursor-pointer',
-                    navigable && 'hover:bg-accent/50',
+                    hasDrawer && 'cursor-pointer',
+                    (hasDrawer || navigable) && 'hover:bg-accent/50',
                   )}
                 >
                   {/* Active-session indicator (ui13 job 2): a quiet
@@ -697,6 +754,8 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                           // row's check and ring render in the foreground ink;
                           // green stays on task icons and the counters.
                           tone="mono"
+                          compactTerminalMarks
+                          fullFailureRing
                           // The job ring is a static circle segmented per task
                           // from the start (ui13 job 7): idle jobs show the
                           // same ring muted and motionless; the active job's
@@ -717,8 +776,7 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                       )}
                     </span>
                   </span>
-                  {/* The title shrinks to its text: the leftover middle
-                      space stays row body, so it navigates, not toggles. */}
+                  {/* The title and its freed middle space both disclose. */}
                   <span className="min-w-0 flex-1">
                     {hasDrawer ? (
                       <button
@@ -734,40 +792,28 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                           'rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         )}
                       >
-                        <MarqueeLabel active={hoveredJob === unit.key} className="flex-initial">
+                        <MarqueeLabel
+                          active={hoveredJob === unit.key}
+                          startDelay={0.18}
+                          stopImmediately
+                          className="flex-initial"
+                        >
                           {unit.name}
                         </MarqueeLabel>
                       </button>
                     ) : (
                       <span className={titleClasses}>
-                        <MarqueeLabel active={hoveredJob === unit.key} className="flex-initial">
+                        <MarqueeLabel
+                          active={hoveredJob === unit.key}
+                          startDelay={0.18}
+                          stopImmediately
+                          className="flex-initial"
+                        >
                           {unit.name}
                         </MarqueeLabel>
                       </span>
                     )}
                   </span>
-                  {unit.tokenCount != null && (
-                    <span
-                      data-slot="jobs-sidebar-row-token-total"
-                      data-token-count={unit.tokenCount}
-                      className="max-w-20 flex-shrink truncate font-mono text-[10px] tabular-nums text-muted-foreground/50"
-                    >
-                      {formatTokenCount(unit.tokenCount)}
-                    </span>
-                  )}
-                  {unit.tasks.length > 0 && (
-                    <span
-                      data-slot="jobs-sidebar-row-count"
-                      className={cn(
-                        'flex-shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground',
-                        displayedDone(unit) === unit.tasks.length && 'text-status-done',
-                      )}
-                    >
-                      <SwapText value={String(displayedDone(unit))}>{displayedDone(unit)}</SwapText>
-                      <span>/</span>
-                      <span>{unit.tasks.length}</span>
-                    </span>
-                  )}
                   {/* Trailing slot: navigable rows swap the chevron for a
                       chat icon on hover (ui13 job 2); rows without a session
                       keep the plain state chevron. */}
@@ -855,6 +901,8 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                             <MarqueeLabel
                               active={reveal}
                               mode="once"
+                              startDelay={0.18}
+                              stopImmediately
                               className={cn(status === 'completed' && !reveal && 'line-through')}
                             >
                               {task}
@@ -874,9 +922,9 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                         );
                       })}
                       <VerifyRow unit={unit} onOpenSession={onOpenSession} />
+                      <VerifyFixedNote unit={unit} />
                       <FailureReason unit={unit} />
                       <EngineRow unit={unit} />
-                      <JobTokenRow tokenCount={unit.tokenCount} />
                       <JobCommitRow unit={unit} />
                       <JobTotalRow unit={unit} />
                     </ul>

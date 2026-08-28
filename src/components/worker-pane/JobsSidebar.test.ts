@@ -86,7 +86,7 @@ test('a committed job holds its check behind a centered spinner while verify run
   assert.equal((markup.match(/data-done="true"/g) ?? []).length, 2);
 });
 
-test('a provider token total renders on both the job row and its drawer', () => {
+test('collapsed rows omit token and task counters while the drawer keeps the token total', () => {
   const chain: ChainSnapshot = {
     slug: 'tokens-stub',
     projectPath: '/workspace/tokens-stub',
@@ -112,9 +112,10 @@ test('a provider token total renders on both the job row and its drawer', () => 
     onOpenSession: () => undefined,
   }));
 
-  assert.match(markup, /data-slot="jobs-sidebar-row-token-total" data-token-count="123456"/);
+  assert.doesNotMatch(markup, /data-slot="jobs-sidebar-row-token-total"/);
+  assert.doesNotMatch(markup, /data-slot="jobs-sidebar-row-count"/);
   assert.match(markup, /data-slot="jobs-sidebar-token-total" data-token-count="123456"/);
-  assert.equal((markup.match(/123,456/g) ?? []).length, 2);
+  assert.equal((markup.match(/123,456/g) ?? []).length, 1);
 });
 
 test('completed task durations are hover-only and long labels use the once-through marquee', () => {
@@ -202,14 +203,61 @@ test('completed and failed jobs keep segmented rings with centered terminal mark
 
   const completedMarkup = renderJobs([{ chain: completed, run: null, sessions: {}, startedAt: completed.startedAt }]);
   assert.equal((completedMarkup.match(/data-slot="job-ring-segment" data-done="true"/g) ?? []).length, 2);
-  assert.match(completedMarkup, /M7\.5 12\.25 10\.5 15\.25 16\.75 8\.75/);
+  assert.match(completedMarkup, /data-terminal-mark="check"/);
+  assert.match(completedMarkup, /M9 12\.2 11 14\.2 15\.2 9\.8/);
 
   const failedMarkup = renderJobs([{ chain: failed, run: null, sessions: {}, startedAt: failed.startedAt }]);
   assert.equal((failedMarkup.match(/data-slot="job-ring-segment" data-done="true"/g) ?? []).length, 1);
+  assert.equal((failedMarkup.match(/data-failed="true"/g) ?? []).length, 3);
   assert.match(failedMarkup, /data-status="cancelled"/);
+  assert.match(failedMarkup, /data-terminal-mark="x"/);
   assert.match(failedMarkup, /text-rose-600/);
   assert.match(failedMarkup, /data-slot="jobs-sidebar-failure-reason"[^>]*>Build command exited 1\.<\/li>/);
-  assert.match(failedMarkup, /M8\.5 8\.5 15\.5 15\.5M15\.5 8\.5 8\.5 15\.5/);
+  assert.match(failedMarkup, /M9 9 15\.2 15\.2M15\.2 9 9 15\.2/);
+});
+
+test('a committed verify failure repaired by its superseding unit reads as done once', () => {
+  const failed: ChainSnapshot = {
+    slug: 'original',
+    projectPath: '/workspace/repair-stub',
+    status: 'failed',
+    phases: 1,
+    currentPhase: 1,
+    phaseActive: false,
+    manifest: [{
+      name: 'Context diet',
+      tasks: ['Land the build'],
+      kind: 'phase',
+      done: 1,
+      commitHash: 'abc1234',
+      verify: 'failed',
+      failureReason: 'Verifier found a regression.',
+      hidden: true,
+      supersededBy: 'repair/1',
+    }],
+    startedAt: 1,
+    lastEventAt: 2,
+  };
+  const repair: ChainSnapshot = {
+    slug: 'repair',
+    projectPath: '/workspace/repair-stub',
+    status: 'completed',
+    phases: 1,
+    currentPhase: 1,
+    phaseActive: false,
+    manifest: [{ name: 'Context diet repair', tasks: [], kind: 'phase', commitHash: 'def5678', verify: 'passed' }],
+    startedAt: 3,
+    lastEventAt: 4,
+  };
+
+  const markup = renderJobs([
+    { chain: repair, run: null, sessions: { 1: 'repair-session' }, startedAt: repair.startedAt },
+    { chain: failed, run: null, sessions: { 1: 'original-session' }, startedAt: failed.startedAt },
+  ]);
+  assert.equal((markup.match(/data-slot="jobs-sidebar-row"/g) ?? []).length, 1);
+  assert.match(markup, /data-chain="original"[^>]*data-status="completed"/);
+  assert.match(markup, /data-slot="jobs-sidebar-verify-fixed"[^>]*>Verify fixed in Context diet repair<\/li>/);
+  assert.doesNotMatch(markup, /data-slot="jobs-sidebar-failure-reason"/);
 });
 
 test('verify renders live and then settles above engine, commit, and total metadata', () => {

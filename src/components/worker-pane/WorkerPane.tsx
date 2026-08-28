@@ -374,7 +374,7 @@ export default function WorkerPane({
     ? (titleFromPrompt(selectedRun.title) || runLabel(selectedRun, chains))
     : titleFromPrompt(paneSession?.summary);
 
-  // Jobs are the navigation (ui13 job 2) and the list spans every run of the
+  // Explicit job-row chat controls are the navigation (ui16 job 2), and the list spans every run of the
   // project (ui14 job 1): each chain is a group carrying the sessions its
   // units have, each chain-less run is a one-row group, newest first. Every
   // selection routes through handleSelectRun so pin/auto-follow holds.
@@ -561,7 +561,7 @@ export default function WorkerPane({
 
         {/* Jobs list (ui14 job 1): a side column beside the transcript, or
             the whole pane where the pane is too narrow for both; the same
-            rows, drawers, and footers either way. Opening a job's session
+            rows, drawers, and footers either way. Opening a job's explicit chat control
             keeps the column; the full-pane view swaps back to the transcript. */}
         {jobsViewOpen && (
           <div
