@@ -1,19 +1,15 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, Provider } from '../../types/types';
 import type { Project } from '../../../../types/app';
 import type { ToolGroupItem } from '../../utils/toolGrouping';
 import { statusStartedAt } from '../../utils/statusDuration';
-import { getToolConfig } from '../../tools';
+import { getToolConfig, ToolGlyph } from '../../tools';
 import {
   AgentDisclosure,
   MESSAGE_POP_UP,
-  SPRING_SWAP,
-  TEXT_SHIMMER_CLASS_NAME,
-  TEXT_SHIMMER_KEYFRAMES,
-  textShimmerStyle,
+  TranscriptIndicatorRow,
 } from '../../../../shared/view/beui';
 
 import MessageComponent from './MessageComponent';
@@ -64,14 +60,6 @@ function getToolInputPreview(message: ChatMessage): string {
   return String(value || title || message.displayText || message.content || '').trim();
 }
 
-function getToolGroupIcon(icon: string | undefined, toolName: string): string {
-  if (icon === 'terminal') {
-    return '$';
-  }
-
-  return icon || toolName.slice(0, 1).toUpperCase();
-}
-
 export default function ToolGroupContainer({
   group,
   animateFrom,
@@ -91,7 +79,6 @@ export default function ToolGroupContainer({
   const [isExpanded, setIsExpanded] = useState(false);
   const config = getToolConfig(group.toolName).input;
   const label = config.label || group.toolName;
-  const icon = getToolGroupIcon(config.icon, group.toolName);
   // beautifului Thinking (coding mode) header treatment: the label shimmers
   // while any tool in the run is still awaiting its result, then settles.
   const working = isTurnRunning && group.messages.some((message) => !message.toolResult);
@@ -139,53 +126,22 @@ export default function ToolGroupContainer({
       transition={MESSAGE_POP_UP}
       style={{ transformOrigin: '0% 100%' }}
     >
-      <button
-        type="button"
-        className="group flex min-h-7 w-full items-center gap-2 rounded-md py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        onClick={() => setIsExpanded((current) => !current)}
-        aria-expanded={isExpanded}
-      >
-        <span
-          aria-hidden="true"
-          className="grid size-4 shrink-0 place-items-center text-xs text-muted-foreground"
-        >
-          {icon}
-        </span>
-        {working ? (
-          <>
-            <style>{TEXT_SHIMMER_KEYFRAMES}</style>
-            <span
-              className={`min-w-0 shrink-0 text-xs font-medium ${TEXT_SHIMMER_CLASS_NAME}`}
-              style={textShimmerStyle(1.4)}
-            >
-              {label}
-            </span>
-          </>
-        ) : (
-          <span className="min-w-0 shrink-0 text-xs font-medium text-foreground/90">{label}</span>
-        )}
-        {/* Plain count, never a chip (DESIGN.md tool-row law) — same meta cut
-            as the Bash row's line count. */}
-        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
-          x{group.messages.length}
-        </span>
-        {preview && (
-          <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/55">{preview}</span>
-        )}
-        <StatusDuration
+      <TranscriptIndicatorRow
+        kind="tool-group"
+        glyph={<ToolGlyph toolName={group.toolName} />}
+        label={label}
+        detail={preview || undefined}
+        meta={`x${group.messages.length}`}
+        duration={<StatusDuration
           startedAt={group.messages[0]?.timestamp}
           durationMs={groupDurationMs}
           running={working}
-        />
-        <motion.span
-          aria-hidden="true"
-          animate={{ rotate: isExpanded ? 180 : 0 }}
-          transition={reduce ? { duration: 0 } : SPRING_SWAP}
-          className="ml-auto grid size-4 shrink-0 place-items-center text-muted-foreground/50 transition-colors group-hover:text-muted-foreground"
-        >
-          <ChevronDown className="size-3.5" />
-        </motion.span>
-      </button>
+        />}
+        active={working}
+        expandable
+        expanded={isExpanded}
+        onToggle={() => setIsExpanded((current) => !current)}
+      />
 
       <AgentDisclosure open={isExpanded}>
         {/* The group root already carries the mobile px-3; nested rows must not

@@ -1,9 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
+import { Search } from 'lucide-react';
 
-import { cn } from '../../../../lib/utils';
-import { AgentDisclosure, CitationList, SPRING_SWAP } from '../../../../shared/view/beui';
+import { AgentDisclosure, CitationList, TranscriptIndicatorRow } from '../../../../shared/view/beui';
 import type { CitationItem } from '../../../../shared/view/beui';
 import StatusDuration from '../../view/subcomponents/StatusDuration';
 
@@ -51,7 +49,6 @@ export const ResearchDisplay: React.FC<ResearchDisplayProps> = ({
   durationMs,
   running: runningOverride,
 }) => {
-  const reduce = useReducedMotion() ?? false;
   const [open, setOpen] = useState(false);
   const isFetch = toolName === 'WebFetch';
   const input = useMemo(() => parseInputObject(toolInput), [toolInput]);
@@ -95,57 +92,21 @@ export const ResearchDisplay: React.FC<ResearchDisplayProps> = ({
 
   return (
     <div data-slot="research-row" className="my-0.5 w-full text-sm">
-      <div
-        role={expandable ? 'button' : undefined}
-        tabIndex={expandable ? 0 : undefined}
-        aria-expanded={expandable ? open : undefined}
-        onClick={toggle}
-        onKeyDown={(event) => {
-          if (expandable && (event.key === 'Enter' || event.key === ' ')) {
-            event.preventDefault();
-            toggle();
-          }
-        }}
-        className={cn(
-          'group/research flex min-h-7 items-center gap-2 rounded-md py-0.5 text-xs outline-none',
-          expandable && 'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring',
-        )}
-      >
-        {/* Leading status slot, always reserved (Bash reference anatomy). */}
-        <span className="grid size-4 shrink-0 place-items-center">
-          {(running || failed) && <ToolRowStatusIcon status={running ? 'running' : 'error'} />}
-        </span>
-        <span className="shrink-0 font-medium text-foreground/90">Research</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70">
-          {query}
-        </span>
-        {failed && errorLine && (
-          <span
-            className="min-w-0 max-w-[50%] truncate text-[11px] text-rose-600 dark:text-rose-400"
-          >
-            {errorLine}
-          </span>
-        )}
-        {!open && expandable && (
-          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
-            {sources.length} {sources.length === 1 ? 'source' : 'sources'}
-          </span>
-        )}
-        <StatusDuration startedAt={startedAt} durationMs={durationMs} running={running} />
-        {/* Fixed size-4 chevron slot per the shared tool-row right-edge column. */}
-        <span className="grid size-4 shrink-0 place-items-center">
-          {expandable && (
-            <motion.span
-              aria-hidden="true"
-              animate={{ rotate: open ? 180 : 0 }}
-              transition={reduce ? { duration: 0 } : SPRING_SWAP}
-              className="text-muted-foreground/50 transition-colors group-hover/research:text-muted-foreground"
-            >
-              <ChevronDown className="size-3.5" />
-            </motion.span>
-          )}
-        </span>
-      </div>
+      <TranscriptIndicatorRow
+        kind="research"
+        glyph={(running || failed)
+          ? <ToolRowStatusIcon status={running ? 'running' : 'error'} />
+          : <Search className="size-3.5" />}
+        label="Research"
+        detail={failed && errorLine ? errorLine : query}
+        meta={!open && expandable
+          ? `${sources.length} ${sources.length === 1 ? 'source' : 'sources'}`
+          : undefined}
+        duration={<StatusDuration startedAt={startedAt} durationMs={durationMs} running={running} />}
+        expandable={expandable}
+        expanded={open}
+        onToggle={toggle}
+      />
 
       <AgentDisclosure open={open && expandable}>
         <div className="mt-1.5 pl-6">

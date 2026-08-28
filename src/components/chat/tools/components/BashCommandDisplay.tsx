@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
 
 import { cn } from '../../../../lib/utils';
-import { AgentDisclosure, SPRING_SWAP } from '../../../../shared/view/beui';
-import { ToolRowStatusIcon, firstErrorLine } from './ToolRowStatus';
+import { AgentDisclosure, TranscriptIndicatorRow } from '../../../../shared/view/beui';
+
+import { ToolRowStatusIcon } from './ToolRowStatus';
 import type { ToolStatus } from './ToolRowStatus';
 
 interface BashCommandDisplayProps {
@@ -33,12 +32,10 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
   defaultOpen = false,
   durationMeta,
 }) => {
-  const reduce = useReducedMotion() ?? false;
   const trimmedOutput = (output || '').replace(/\s+$/, '');
   const hasOutput = trimmedOutput.length > 0;
   const outputLineCount = hasOutput ? trimmedOutput.split('\n').length : 0;
   const isRunning = status === 'running';
-  const errorLine = status === 'error' || status === 'denied' ? firstErrorLine(trimmedOutput) : '';
   const [open, setOpen] = useState(false);
 
   // Output often arrives after this component first mounts, so apply the
@@ -62,73 +59,19 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
 
   return (
     <div className="group/cmd my-0.5 w-full text-sm">
-      {/* Command header — clickable when there is output to expand */}
-      <div
-        role={hasOutput ? 'button' : undefined}
-        tabIndex={hasOutput ? 0 : undefined}
-        aria-expanded={hasOutput ? open : undefined}
-        onClick={toggle}
-        onKeyDown={(event) => {
-          if (hasOutput && (event.key === 'Enter' || event.key === ' ')) {
-            event.preventDefault();
-            toggle();
-          }
-        }}
-        className={cn(
-          'flex min-h-7 items-center gap-2 rounded-md py-0.5 outline-none',
-          hasOutput && 'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring',
-        )}
-      >
-        {/* Leading-icon status (ui12 job 10): the `$` glyph gives way to the
-            ramped spinner while running and the red/amber status glyph on
-            error/denial — same size-4 slot, no layout shift. */}
-        <span className="grid size-4 shrink-0 select-none place-items-center font-mono text-xs font-semibold text-muted-foreground">
-          {status ? <ToolRowStatusIcon status={status} /> : '$'}
-        </span>
-        {/* Not a <code> tag: the global `.chat-message code` rule forces
-            `white-space: pre-wrap !important`, which would defeat `truncate`
-            and render collapsed multi-line commands in full. */}
-        <span
-          className={cn(
-            'min-w-0 flex-1 font-mono text-xs text-foreground/90',
-            open ? 'whitespace-pre-wrap break-all' : 'truncate',
-          )}
-        >
-          {command}
-        </span>
-
-        {!open && hasOutput && !isRunning && (
-          <span className="flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
-            {outputLineCount} {outputLineCount === 1 ? 'line' : 'lines'}
-          </span>
-        )}
-        {durationMeta}
-
-        {/* Fixed chevron slot: every tool row ends in this size-4 slot so the
-            chevrons share one right-edge column regardless of content. */}
-        <span className="grid size-4 flex-shrink-0 place-items-center">
-          {hasOutput && (
-            <motion.span
-              aria-hidden="true"
-              animate={{ rotate: open ? 180 : 0 }}
-              transition={reduce ? { duration: 0 } : SPRING_SWAP}
-              className="text-muted-foreground/50 transition-colors group-hover/cmd:text-muted-foreground"
-            >
-              <ChevronDown className="size-3.5" />
-            </motion.span>
-          )}
-        </span>
-      </div>
-
-      {(errorLine || description) && !open && (
-        <div className="flex items-center gap-2 pl-6 text-[11px] text-muted-foreground/70">
-          {errorLine ? (
-            <span className="min-w-0 truncate text-rose-600 dark:text-rose-400">{errorLine}</span>
-          ) : (
-            <span className="min-w-0 truncate italic">{description}</span>
-          )}
-        </div>
-      )}
+      <TranscriptIndicatorRow
+        kind="bash"
+        glyph={status ? <ToolRowStatusIcon status={status} /> : <span className="font-mono font-semibold">$</span>}
+        label="Bash"
+        detail={command}
+        meta={!open && hasOutput && !isRunning
+          ? `${outputLineCount} ${outputLineCount === 1 ? 'line' : 'lines'}`
+          : undefined}
+        duration={durationMeta}
+        expandable={hasOutput}
+        expanded={open}
+        onToggle={toggle}
+      />
 
       {/* Expanded output */}
       <AgentDisclosure open={open && hasOutput}>

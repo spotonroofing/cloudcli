@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Ban, BookMarked, ChevronDown, Cpu, Info, Pencil, RotateCcw, Wrench } from 'lucide-react';
+import { Ban, BookMarked, ChevronDown, CircleCheck, Clock3, Cpu, Info, Pencil, RotateCcw, Wrench } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import type {
@@ -13,7 +13,7 @@ import type {
 import { extractExternalLinks, formatUsageLimitText, stripProposedPlanEnvelope } from '../../utils/chatFormatting';
 import type { Project } from '../../../../types/app';
 import { ToolRenderer, ToolErrorDisplay, ResearchDisplay, shouldHideToolResult } from '../../tools';
-import { AgentDisclosure, MESSAGE_POP_UP, SPRING_SWAP, Thinking } from '../../../../shared/view/beui';
+import { AgentDisclosure, MESSAGE_POP_UP, SPRING_SWAP, Thinking, TranscriptIndicatorRow } from '../../../../shared/view/beui';
 import { Citations } from '../../../../shared/view/beui/Citations';
 import { Button } from '../../../../shared/view/ui';
 
@@ -81,11 +81,12 @@ export const META_REVEAL_CLASS = 'transition-opacity duration-200 opacity-0 grou
 export function InterruptedMarker() {
   const { t } = useTranslation('chat');
   return (
-    <div data-slot="interrupted-marker" className="flex min-h-7 items-center gap-2 py-0.5 text-[11px] text-muted-foreground/80">
-      <span className="grid size-4 shrink-0 place-items-center" aria-hidden="true">
-        <Ban className="size-3.5" />
-      </span>
-      <span>{t('interrupted', { defaultValue: 'Interrupted' })}</span>
+    <div data-slot="interrupted-marker" className="my-0.5">
+      <TranscriptIndicatorRow
+        kind="interrupted"
+        glyph={<Ban className="size-3.5" />}
+        label={t('interrupted', { defaultValue: 'Interrupted' })}
+      />
     </div>
   );
 }
@@ -111,6 +112,7 @@ export function MemoryUpdatedMarker({
     <div data-slot="memory-updated-marker">
       <Thinking
         mode="coding"
+        kind="memory"
         working={false}
         icon={<BookMarked aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />}
         activeLabel={t('memoryUpdated', { defaultValue: 'Memory updated' })}
@@ -144,31 +146,19 @@ export function MemoryUpdatedMarker({
 
 /** Machine-to-planner prompt: compact meta row, never a user bubble. */
 function MachineMessageRow({ content }: { content: string }) {
-  const reduce = useReducedMotion() ?? false;
   const [open, setOpen] = useState(false);
   const summary = content.replace(/\s+/g, ' ').trim();
   return (
     <div data-slot="machine-message-row" data-origin="watchdog" className="my-0.5 w-full">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-        className="group/machine flex min-h-7 w-full items-center gap-2 rounded-md py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span className="grid size-4 shrink-0 place-items-center text-sky-600 dark:text-sky-400">
-          <Cpu aria-hidden="true" className="size-3.5" />
-        </span>
-        <span className="shrink-0 text-xs font-medium text-sky-700 dark:text-sky-300">Watchdog</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70">{summary}</span>
-        <motion.span
-          aria-hidden="true"
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={reduce ? { duration: 0 } : SPRING_SWAP}
-          className="grid size-4 shrink-0 place-items-center text-muted-foreground/50 group-hover/machine:text-muted-foreground"
-        >
-          <ChevronDown className="size-3.5" />
-        </motion.span>
-      </button>
+      <TranscriptIndicatorRow
+        kind="watchdog"
+        glyph={<Cpu className="size-3.5" />}
+        label="Watchdog"
+        detail={summary}
+        expandable
+        expanded={open}
+        onToggle={() => setOpen((current) => !current)}
+      />
       <AgentDisclosure open={open}>
         <div className="pl-6 pt-1.5">
           <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted/80 p-3 font-mono text-[11px] leading-4 text-muted-foreground/80">
@@ -535,11 +525,15 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
         </div>
       ) : message.isTaskNotification ? (
         /* Compact task notification on the left */
-        <div className="w-full">
-          <div className="flex items-center gap-2 py-0.5">
-            <span className={`inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full ${message.taskStatus === 'completed' ? 'bg-green-400 dark:bg-green-500' : 'bg-amber-400 dark:bg-amber-500'}`} />
-            <span className="text-xs text-gray-500 dark:text-gray-400">{message.content}</span>
-          </div>
+        <div className="my-0.5 w-full">
+          <TranscriptIndicatorRow
+            kind="task-status"
+            glyph={message.taskStatus === 'completed'
+              ? <CircleCheck className="size-3.5" />
+              : <Clock3 className="size-3.5" />}
+            label="Task"
+            detail={message.content}
+          />
         </div>
       ) : (
         /* Claude/Error/Tool messages on the left */

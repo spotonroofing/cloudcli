@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { ChevronDown, CircleX } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
+import { CircleX } from 'lucide-react';
 
-import { cn } from '../../../../lib/utils';
-import { AgentDisclosure, SPRING_SWAP } from '../../../../shared/view/beui';
+import { AgentDisclosure, TranscriptIndicatorRow } from '../../../../shared/view/beui';
 import { Markdown } from '../../view/subcomponents/Markdown';
 
 interface ToolErrorDisplayProps {
@@ -20,7 +18,6 @@ interface ToolErrorDisplayProps {
  * one click away.
  */
 export const ToolErrorDisplay: React.FC<ToolErrorDisplayProps> = ({ content, label }) => {
-  const reduce = useReducedMotion() ?? false;
   const trimmedContent = content.trim();
   const hasContent = trimmedContent.length > 0;
   const [open, setOpen] = useState(false);
@@ -33,46 +30,16 @@ export const ToolErrorDisplay: React.FC<ToolErrorDisplayProps> = ({ content, lab
 
   return (
     <div className="my-0.5 w-full text-sm">
-      <div
-        role={hasContent ? 'button' : undefined}
-        tabIndex={hasContent ? 0 : undefined}
-        aria-expanded={hasContent ? open : undefined}
-        onClick={toggle}
-        onKeyDown={(event) => {
-          if (hasContent && (event.key === 'Enter' || event.key === ' ')) {
-            event.preventDefault();
-            toggle();
-          }
-        }}
-        className={cn(
-          'flex min-h-7 items-center gap-2 rounded-md py-0.5 outline-none',
-          hasContent && 'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring',
-        )}
-      >
-        <span className="grid size-4 shrink-0 place-items-center text-rose-600 dark:text-rose-400">
-          <CircleX className="size-3.5" />
-        </span>
-        <span className="shrink-0 text-xs font-medium text-rose-600 dark:text-rose-400">{label}</span>
-        {!open && hasContent && (
-          /* Not a <code>/<pre> tag: the global `.chat-message code` rule forces
-             `white-space: pre-wrap !important`, which would defeat `truncate`. */
-          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70">
-            {trimmedContent}
-          </span>
-        )}
-        {hasContent && (
-          <span className="ml-auto grid size-4 shrink-0 place-items-center">
-            <motion.span
-              aria-hidden="true"
-              animate={{ rotate: open ? 180 : 0 }}
-              transition={reduce ? { duration: 0 } : SPRING_SWAP}
-              className="text-muted-foreground/50"
-            >
-              <ChevronDown className="size-3.5" />
-            </motion.span>
-          </span>
-        )}
-      </div>
+      <TranscriptIndicatorRow
+        kind="error"
+        glyph={<CircleX className="size-3.5" />}
+        leadingClassName="text-rose-600 dark:text-rose-400"
+        label={label}
+        detail={hasContent ? trimmedContent : undefined}
+        expandable={hasContent}
+        expanded={open}
+        onToggle={toggle}
+      />
 
       <AgentDisclosure open={open && hasContent}>
         <div className="pl-6 pt-1.5">

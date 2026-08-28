@@ -1,4 +1,5 @@
 import React from 'react';
+import { Bot } from 'lucide-react';
 
 import type { SubagentChildTool } from '../../types/types';
 import { Thinking } from '../../../../shared/view/beui';
@@ -107,9 +108,13 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
     <div className="my-0.5">
       <Thinking
         mode="steps"
+        kind="agent"
         working={!settled}
-        activeLabel={description}
-        doneLabel={`${description} · ${subagentType}, ${childTools.length} ${childTools.length === 1 ? 'tool' : 'tools'}`}
+        icon={<Bot className="size-3.5" />}
+        activeLabel="Agent"
+        doneLabel="Agent"
+        activeDetail={description}
+        doneDetail={`${description} · ${subagentType}, ${childTools.length} ${childTools.length === 1 ? 'tool' : 'tools'}`}
         meta={<StatusDuration startedAt={startedAt} durationMs={durationMs} running={!settled} />}
         intro={prompt ? (
           <span className="line-clamp-4 whitespace-pre-wrap break-words">{prompt}</span>

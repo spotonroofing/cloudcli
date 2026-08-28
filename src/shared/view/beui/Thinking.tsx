@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronDown, Globe, Search } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
+import { Globe, Search } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';
 
-import { SPRING_SWAP } from './ease';
-import { TEXT_SHIMMER_CLASS_NAME, TEXT_SHIMMER_KEYFRAMES, textShimmerStyle } from './textShimmer';
+import { TEXT_SHIMMER_KEYFRAMES } from './textShimmer';
+import { TranscriptIndicatorRow } from './TranscriptIndicatorRow';
 import { useFavicon } from './useFavicon';
 
 /**
@@ -87,6 +86,8 @@ function StepStateIcon({ state }: { state?: 'active' | 'done' }) {
 
 export interface ThinkingProps {
   mode: ThinkingMode;
+  /** Transcript kind override for callers such as agents and memory writes. */
+  kind?: string;
   /** True while the traced work is still in flight. */
   working?: boolean;
   /** Replaces the star glyph in the header's size-4 icon slot (size-3.5 glyph, caller-colored). */
@@ -95,6 +96,10 @@ export interface ThinkingProps {
   activeLabel: string;
   /** Settled header label once done. */
   doneLabel: string;
+  /** Muted detail beside the active label. */
+  activeDetail?: ReactNode;
+  /** Muted detail beside the settled label. */
+  doneDetail?: ReactNode;
   /** Muted status metadata between the label and disclosure chevron. */
   meta?: ReactNode;
   /** Search mode: the query line above the source rows. */
@@ -111,10 +116,13 @@ export interface ThinkingProps {
 
 export function Thinking({
   mode,
+  kind,
   working = false,
   icon,
   activeLabel,
   doneLabel,
+  activeDetail,
+  doneDetail,
   meta,
   query,
   intro,
@@ -123,7 +131,6 @@ export function Thinking({
   footer,
   className,
 }: ThinkingProps) {
-  const reduceMotion = useReducedMotion() ?? false;
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
   // Auto behavior: open while working, close shortly after settling. A trace
   // that mounts already settled (loaded history) starts closed.
@@ -150,56 +157,27 @@ export function Thinking({
   return (
     <div className={cn('not-prose flex w-full flex-col', className)} data-slot="thinking-trace" data-mode={mode}>
       <style>{TEXT_SHIMMER_KEYFRAMES}</style>
-      {/* Header in the shared row anatomy (ui13 job 13, Bash reference):
-          size-4 leading icon slot, text-xs medium label, spring-rotated
-          size-3.5 chevron in a size-4 slot, min-h-7 rhythm. */}
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={() => setManualExpanded((current) => !(current ?? autoExpanded))}
-        className="-mx-1.5 flex min-h-7 w-fit items-center gap-2 rounded-md px-1.5 py-0.5 text-left transition-colors duration-100 hover:bg-muted/60"
-      >
-        <span className="grid size-4 shrink-0 place-items-center">
-          {icon ?? (
-            <svg
-              aria-hidden="true"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className={working ? 'shrink-0 text-muted-foreground' : 'shrink-0 text-muted-foreground/60'}
-            >
-              <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
-            </svg>
-          )}
-        </span>
-        {working ? (
-          <span
-            className={`whitespace-nowrap text-xs font-medium ${TEXT_SHIMMER_CLASS_NAME}`}
-            style={textShimmerStyle(1.4)}
-          >
-            {activeLabel}
-          </span>
-        ) : (
-          <span
-            className="whitespace-nowrap text-xs font-medium text-muted-foreground"
-            style={{ animation: 'bui-fade-in 350ms ease-out both' }}
-          >
-            {doneLabel}
-          </span>
-        )}
-        {meta}
-        <span className="grid size-4 shrink-0 place-items-center">
-          <motion.span
+      <TranscriptIndicatorRow
+        kind={kind ?? mode}
+        glyph={icon ?? (
+          <svg
             aria-hidden="true"
-            animate={{ rotate: expanded ? 180 : 0 }}
-            transition={reduceMotion ? { duration: 0 } : SPRING_SWAP}
-            className="text-muted-foreground/50"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="currentColor"
           >
-            <ChevronDown className="size-3.5" />
-          </motion.span>
-        </span>
-      </button>
+            <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
+          </svg>
+        )}
+        label={working ? activeLabel : doneLabel}
+        detail={working ? activeDetail : doneDetail}
+        duration={meta}
+        active={working}
+        expandable
+        expanded={expanded}
+        onToggle={() => setManualExpanded((current) => !(current ?? autoExpanded))}
+      />
 
       <div
         className="grid transition-[grid-template-rows,opacity] duration-[400ms]"

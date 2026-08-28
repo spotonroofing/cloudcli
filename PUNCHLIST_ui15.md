@@ -193,11 +193,11 @@ Goal: nothing in the app needs a refresh to show what already happened. Files: t
 
 Done check: on dev: a stub running session's context figure changes without reload; new rows appear without reload or scroll; skeletons render on a throttled network (agent-browser network delay) for each surface listed and clear when data lands. Commit.
 
-## Job 14 — One style for indicator rows (2026-08-27). Verify: no
+## Job 14 — One style for indicator rows (2026-08-27). Verify: yes
 
 Goal: every tool-call and status row in a transcript shares one anatomy. Files: the transcript meta-row family (bash, tool calls, research, agent, memory, watchdog, status rows), `design/transcript-rows.md`. Dependencies: none.
 
-- [ ] Audit every indicator row kind and unify to one row anatomy (leading glyph, label, muted detail, duration slot, expand affordance) with kind-specific glyph and label only; the bash/command row stops looking different from the rest; document the anatomy once in the area file.
+- [x] Audit every indicator row kind and unify to one row anatomy (leading glyph, label, muted detail, duration slot, expand affordance) with kind-specific glyph and label only; the bash/command row stops looking different from the rest; document the anatomy once in the area file.
 
 Done check: on dev with a synthetic transcript carrying every row kind: computed styles for padding, font, ink and radius match across kinds; one anatomy documented. Commit.
 

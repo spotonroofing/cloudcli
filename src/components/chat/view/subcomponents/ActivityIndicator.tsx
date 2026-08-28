@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 
 import {
   PixelLoader,
-  TEXT_SHIMMER_CLASS_NAME,
-  TEXT_SHIMMER_KEYFRAMES,
+  TranscriptIndicatorRow,
 } from '../../../../shared/view/beui';
 import type { PixelLoaderVariant } from '../../../../shared/view/beui';
 import { NumberTicker } from '../../../../shared/view/beui/NumberTicker';
@@ -13,7 +12,6 @@ type ActivityIndicatorProps = {
   activity: SessionActivity | null;
 };
 
-const SHIMMER_DURATION_S = 1.4;
 const PHASE_PRESENTATION: Record<'thinking' | 'writing', { word: string; variant: PixelLoaderVariant }> = {
   thinking: { word: 'Thinking', variant: 'drive' },
   writing: { word: 'Writing', variant: 'dots' },
@@ -49,20 +47,16 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
     : `${Math.floor(totalSeconds / 60)}m ${(totalSeconds % 60).toFixed(1)}s`;
 
   return (
-    <div className="chat-activity-enter" data-phase={activity.phase}>
-      <style>{TEXT_SHIMMER_KEYFRAMES}</style>
-      <div className="flex items-center gap-2.5 text-sm" role="status" data-testid="activity-indicator">
-        <PixelLoader variant={presentation.variant} className="shrink-0" />
-        <span className="sr-only">{label}</span>
-        <span
-          key={label}
-          aria-hidden="true"
-          className={`text-[13px] font-medium ${TEXT_SHIMMER_CLASS_NAME}`}
-          style={{ animation: `beui-text-shimmer ${SHIMMER_DURATION_S}s linear infinite, bui-fade-in 350ms ease-out both` }}
-        >
-          {label}
-        </span>
-        <span className="font-mono text-xs tabular-nums text-muted-foreground/60">
+    <div className="chat-activity-enter my-0.5" data-phase={activity.phase}>
+      <TranscriptIndicatorRow
+        kind={`activity-${activity.phase}`}
+        role="status"
+        testId="activity-indicator"
+        glyph={<PixelLoader variant={presentation.variant} />}
+        label={label}
+        active
+        duration={(
+          <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground/60">
           {/* Ticker layout (fixed glyph boxes, place-keyed digits) but zero
               roll: the tenths digit updates every 100ms, faster than any roll
               can settle, so a rolling column here is perpetually mid-glyph
@@ -74,8 +68,9 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
             stagger={0}
             startOnView={false}
           />
-        </span>
-      </div>
+          </span>
+        )}
+      />
     </div>
   );
 }

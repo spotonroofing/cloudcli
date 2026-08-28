@@ -10,3 +10,4 @@ export * from './ContentRenderers';
 export * from './InteractiveRenderers';
 export { ToolRowStatusIcon, firstErrorLine } from './ToolRowStatus';
 export type { ToolStatus } from './ToolRowStatus';
+export { ToolGlyph } from './ToolGlyph';
