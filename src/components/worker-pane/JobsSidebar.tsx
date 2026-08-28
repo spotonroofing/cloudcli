@@ -1,4 +1,4 @@
-import { ChevronDown, Cpu, GitCommitHorizontal, MessageSquare, Pause } from 'lucide-react';
+import { ChevronDown, Cpu, GitCommitHorizontal, Hash, MessageSquare, Pause } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -83,6 +83,8 @@ type Unit = {
   /** Engine and model the unit ran on (codex job 2). */
   engine?: string;
   model?: string;
+  /** Whole build-session token cost from its provider-native source. */
+  tokenCount?: number | null;
 };
 
 function chainUnits(chain: ChainSnapshot): Unit[] {
@@ -147,6 +149,11 @@ function formatDuration(ms: number): string {
     return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
   }
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+/** Exact token total with lining separators; the narrow row may shrink it. */
+function formatTokenCount(tokens: number): string {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(tokens);
 }
 
 /**
@@ -266,6 +273,24 @@ function EngineRow({ unit }: { unit: Unit }) {
   );
 }
 
+/** Provider-source token total in the drawer's muted metadata anatomy. */
+function JobTokenRow({ tokenCount }: { tokenCount: number | null | undefined }) {
+  if (tokenCount == null) return null;
+  return (
+    <li
+      data-slot="jobs-sidebar-token-total"
+      data-token-count={tokenCount}
+      className="flex min-h-5 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground/60"
+    >
+      <Hash className="h-3 w-3 flex-shrink-0 scale-[0.9]" aria-hidden="true" />
+      <span>Tokens</span>
+      <span className="ml-auto flex-shrink-0 pl-2 font-mono text-[10px] tabular-nums text-muted-foreground/50">
+        {formatTokenCount(tokenCount)}
+      </span>
+    </li>
+  );
+}
+
 type VerifyState = 'running' | 'passed' | 'failed' | 'stopped';
 
 const verifyRowStatus: Record<VerifyState, TodoListItemStatus> = {
@@ -375,6 +400,8 @@ export type JobGroup = {
   run: { label: string; state: 'running' | 'finished' | 'stopped' } | null;
   /** Unit index → session id, for the units that have a session to open. */
   sessions: Record<number, string>;
+  /** Unit index → provider-source whole-session token total. */
+  tokenCounts?: Record<number, number | null>;
   /** Ordering key: newer groups sit higher in the list. */
   startedAt: number;
 };
@@ -424,7 +451,12 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
           }]
         : [];
     for (const unit of [...units].reverse()) {
-      stacked.push({ ...unit, sessionId: group.sessions[unit.index], position: 0 });
+      stacked.push({
+        ...unit,
+        sessionId: group.sessions[unit.index],
+        tokenCount: group.tokenCounts?.[unit.index] ?? null,
+        position: 0,
+      });
     }
   }
   stacked.forEach((unit, i) => {
@@ -462,7 +494,7 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
       <ol ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <AnimatePresence initial={false}>
           {stacked.map((unit) => {
-            const hasDrawer = unit.tasks.length > 0;
+            const hasDrawer = unit.tasks.length > 0 || unit.tokenCount != null;
             const drawerOpen = hasDrawer
               && (drawerOverrides[unit.key] ?? unit.key === defaultOpenKey);
             // Jobs are the navigation (ui13 job 2): a unit with a session
@@ -609,6 +641,15 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
                       </span>
                     )}
                   </span>
+                  {unit.tokenCount != null && (
+                    <span
+                      data-slot="jobs-sidebar-row-token-total"
+                      data-token-count={unit.tokenCount}
+                      className="max-w-20 flex-shrink truncate font-mono text-[10px] tabular-nums text-muted-foreground/50"
+                    >
+                      {formatTokenCount(unit.tokenCount)}
+                    </span>
+                  )}
                   {unit.tasks.length > 0 && (
                     <span
                       data-slot="jobs-sidebar-row-count"
@@ -708,6 +749,7 @@ export default function JobsSidebar({ groups, activeSessionId, onOpenSession }: 
                         );
                       })}
                       <EngineRow unit={unit} />
+                      <JobTokenRow tokenCount={unit.tokenCount} />
                       <JobFooter unit={unit} />
                       <VerifyRow unit={unit} onOpenSession={onOpenSession} />
                     </ul>

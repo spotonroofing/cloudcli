@@ -221,7 +221,8 @@ async function spawnOpenCode(command, options = {}, ws, context) {
         response = JSON.parse(line);
       } catch {
         ws.send(createNormalizedMessage({
-          kind: 'stream_delta',
+          kind: 'text',
+          role: 'assistant',
           content: line,
           sessionId: capturedSessionId || sessionId || null,
           provider: 'opencode',

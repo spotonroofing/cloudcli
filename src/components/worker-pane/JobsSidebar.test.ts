@@ -67,3 +67,34 @@ test('a committed job holds its check behind a centered spinner while verify run
   assert.match(markup, /data-slot="job-verify-spinner"/);
   assert.equal((markup.match(/data-done="true"/g) ?? []).length, 2);
 });
+
+test('a provider token total renders on both the job row and its drawer', () => {
+  const chain: ChainSnapshot = {
+    slug: 'tokens-stub',
+    projectPath: '/workspace/tokens-stub',
+    status: 'running',
+    phases: 1,
+    currentPhase: 1,
+    phaseActive: true,
+    manifest: [{ name: 'Count tokens', tasks: ['Read the transcript'], kind: 'phase' }],
+    startedAt: 1,
+    lastEventAt: 2,
+  };
+  const groups: JobGroup[] = [{
+    chain,
+    run: null,
+    sessions: { 1: 'job-session' },
+    tokenCounts: { 1: 123_456 },
+    startedAt: 1,
+  }];
+
+  const markup = renderToStaticMarkup(createElement(JobsSidebar, {
+    groups,
+    activeSessionId: null,
+    onOpenSession: () => undefined,
+  }));
+
+  assert.match(markup, /data-slot="jobs-sidebar-row-token-total" data-token-count="123456"/);
+  assert.match(markup, /data-slot="jobs-sidebar-token-total" data-token-count="123456"/);
+  assert.equal((markup.match(/123,456/g) ?? []).length, 2);
+});

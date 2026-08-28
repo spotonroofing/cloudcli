@@ -134,6 +134,8 @@ type WorkerRun = {
   state: 'running' | 'finished' | 'stopped';
   model: string | null;
   lastActivity: string | null;
+  /** Whole-session token cost from the provider's transcript or rollout. */
+  tokenCount: number | null;
 };
 
 type ChainEventName =
@@ -971,7 +973,10 @@ class WatchdogService {
 
   listWorkerRuns(projectPath: string): { runs: WorkerRun[]; chains: Record<string, ChainSnapshot> } {
     const normalizedPath = normalizeProjectPath(projectPath);
-    const rows = sessionsDb.listWorkerSessions(normalizedPath, 10);
+    // Jobs is a history surface, not a recent-run switcher. Keep enough rows
+    // to cover completed chains and both provider types; file totals are
+    // metadata-cached by size/mtime in the token service.
+    const rows = sessionsDb.listWorkerSessions(normalizedPath, 100);
 
     const knownIds = new Set<string>();
     for (const row of rows) {
@@ -997,6 +1002,7 @@ class WatchdogService {
         state: 'running' as const,
         model: run.model,
         lastActivity: new Date(run.lastEventAt).toISOString(),
+        tokenCount: null,
       }));
 
     // Only the newest run of a chain can carry the chain's stopped/failed
@@ -1053,6 +1059,7 @@ class WatchdogService {
         state,
         model: row.model ?? live?.model ?? null,
         lastActivity: row.updated_at ?? row.created_at ?? null,
+        tokenCount: null,
       };
     });
 
@@ -1073,6 +1080,30 @@ class WatchdogService {
     }
 
     return { runs: [...liveOnly, ...fromRows], chains };
+  }
+
+  /**
+   * Enriches the jobs-history snapshot with provider-source token totals. The
+   * providers route uses this async form; the sync form remains available to
+   * watchdog tests and internal callers that do not need filesystem totals.
+   */
+  async listWorkerRunsWithTokens(
+    projectPath: string,
+  ): Promise<{ runs: WorkerRun[]; chains: Record<string, ChainSnapshot> }> {
+    const snapshot = this.listWorkerRuns(projectPath);
+    const runs = await Promise.all(snapshot.runs.map(async (run) => {
+      try {
+        const usage = await providerTokenUsageService.getJobTokenUsage(run.sessionId);
+        return { ...run, tokenCount: usage?.totalTokens ?? null };
+      } catch (error) {
+        console.warn('Could not read worker run token usage', {
+          sessionId: run.sessionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return run;
+      }
+    }));
+    return { ...snapshot, runs };
   }
 
   /**

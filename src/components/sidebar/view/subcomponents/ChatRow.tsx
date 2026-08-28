@@ -10,8 +10,6 @@ import ResponseSignal, { type ActivityKinds } from './ResponseSignal';
 
 type ChatRowProps = {
   href: string;
-  /** Bounce-dot destination key (the session id). */
-  bounceKey: string;
   title: string;
   /** Second-line lead (the owning project's name on the Chats tab). */
   subtitle?: string | null;
@@ -37,11 +35,10 @@ type ChatRowProps = {
  * Chats tab: two-line row — title over relative time bottom-left (with an
  * optional project-name lead) — and a trailing control that shows the
  * chevron arrow at rest and morphs into the three-dots menu trigger on
- * hover. Selection stays an ink shift; the bounce dot marks the open chat.
+ * hover. Selection stays a quiet ink shift.
  */
 export default function ChatRow({
   href,
-  bounceKey,
   title,
   subtitle = null,
   subtitleItalic = false,
@@ -86,7 +83,6 @@ export default function ChatRow({
   return (
     <a
       href={href}
-      data-bounce-key={bounceKey}
       data-testid={dataTestId}
       data-slot="chat-row"
       onClick={handleClick}

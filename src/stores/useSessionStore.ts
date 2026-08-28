@@ -312,11 +312,9 @@ function isAssistantTextEchoedInSameTurnOnServer(
 }
 
 /**
- * After `finalizeStreaming`, the client holds a synthetic assistant `text` row
- * while the sessions API soon returns the same reply with a different id.
- * Those sit back-to-back in merged order and look like duplicate bubbles until
- * A persisted-tail refresh reconciles realtime. Collapse same-text assistant rows and
- * stream_placeholder → text when content matches.
+ * A compatibility stream block or provider event can briefly coexist with the
+ * persisted copy under a different id. Collapse same-text assistant rows and
+ * stream placeholders when content matches.
  */
 function dedupeAdjacentAssistantEchoes(merged: NormalizedMessage[]): NormalizedMessage[] {
   const out: NormalizedMessage[] = [];
@@ -877,55 +875,6 @@ export function useSessionStore() {
   }, []);
 
   /**
-   * Update or create a streaming message (accumulated text so far).
-   * Uses a well-known ID so subsequent calls replace the same message.
-   */
-  const updateStreaming = useCallback((sessionId: string, accumulatedText: string, msgProvider: LLMProvider) => {
-    const slot = getSlot(sessionId);
-    const streamId = `__streaming_${sessionId}`;
-    const msg: NormalizedMessage = {
-      id: streamId,
-      sessionId,
-      timestamp: new Date().toISOString(),
-      provider: msgProvider,
-      kind: 'stream_delta',
-      content: accumulatedText,
-    };
-    const idx = slot.realtimeMessages.findIndex(m => m.id === streamId);
-    if (idx >= 0) {
-      slot.realtimeMessages = [...slot.realtimeMessages];
-      slot.realtimeMessages[idx] = msg;
-    } else {
-      slot.realtimeMessages = [...slot.realtimeMessages, msg];
-    }
-    recomputeMergedIfNeeded(slot);
-    notify(sessionId);
-  }, [getSlot, notify]);
-
-  /**
-   * Finalize streaming: convert the streaming message to a regular text message.
-   * The well-known streaming ID is replaced with a unique text message ID.
-   */
-  const finalizeStreaming = useCallback((sessionId: string) => {
-    const slot = storeRef.current.get(sessionId);
-    if (!slot) return;
-    const streamId = `__streaming_${sessionId}`;
-    const idx = slot.realtimeMessages.findIndex(m => m.id === streamId);
-    if (idx >= 0) {
-      const stream = slot.realtimeMessages[idx];
-      slot.realtimeMessages = [...slot.realtimeMessages];
-      slot.realtimeMessages[idx] = {
-        ...stream,
-        id: `text_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        kind: 'text',
-        role: 'assistant',
-      };
-      recomputeMergedIfNeeded(slot);
-      notify(sessionId);
-    }
-  }, [notify]);
-
-  /**
    * Clear realtime messages for a session (e.g., after stream completes and server fetch catches up).
    */
   const clearRealtime = useCallback((sessionId: string) => {
@@ -962,15 +911,13 @@ export function useSessionStore() {
     setActiveSession,
     setStatus,
     isStale,
-    updateStreaming,
-    finalizeStreaming,
     clearRealtime,
     getMessages,
     getSessionSlot,
   }), [
     getSlot, has, fetchFromServer, fetchMore,
     appendRealtime, appendRealtimeBatch, refreshLatestFromServer,
-    setActiveSession, setStatus, isStale, updateStreaming, finalizeStreaming,
+    setActiveSession, setStatus, isStale,
     clearRealtime, getMessages, getSessionSlot,
   ]);
 }

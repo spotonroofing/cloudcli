@@ -62,6 +62,8 @@ type WorkerRun = {
   state: 'running' | 'finished' | 'stopped';
   model: string | null;
   lastActivity: string | null;
+  /** Whole-session token cost from the provider transcript or rollout. */
+  tokenCount: number | null;
 };
 
 /**
@@ -349,14 +351,16 @@ export default function WorkerPane({
   const jobGroups: JobGroup[] = [
     ...Object.values(chains).map((chain) => {
       const sessions: Record<number, string> = {};
+      const tokenCounts: Record<number, number | null> = {};
       // The job row opens the build session; the verify session (ui14 job
       // 10) is reached from the drawer's verify row instead.
       for (const run of runs) {
         if (run.chainSlug === chain.slug && run.chainPhase != null && run.chainStage !== 'verify') {
           sessions[run.chainPhase] = run.sessionId;
+          tokenCounts[run.chainPhase] = run.tokenCount;
         }
       }
-      return { chain, run: null, sessions, startedAt: chain.startedAt };
+      return { chain, run: null, sessions, tokenCounts, startedAt: chain.startedAt };
     }),
     ...runs
       .filter((run) => !run.chainSlug)
@@ -364,6 +368,7 @@ export default function WorkerPane({
         chain: null,
         run: { label: runLabel(run, chains), state: run.state },
         sessions: { 1: run.sessionId },
+        tokenCounts: { 1: run.tokenCount },
         startedAt: run.lastActivity ? Date.parse(run.lastActivity) : 0,
       })),
   ].sort((a, b) => b.startedAt - a.startedAt);

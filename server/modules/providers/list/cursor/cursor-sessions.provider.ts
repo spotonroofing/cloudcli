@@ -379,7 +379,8 @@ export class CursorSessionsProvider implements IProviderSessions {
     const raw = readObjectRecord(rawMessage);
     if (raw?.type === 'assistant' && raw.message?.content?.[0]?.text) {
       return [createNormalizedMessage({
-        kind: 'stream_delta',
+        kind: 'text',
+        role: 'assistant',
         content: raw.message.content[0].text,
         sessionId,
         provider: PROVIDER,
@@ -388,7 +389,8 @@ export class CursorSessionsProvider implements IProviderSessions {
 
     if (typeof rawMessage === 'string' && rawMessage.trim()) {
       return [createNormalizedMessage({
-        kind: 'stream_delta',
+        kind: 'text',
+        role: 'assistant',
         content: rawMessage,
         sessionId,
         provider: PROVIDER,

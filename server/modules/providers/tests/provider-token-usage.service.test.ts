@@ -118,6 +118,44 @@ test('Claude token usage skips trailing sidechain (subagent) rows', async () => 
   }
 });
 
+test('Claude job tokens sum unique message usage across the whole transcript', async () => {
+  const tempDirectory = await mkdtemp(path.join(tmpdir(), 'provider-job-token-usage-claude-'));
+  const sessionFilePath = path.join(tempDirectory, 'provider-session.jsonl');
+
+  try {
+    const repeatedUsage = {
+      input_tokens: 100,
+      cache_read_input_tokens: 1_000,
+      cache_creation_input_tokens: 50,
+      output_tokens: 25,
+    };
+    await writeFile(sessionFilePath, [
+      JSON.stringify({ uuid: 'thinking-block', message: { id: 'message-1', usage: repeatedUsage } }),
+      JSON.stringify({ uuid: 'text-block', message: { id: 'message-1', usage: repeatedUsage } }),
+      JSON.stringify({
+        uuid: 'message-2',
+        message: {
+          id: 'message-2',
+          usage: { input_tokens: 20, cache_read_input_tokens: 200, output_tokens: 5 },
+        },
+      }),
+      '{incomplete',
+    ].join('\n'));
+
+    const service = createProviderTokenUsageService({
+      getSessionById: () => createSessionRow({ jsonl_path: sessionFilePath }),
+    });
+
+    assert.deepEqual(await service.getJobTokenUsage('app-session'), {
+      totalTokens: 1_400,
+      inputTokens: 1_370,
+      outputTokens: 30,
+    });
+  } finally {
+    await rm(tempDirectory, { recursive: true, force: true });
+  }
+});
+
 test('Codex token usage uses the latest turn rather than cumulative rollout usage', async () => {
   const tempDirectory = await mkdtemp(path.join(tmpdir(), 'provider-token-usage-codex-'));
   const sessionFilePath = path.join(tempDirectory, 'rollout-provider-session.jsonl');
@@ -178,6 +216,11 @@ test('Codex token usage uses the latest turn rather than cumulative rollout usag
       freshInputTokens: 15,
       reasoningTokens: 3,
       breakdown: { input: 40, output: 9 },
+    });
+    assert.deepEqual(await service.getJobTokenUsage('app-session'), {
+      totalTokens: 4_900,
+      inputTokens: 4_000,
+      outputTokens: 900,
     });
   } finally {
     await rm(tempDirectory, { recursive: true, force: true });

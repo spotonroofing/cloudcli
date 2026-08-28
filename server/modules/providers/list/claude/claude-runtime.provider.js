@@ -248,10 +248,10 @@ function mapCliOptionsToSDK(options = {}) {
 
   sdkOptions.model = options.model || CLAUDE_PREDEFINED_MODELS.DEFAULT;
 
-  // Live text streaming: partial-message events feed the stream_delta path
-  // (content_block_delta → stream_delta) so replies play back as they arrive
-  // instead of landing whole at the end of the turn.
-  sdkOptions.includePartialMessages = true;
+  // Transcript prose lands as complete SDK content blocks. Partial events used
+  // to create a second client-side copy of the same reply and could expose raw
+  // chunks when a pane was not active.
+  sdkOptions.includePartialMessages = false;
 
   const resolvedEffort = resolveClaudeEffort(
     sdkOptions.model,

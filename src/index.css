@@ -1896,11 +1896,6 @@
     62% { opacity: 0.15; }
   }
 
-  @keyframes bui-stream-in {
-    0% { opacity: 0; filter: blur(4px); }
-    100% { opacity: 1; filter: blur(0); }
-  }
-
   @keyframes bui-fade-up {
     0% { opacity: 0; transform: translateY(8px); }
     100% { opacity: 1; transform: translateY(0); }
@@ -1911,36 +1906,8 @@
     100% { opacity: 1; }
   }
 
-  @keyframes bui-caret-blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-  }
-
-  /* Words resolve out of blur as they stream in (beautifului Streaming Text). */
-  .bui-stream-word {
-    animation: bui-stream-in 420ms cubic-bezier(0.22, 0.61, 0.25, 1) both;
-    will-change: filter, opacity;
-  }
-
-  /* Trailing caret on the live streamed block: drawn as a pseudo-element on
-     the last markdown block so it sits inline after the newest word. Code
-     panels and tables carry their own chrome, so they skip it. */
-  .bui-stream-caret-host .prose > :last-child:not(div[class*='rounded-lg']):not(table)::after {
-    content: '';
-    display: inline-block;
-    width: 2px;
-    height: 1.05em;
-    margin-left: 3px;
-    border-radius: 1px;
-    vertical-align: text-bottom;
-    background: hsl(var(--foreground));
-    animation: bui-caret-blink 1s step-end infinite;
-  }
-
   @media (prefers-reduced-motion: reduce) {
-    .bui-stream-word { animation: none !important; }
     .bui-pixel-cell { animation: none !important; }
-    .bui-stream-caret-host .prose > :last-child::after { animation: none !important; }
   }
 
   /* Composer clear-with-undo (ui15 job 2): the character counter crossfades

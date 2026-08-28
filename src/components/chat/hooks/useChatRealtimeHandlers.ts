@@ -107,6 +107,10 @@ export function useChatRealtimeHandlers({
   // listener so back-to-back permission events can dedupe and re-arm the
   // notification sound before React finishes a rerender.
   const pendingPermissionRequestsRef = useRef(pendingPermissionRequests);
+  // Compatibility buffer for an older/custom provider that still emits text
+  // deltas. Nothing reaches the store until the provider closes the block, so
+  // transcript rows always land whole.
+  const completedStreamBlockRef = useRef<{ sessionId: string; content: string } | null>(null);
 
   useEffect(() => {
     pendingPermissionRequestsRef.current = pendingPermissionRequests;
@@ -227,19 +231,12 @@ export function useChatRealtimeHandlers({
       if (msg.kind === 'stream_delta') {
         const text = (msg.content as string) || '';
         if (!text) return;
-        accumulatedStreamRef.current += text;
-        if (sid) onSessionProcessing?.(sid, { phase: 'writing' });
-        if (!streamTimerRef.current) {
-          streamTimerRef.current = window.setTimeout(() => {
-            streamTimerRef.current = null;
-            if (sid) {
-              sessionStore.updateStreaming(sid, accumulatedStreamRef.current, provider);
-            }
-          }, 100);
-        }
-        // Also route to store for non-active sessions
-        if (sid && sid !== activeViewSessionId) {
-          sessionStore.appendRealtime(sid, msg as unknown as NormalizedMessage);
+        // A pane only buffers its viewed session. Hidden sessions reload their
+        // persisted transcript when opened; retaining their raw deltas was the
+        // source of chopped and repeated rows.
+        if (sid && sid === activeViewSessionId) {
+          accumulatedStreamRef.current += text;
+          onSessionProcessing?.(sid, { phase: 'writing' });
         }
         return;
       }
@@ -249,11 +246,18 @@ export function useChatRealtimeHandlers({
           clearTimeout(streamTimerRef.current);
           streamTimerRef.current = null;
         }
-        if (sid) {
-          if (accumulatedStreamRef.current) {
-            sessionStore.updateStreaming(sid, accumulatedStreamRef.current, provider);
-          }
-          sessionStore.finalizeStreaming(sid);
+        if (sid && sid === activeViewSessionId && accumulatedStreamRef.current) {
+          const content = accumulatedStreamRef.current;
+          sessionStore.appendRealtime(sid, {
+            id: `assistant_block_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            sessionId: sid,
+            timestamp: new Date().toISOString(),
+            provider,
+            kind: 'text',
+            role: 'assistant',
+            content,
+          } as NormalizedMessage);
+          completedStreamBlockRef.current = { sessionId: sid, content };
         }
         accumulatedStreamRef.current = '';
         if (sid) onSessionProcessing?.(sid, { phase: 'thinking' });
@@ -281,8 +285,19 @@ export function useChatRealtimeHandlers({
       }
 
       // --- All other messages: route to store ---
+      const completedStreamEcho = Boolean(
+        sid
+        && msg.kind === 'text'
+        && msg.role === 'assistant'
+        && completedStreamBlockRef.current?.sessionId === sid
+        && String(msg.content || '').trim() === completedStreamBlockRef.current.content.trim(),
+      );
+      if (completedStreamEcho) {
+        completedStreamBlockRef.current = null;
+      }
       const shouldPersist =
-        msg.kind !== 'complete'
+        !completedStreamEcho
+        && msg.kind !== 'complete'
         && msg.kind !== 'status'
         && msg.kind !== 'permission_request'
         && msg.kind !== 'permission_cancelled';
@@ -299,11 +314,20 @@ export function useChatRealtimeHandlers({
             clearTimeout(streamTimerRef.current);
             streamTimerRef.current = null;
           }
-          if (sid && accumulatedStreamRef.current) {
-            sessionStore.updateStreaming(sid, accumulatedStreamRef.current, provider);
-            sessionStore.finalizeStreaming(sid);
+          if (sid && sid === activeViewSessionId && accumulatedStreamRef.current) {
+            const content = accumulatedStreamRef.current;
+            sessionStore.appendRealtime(sid, {
+              id: `assistant_block_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+              sessionId: sid,
+              timestamp: new Date().toISOString(),
+              provider,
+              kind: 'text',
+              role: 'assistant',
+              content,
+            } as NormalizedMessage);
           }
           accumulatedStreamRef.current = '';
+          completedStreamBlockRef.current = null;
 
           // `complete` is the unified terminal event — every provider run ends
           // with exactly one, regardless of success, failure, or abort. The

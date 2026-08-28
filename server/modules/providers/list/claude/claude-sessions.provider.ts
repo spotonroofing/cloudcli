@@ -261,11 +261,11 @@ export class ClaudeSessionsProvider implements IProviderSessions {
       return [];
     }
 
-    if (raw.type === 'content_block_delta' && raw.delta?.text) {
-      return [createNormalizedMessage({ kind: 'stream_delta', content: raw.delta.text, sessionId, provider: PROVIDER })];
-    }
-    if (raw.type === 'content_block_stop') {
-      return [createNormalizedMessage({ kind: 'stream_end', sessionId, provider: PROVIDER })];
+    // Complete assistant records below are the single live/reload source of
+    // transcript prose. Ignore defensive partial frames from older runtimes so
+    // raw chunks can never become separate rows or duplicate the final block.
+    if (raw.type === 'content_block_delta' || raw.type === 'content_block_stop') {
+      return [];
     }
 
     // A message queued while a turn ran is folded into that turn by the CLI

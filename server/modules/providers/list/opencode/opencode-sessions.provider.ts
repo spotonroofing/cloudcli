@@ -233,7 +233,8 @@ export class OpenCodeSessionsProvider implements IProviderSessions {
         sessionId: eventSessionId,
         timestamp,
         provider: PROVIDER,
-        kind: 'stream_delta',
+        kind: 'text',
+        role: 'assistant',
         content,
       })];
     }
@@ -290,13 +291,7 @@ export class OpenCodeSessionsProvider implements IProviderSessions {
     }
 
     if (type === 'step_finish') {
-      return [createNormalizedMessage({
-        id: baseId,
-        sessionId: eventSessionId,
-        timestamp,
-        provider: PROVIDER,
-        kind: 'stream_end',
-      })];
+      return [];
     }
 
     return [];
@@ -474,13 +469,6 @@ export class OpenCodeSessionsProvider implements IProviderSessions {
       }
 
       if (partType === 'step-finish') {
-        normalized.push(createNormalizedMessage({
-          id: baseId,
-          sessionId,
-          timestamp,
-          provider: PROVIDER,
-          kind: 'stream_end',
-        }));
         continue;
       }
 

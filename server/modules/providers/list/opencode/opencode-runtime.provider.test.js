@@ -87,18 +87,18 @@ test('spawnOpenCode emits session_created before normalized live messages for ne
     await opencodeRuntime.run('Hi', { cwd: tempRoot }, writer, runtimeContext);
 
     const sessionCreatedIndex = messages.findIndex((message) => message.kind === 'session_created');
-    const assistantDeltaIndex = messages.findIndex((message) =>
-      message.kind === 'stream_delta' && message.content === 'assistant response',
+    const assistantBlockIndex = messages.findIndex((message) =>
+      message.kind === 'text' && message.role === 'assistant' && message.content === 'assistant response',
     );
-    const streamEnd = messages.find((message) => message.kind === 'stream_end');
     const complete = messages.find((message) => message.kind === 'complete');
 
     assert.notEqual(sessionCreatedIndex, -1);
-    assert.notEqual(assistantDeltaIndex, -1);
-    assert.ok(sessionCreatedIndex < assistantDeltaIndex);
+    assert.notEqual(assistantBlockIndex, -1);
+    assert.ok(sessionCreatedIndex < assistantBlockIndex);
     assert.equal(messages[sessionCreatedIndex].newSessionId, 'open-live-1');
     assert.equal(writer.sessionId, 'open-live-1');
-    assert.equal(streamEnd?.sessionId, 'open-live-1');
+    assert.equal(messages.some((message) => message.kind === 'stream_delta'), false);
+    assert.equal(messages.some((message) => message.kind === 'stream_end'), false);
     assert.equal(complete?.sessionId, 'open-live-1');
     assert.equal(messages.some((message) => message.kind === 'error'), false);
 

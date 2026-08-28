@@ -50,6 +50,12 @@ type TokenUsageResult = {
   message?: string;
 };
 
+type JobTokenUsageResult = {
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+};
+
 type OpenCodeTokenRow = {
   inputTokens: number | null;
   outputTokens: number | null;
@@ -173,6 +179,30 @@ function readCodexTokenUsage(fileContent: string): TokenUsageResult {
     outputTokens: 0,
     breakdown: { input: 0, output: 0 },
   };
+}
+
+/** Total billed transcript usage from the newest cumulative Codex rollout frame. */
+function readCodexJobTokenUsage(fileContent: string): JobTokenUsageResult {
+  const lines = fileContent.trim().split('\n');
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try {
+      const entry = JSON.parse(lines[index]) as AnyRecord;
+      const usage = entry.type === 'event_msg' && entry.payload?.type === 'token_count'
+        ? entry.payload.info?.total_token_usage as AnyRecord | null
+        : null;
+      if (!usage) continue;
+      const inputTokens = readUsageNumber(usage.input_tokens);
+      const outputTokens = readUsageNumber(usage.output_tokens);
+      return {
+        totalTokens: readUsageNumber(usage.total_tokens) || inputTokens + outputTokens,
+        inputTokens,
+        outputTokens,
+      };
+    } catch {
+      // A provider may be writing the last JSONL line while this read happens.
+    }
+  }
+  return { totalTokens: 0, inputTokens: 0, outputTokens: 0 };
 }
 
 export type CodexRateLimitWindow = {
@@ -299,6 +329,42 @@ function readClaudeTokenUsage(
   };
 }
 
+/**
+ * Sums Claude usage across the job transcript. Claude repeats one API
+ * message's usage on each persisted content block, so message ids are counted
+ * once; counting raw JSONL rows would multiply thinking/tool/text blocks.
+ */
+function readClaudeJobTokenUsage(fileContent: string): JobTokenUsageResult {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  const countedMessageIds = new Set<string>();
+  const lines = fileContent.trim().split('\n');
+
+  for (let index = 0; index < lines.length; index += 1) {
+    try {
+      const entry = JSON.parse(lines[index]) as AnyRecord;
+      const usage = entry.message?.usage as AnyRecord | null;
+      if (!usage) continue;
+      const messageId = typeof entry.message?.id === 'string' && entry.message.id
+        ? entry.message.id
+        : typeof entry.uuid === 'string' && entry.uuid
+          ? entry.uuid
+          : `line:${index}`;
+      if (countedMessageIds.has(messageId)) continue;
+      countedMessageIds.add(messageId);
+
+      inputTokens += readUsageNumber(usage.input_tokens ?? usage.inputTokens)
+        + readUsageNumber(usage.cache_read_input_tokens ?? usage.cacheReadInputTokens)
+        + readUsageNumber(usage.cache_creation_input_tokens ?? usage.cacheCreationInputTokens);
+      outputTokens += readUsageNumber(usage.output_tokens ?? usage.outputTokens);
+    } catch {
+      // Skip malformed or concurrently-written rows and retain earlier usage.
+    }
+  }
+
+  return { totalTokens: inputTokens + outputTokens, inputTokens, outputTokens };
+}
+
 function readOpenCodeTokenUsage(databasePath: string, providerSessionId: string): TokenUsageResult {
   const database = new Database(databasePath, { readonly: true, fileMustExist: true });
   try {
@@ -369,6 +435,42 @@ export function createProviderTokenUsageService(
   dependencyOverrides: Partial<ProviderTokenUsageServiceDependencies> = {},
 ) {
   const dependencies = { ...defaultDependencies, ...dependencyOverrides };
+  const jobUsageCache = new Map<string, {
+    filePath: string;
+    size: number;
+    modifiedAt: number;
+    usage: JobTokenUsageResult;
+  }>();
+
+  const resolveCodexSessionFile = async (
+    session: SessionRow,
+    providerSessionId: string,
+  ): Promise<string | null> => {
+    const indexedFilePath = session.jsonl_path && dependencies.fileExists(session.jsonl_path)
+      ? session.jsonl_path
+      : null;
+    return indexedFilePath ?? findCodexSessionFile(
+      path.join(dependencies.getHomeDirectory(), '.codex', 'sessions'),
+      providerSessionId,
+      dependencies,
+    );
+  };
+
+  const resolveClaudeSessionFile = (session: SessionRow, providerSessionId: string): string | null => {
+    if (session.jsonl_path) return session.jsonl_path;
+    if (!session.project_path) return null;
+    const encodedProjectPath = session.project_path.replace(/[^a-zA-Z0-9-]/g, '-');
+    const projectDirectory = path.join(getClaudeConfigDir(), 'projects', encodedProjectPath);
+    const sessionFilePath = path.join(projectDirectory, `${providerSessionId}.jsonl`);
+    const relativePath = path.relative(path.resolve(projectDirectory), path.resolve(sessionFilePath));
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+      throw new AppError('Resolved session path is invalid.', {
+        code: 'INVALID_SESSION_PATH',
+        statusCode: 400,
+      });
+    }
+    return sessionFilePath;
+  };
 
   return {
     /**
@@ -411,14 +513,7 @@ export function createProviderTokenUsageService(
       }
 
       if (session.provider === 'codex') {
-        const indexedFilePath = session.jsonl_path && dependencies.fileExists(session.jsonl_path)
-          ? session.jsonl_path
-          : null;
-        const sessionFilePath = indexedFilePath ?? await findCodexSessionFile(
-          path.join(dependencies.getHomeDirectory(), '.codex', 'sessions'),
-          providerSessionId,
-          dependencies,
-        );
+        const sessionFilePath = await resolveCodexSessionFile(session, providerSessionId);
 
         if (!sessionFilePath) {
           throw new AppError(`Codex session file for "${sessionId}" was not found.`, {
@@ -431,33 +526,9 @@ export function createProviderTokenUsageService(
         return readCodexTokenUsage(fileContent);
       }
 
-      let sessionFilePath = session.jsonl_path;
-      if (!sessionFilePath) {
-        if (!session.project_path) {
-          throw new AppError(`Session file for "${sessionId}" was not found.`, {
-            code: 'SESSION_FILE_NOT_FOUND',
-            statusCode: 404,
-          });
-        }
+      const sessionFilePath = resolveClaudeSessionFile(session, providerSessionId);
 
-        const encodedProjectPath = session.project_path.replace(/[^a-zA-Z0-9-]/g, '-');
-        const projectDirectory = path.join(
-          getClaudeConfigDir(),
-          'projects',
-          encodedProjectPath,
-        );
-        sessionFilePath = path.join(projectDirectory, `${providerSessionId}.jsonl`);
-
-        const relativePath = path.relative(path.resolve(projectDirectory), path.resolve(sessionFilePath));
-        if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-          throw new AppError('Resolved session path is invalid.', {
-            code: 'INVALID_SESSION_PATH',
-            statusCode: 400,
-          });
-        }
-      }
-
-      if (!dependencies.fileExists(sessionFilePath)) {
+      if (!sessionFilePath || !dependencies.fileExists(sessionFilePath)) {
         throw new AppError(`Session file for "${sessionId}" was not found.`, {
           code: 'SESSION_FILE_NOT_FOUND',
           statusCode: 404,
@@ -472,6 +543,48 @@ export function createProviderTokenUsageService(
           catalog: findClaudeContextWindow(resolvedModel),
         };
       });
+    },
+
+    /**
+     * Returns the whole dispatched session's token cost for the watchdog jobs
+     * history. Claude sums unique message usage; Codex reads cumulative rollout
+     * usage. Other providers do not yet expose the named source formats.
+     */
+    async getJobTokenUsage(sessionId: string): Promise<JobTokenUsageResult | null> {
+      const session = dependencies.getSessionById(sessionId);
+      if (!session || (session.provider !== 'claude' && session.provider !== 'codex')) {
+        return null;
+      }
+      const providerSessionId = session.provider_session_id || sessionId;
+      const sessionFilePath = session.provider === 'codex'
+        ? await resolveCodexSessionFile(session, providerSessionId)
+        : resolveClaudeSessionFile(session, providerSessionId);
+      if (!sessionFilePath || !dependencies.fileExists(sessionFilePath)) {
+        return null;
+      }
+
+      const stats = await fsp.stat(sessionFilePath);
+      const cached = jobUsageCache.get(sessionId);
+      if (
+        cached
+        && cached.filePath === sessionFilePath
+        && cached.size === stats.size
+        && cached.modifiedAt === stats.mtimeMs
+      ) {
+        return cached.usage;
+      }
+
+      const fileContent = await dependencies.readTextFile(sessionFilePath);
+      const usage = session.provider === 'codex'
+        ? readCodexJobTokenUsage(fileContent)
+        : readClaudeJobTokenUsage(fileContent);
+      jobUsageCache.set(sessionId, {
+        filePath: sessionFilePath,
+        size: stats.size,
+        modifiedAt: stats.mtimeMs,
+        usage,
+      });
+      return usage;
     },
   };
 }

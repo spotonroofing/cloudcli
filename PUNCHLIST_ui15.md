@@ -163,12 +163,12 @@ Done check: on dev: dot's left edge equals the New session button's left edge (D
 
 Goal: make completed text arrive cleanly, remove a real duplicate transcript entry at its source, and show the token cost of every dispatched job. Files: transcript streaming and rendering, transcript ingestion/deduplication, jobs history and drawer, Claude JSONL transcripts, Codex rollouts. Dependencies: none; runs last.
 
-- [ ] Streaming text off: assistant text renders whole per block as each block arrives; the arrival fade stays, and the word-by-word stream spans go.
-- [ ] Double-posted reply fixed: in the cloudcli planner session `60a700a2-9e8a-4cc8-9278-97b500aed02c`, the long assistant message beginning "Bottom line: it is not you" showed twice in the transcript on 2026-08-27. Determine whether the JSONL holds two records or the renderer draws one twice, then fix the real cause and cover it with a regression check.
-- [ ] Token count per job in the jobs column: sum `message.usage` across the job's session transcript for Claude sessions; read token counts from the Codex rollout under `~/.codex/sessions` for Codex sessions; show the total as a mono figure on the job row and in the job drawer.
-- [ ] New-chat orange dot gone: the indicator still shows after a reboot; remove the component entirely (there is no new-chat indicator any more).
-- [ ] No streaming cursor on planner replies once streaming is off; nothing blinks after a block lands.
-- [ ] Chopped and repeated text inside replies: reproduce on the planner session named above, confirm it shares the double-post root, fix at that source, and cover both symptoms with the same regression check.
+- [x] Streaming text off: assistant text renders whole per block as each block arrives; the arrival fade stays, and the word-by-word stream spans go.
+- [x] Double-posted reply fixed: in the cloudcli planner session `60a700a2-9e8a-4cc8-9278-97b500aed02c`, the long assistant message beginning "Bottom line: it is not you" showed twice in the transcript on 2026-08-27. Determine whether the JSONL holds two records or the renderer draws one twice, then fix the real cause and cover it with a regression check.
+- [x] Token count per job in the jobs column: sum `message.usage` across the job's session transcript for Claude sessions; read token counts from the Codex rollout under `~/.codex/sessions` for Codex sessions; show the total as a mono figure on the job row and in the job drawer.
+- [x] New-chat orange dot gone: the indicator still shows after a reboot; remove the component entirely (there is no new-chat indicator any more).
+- [x] No streaming cursor on planner replies once streaming is off; nothing blinks after a block lands.
+- [x] Chopped and repeated text inside replies: reproduce on the planner session named above, confirm it shares the double-post root, fix at that source, and cover both symptoms with the same regression check.
 
 Done check: on dev: assistant blocks arrive whole with the existing arrival fade and no word-stream spans; the named planner message renders exactly once after reload and its underlying record path is verified; a Claude-backed job and a Codex-backed job each show a correct mono token total on both the row and drawer, checked against their source transcript or rollout. Phone holds. Fresh-context subagent verification. Commit.
 

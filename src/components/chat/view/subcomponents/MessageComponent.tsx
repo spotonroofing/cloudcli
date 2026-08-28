@@ -13,7 +13,7 @@ import type {
 import { extractExternalLinks, formatUsageLimitText, stripProposedPlanEnvelope } from '../../utils/chatFormatting';
 import type { Project } from '../../../../types/app';
 import { ToolRenderer, ToolErrorDisplay, ResearchDisplay, shouldHideToolResult } from '../../tools';
-import { AgentDisclosure, MESSAGE_POP_UP, SPRING_SWAP, StreamingResponse, Thinking, useStreamedReveal } from '../../../../shared/view/beui';
+import { AgentDisclosure, MESSAGE_POP_UP, SPRING_SWAP, Thinking } from '../../../../shared/view/beui';
 import { Citations } from '../../../../shared/view/beui/Citations';
 import { Button } from '../../../../shared/view/ui';
 
@@ -177,22 +177,6 @@ function MachineMessageRow({ content }: { content: string }) {
         </div>
       </AgentDisclosure>
     </div>
-  );
-}
-
-/**
- * Live assistant turn: the reveal engine paces the growing buffer while the
- * beautifului streaming-text treatment blurs each word in and keeps a caret
- * at the live edge.
- */
-function StreamingAssistantText({ content }: { content: string }) {
-  const cursor = useStreamedReveal(content);
-  return (
-    <StreamingResponse status="streaming" announce={false} contentClassName="bui-stream-caret-host">
-      <Markdown streamWords className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
-        {content.slice(0, cursor)}
-      </Markdown>
-    </StreamingResponse>
   );
 }
 
@@ -786,16 +770,12 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
 
                   // Normal rendering for non-JSON content
                   return message.type === 'assistant' ? (
-                    message.isStreaming ? (
-                      <StreamingAssistantText content={content} />
-                    ) : (
-                      <>
-                        <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
-                          {content}
-                        </Markdown>
-                        <AssistantCitations content={content} />
-                      </>
-                    )
+                    <>
+                      <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
+                        {content}
+                      </Markdown>
+                      <AssistantCitations content={content} />
+                    </>
                   ) : (
                     <div className="whitespace-pre-wrap">
                       {content}

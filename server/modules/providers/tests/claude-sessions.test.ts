@@ -76,6 +76,31 @@ test('claude: the Skill tool result itself still reaches the UI', () => {
   assert.equal(messages[0].toolId, 'toolu_1');
 });
 
+test('claude: partial frames cannot chop or double-post a completed assistant block', () => {
+  const provider = new ClaudeSessionsProvider();
+  const content = 'Bottom line: it is not you. This reply must render exactly once.';
+  const frames = [
+    { type: 'content_block_delta', delta: { text: 'Bottom line: ' } },
+    { type: 'content_block_delta', delta: { text: 'it is not you.' } },
+    { type: 'content_block_stop' },
+    {
+      type: 'assistant',
+      uuid: 'completed-block',
+      timestamp: '2026-08-27T04:14:18.864Z',
+      message: {
+        id: 'msg_named_planner_reply',
+        role: 'assistant',
+        content: [{ type: 'text', text: content }],
+      },
+    },
+  ];
+
+  const normalized = frames.flatMap((frame) => provider.normalizeMessage(frame, SESSION_ID));
+  assert.equal(normalized.length, 1);
+  assert.equal(normalized[0].kind, 'text');
+  assert.equal(normalized[0].content, content);
+});
+
 test('claude: a queued_command attachment renders as the user turn it became', () => {
   const provider = new ClaudeSessionsProvider();
 

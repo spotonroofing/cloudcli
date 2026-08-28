@@ -367,7 +367,8 @@ test('OpenCode sessions provider normalizes quoted live text and skips user echo
   }, null);
 
   assert.equal(normalized.length, 1);
-  assert.equal(normalized[0]?.kind, 'stream_delta');
+  assert.equal(normalized[0]?.kind, 'text');
+  assert.equal(normalized[0]?.role, 'assistant');
   assert.equal(normalized[0]?.content, 'hello bro');
 
   const userEcho = provider.normalizeMessage({

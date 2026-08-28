@@ -26,13 +26,6 @@ type MarkdownProps = {
   className?: string;
   /** Render single newlines as hard line breaks (for user-typed messages). */
   breaks?: boolean;
-  /**
-   * Live-turn streaming treatment (beautifului.dev Streaming Text): wrap each
-   * word in a span that blurs in on arrival. Append-only growth keeps earlier
-   * spans' DOM nodes stable across reparses, so a word animates exactly once —
-   * when it first lands.
-   */
-  streamWords?: boolean;
 };
 
 type MarkdownInlineImageProps = {
@@ -44,47 +37,6 @@ type MarkdownInlineImageProps = {
 const MarkdownImageRenderer = ({ src, alt, compact }: MarkdownInlineImageProps) => (
   <MarkdownInlineImage src={src} alt={alt} compact={compact} />
 );
-
-// Rehype plugin behind `streamWords`: wraps every word-sized text run in a
-// `.bui-stream-word` span. Code panels and KaTeX output keep their text nodes
-// untouched — wrapping there would break their own layout.
-const rehypeStreamWords = () => (tree: unknown) => {
-  const visit = (node: { children?: any[] }) => {
-    if (!node.children) return;
-    const nextChildren: any[] = [];
-    for (const child of node.children) {
-      if (child.type === 'element') {
-        const classes = Array.isArray(child.properties?.className)
-          ? child.properties.className.join(' ')
-          : String(child.properties?.className ?? '');
-        if (child.tagName === 'code' || child.tagName === 'pre' || classes.includes('katex')) {
-          nextChildren.push(child);
-          continue;
-        }
-        visit(child);
-        nextChildren.push(child);
-      } else if (child.type === 'text' && child.value.trim()) {
-        for (const part of child.value.split(/(\s+)/)) {
-          if (!part) continue;
-          if (/^\s+$/.test(part)) {
-            nextChildren.push({ type: 'text', value: part });
-          } else {
-            nextChildren.push({
-              type: 'element',
-              tagName: 'span',
-              properties: { className: ['bui-stream-word'] },
-              children: [{ type: 'text', value: part }],
-            });
-          }
-        }
-      } else {
-        nextChildren.push(child);
-      }
-    }
-    node.children = nextChildren;
-  };
-  visit(tree as { children?: any[] });
-};
 
 // Links to the wider web (or in-page anchors) keep normal browser navigation;
 // everything else is treated as a workspace file reference.
@@ -301,7 +253,7 @@ const markdownComponents = {
   ),
 };
 
-export function Markdown({ children, className, breaks = false, streamWords = false }: MarkdownProps) {
+export function Markdown({ children, className, breaks = false }: MarkdownProps) {
   const content = normalizeInlineCodeFences(String(children ?? ''));
   const remarkPlugins = useMemo(
     () => (breaks
@@ -309,10 +261,7 @@ export function Markdown({ children, className, breaks = false, streamWords = fa
       : [remarkGfm, [remarkMath, { singleDollarTextMath: false }]]) as any,
     [breaks],
   );
-  const rehypePlugins = useMemo(
-    () => (streamWords ? [rehypeKatex, rehypeStreamWords] : [rehypeKatex]),
-    [streamWords],
-  );
+  const rehypePlugins = useMemo(() => [rehypeKatex], []);
   const { openFileInEditor } = usePaletteOps();
 
   const components = useMemo(

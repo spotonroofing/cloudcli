@@ -767,7 +767,7 @@ router.get(
     if (!projectPath) {
       throw new AppError('projectPath is required.', { code: 'PROJECT_PATH_REQUIRED', statusCode: 400 });
     }
-    res.json(createApiSuccessResponse(watchdogService.listWorkerRuns(projectPath)));
+    res.json(createApiSuccessResponse(await watchdogService.listWorkerRunsWithTokens(projectPath)));
   }),
 );
 
