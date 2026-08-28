@@ -6,12 +6,13 @@
 
 ## Showing an image in the chat
 
-A session shows an image inline in its transcript by writing a markdown image whose path is a file inside the project workspace:
+A session shows an image inline in its transcript by writing a markdown image whose source is either a file inside the project workspace or an HTTPS URL:
 
 ```
 ![icon draft](assets/icon.svg)
+![research reference](https://example.com/reference.png)
 ```
 
 - The path is relative to the project root (an absolute path inside the project also works). Use this deliberately when you produced or edited an image worth previewing — icon renders, screenshots, mockups.
-- Only files inside the project workspace render; URLs and paths outside it fall back to a plain non-image line. Covered formats: SVG, PNG, JPEG, GIF, WebP.
+- Local files render only when their resolved path stays inside the project workspace. HTTPS URLs render directly without a download step. Other URL schemes, paths outside the workspace, missing files, and failed remote images fall back to a plain non-image line. Covered formats: SVG, PNG, JPEG, GIF, WebP.
 - The image renders as a bordered card in the chat and opens in a zoomable preview on click.

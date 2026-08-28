@@ -5,6 +5,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { Markdown } from './Markdown';
+import { isRemoteImageUrl, isWorkspaceImagePath } from './MarkdownInlineImage';
 import { DRAFT_LIST_25, BOLD_LED_BULLETS } from './markdownRegressionFixtures';
 
 // The component needs no providers for plain prose: palette ops fall back to
@@ -72,4 +73,40 @@ test('standard GFM structures round-trip: nested lists, links, tables', () => {
   assert.match(html, /href="https:\/\/example\.com"/);
   assert.match(html, /<table[^>]*>/);
   assert.match(html, /<th[^>]*>h1<\/th>/);
+});
+
+test('image source classification accepts only HTTPS or bare workspace paths', () => {
+  assert.equal(isRemoteImageUrl('https://images.example.com/reference.png'), true);
+  assert.equal(isRemoteImageUrl('HTTPS://images.example.com/reference.png'), true);
+  assert.equal(isRemoteImageUrl('http://images.example.com/reference.png'), false);
+  assert.equal(isRemoteImageUrl('//images.example.com/reference.png'), false);
+  assert.equal(isRemoteImageUrl('data:image/png;base64,abc'), false);
+
+  assert.equal(isWorkspaceImagePath('assets/icon.svg'), true);
+  assert.equal(isWorkspaceImagePath('/Users/example/project/icon.png'), true);
+  assert.equal(isWorkspaceImagePath('https://images.example.com/reference.png'), false);
+  assert.equal(isWorkspaceImagePath('blob:unsafe'), false);
+  assert.equal(isWorkspaceImagePath('//images.example.com/reference.png'), false);
+});
+
+test('consecutive HTTPS image markers render as an even compact grid of zoomable cards', () => {
+  const html = render([
+    '![One](https://images.example.com/one.png)',
+    '![Two](https://images.example.com/two.png)',
+    '![Three](https://images.example.com/three.png)',
+    '![Four](https://images.example.com/four.png)',
+  ].join('\n'));
+
+  assert.match(html, /data-slot="transcript-image-grid"/);
+  assert.match(html, /data-image-count="4"/);
+  assert.equal((html.match(/data-slot="transcript-image-card"/g) ?? []).length, 4);
+  assert.equal((html.match(/aria-label="Expand /g) ?? []).length, 4);
+  assert.equal((html.match(/size-28 sm:size-32/g) ?? []).length, 4);
+  assert.equal((html.match(/object-contain/g) ?? []).length, 4);
+});
+
+test('unsupported remote schemes keep the graceful non-image fallback', () => {
+  const html = render('![Unsafe](http://images.example.com/unsafe.png)');
+  assert.match(html, /data-slot="transcript-image-fallback"/);
+  assert.doesNotMatch(html, /data-slot="transcript-image-card"/);
 });

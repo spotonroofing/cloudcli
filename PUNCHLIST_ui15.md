@@ -130,8 +130,8 @@ Done check: on dev with stubbed cswap status feeds: crossing each threshold fire
 
 Goal: image presentation in both panes is verified working and polished, and research imagery can render straight from a URL. Files: the transcript image card and preview, the asset route, the renderer, DESIGN.md, CLAUDE.md (the documented marker). Dependencies: none.
 
-- [ ] End-to-end verification of inline images in the planner and worker panes: a worker-produced set of images (SVG and PNG) renders as clean image cards (bordered, fit-contained, grid when several), opens in the zoom preview, works on phone; fix any gaps found; polish the multi-image presentation (an icon-set preview should look deliberate, e.g. a small grid with even gutters).
-- [ ] Remote images: an https image URL in a transcript image marker renders the same card directly from the URL (no download step), with graceful failure on a dead link; document the URL form next to the path form in CLAUDE.md; workspace-path scoping for local files stays strict.
+- [x] End-to-end verification of inline images in the planner and worker panes: a worker-produced set of images (SVG and PNG) renders as clean image cards (bordered, fit-contained, grid when several), opens in the zoom preview, works on phone; fix any gaps found; polish the multi-image presentation (an icon-set preview should look deliberate, e.g. a small grid with even gutters).
+- [x] Remote images: an https image URL in a transcript image marker renders the same card directly from the URL (no download step), with graceful failure on a dead link; document the URL form next to the path form in CLAUDE.md; workspace-path scoping for local files stays strict.
 
 Done check: on dev: a message with three local images and one remote URL renders a tidy grid, all four zoomable, dead-link case shows the graceful fallback; phone holds; CLAUDE.md documents both forms. Fresh-context subagent verification. Commit.
 

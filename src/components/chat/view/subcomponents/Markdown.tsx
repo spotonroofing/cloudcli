@@ -35,6 +35,16 @@ type MarkdownProps = {
   streamWords?: boolean;
 };
 
+type MarkdownInlineImageProps = {
+  src?: string;
+  alt?: string;
+  compact?: boolean;
+};
+
+const MarkdownImageRenderer = ({ src, alt, compact }: MarkdownInlineImageProps) => (
+  <MarkdownInlineImage src={src} alt={alt} compact={compact} />
+);
+
 // Rehype plugin behind `streamWords`: wraps every word-sized text run in a
 // `.bui-stream-word` span. Code panels and KaTeX output keep their text nodes
 // untouched — wrapping there would break their own layout.
@@ -215,9 +225,9 @@ const CodeBlock = ({ node: _node, className, children, forceBlock, ...props }: C
 
 const markdownComponents = {
   code: CodeBlock,
-  // Session-produced images: `![caption](path)` renders inline when the path
-  // is a file inside the project workspace (see MarkdownInlineImage).
-  img: ({ src, alt }: { src?: string; alt?: string }) => <MarkdownInlineImage src={src} alt={alt} />,
+  // Session-produced images: `![caption](path-or-https-url)` renders inline
+  // when its source is supported (see MarkdownInlineImage).
+  img: MarkdownImageRenderer,
   // Fenced/indented code arrives as <pre><code>. Re-render the child CodeBlock
   // with `forceBlock` so it always gets the block treatment (react-markdown v9+
   // no longer passes an `inline` flag), and skip the outer <pre> so Tailwind
@@ -235,7 +245,32 @@ const markdownComponents = {
     </blockquote>
   ),
   hr: () => <hr className="my-4 border-t border-border" />,
-  p: ({ children }: { children?: React.ReactNode }) => <div className="mb-2 last:mb-0">{children}</div>,
+  p: ({ children }: { children?: React.ReactNode }) => {
+    const meaningfulChildren = React.Children.toArray(children).filter(
+      (child) => typeof child !== 'string' || child.trim().length > 0,
+    );
+    const imageOnly = meaningfulChildren.length > 0 && meaningfulChildren.every(
+      (child) => React.isValidElement(child) && child.type === MarkdownImageRenderer,
+    );
+
+    if (imageOnly) {
+      const compact = meaningfulChildren.length > 1;
+      return (
+        <div
+          data-slot={compact ? 'transcript-image-grid' : 'transcript-image-row'}
+          data-image-count={meaningfulChildren.length}
+          className={compact ? 'my-3 grid w-fit max-w-full grid-cols-2 gap-2' : 'my-3 max-w-full'}
+        >
+          {meaningfulChildren.map((child) => React.cloneElement(
+            child as React.ReactElement<MarkdownInlineImageProps>,
+            { compact },
+          ))}
+        </div>
+      );
+    }
+
+    return <div className="mb-2 last:mb-0">{children}</div>;
+  },
   ul: ({ children }: { children?: React.ReactNode }) => (
     <ul className="mb-2 list-outside list-disc space-y-1 pl-5 marker:text-current last:mb-0">{children}</ul>
   ),
