@@ -63,3 +63,14 @@ Goal: the sidebar footer's activity drawer (the one that expands to show "Worker
 - [ ] Phone holds; `design/sidebar.md` documents the footer anatomy.
 
 Done check: on dev with the stub fixture that has a planner and a worker running, the bottom bar's right group renders the two-line stack centered, one line when only one is active, nothing when idle; no element in the footer uses a green color token; no "--" text anywhere in the footer; clicking the stack opens the drawer; 390px holds. Commit.
+
+## Job 4 — Account switcher: one look for both lists, the real Claude mark, no Add account (2026-08-28, Willem). Verify: no
+
+Goal: the account switcher drawer got provider headers with logos, but the Claude header uses a different mark than the rest of the app, the ChatGPT rows carry a logo the Claude rows do not, and there is an Add account button that will never be used. Files: the account switcher drawer and its rows (`src/components/sidebar/` account switcher pieces), the provider mark component the model switcher uses, `design/sidebar.md`.
+
+- [ ] The Claude header uses the same Claude mark the model switcher uses (the app's original one), rendered as a plain white monochrome glyph with no background disc, plate or tint behind it; the ChatGPT header mark gets the same treatment (plain monochrome glyph, no background) so the two headers match in size and weight.
+- [ ] The Add account button is removed entirely (accounts are added by hand on the mini); nothing else in the drawer shifts to fill its place awkwardly, the sections just stack.
+- [ ] The ChatGPT account list copies the Claude list's row anatomy exactly: a number on the left instead of a logo, the email, the plan tag where the Claude rows put theirs, the same meter rows (5H, 7D, and the model window where one exists), the same "updated" line; one shared row component for both providers so they cannot drift again.
+- [ ] Phone holds; `design/sidebar.md` documents the drawer as one anatomy for both providers.
+
+Done check: on dev with agent-browser, both provider headers render the same mark component with no background element behind the glyph; no "Add account" text exists in the drawer; the ChatGPT row is the same component as the Claude rows and starts with a number; 390px holds. Commit.
