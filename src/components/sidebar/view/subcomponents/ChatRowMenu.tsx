@@ -2,7 +2,6 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Archive,
-  BellRing,
   Check,
   ChevronLeft,
   Copy,
@@ -267,7 +266,9 @@ export default function ChatRowMenu({
               {wakeTargetState === 'saving' ? (
                 <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" />
               ) : (
-                <BellRing className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-shrink-0 rounded-sm border border-border/70 px-1 py-0.5 font-mono text-[9px] leading-none tracking-tight text-muted-foreground">
+                  wake
+                </span>
               )}
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">Receive watchdog wakes here</span>

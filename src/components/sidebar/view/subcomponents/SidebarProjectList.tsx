@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { TFunction } from 'i18next';
 
+import { BounceIndicator } from '../../../../shared/view/beui';
 import type { LoadingProgress, Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { SessionActivityMap } from '../../../../hooks/useSessionProtection';
 import { getPageTitle } from '../../../../utils/pageTitle';
@@ -41,6 +42,8 @@ export type SidebarProjectListProps = {
   workspaceProjectIds?: string[];
   /** Closes a project's workspace row (sidebar hover-close). */
   onCloseWorkspaceProject?: (project: Project) => void;
+  /** Bounce-dot destination: the selected session's row, when it is in this list. */
+  selectedSessionId: string | null;
   onEditingNameChange: (value: string) => void;
   onEditingPlannerNameChange: (value: string) => void;
   onEditingPathChange: (value: string) => void;
@@ -91,6 +94,7 @@ export default function SidebarProjectList({
   onSessionViewed,
   workspaceProjectIds,
   onCloseWorkspaceProject,
+  selectedSessionId,
   onEditingNameChange,
   onEditingPlannerNameChange,
   onEditingPathChange,
@@ -108,6 +112,7 @@ export default function SidebarProjectList({
   onSaveEditingSession,
   t,
 }: SidebarProjectListProps) {
+  const listRef = useRef<HTMLDivElement>(null);
   const pageTitle = getPageTitle(selectedProject, selectedSession);
   const state = (
     <SidebarProjectsState
@@ -126,7 +131,12 @@ export default function SidebarProjectList({
   const showProjects = !isLoading && projects.length > 0 && filteredProjects.length > 0;
 
   return (
-    <div className="relative md:space-y-1">
+    <div ref={listRef} className="relative md:space-y-1">
+      {/* beUI bounce-sidebar behavior: the active dot arcs to the selected
+          session's row on a curved spring path. */}
+      {showProjects && (
+        <BounceIndicator activeKey={selectedSessionId} containerRef={listRef} />
+      )}
       {!showProjects
         ? state
         : filteredProjects.map((project) => (

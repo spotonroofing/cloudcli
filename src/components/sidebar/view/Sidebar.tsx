@@ -364,6 +364,7 @@ function Sidebar({
     onSessionViewed,
     workspaceProjectIds,
     onCloseWorkspaceProject,
+    selectedSessionId: selectedSession ? String(selectedSession.id) : null,
     onEditingNameChange: setEditingName,
     onEditingPlannerNameChange: setEditingPlannerName,
     onEditingPathChange: setEditingPath,

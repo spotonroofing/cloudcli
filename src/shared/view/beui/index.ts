@@ -5,6 +5,7 @@ export { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 export { BeuiSwitch } from './BeuiSwitch';
 export { Tabs, TabsList, TabsTrigger, TabsContent, TABS_INDICATOR_SPRING } from './BeuiTabs';
 export { BorderBeam, BorderBeamOverlay, useBeamPresence } from './BorderBeam';
+export { BounceIndicator } from './BounceIndicator';
 export { BrailleLoader } from './BrailleLoader';
 export { MarqueeLabel } from './MarqueeLabel';
 export { Citations, CitationList, type CitationItem } from './Citations';

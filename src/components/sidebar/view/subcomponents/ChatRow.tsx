@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
-import { BellRing, Check, ChevronRight, X } from 'lucide-react';
+import { Check, ChevronRight, X } from 'lucide-react';
 
 import { cn } from '../../../../lib/utils';
 import { MarqueeLabel } from '../../../../shared/view/beui';
@@ -10,6 +10,8 @@ import ResponseSignal, { type ActivityKinds } from './ResponseSignal';
 
 type ChatRowProps = {
   href: string;
+  /** Bounce-dot destination key (the session id). */
+  bounceKey: string;
   title: string;
   /** Second-line lead (the owning project's name on the Chats tab). */
   subtitle?: string | null;
@@ -37,10 +39,11 @@ type ChatRowProps = {
  * Chats tab: two-line row — title over relative time bottom-left (with an
  * optional project-name lead) — and a trailing control that shows the
  * chevron arrow at rest and morphs into the three-dots menu trigger on
- * hover. Selection stays a quiet ink shift.
+ * hover. Selection stays an ink shift; the bounce dot marks the open chat.
  */
 export default function ChatRow({
   href,
+  bounceKey,
   title,
   subtitle = null,
   subtitleItalic = false,
@@ -102,6 +105,7 @@ export default function ChatRow({
   return (
     <a
       href={href}
+      data-bounce-key={bounceKey}
       data-testid={dataTestId}
       data-slot="chat-row"
       onClick={handleClick}
@@ -178,11 +182,12 @@ export default function ChatRow({
       )}
 
       {wakeTarget && (
-        <BellRing
+        <span
           data-slot="watchdog-wake-target-mark"
-          aria-label="Receives watchdog wakes"
-          className="h-3 w-3 flex-shrink-0 text-muted-foreground/55"
-        />
+          className="hidden h-4 flex-shrink-0 items-center rounded-sm border border-border/70 px-1 font-mono text-[9px] leading-none tracking-tight text-muted-foreground/70 md:group-hover:inline-flex"
+        >
+          wake
+        </span>
       )}
 
       <ResponseSignal kinds={responseKinds} />

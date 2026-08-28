@@ -81,6 +81,7 @@ export default function SidebarSessionItem({
           arrow-to-dots trailing control, one shared menu. */}
       <ChatRow
         href={`/session/${session.id}`}
+        bounceKey={String(session.id)}
         title={sessionView.sessionName}
         timestamp={sessionView.sessionTime || null}
         age={compactSessionAge}

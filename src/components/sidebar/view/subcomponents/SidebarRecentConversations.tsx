@@ -1,7 +1,9 @@
 import { MessageSquare, Plus } from 'lucide-react';
+import { useRef } from 'react';
 import type { TFunction } from 'i18next';
 
 import { Button, Skeleton } from '../../../../shared/view/ui';
+import { BounceIndicator } from '../../../../shared/view/beui';
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { RecentConversationListItem } from '../../types/types';
 import { formatCompactAge } from '../../utils/utils';
@@ -85,6 +87,8 @@ export default function SidebarRecentConversations({
   onNewStandaloneChat,
   t,
 }: SidebarRecentConversationsProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+
   if (isLoading && conversations.length === 0) {
     return <RecentConversationSkeleton />;
   }
@@ -141,7 +145,13 @@ export default function SidebarRecentConversations({
         </span>
       </div>
 
-      <div className="relative space-y-1">
+      <div ref={listRef} className="relative space-y-1">
+        {/* Same law as the project list: the bounce dot is the one honest
+            indicator of the open chat. */}
+        <BounceIndicator
+          activeKey={selectedSession ? String(selectedSession.id) : null}
+          containerRef={listRef}
+        />
         {conversations.map((conversation) => {
           const isSelected = String(selectedSession?.id ?? '') === conversation.sessionId;
           const age = formatCompactAge(conversation.lastActivity, currentTime);
@@ -151,6 +161,7 @@ export default function SidebarRecentConversations({
             <ChatRow
               key={conversation.sessionId}
               href={`/session/${conversation.sessionId}`}
+              bounceKey={conversation.sessionId}
               dataTestId="recent-conversation-row"
               title={conversation.sessionTitle}
               subtitle={conversation.projectDisplayName ?? t('standalone.noProject', 'No project')}
