@@ -47,7 +47,7 @@ Done check: on dev with the stub chain fixture that has one job in each status, 
 
 Goal: Willem's laptop sits at 64 percent memory idle with a quarter of it in the browser; the Command Center tab has to be a light tenant. Job 0 measured main-thread time; this job measures and cuts what the tab holds in memory. Files: wherever the evidence leads; suspects to measure, not assume: every session's transcript kept in memory after switching away, message arrays that only grow, listeners and intervals that survive unmount, duplicated composers and drafts per pane, image and attachment blobs retained, the jobs history holding every chain's full record, DOM node count on long transcripts, and any store that never evicts.
 
-- [ ] Measure first on dev with a realistic state (cloudcli open, planner pane on a long real transcript, worker pane, jobs column with full history): heap size, DOM node count, detached DOM nodes, listener count and live intervals, taken at load, after 30 chat switches, after 10 minutes idle with a running worker streaming, and after opening and closing the jobs drawers and the memory sheet 20 times. Write the numbers down as the baseline in the summary.
+- [x] Measure first on dev with a realistic state (cloudcli open, planner pane on a long real transcript, worker pane, jobs column with full history): heap size, DOM node count, detached DOM nodes, listener count and live intervals, taken at load, after 30 chat switches, after 10 minutes idle with a running worker streaming, and after opening and closing the jobs drawers and the memory sheet 20 times. Write the numbers down as the baseline in the summary.
 - [ ] Fix the top holders in order of measured size with a before-and-after number each: evict transcripts of sessions not in view beyond a small recent set (a bounded cache, re-fetch on return), keep only the paged window of a transcript mounted, dispose listeners, intervals and observers on unmount, hold images as URLs not blobs, and let the jobs history render its long tail cheaply. Budgets: heap after the whole scenario within 25 percent of the heap at load; DOM nodes bounded by the visible page of each list; zero detached nodes growing over the scenario; zero intervals left from unmounted components.
 - [ ] Add the memory scenario to the committed measurement script under `scripts/perf/` from Job 0 so both budgets run together, and record the numbers and rules in the performance section of `design/motion.md`.
 
@@ -95,3 +95,12 @@ Goal: dragging a file over a pane shows the dotted outline and wash (`data-slot=
 - [ ] A regression test drives dragenter over the pane, dragover across three nested children, and asserts the highlight element stays mounted and opaque throughout; then dragleave outside the pane removes it.
 
 Done check: on dev with agent-browser, synthetic drag events across the pane's children keep `pane-drop-highlight` present and at full opacity for the whole sequence; a drop still attaches the file; tests pass. Commit.
+
+## Job 7 — Segmented ring breathing: opacity only, no blur (2026-08-28, Willem). Verify: no
+
+Goal: the running job's segmented ring in the jobs column breathes with a blur that matches nothing else in the app. Keep the breathing, drop the blur: the active segment animates opacity alone (the stroke fading between its dim and full values on the ring's existing ramped curve), no filter, no glow, no scale. Files: the ring in `src/components/worker-pane/JobsSidebar.tsx` (or its ring component) and the keyframes it uses in `src/index.css`, `design/worker-pane-and-jobs.md`.
+
+- [ ] The breathing keyframes animate `opacity` only; every `filter`, `blur`, `drop-shadow` or `box-shadow` step in that animation is removed; timing and ramp unchanged.
+- [ ] Nothing else in the ring changes (segment geometry, colors, the check and the red X from Job 1).
+
+Done check: on dev with the stub running job, the animated segment's computed style shows no filter at any sampled frame and its opacity moves between the two values; tests pass. Commit.
