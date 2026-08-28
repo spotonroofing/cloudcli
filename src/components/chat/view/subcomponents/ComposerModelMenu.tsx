@@ -149,7 +149,8 @@ export default function ComposerModelMenu({
           updateAnchor();
           setIsOpen((current) => !current);
         }}
-        className="flex h-7 max-w-36 shrink-0 items-center gap-1 rounded-lg px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:max-w-56"
+        className="flex h-7 max-w-24 shrink-0 items-center gap-1 rounded-lg px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:max-w-56"
+        data-slot="composer-model-switcher"
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-label={ariaLabel}

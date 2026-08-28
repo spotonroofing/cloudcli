@@ -158,6 +158,7 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
         aria-haspopup="menu"
         aria-expanded={isOpen}
         data-context-percent={percentUsed}
+        data-slot="composer-context-window"
       >
         <svg viewBox="0 0 18 18" className="h-4 w-4 -rotate-90" aria-hidden="true">
           {/* Unused track: muted-foreground ink, not the border token — the

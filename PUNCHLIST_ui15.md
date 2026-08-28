@@ -178,7 +178,7 @@ Done check: on dev: assistant blocks arrive whole with the existing arrival fade
 
 Goal: the composer's bottom row reads, right-aligned, in this order: handoff button, prompt history button, model switcher, context window button, send. Today the context window control sits below the composer instead of in the row. Files: the composer bottom row and the context window control, `design/composer.md`. Dependencies: none.
 
-- [ ] Move the context window control into the bottom row between the model switcher and send, same height and icon language as its neighbors, its popover unchanged; the row below the composer disappears; both panes; phone holds.
+- [x] Move the context window control into the bottom row between the model switcher and send, same height and icon language as its neighbors, its popover unchanged; the row below the composer disappears; both panes; phone holds.
 
 Done check: on dev: DOM order of the bottom row's right group is handoff, history, switcher, context window, send in both panes; nothing renders below the composer; 390px holds. Commit.
 

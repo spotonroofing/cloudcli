@@ -464,8 +464,9 @@ export default function ChatComposer({
             />
           </PromptInputBody>
 
-          {/* Bottom controls row (ui15 job 2): plus left; handoff, prompt
-              history, the model switcher, then send on the right. */}
+          {/* Bottom controls row (ui15 job 12): composer utilities stay left;
+              handoff, history, model, context, and send form one ordered
+              group on the right. */}
           <div data-slot="composer-controls-row" className="flex items-center gap-1 px-2 pb-1.5 pt-0.5">
             <ComposerPlusMenu
               onUpload={openAttachmentPicker}
@@ -473,90 +474,6 @@ export default function ChatComposer({
               className="ml-0.5 h-7 w-7"
             />
 
-            <div className="flex-1" />
-
-            {handoffAvailable && (
-              <PromptInputButton
-                onClick={onHandoff}
-                aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
-                tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
-                className="h-7 w-7"
-                data-slot="composer-handoff"
-              >
-                <FileTextIcon />
-              </PromptInputButton>
-            )}
-
-            <PromptInputButton
-              onClick={() => setHistoryOpen((previous) => !previous)}
-              aria-label={t('input.history.title', { defaultValue: 'Prompt history' })}
-              aria-pressed={historyOpen}
-              tooltip={{ content: t('input.history.title', { defaultValue: 'Prompt history' }) }}
-              className={`h-7 w-7 ${historyOpen ? 'bg-accent/60 text-foreground' : ''}`}
-              data-slot="composer-history-toggle"
-            >
-              <History />
-            </PromptInputButton>
-
-            <ComposerModelMenu
-              effort={effort}
-              effortOptions={availableEffortOptions}
-              onSelectEffort={onSelectEffort}
-              model={model}
-              provider={provider}
-              modelGroups={modelGroups}
-              onSelectModel={onSelectModel}
-              modelsLoading={modelsLoading}
-            />
-
-            <PromptInputSubmit
-              className="h-7 w-7"
-              onClick={
-                canQueueDraft
-                  ? (e: MouseEvent<HTMLButtonElement>) => {
-                      e.preventDefault();
-                      onSubmit(e);
-                    }
-                  : isLoading
-                    ? onAbortSession
-                    : isRecording
-                      ? (e: MouseEvent<HTMLButtonElement>) => {
-                          e.preventDefault();
-                          voiceStop({ send: true });
-                        }
-                      : undefined
-              }
-              disabled={
-                isLoading
-                  ? false
-                  : isRecording
-                    ? false
-                    : isTranscribing
-                      ? true
-                      : !input.trim() && !hasAttachments
-              }
-              aria-label={submitAriaLabel}
-            >
-              {isTranscribing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : canQueueDraft ? (
-                <ArrowUpIcon className="h-4 w-4" />
-              ) : undefined}
-            </PromptInputSubmit>
-          </div>
-      </PromptInput>
-
-        {/* Slim secondary row (ui11 phase 5, ui12 phase 2, ui13 job 12, ui14
-            job 6, ui15 job 2): floats under the enclosure, outside its
-            border. Left: the character counter flush with the enclosure's
-            left edge (hover fades it into a clear X; clearing swaps in the
-            depleting Undo affordance), then voice. Right: the context ring
-            flush with the right edge (the model switcher moved up into the
-            controls row). No horizontal padding on the row. */}
-        <div
-          data-slot="composer-secondary-row"
-          className="mt-1 flex items-center justify-between gap-2"
-        >
             <PromptInputTools className="min-w-0 gap-1.5">
               {clearUndoPending ? (
                 <button
@@ -596,10 +513,82 @@ export default function ChatComposer({
               )}
             </PromptInputTools>
 
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="min-w-0 flex-1" />
+
+            <div data-slot="composer-controls-right" className="flex min-w-0 shrink-0 items-center gap-1">
+              {handoffAvailable && (
+                <PromptInputButton
+                  onClick={onHandoff}
+                  aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
+                  tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
+                  className="h-7 w-7"
+                  data-slot="composer-handoff"
+                >
+                  <FileTextIcon />
+                </PromptInputButton>
+              )}
+
+              <PromptInputButton
+                onClick={() => setHistoryOpen((previous) => !previous)}
+                aria-label={t('input.history.title', { defaultValue: 'Prompt history' })}
+                aria-pressed={historyOpen}
+                tooltip={{ content: t('input.history.title', { defaultValue: 'Prompt history' }) }}
+                className={`h-7 w-7 ${historyOpen ? 'bg-accent/60 text-foreground' : ''}`}
+                data-slot="composer-history-toggle"
+              >
+                <History />
+              </PromptInputButton>
+
+              <ComposerModelMenu
+                effort={effort}
+                effortOptions={availableEffortOptions}
+                onSelectEffort={onSelectEffort}
+                model={model}
+                provider={provider}
+                modelGroups={modelGroups}
+                onSelectModel={onSelectModel}
+                modelsLoading={modelsLoading}
+              />
+
               <TokenUsageSummary usage={tokenBudget} />
+
+              <PromptInputSubmit
+                className="h-7 w-7"
+                onClick={
+                  canQueueDraft
+                    ? (e: MouseEvent<HTMLButtonElement>) => {
+                        e.preventDefault();
+                        onSubmit(e);
+                      }
+                    : isLoading
+                      ? onAbortSession
+                      : isRecording
+                        ? (e: MouseEvent<HTMLButtonElement>) => {
+                            e.preventDefault();
+                            voiceStop({ send: true });
+                          }
+                        : undefined
+                }
+                disabled={
+                  isLoading
+                    ? false
+                    : isRecording
+                      ? false
+                      : isTranscribing
+                        ? true
+                        : !input.trim() && !hasAttachments
+                }
+                aria-label={submitAriaLabel}
+              >
+                {isTranscribing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : canQueueDraft ? (
+                  <ArrowUpIcon className="h-4 w-4" />
+                ) : undefined}
+              </PromptInputSubmit>
             </div>
-        </div>
+          </div>
+      </PromptInput>
       </div>}
       </div>
     </div>
