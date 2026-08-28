@@ -1,0 +1,20 @@
+[
+ {
+  "name": "Performance, measured",
+  "tasks": [
+   "Baseline traces at 4x throttle",
+   "Top causes fixed with numbers",
+   "Selection dot hop visible",
+   "Idle animations cost nothing",
+   "Budgets and script committed"
+  ]
+ },
+ {
+  "name": "Failed mark",
+  "tasks": [
+   "Failed rows stay failed",
+   "Red segmented ring with centered X",
+   "Historical rows included"
+  ]
+ }
+]
