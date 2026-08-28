@@ -1,0 +1,27 @@
+[
+ {
+  "name": "Selection dot returns",
+  "tasks": [
+   "Bounce dot back in both views",
+   "Wake mark is a hover tag, not a bell"
+  ]
+ },
+ {
+  "name": "Composer controls below",
+  "tasks": [
+   "Counter bottom left under the bar",
+   "Usage, switcher, history, handoff right",
+   "Box holds plus, voice, send only"
+  ]
+ },
+ {
+  "name": "Jobs column feel",
+  "tasks": [
+   "Tokens and counters off the rows",
+   "Small check, red X ring for failed",
+   "Superseded failures read as done",
+   "Name click only toggles",
+   "Smooth hover and scroll"
+  ]
+ }
+]
