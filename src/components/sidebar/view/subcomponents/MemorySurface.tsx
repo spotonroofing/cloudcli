@@ -12,6 +12,7 @@ import SidebarSurface from './SidebarSurface';
 type MemorySurfaceProps = {
   open: boolean;
   onClose: () => void;
+  isMobile: boolean;
   t: TFunction;
 };
 
@@ -30,7 +31,7 @@ const DONE_SETTLE_MS = 1_600;
  * rules, commits and pushes the memory repo, and the view refreshes from the
  * response. No tabs, no Internals, no Project/Global split.
  */
-export default function MemorySurface({ open, onClose, t }: MemorySurfaceProps) {
+export default function MemorySurface({ open, onClose, isMobile, t }: MemorySurfaceProps) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [instruction, setInstruction] = useState('');
@@ -122,6 +123,7 @@ export default function MemorySurface({ open, onClose, t }: MemorySurfaceProps) 
       onClose={onClose}
       ariaLabel={t('memory.title', 'Memory')}
       dataSlot="memory-surface"
+      mobileSheet={isMobile}
     >
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-medium text-foreground">{t('memory.title', 'Memory')}</h2>

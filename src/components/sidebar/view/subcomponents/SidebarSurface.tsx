@@ -9,6 +9,8 @@ type SidebarSurfaceProps = {
   onClose: () => void;
   ariaLabel: string;
   dataSlot: string;
+  /** Memory uses the shared phone bottom-sheet treatment; desktop stays in-flow. */
+  mobileSheet?: boolean;
   children: ReactNode;
 };
 
@@ -24,6 +26,7 @@ export default function SidebarSurface({
   onClose,
   ariaLabel,
   dataSlot,
+  mobileSheet = false,
   children,
 }: SidebarSurfaceProps) {
   const reduceMotion = useReducedMotion();
@@ -40,18 +43,36 @@ export default function SidebarSurface({
   return (
     <AnimatePresence initial={false}>
       {open && (
-        <motion.div
-          role="region"
-          aria-label={ariaLabel}
-          data-slot={dataSlot}
-          className="absolute inset-0 z-20 flex flex-col overflow-hidden bg-background"
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: EASE_IN_OUT }}
-        >
-          {children}
-        </motion.div>
+        <>
+          {mobileSheet && (
+            <motion.button
+              type="button"
+              tabIndex={-1}
+              aria-label={`Close ${ariaLabel}`}
+              className="absolute inset-0 z-20 bg-background/60 backdrop-blur-sm md:hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.15 }}
+              onClick={onClose}
+            />
+          )}
+          <motion.div
+            role={mobileSheet ? 'dialog' : 'region'}
+            aria-modal={mobileSheet || undefined}
+            aria-label={ariaLabel}
+            data-slot={dataSlot}
+            className={mobileSheet
+              ? 'absolute inset-x-0 bottom-0 top-12 z-30 flex min-h-0 flex-col overflow-hidden rounded-t-lg border-t border-border bg-background md:inset-0 md:rounded-none md:border-0'
+              : 'absolute inset-0 z-20 flex flex-col overflow-hidden bg-background'}
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: EASE_IN_OUT }}
+          >
+            {children}
+          </motion.div>
+        </>
       )}
     </AnimatePresence>
   );
