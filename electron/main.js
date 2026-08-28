@@ -8,18 +8,23 @@ import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
 import { LocalServerController } from './localServer.js';
 import { TabsController } from './tabs.js';
+import { LEGACY_RUNTIME_ANCHORS, readRenamedEnvironmentVariable } from '../shared/runtime-anchors.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_NAME = 'CloudCLI';
-const APP_USER_MODEL_ID = 'ai.cloudcli.desktop';
-const CALLBACK_PROTOCOL = 'cloudcli';
+const APP_NAME = 'Command Center';
+const APP_USER_MODEL_ID = 'ai.command-center.desktop';
+const CALLBACK_PROTOCOL = 'command-center';
 const CALLBACK_URL = `${CALLBACK_PROTOCOL}://auth/callback`;
-const CLOUDCLI_CONTROL_PLANE_URL = process.env.CLOUDCLI_CONTROL_PLANE_URL || 'https://cloudcli.ai';
+const COMMAND_CENTER_CONTROL_PLANE_URL = readRenamedEnvironmentVariable('CONTROL_PLANE_URL') || 'https://command-center.ai';
 const REMOTE_START_TIMEOUT_MS = 30000;
 const AUTH_CALLBACK_TTL_MS = 10 * 60 * 1000;
 
 const tabs = new TabsController();
+
+// Keep the desktop configuration in its existing directory until Job 19
+// migrates the files after the current automation chain has ended.
+app.setPath('userData', path.join(app.getPath('appData'), LEGACY_RUNTIME_ANCHORS.desktopConfigDirectoryName));
 
 if (process.platform === 'win32') {
   app.setAppUserModelId(APP_USER_MODEL_ID);
@@ -80,7 +85,7 @@ function getCloudState() {
   return {
     account: cloud.getAccount(),
     environments: cloud.getEnvironments(),
-    controlPlaneUrl: CLOUDCLI_CONTROL_PLANE_URL,
+    controlPlaneUrl: COMMAND_CENTER_CONTROL_PLANE_URL,
   };
 }
 
@@ -196,7 +201,7 @@ async function hasCloudWebSession() {
   const cookies = await session.defaultSession.cookies.get({});
   return cookies.some((cookie) => {
     const cookieDomain = String(cookie.domain || '');
-    return cookieDomain.includes('cloudcli.ai')
+    return cookieDomain.includes('command-center.ai')
       && /-auth-token(?:\.\d+)?$/.test(cookie.name)
       && Boolean(cookie.value);
   });
@@ -206,7 +211,7 @@ function isCloudAuthRedirect(url) {
   if (!url) return false;
   try {
     const parsed = new URL(url);
-    const controlPlane = new URL(CLOUDCLI_CONTROL_PLANE_URL);
+    const controlPlane = new URL(COMMAND_CENTER_CONTROL_PLANE_URL);
     return parsed.origin === controlPlane.origin
       && (parsed.pathname === '/login' || parsed.pathname.startsWith('/auth/'));
   } catch {
@@ -238,7 +243,7 @@ function getDiagnosticsText() {
     cloudRunningEnvironmentCount: getRunningEnvironmentUrls().length,
     cloudAuthState: cloud.getAuthState(),
     cloudAccountPath: getStorePath(),
-    controlPlaneUrl: CLOUDCLI_CONTROL_PLANE_URL,
+    controlPlaneUrl: COMMAND_CENTER_CONTROL_PLANE_URL,
   }, null, 2);
 }
 
@@ -247,7 +252,7 @@ async function copyDiagnostics() {
   await dialog.showMessageBox(desktopWindow?.getMainWindow() || undefined, {
     type: 'info',
     title: 'Diagnostics copied',
-    message: 'CloudCLI desktop diagnostics were copied to the clipboard.',
+    message: 'Command Center desktop diagnostics were copied to the clipboard.',
   });
 }
 
@@ -259,15 +264,15 @@ async function refreshCloudEnvironments({ showErrors = false } = {}) {
   } catch (error) {
     const authState = cloud.getAuthState();
     if (authState === 'expired') {
-      const expiredError = new Error('Your CloudCLI session expired. Reconnect your account.');
+      const expiredError = new Error('Your Command Center session expired. Reconnect your account.');
       if (showErrors) {
-        await showError('CloudCLI login required', expiredError);
+        await showError('Command Center login required', expiredError);
         return [];
       }
       throw expiredError;
     }
     if (showErrors) {
-      await showError('Could not load CloudCLI environments', error);
+      await showError('Could not load Command Center environments', error);
       return [];
     }
     throw error;
@@ -299,13 +304,13 @@ async function handleDeepLink(url) {
   }
 
   if (!pendingCloudConnectStartedAt || Date.now() - pendingCloudConnectStartedAt > AUTH_CALLBACK_TTL_MS) {
-    await showError('CloudCLI account connection failed', new Error('No recent CloudCLI account connection was started from this app.'));
+    await showError('Command Center account connection failed', new Error('No recent Command Center account connection was started from this app.'));
     return;
   }
 
   const apiKey = parsed.searchParams.get('api_key');
   if (!apiKey) {
-    await showError('CloudCLI account connection failed', new Error('The callback did not include an API key.'));
+    await showError('Command Center account connection failed', new Error('The callback did not include an API key.'));
     return;
   }
 
@@ -318,8 +323,8 @@ async function handleDeepLink(url) {
 
   dialog.showMessageBox(desktopWindow?.getMainWindow() || undefined, {
     type: 'info',
-    title: 'CloudCLI account connected',
-    message: cloud.getAccount()?.email ? `Connected as ${cloud.getAccount().email}.` : 'CloudCLI account connected.',
+    title: 'Command Center account connected',
+    message: cloud.getAccount()?.email ? `Connected as ${cloud.getAccount().email}.` : 'Command Center account connected.',
   }).catch(() => {});
 }
 
@@ -329,7 +334,7 @@ async function copyLocalWebUrl() {
   const localUrl = localServer.getLocalServerUrl();
 
   if (!shareableUrl) {
-    throw new Error('Local CloudCLI URL is not available yet.');
+    throw new Error('Local Command Center URL is not available yet.');
   }
 
   clipboard.writeText(shareableUrl);
@@ -340,7 +345,7 @@ async function copyLocalWebUrl() {
     message: isLanUrl ? 'LAN web URL copied.' : 'Local web URL copied.',
     detail: isLanUrl
       ? `${shareableUrl}\n\nUse this URL from another device on the same network.`
-      : `${shareableUrl}\n\nThis URL works on this computer. Enable LAN access before starting Local CloudCLI to copy a phone-accessible URL.`,
+      : `${shareableUrl}\n\nThis URL works on this computer. Enable LAN access before starting Local Command Center to copy a phone-accessible URL.`,
   });
 
   return getDesktopState();
@@ -350,7 +355,7 @@ async function openLocalWebUi() {
   await localServer.ensureLocalServer();
   const url = localServer.getShareableWebUrl() || localServer.getLocalServerUrl();
   if (!url) {
-    throw new Error('Local CloudCLI URL is not available yet.');
+    throw new Error('Local Command Center URL is not available yet.');
   }
 
   await openExternalUrl(url);
@@ -366,7 +371,7 @@ async function updateDesktopSetting(key, value) {
       type: 'info',
       title: 'Restart local server to apply',
       message: 'LAN access changes apply the next time the local server starts.',
-      detail: 'Quit CloudCLI and stop the local server, then open Local CloudCLI again.',
+      detail: 'Quit Command Center and stop the local server, then open Local Command Center again.',
     });
   }
 
@@ -386,7 +391,7 @@ async function showEnvironmentPicker() {
     }
   }
 
-  const choices = ['Local CloudCLI', ...environments.map((environment) => {
+  const choices = ['Local Command Center', ...environments.map((environment) => {
     const status = environment.status === 'running' ? '' : ` (${environment.status})`;
     return `${environment.name || environment.subdomain}${status}`;
   })];
@@ -396,7 +401,7 @@ async function showEnvironmentPicker() {
     buttons: [...choices, 'Cancel'],
     defaultId: 0,
     cancelId: choices.length,
-    title: 'Switch CloudCLI Environment',
+    title: 'Switch Command Center Environment',
     message: 'Choose where this desktop window should connect.',
     detail: refreshError ? `Cloud environments could not be refreshed. Showing cached environments.\n\n${refreshError.message || refreshError}` : undefined,
   });
@@ -432,13 +437,13 @@ function getSshTarget(credentials) {
     const parts = String(credentials.ssh_command).split(/\s+/);
     if (parts.length >= 2) return parts[1];
   }
-  return `${credentials.username}@ssh.cloudcli.ai`;
+  return `${credentials.username}@ssh.command-center.ai`;
 }
 
 function getSshHost(credentials) {
   const target = getSshTarget(credentials);
   const atIndex = target.indexOf('@');
-  return atIndex >= 0 ? target.slice(atIndex + 1) : 'ssh.cloudcli.ai';
+  return atIndex >= 0 ? target.slice(atIndex + 1) : 'ssh.command-center.ai';
 }
 
 function getSafeSshUsername(credentials) {
@@ -514,7 +519,7 @@ async function copyEnvironmentMobileUrl(environment) {
 }
 
 async function openCloudDashboard() {
-  await openExternalUrl(CLOUDCLI_CONTROL_PLANE_URL);
+  await openExternalUrl(COMMAND_CENTER_CONTROL_PLANE_URL);
   return getDesktopState();
 }
 
@@ -588,7 +593,7 @@ async function openEnvironmentInDesktop(environment) {
       cancelId: 1,
       title: 'Start environment?',
       message: `${pendingTarget.name} is ${environment.status}.`,
-      detail: 'CloudCLI can start it before opening the remote app.',
+      detail: 'Command Center can start it before opening the remote app.',
     });
 
     if (response.response !== 0) {
@@ -696,7 +701,7 @@ function getRemoteEnvironmentMenuItems() {
   const environments = cloud.getEnvironments();
 
   if (!cloudAccount?.apiKey) {
-    return [{ label: 'Connect CloudCLI Account...', click: () => void connectCloudAccount() }];
+    return [{ label: 'Connect Command Center Account...', click: () => void connectCloudAccount() }];
   }
 
   if (!environments.length) {
@@ -720,55 +725,55 @@ function registerProtocolHandler() {
 }
 
 function registerIpcHandlers() {
-  ipcMain.handle('cloudcli-desktop:connect-cloud', async () => ({
+  ipcMain.handle('command-center-desktop:connect-cloud', async () => ({
     ...getDesktopState(),
     connectUrl: await connectCloudAccount(),
   }));
 
-  ipcMain.handle('cloudcli-desktop:copy-diagnostics', async () => {
+  ipcMain.handle('command-center-desktop:copy-diagnostics', async () => {
     await copyDiagnostics();
     return getDesktopState();
   });
 
-  ipcMain.handle('cloudcli-desktop:copy-local-web-url', async () => copyLocalWebUrl());
-  ipcMain.handle('cloudcli-desktop:get-state', () => getDesktopState());
-  ipcMain.handle('cloudcli-desktop:open-cloud-dashboard', async () => openCloudDashboard());
-  ipcMain.handle('cloudcli-desktop:run-active-environment-action', async (_event, action) => runActiveEnvironmentAction(action));
-  ipcMain.handle('cloudcli-desktop:open-environment', async (_event, environmentId) => {
+  ipcMain.handle('command-center-desktop:copy-local-web-url', async () => copyLocalWebUrl());
+  ipcMain.handle('command-center-desktop:get-state', () => getDesktopState());
+  ipcMain.handle('command-center-desktop:open-cloud-dashboard', async () => openCloudDashboard());
+  ipcMain.handle('command-center-desktop:run-active-environment-action', async (_event, action) => runActiveEnvironmentAction(action));
+  ipcMain.handle('command-center-desktop:open-environment', async (_event, environmentId) => {
     const environment = cloud.findEnvironment(environmentId);
     if (!environment) {
       throw new Error('Environment not found. Refresh and try again.');
     }
     return openEnvironmentInDesktop(environment);
   });
-  ipcMain.handle('cloudcli-desktop:open-local', async () => openLocalInDesktop());
-  ipcMain.handle('cloudcli-desktop:open-local-web-ui', async () => openLocalWebUi());
-  ipcMain.handle('cloudcli-desktop:refresh-environments', async () => {
+  ipcMain.handle('command-center-desktop:open-local', async () => openLocalInDesktop());
+  ipcMain.handle('command-center-desktop:open-local-web-ui', async () => openLocalWebUi());
+  ipcMain.handle('command-center-desktop:refresh-environments', async () => {
     await refreshCloudEnvironments({ showErrors: true });
     return getDesktopState();
   });
-  ipcMain.handle('cloudcli-desktop:disconnect-cloud', async () => clearCloudAccount());
-  ipcMain.handle('cloudcli-desktop:reload-active-tab', async () => desktopWindow.reloadActiveTab());
-  ipcMain.handle('cloudcli-desktop:show-environment-picker', async () => showEnvironmentPicker());
-  ipcMain.handle('cloudcli-desktop:show-launcher', async () => {
+  ipcMain.handle('command-center-desktop:disconnect-cloud', async () => clearCloudAccount());
+  ipcMain.handle('command-center-desktop:reload-active-tab', async () => desktopWindow.reloadActiveTab());
+  ipcMain.handle('command-center-desktop:show-environment-picker', async () => showEnvironmentPicker());
+  ipcMain.handle('command-center-desktop:show-launcher', async () => {
     await desktopWindow.showLauncher();
     return getDesktopState();
   });
-  ipcMain.handle('cloudcli-desktop:update-desktop-notifications', async (_event, settings) => {
+  ipcMain.handle('command-center-desktop:update-desktop-notifications', async (_event, settings) => {
     await desktopNotifications?.saveSettings(settings);
     return getDesktopState();
   });
-  ipcMain.handle('cloudcli-desktop:show-desktop-settings', async () => desktopWindow.showDesktopSettings());
-  ipcMain.handle('cloudcli-desktop:show-local-settings', async () => desktopWindow.showLocalSettings());
-  ipcMain.handle('cloudcli-desktop:close-settings-window', async () => {
+  ipcMain.handle('command-center-desktop:show-desktop-settings', async () => desktopWindow.showDesktopSettings());
+  ipcMain.handle('command-center-desktop:show-local-settings', async () => desktopWindow.showLocalSettings());
+  ipcMain.handle('command-center-desktop:close-settings-window', async () => {
     desktopWindow.closeSettingsWindow();
     return getDesktopState();
   });
-  ipcMain.handle('cloudcli-desktop:show-active-environment-actions-menu', async () => desktopWindow.showActiveEnvironmentActionsMenu());
-  ipcMain.handle('cloudcli-desktop:show-environment-actions-menu', async (_event, environmentId) => desktopWindow.showEnvironmentActionsMenu(environmentId));
-  ipcMain.handle('cloudcli-desktop:switch-tab', async (_event, tabId) => desktopWindow.switchDesktopTab(tabId));
-  ipcMain.handle('cloudcli-desktop:close-tab', async (_event, tabId) => desktopWindow.closeDesktopTab(tabId));
-  ipcMain.handle('cloudcli-desktop:update-setting', async (_event, key, value) => updateDesktopSetting(key, value));
+  ipcMain.handle('command-center-desktop:show-active-environment-actions-menu', async () => desktopWindow.showActiveEnvironmentActionsMenu());
+  ipcMain.handle('command-center-desktop:show-environment-actions-menu', async (_event, environmentId) => desktopWindow.showEnvironmentActionsMenu(environmentId));
+  ipcMain.handle('command-center-desktop:switch-tab', async (_event, tabId) => desktopWindow.switchDesktopTab(tabId));
+  ipcMain.handle('command-center-desktop:close-tab', async (_event, tabId) => desktopWindow.closeDesktopTab(tabId));
+  ipcMain.handle('command-center-desktop:update-setting', async (_event, key, value) => updateDesktopSetting(key, value));
 }
 
 function registerAppEvents() {
@@ -895,7 +900,7 @@ async function bootstrap() {
   app.setAboutPanelOptions({
     applicationName: APP_NAME,
     applicationVersion: app.getVersion(),
-    copyright: 'CloudCLI',
+    copyright: 'Command Center',
   });
 
   localServer = new LocalServerController({
@@ -907,7 +912,7 @@ async function bootstrap() {
   });
   cloud = new CloudController({
     storePath: getStorePath(),
-    controlPlaneUrl: CLOUDCLI_CONTROL_PLANE_URL,
+    controlPlaneUrl: COMMAND_CENTER_CONTROL_PLANE_URL,
     callbackUrl: CALLBACK_URL,
     onChange: syncDesktopState,
   });
@@ -938,7 +943,7 @@ async function bootstrap() {
 
 if (registerSingleInstance()) {
   bootstrap().catch(async (error) => {
-    await showError('CloudCLI failed to start', error);
+    await showError('Command Center failed to start', error);
     app.quit();
   });
 }

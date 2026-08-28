@@ -16,13 +16,19 @@
 # instance) and exits 0 when the tag would be allowed, 2 when refused.
 set -u
 
-REPO="${CLOUDCLI_REPO:-$HOME/Projects/cloudcli}"
+SCRIPT_DIR="${0:A:h}"
+NODE=$(command -v node || echo /usr/local/bin/node)
+eval "$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --shell)"
+CONFIGURED_REPO=$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --environment REPO)
+REPO="${CONFIGURED_REPO:-$COMMAND_CENTER_RUNTIME_PROJECT_DIR}"
 SERVER_URL="${PROMOTE_SERVER_URL:-http://127.0.0.1:4747}"
 DEV_URL="http://127.0.0.1:4748"
 SNAPSHOT_DIR="$REPO/.last-good"
 DRAIN_BUDGET_S="${PROMOTE_DRAIN_BUDGET_S:-1800}"
 UID_NUM=$(id -u)
-DB_PATH="${PROMOTE_DB_PATH:-$HOME/.cloudcli/auth.db}"
+DB_PATH="${PROMOTE_DB_PATH:-$COMMAND_CENTER_RUNTIME_DATA_DIR/auth.db}"
+DEV_LAUNCHD_LABEL="$COMMAND_CENTER_RUNTIME_LAUNCHD_PREFIX-dev"
+LIVE_LAUNCHD_LABEL="$COMMAND_CENTER_RUNTIME_LAUNCHD_PREFIX-live"
 
 log() { print -r -- "[promote $(date +%H:%M:%S)] $*"; }
 fail() { log "ABORT: $*"; exit 1; }
@@ -84,7 +90,7 @@ log "running server test suite"
 npm test >/tmp/promote-test.log 2>&1 || fail "tests failed; see /tmp/promote-test.log"
 
 log "verifying the fresh build on dev (4748)"
-launchctl kickstart -k "gui/$UID_NUM/com.spoton.cloudcli-dev" || fail "could not start dev"
+launchctl kickstart -k "gui/$UID_NUM/$DEV_LAUNCHD_LABEL" || fail "could not start dev"
 DEV_OK=0
 for i in {1..12}; do
   sleep 5
@@ -125,7 +131,7 @@ rsync -a --delete "$REPO/dist-dev/" "$REPO/dist/" || fail "artifact copy (fronte
 rsync -a --delete "$REPO/dist-server-dev/" "$REPO/dist-server/" || fail "artifact copy (server) failed"
 
 log "restarting live on the new build"
-launchctl kickstart -k "gui/$UID_NUM/com.spoton.cloudcli-live"
+launchctl kickstart -k "gui/$UID_NUM/$LIVE_LAUNCHD_LABEL"
 
 LIVE_OK=0
 for i in {1..12}; do
@@ -153,7 +159,7 @@ if [[ -d "$SNAPSHOT_DIR/dist-server" ]]; then
   rm -rf "$REPO/dist" "$REPO/dist-server"
   cp -R "$SNAPSHOT_DIR/dist" "$REPO/dist"
   cp -R "$SNAPSHOT_DIR/dist-server" "$REPO/dist-server"
-  launchctl kickstart -k "gui/$UID_NUM/com.spoton.cloudcli-live"
+  launchctl kickstart -k "gui/$UID_NUM/$LIVE_LAUNCHD_LABEL"
   ROLLBACK_OK=0
   for i in {1..12}; do
     sleep 5

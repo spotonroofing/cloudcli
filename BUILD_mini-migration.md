@@ -2,7 +2,7 @@
 
 Goal: turn this Mac mini into the single always-on Claude machine per SPEC_mini-migration.md in this repo root. The spec is the authoritative requirements document: read it fully before phase 0 and treat every numbered spec item as binding. This brief is the execution plan; where it and the spec differ in detail, the spec wins. The why: consolidate a three-machine workflow into one host so planning, dispatch, and monitoring happen in one place with tokens spent only on planning and building.
 
-Stack and locked decisions: CloudCLI fork (this repo) on ports 4747 live and 4748 dev; Express + WebSocket + SQLite + @anthropic-ai/claude-agent-sdk; launchd for services; Tailscale Serve for tailnet HTTPS; watchdog and scheduler as server modules; bash/zsh for all scripts (this is macOS: no PowerShell, pmset not powercfg, launchd not Task Scheduler); spoton-worker repo at the same projects root holds planner doctrine and mined seeds; ~/.claude is ccsync-managed.
+Stack and locked decisions: Command Center fork (this repo) on ports 4747 live and 4748 dev; Express + WebSocket + SQLite + @anthropic-ai/claude-agent-sdk; launchd for services; Tailscale Serve for tailnet HTTPS; watchdog and scheduler as server modules; bash/zsh for all scripts (this is macOS: no PowerShell, pmset not powercfg, launchd not Task Scheduler); spoton-worker repo at the same projects root holds planner doctrine and mined seeds; ~/.claude is ccsync-managed.
 
 Final acceptance: the system self-test in phase 12 passes end to end and WILLEM_CHECKLIST.md exists, covering everything only Willem can do.
 
@@ -29,7 +29,7 @@ Done when: build clean, baseline recorded, all repos present, MIGRATION.md line 
 
 ## Phase 1 — Live service, tailnet HTTPS, backup (spec A3, A4, A5, A9)
 
-Goal: CloudCLI live as a boot-persistent service reachable from the tailnet over HTTPS. launchd service for live (RunAtLoad, KeepAlive, logs to ~/forge-logs/cloudcli-service/). Tailscale Serve: primary HTTPS route to 4747 and a second HTTPS port to 4748. If tailnet HTTPS certs are not enabled on the tailnet, this is the one genuine pause in this build: state exactly which admin-console toggle Willem must flip, wait for his go-ahead, then continue. Auth session lifetime to 90 days (config or code as the codebase dictates). Nightly backup launchd job: tarball ~/.claude and ~/.cloudcli to the off-mini destination reachable over Tailscale; pick the healthiest available fleet target, document the choice in MIGRATION.md, verify one real backup ran.
+Goal: Command Center live as a boot-persistent service reachable from the tailnet over HTTPS. launchd service for live (RunAtLoad, KeepAlive, logs to ~/forge-logs/command-center-service/). Tailscale Serve: primary HTTPS route to 4747 and a second HTTPS port to 4748. If tailnet HTTPS certs are not enabled on the tailnet, this is the one genuine pause in this build: state exactly which admin-console toggle Willem must flip, wait for his go-ahead, then continue. Auth session lifetime to 90 days (config or code as the codebase dictates). Nightly backup launchd job: tarball ~/.claude and ~/.command-center to the off-mini destination reachable over Tailscale; pick the healthiest available fleet target, document the choice in MIGRATION.md, verify one real backup ran.
 Done when: curl over the tailnet HTTPS URL returns healthy from this machine, launchctl kickstart restarts it clean, one backup archive exists at the destination.
 
 ## Phase 2 — Dev/live isolation (spec B5)
@@ -64,7 +64,7 @@ Done when: a real promote of a trivial change succeeds through the full flow, an
 
 ## Phase 8 — Monday self-maintenance (spec B9)
 
-Goal: the weekly silent maintainer. Scheduler entry dispatching the maintenance run into this project: upstream CloudCLI delta classification and backend-safe auto-apply through the dispatch flow, plus the Claude Code CLI version and release-notes assessment against the fork and the doctrine files, silent when safe, decision-needed when judgment-shaped, silence when there is nothing.
+Goal: the weekly silent maintainer. Scheduler entry dispatching the maintenance run into this project: upstream Command Center delta classification and backend-safe auto-apply through the dispatch flow, plus the Claude Code CLI version and release-notes assessment against the fork and the doctrine files, silent when safe, decision-needed when judgment-shaped, silence when there is nothing.
 Done when: a manual trigger of the scheduler entry runs the full check against current state and journals a correct classification (whatever it finds, including nothing).
 
 ## Phase 9 — Browser subsystem (spec 7)

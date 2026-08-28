@@ -319,7 +319,7 @@ export const sessionsService = {
    * chat, navigates to the returned id immediately, and the id never changes
    * for the lifetime of the conversation. The provider-native id is mapped to
    * this row later, when the provider runtime announces it mid-run. Its title
-   * comes directly from the first visible CloudCLI message and is limited to
+   * comes directly from the first visible Command Center message and is limited to
    * four whole words before any provider-owned storage exists — except boot
    * sessions (auto-sent /planner or /worker first message), which start with
    * a placeholder title and are named from the first user-typed message.

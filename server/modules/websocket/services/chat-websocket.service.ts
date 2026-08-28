@@ -31,7 +31,7 @@ import { commandDisplayText, parseCommandMessage } from '@/shared/command-messag
  * Trust boundary for client-supplied image attachments: chat.send options come
  * straight from the browser, and the provider runtimes read the referenced
  * files off disk (Claude base64-encodes them into the prompt). Only images
- * that live directly inside the global upload store (`~/.cloudcli/assets`,
+ * that live directly inside the global runtime upload store,
  * where POST /api/assets/images puts them) are allowed through — anything
  * else (absolute paths elsewhere, traversal, subdirectories) is dropped.
  *
@@ -455,7 +455,7 @@ async function handleChatSend(
     cwd: clientOptions.cwd ?? session.project_path ?? undefined,
     projectPath: session.project_path ?? clientOptions.projectPath,
   };
-  // Version bookkeeping is CloudCLI-side only; runtimes never see it.
+  // Version bookkeeping is Command Center-side only; runtimes never see it.
   delete runtimeOptions.edit;
 
   let runtimeThrew = false;

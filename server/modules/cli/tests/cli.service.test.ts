@@ -17,12 +17,12 @@ function createHarness() {
   let sandboxArguments: string[] = [];
   const service = createCliService({
     applicationRoot: '/application',
-    defaultDatabasePath: '/home/user/.cloudcli/auth.db',
+    defaultDatabasePath: '/home/user/.command-center/auth.db',
     homeDirectory: '/home/user',
     packageMetadata: {
       version: '1.2.3',
-      homepage: 'https://cloudcli.example',
-      bugsUrl: 'https://cloudcli.example/issues',
+      homepage: 'https://command-center.example',
+      bugsUrl: 'https://command-center.example/issues',
     },
     environment,
     fileSystem: {

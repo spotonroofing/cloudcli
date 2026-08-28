@@ -1,4 +1,4 @@
-import { CLOUDCLI_WORDMARK_FONT_FAMILY } from '../../../shared/constants';
+import { COMMAND_CENTER_WORDMARK_FONT_FAMILY } from '../../../shared/constants';
 import CommandCenterMark from '../../../shared/view/CommandCenterMark';
 
 const loadingDotAnimationDelays = ['0s', '0.15s', '0.3s'];
@@ -17,7 +17,7 @@ export default function AuthLoadingScreen() {
 
         <h1
           className="mb-4 text-2xl font-bold tracking-tight text-foreground"
-          style={{ fontFamily: CLOUDCLI_WORDMARK_FONT_FAMILY }}
+          style={{ fontFamily: COMMAND_CENTER_WORDMARK_FONT_FAMILY }}
         >
           Command Center
         </h1>

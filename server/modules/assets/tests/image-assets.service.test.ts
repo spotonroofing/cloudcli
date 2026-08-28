@@ -11,7 +11,9 @@ import {
   resolveImageAssetFile,
 } from '@/modules/assets/services/image-assets.service.js';
 
-const ASSETS_DIR = path.join(os.homedir(), '.cloudcli', 'assets');
+import { getLegacyDataDirectory } from '../../../../shared/runtime-anchors.js';
+
+const ASSETS_DIR = path.join(getLegacyDataDirectory(os.homedir()), 'assets');
 
 test('isAllowedImageMimeType accepts image formats and rejects the rest', () => {
   assert.equal(isAllowedImageMimeType('image/png'), true);

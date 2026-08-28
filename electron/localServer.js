@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { ServerInstaller } from './serverInstaller.js';
+import { getLegacyDataDirectory, readRenamedEnvironmentVariable } from '../shared/runtime-anchors.js';
 
 const DEFAULT_PORT = 3001;
 const HOST = '127.0.0.1';
@@ -13,18 +14,9 @@ const DISPLAY_HOST = 'localhost';
 const HEALTH_TIMEOUT_MS = 1000;
 const SERVER_START_TIMEOUT_MS = 30000;
 const MAX_STARTUP_LOG_LINES = 300;
-const SERVER_MARKER_PATH = path.join(os.homedir(), '.cloudcli', 'local-server.json');
-const LOCAL_SERVER_URL_ENV_KEYS = [
-  'CLOUDCLI_DESKTOP_LOCAL_SERVER_URL',
-  'CLOUDCLI_LOCAL_SERVER_URL',
-  'ELECTRON_LOCAL_SERVER_URL',
-];
-const LOCAL_SERVER_PORT_ENV_KEYS = [
-  'CLOUDCLI_DESKTOP_LOCAL_SERVER_PORT',
-  'CLOUDCLI_SERVER_PORT',
-  'SERVER_PORT',
-  'PORT',
-];
+const SERVER_MARKER_PATH = path.join(getLegacyDataDirectory(os.homedir()), 'local-server.json');
+const LOCAL_SERVER_URL_ENV_SUFFIXES = ['DESKTOP_LOCAL_SERVER_URL', 'LOCAL_SERVER_URL'];
+const LOCAL_SERVER_PORT_ENV_SUFFIXES = ['DESKTOP_LOCAL_SERVER_PORT', 'SERVER_PORT'];
 
 function requestJson(url, timeoutMs = HEALTH_TIMEOUT_MS) {
   return new Promise((resolve) => {
@@ -55,7 +47,7 @@ function requestJson(url, timeoutMs = HEALTH_TIMEOUT_MS) {
   });
 }
 
-async function isCloudCliServer(baseUrl) {
+async function isCommandCenterServer(baseUrl) {
   const response = await requestJson(`${baseUrl}/health`);
   return response.ok
     && response.json?.status === 'ok'
@@ -218,25 +210,28 @@ async function readServerMarkerUrl() {
 async function getExistingServerCandidateUrls(defaultUrl) {
   const urls = [];
 
-  for (const key of LOCAL_SERVER_URL_ENV_KEYS) {
-    addCandidateUrl(urls, process.env[key]);
+  for (const suffix of LOCAL_SERVER_URL_ENV_SUFFIXES) {
+    addCandidateUrl(urls, readRenamedEnvironmentVariable(suffix));
   }
+  addCandidateUrl(urls, process.env.ELECTRON_LOCAL_SERVER_URL);
 
   addCandidateUrl(urls, await readServerMarkerUrl());
 
-  for (const key of LOCAL_SERVER_PORT_ENV_KEYS) {
-    addCandidatePort(urls, process.env[key]);
+  for (const suffix of LOCAL_SERVER_PORT_ENV_SUFFIXES) {
+    addCandidatePort(urls, readRenamedEnvironmentVariable(suffix));
   }
+  addCandidatePort(urls, process.env.SERVER_PORT);
+  addCandidatePort(urls, process.env.PORT);
 
   addCandidateUrl(urls, defaultUrl);
   return urls;
 }
 
-async function waitForCloudCliServer(baseUrl, timeoutMs) {
+async function waitForCommandCenterServer(baseUrl, timeoutMs) {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
-    if (await isCloudCliServer(baseUrl)) {
+    if (await isCommandCenterServer(baseUrl)) {
       return true;
     }
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -294,7 +289,7 @@ export class LocalServerController {
   getPendingTarget() {
     return {
       kind: 'local',
-      name: 'Local CloudCLI',
+      name: 'Local Command Center',
       url: this.localServerUrl || `http://${DISPLAY_HOST}:${this.localServerPort || DEFAULT_PORT}`,
     };
   }
@@ -378,7 +373,7 @@ export class LocalServerController {
     }
 
     const bundledEntry = path.join(this.appRoot, 'dist-server', 'server', 'index.js');
-    if (process.env.CLOUDCLI_USE_INSTALLED_SERVER !== '1' && await pathExists(bundledEntry)) {
+    if (readRenamedEnvironmentVariable('USE_INSTALLED_SERVER') !== '1' && await pathExists(bundledEntry)) {
       return bundledEntry;
     }
 
@@ -439,7 +434,7 @@ export class LocalServerController {
     this.ownedServerProcess.once('exit', (code, signal) => {
       this.appendStartupLog(`process exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}`);
       if (this.ownedServerProcess) {
-        console.error(`CloudCLI desktop server exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}`);
+        console.error(`Command Center desktop server exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}`);
       }
       this.ownedServerProcess = null;
     });
@@ -452,7 +447,7 @@ export class LocalServerController {
     const forceOwnServer = process.env.ELECTRON_FORCE_OWN_SERVER === '1';
 
     if (devUrl) {
-      const ready = await waitForCloudCliServer(defaultUrl, SERVER_START_TIMEOUT_MS);
+      const ready = await waitForCommandCenterServer(defaultUrl, SERVER_START_TIMEOUT_MS);
       if (!ready) {
         throw new Error(`Development backend did not become ready at ${defaultDisplayUrl}`);
       }
@@ -463,10 +458,10 @@ export class LocalServerController {
     if (!forceOwnServer) {
       const candidateUrls = await getExistingServerCandidateUrls(defaultUrl);
       for (const candidateUrl of candidateUrls) {
-        if (await isCloudCliServer(candidateUrl)) {
+        if (await isCommandCenterServer(candidateUrl)) {
           const displayUrl = getDisplayUrl(candidateUrl);
           this.localServerPort = getPortFromUrl(candidateUrl);
-          this.appendStartupLog(`Using existing Local CloudCLI at ${displayUrl}`);
+          this.appendStartupLog(`Using existing Local Command Center at ${displayUrl}`);
           return displayUrl;
         }
       }
@@ -480,7 +475,7 @@ export class LocalServerController {
     this.localServerPort = port;
     this.startBundledServer(port, serverEntry);
 
-    const ready = await waitForCloudCliServer(serverUrl, SERVER_START_TIMEOUT_MS);
+    const ready = await waitForCommandCenterServer(serverUrl, SERVER_START_TIMEOUT_MS);
     if (!ready) {
       const recentLogs = this.getStartupLogs().slice(-20).join('\n');
       await this.shutdownOwnedServer();
@@ -491,7 +486,7 @@ export class LocalServerController {
       ].join('\n\n'));
     }
 
-    this.appendStartupLog(`Local CloudCLI ready at ${displayUrl}`);
+    this.appendStartupLog(`Local Command Center ready at ${displayUrl}`);
     this.localServerUrl = displayUrl;
     return displayUrl;
   }
@@ -507,7 +502,7 @@ export class LocalServerController {
     await this.ensureLocalServer();
     return {
       kind: 'local',
-      name: 'Local CloudCLI',
+      name: 'Local Command Center',
       url: this.localServerUrl,
     };
   }

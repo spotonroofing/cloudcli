@@ -4,7 +4,7 @@ import type { ChatMessage } from '../types/types';
  * Edit-and-resend response versioning (ui9 B3).
  *
  * A resend is a fresh provider turn appended to the Claude transcript; the
- * transcript itself is never rewritten. CloudCLI's `message_versions` rows
+ * transcript itself is never rewritten. Command Center's `message_versions` rows
  * only say which turns are alternative versions of the same exchange. This
  * module maps those rows onto the loaded transcript: each version's segment
  * starts at its user turn and runs to the next version's start; only the

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { authenticatedFetch } from '../utils/api';
+import { getDesktopNotificationsBridge } from '../shared/desktopBridge';
 
 type WebPushState = {
   permission: NotificationPermission | 'unsupported';
@@ -25,7 +26,7 @@ export function useWebPush(): WebPushState {
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() => {
     if (
       typeof window === 'undefined'
-      || Boolean((window as any).cloudcliDesktopNotifications)
+      || Boolean(getDesktopNotificationsBridge())
       || !('Notification' in window)
       || !('serviceWorker' in navigator)
     ) {

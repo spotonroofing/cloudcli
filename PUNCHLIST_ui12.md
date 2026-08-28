@@ -6,7 +6,7 @@ Willem's post-promote round on the ui11 build. Queued messages become impossible
 
 ## Stack and decisions already made
 
-- Self-surgery, dev-first: build and verify on dev (4748) with dev artifacts; never touch live's dist/ or run promote from a phase. Dev restart: `launchctl kickstart -k gui/$(id -u)/com.spoton.cloudcli-dev`, then `curl http://127.0.0.1:4748/health`.
+- Self-surgery, dev-first: build and verify on dev (4748) with dev artifacts; never touch live's dist/ or run promote from a phase. Dev restart: `launchctl kickstart -k gui/$(id -u)/com.spoton.command-center-dev`, then `curl http://127.0.0.1:4748/health`.
 - "Phase" renames to "Job" in all user-facing copy (Willem approved renaming; Job is the planner's pick, a one-line swap later if he prefers another word). Tasks stay tasks. Internal identifiers, API routes, and DB columns keep their names; this is UI copy only.
 - Standing law revised (2026-08-25): monochromatic iconography except semantic status — done is green, working is the accent, idle stays muted. Colors carry meaning only.
 - The Claude Code desktop composer screenshot is a sizing and placement reference only; Command Center keeps its own components and look.

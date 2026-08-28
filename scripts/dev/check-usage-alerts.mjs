@@ -130,7 +130,7 @@ async function main() {
     fail('run npm run build before this check');
   });
 
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'cloudcli-usage-alerts-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'command-center-usage-alerts-'));
   const home = path.join(directory, 'home');
   const bin = path.join(directory, 'bin');
   const parked = path.join(directory, 'parked');
@@ -140,7 +140,7 @@ async function main() {
   const port = await unusedPort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const browserSession = `usage-alerts-${process.pid}`;
-  const browserNamespace = `cloudcli-ui15r5-${process.pid}`;
+  const browserNamespace = `command-center-ui15r5-${process.pid}`;
   let serverProcess = null;
   let browserOpened = false;
 
@@ -174,8 +174,8 @@ esac
       HOST: '127.0.0.1',
       SERVER_PORT: String(port),
       DATABASE_PATH: path.join(directory, 'auth.db'),
-      CLOUDCLI_FRONTEND_DIST: frontendDist,
-      CLOUDCLI_INSTANCE: 'dev-usage-check',
+      COMMAND_CENTER_FRONTEND_DIST: frontendDist,
+      COMMAND_CENTER_INSTANCE: 'dev-usage-check',
       CSWAP_PATH: cswapPath,
       CSWAP_PARK_DIR: parked,
       CSWAP_STUB_STATE: statePath,

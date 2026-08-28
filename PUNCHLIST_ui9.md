@@ -1,4 +1,4 @@
-# PUNCHLIST_ui9 — CloudCLI feedback round 3: comms blockers first, then beautifului.dev transcript, versioning, phase navigator, rows/menus, polish, mobile
+# PUNCHLIST_ui9 — Command Center feedback round 3: comms blockers first, then beautifului.dev transcript, versioning, phase navigator, rows/menus, polish, mobile
 
 ## Goal
 
@@ -6,9 +6,9 @@ Willem's third round, on live = 72c0569. Delivered as two chains. Chain ui9a run
 
 ## Stack and decisions already made
 
-- Self-surgery, dev-first: build and verify on dev (4748); do not run promote inside any phase. Dev restart cycle: `npm run build` (after A1: the dev-scoped build), `launchctl kickstart -k gui/$(id -u)/com.spoton.cloudcli-dev`, `curl http://127.0.0.1:4748/health`.
+- Self-surgery, dev-first: build and verify on dev (4748); do not run promote inside any phase. Dev restart cycle: `npm run build` (after A1: the dev-scoped build), `launchctl kickstart -k gui/$(id -u)/com.spoton.command-center-dev`, `curl http://127.0.0.1:4748/health`.
 - The component library for the transcript work is beautifului.dev (Willem's link; not beui.dev). Research it live; take whole components and retheme to DESIGN.md tokens. Where a named component does not exist there, build to the functional spec and name the substitution in the summary.
-- Approved decisions this round: project ordering = most-recently-touched project floats to top automatically, no manual reorder; overlays standardize on shadcn primitives already in the app with deliberate animations, beautifului pieces render inside them; edit-and-resend versions live in CloudCLI's DB with the Claude Code transcript untouched (resend = fresh turn under the hood, old response hidden never deleted); prompt bar = two rows (input row: plus left, model selector + send right; slim row below: handoff + slash left, smaller context ring right; no permission-mode control); phase navigator data = a phase manifest attached at dispatch, watchdog streams per-phase progress.
+- Approved decisions this round: project ordering = most-recently-touched project floats to top automatically, no manual reorder; overlays standardize on shadcn primitives already in the app with deliberate animations, beautifului pieces render inside them; edit-and-resend versions live in Command Center's DB with the Claude Code transcript untouched (resend = fresh turn under the hood, old response hidden never deleted); prompt bar = two rows (input row: plus left, model selector + send right; slim row below: handoff + slash left, smaller context ring right; no permission-mode control); phase navigator data = a phase manifest attached at dispatch, watchdog streams per-phase progress.
 - Standing laws: no pills anywhere (rectangles on app radius); monochromatic icons; mobile parity one-to-one, tap-first; Willem-chat-only sidebar lists (dispatch/direct/external live in the worker switcher only).
 - Markdown from the planner may include bold-led bullets and ordered lists; the renderer must handle standard GitHub-flavored markdown faithfully.
 
@@ -89,7 +89,7 @@ Goal: Willem can stop a response, edit his prompt, silently resend, and flip bet
 - [x] Pencil control next to copy on Willem's messages; clicking loads that message text into the composer.
 - [x] Sending the edit silently resends: no duplicate user bubble; the prior response (partial or full) is hidden from the frontend; the new response streams in its place.
 - [x] Version navigator bottom-left of the response — left arrow, count, right arrow — flips between response versions (two or more).
-- [x] Versions live in CloudCLI's DB per session; the Claude Code transcript stays untouched (a resend is a fresh turn under the hood; hidden, never deleted).
+- [x] Versions live in Command Center's DB per session; the Claude Code transcript stays untouched (a resend is a fresh turn under the hood; hidden, never deleted).
 
 Done check: on dev, edit-and-resend a real prompt; DOM shows one user bubble, the navigator flips between both responses, sqlite shows the version rows, and the session transcript file still contains both raw turns. Fresh-context subagent verification. Commit.
 

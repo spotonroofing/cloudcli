@@ -7,7 +7,7 @@ import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
 export type WorkspaceMode = 'rows' | 'columns';
 
 /** dataTransfer MIME type for dragging a sidebar project row into the view. */
-export const PROJECT_DRAG_TYPE = 'application/x-cloudcli-project';
+export const PROJECT_DRAG_TYPE = 'application/x-command-center-project';
 
 export type WorkspaceState = {
   /** Ordered project ids of every open workspace row (the primary included). */

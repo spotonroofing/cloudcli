@@ -1,4 +1,4 @@
-# PUNCHLIST cloudcli-ui2
+# PUNCHLIST command-center-ui2
 
 Goal: second polish round on the chat-first desktop UI: Claude.ai accent and send button, an exact Claude.ai-style model switcher with sane naming, cleaner tool blocks and sidebar chrome, a Claude-desktop-style usage menu with honest math, and a tidied commands button. Desktop only except where an item says otherwise; upstream stays frozen.
 

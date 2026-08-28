@@ -228,7 +228,7 @@ function buildShellCommand(
 }
 
 /**
- * Pre-trusts a project folder for the Claude CLI in this instance's config dir
+ * Pre-trusts a project folder for the Claude Code CLI in this instance's config dir
  * (ui14 job 11): the interactive CLI asks "Do you trust the files in this
  * folder?" unless `.claude.json` records the answer for the exact cwd, and the
  * shell is a terminal Willem already chose to open there. Writes only that

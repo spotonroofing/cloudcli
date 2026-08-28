@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.spoton.cloudcli-scrub</string>
+    <string>__LAUNCHD_PREFIX__-scrub</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -18,9 +18,9 @@
     <integer>3600</integer>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/forge-logs/cloudcli-scrub/job.out.log</string>
+    <string>__HOME__/forge-logs/__SCRUB_LOG_DIR__/job.out.log</string>
     <key>StandardErrorPath</key>
-    <string>__HOME__/forge-logs/cloudcli-scrub/job.err.log</string>
+    <string>__HOME__/forge-logs/__SCRUB_LOG_DIR__/job.err.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>

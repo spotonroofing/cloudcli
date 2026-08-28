@@ -1,4 +1,4 @@
-# PUNCHLIST cloudcli-ui5
+# PUNCHLIST command-center-ui5
 
 Goal: make the planner UI honest and quiet: silent boot, real context ring, a worker pane that reflects what is actually running, and cosmetic cleanup. All work verifies against the dev instance per the repo's documented dev/promote flow before promote.
 

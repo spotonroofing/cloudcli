@@ -249,7 +249,7 @@
     "viewFullRelease": "View full release",
     "updateProgress": "Update progress:",
     "manualUpgrade": "Manual upgrade:",
-    "npmUpgradeCommand": "npm install -g @cloudcli-ai/cloudcli@latest",
+    "npmUpgradeCommand": "npm install -g @command-center-ai/command-center@latest",
     "manualUpgradeHint": "Or click \"Update now\" to run the update automatically.",
     "updateCompleted": "Update completed",
     "restartServer": "Restart the server to apply changes.",

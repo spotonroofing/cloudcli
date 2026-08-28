@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.spoton.cloudcli-backup</string>
+    <string>__LAUNCHD_PREFIX__-backup</string>
 
     <key>ProgramArguments</key>
     <array>
         <string>/bin/zsh</string>
-        <string>__REPO__/scripts/macos/cloudcli-backup.sh</string>
+        <string>__REPO__/scripts/macos/__LEGACY_STEM__-backup.sh</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -20,9 +20,9 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/forge-logs/cloudcli-backup/job.out.log</string>
+    <string>__HOME__/forge-logs/__BACKUP_LOG_DIR__/job.out.log</string>
     <key>StandardErrorPath</key>
-    <string>__HOME__/forge-logs/cloudcli-backup/job.err.log</string>
+    <string>__HOME__/forge-logs/__BACKUP_LOG_DIR__/job.err.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>

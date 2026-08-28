@@ -62,10 +62,18 @@ type NormalizedMessageInput =
 
 // ---------------------------
 //----------------- MACHINE MESSAGE ORIGIN UTILITIES ------------
-const MACHINE_MESSAGE_ORIGIN_OPEN = '<cloudcli-message-origin>';
-const MACHINE_MESSAGE_ORIGIN_CLOSE = '</cloudcli-message-origin>';
-const MACHINE_MESSAGE_BODY_OPEN = '<cloudcli-machine-message>';
-const MACHINE_MESSAGE_BODY_CLOSE = '</cloudcli-machine-message>';
+const MACHINE_MESSAGE_ORIGIN_OPEN = '<command-center-message-origin>';
+const MACHINE_MESSAGE_ORIGIN_CLOSE = '</command-center-message-origin>';
+const MACHINE_MESSAGE_BODY_OPEN = '<command-center-machine-message>';
+const MACHINE_MESSAGE_BODY_CLOSE = '</command-center-machine-message>';
+const LEGACY_MACHINE_MESSAGE_STEM = ['cloud', 'cli'].join('');
+const LEGACY_MACHINE_MESSAGE_MARKERS = {
+  originOpen: `<${LEGACY_MACHINE_MESSAGE_STEM}-message-origin>`,
+  originClose: `</${LEGACY_MACHINE_MESSAGE_STEM}-message-origin>`,
+  bodyOpen: `<${LEGACY_MACHINE_MESSAGE_STEM}-machine-message>`,
+  bodyClose: `</${LEGACY_MACHINE_MESSAGE_STEM}-machine-message>`,
+};
+let legacyMachineMessageWarningLogged = false;
 
 /**
  * Wraps a machine-authored provider prompt in explicit origin metadata.
@@ -90,19 +98,32 @@ export function wrapMachineMessage(content: string, origin: MessageOrigin): stri
  * without inspecting the prompt's natural-language wording.
  */
 export function parseMachineMessage(content: string): { origin: MessageOrigin; content: string } | null {
-  const originStart = content.indexOf(MACHINE_MESSAGE_ORIGIN_OPEN);
-  const originEnd = content.indexOf(MACHINE_MESSAGE_ORIGIN_CLOSE, originStart + MACHINE_MESSAGE_ORIGIN_OPEN.length);
-  const bodyStart = content.indexOf(MACHINE_MESSAGE_BODY_OPEN, originEnd + MACHINE_MESSAGE_ORIGIN_CLOSE.length);
-  const bodyEnd = content.lastIndexOf(MACHINE_MESSAGE_BODY_CLOSE);
+  const usesLegacyMarkers = content.startsWith(LEGACY_MACHINE_MESSAGE_MARKERS.originOpen);
+  const markers = usesLegacyMarkers
+    ? LEGACY_MACHINE_MESSAGE_MARKERS
+    : {
+        originOpen: MACHINE_MESSAGE_ORIGIN_OPEN,
+        originClose: MACHINE_MESSAGE_ORIGIN_CLOSE,
+        bodyOpen: MACHINE_MESSAGE_BODY_OPEN,
+        bodyClose: MACHINE_MESSAGE_BODY_CLOSE,
+      };
+  const originStart = content.indexOf(markers.originOpen);
+  const originEnd = content.indexOf(markers.originClose, originStart + markers.originOpen.length);
+  const bodyStart = content.indexOf(markers.bodyOpen, originEnd + markers.originClose.length);
+  const bodyEnd = content.lastIndexOf(markers.bodyClose);
   if (originStart !== 0 || originEnd < 0 || bodyStart < 0 || bodyEnd < bodyStart) {
     return null;
   }
 
-  const rawOrigin = content.slice(originStart + MACHINE_MESSAGE_ORIGIN_OPEN.length, originEnd).trim();
+  const rawOrigin = content.slice(originStart + markers.originOpen.length, originEnd).trim();
   if (rawOrigin !== 'watchdog') {
     return null;
   }
-  const body = content.slice(bodyStart + MACHINE_MESSAGE_BODY_OPEN.length, bodyEnd).trim();
+  if (usesLegacyMarkers && !legacyMachineMessageWarningLogged) {
+    legacyMachineMessageWarningLogged = true;
+    console.warn('[Command Center] The legacy machine-message envelope is deprecated.');
+  }
+  const body = content.slice(bodyStart + markers.bodyOpen.length, bodyEnd).trim();
   return { origin: rawOrigin, content: body };
 }
 
@@ -172,7 +193,7 @@ export const WORKSPACES_ROOT = process.env.WORKSPACES_ROOT || os.homedir();
 /**
  * Claude config directory for this server instance.
  *
- * Honors CLAUDE_CONFIG_DIR (the same variable the Claude CLI itself uses), so
+ * Honors CLAUDE_CONFIG_DIR (the same variable the Claude Code CLI itself uses), so
  * an isolated instance (dev on 4748) reads, watches, and spawns sessions in
  * its own config tree instead of the user-level ~/.claude.
  */
@@ -205,7 +226,7 @@ export const NEW_SESSION_PLACEHOLDER_TITLE = 'New session';
 const MAX_SESSION_TITLE_WORDS = 4;
 
 /**
- * Derives a CloudCLI session title from a message: its first four whole words.
+ * Derives a Command Center session title from a message: its first four whole words.
  */
 export function buildSessionTitleFromMessage(message: string): string {
   // A prompt-file message (codex job 5) is titled by its name header, never

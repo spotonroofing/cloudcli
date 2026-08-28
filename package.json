@@ -1,12 +1,12 @@
 {
-  "name": "@cloudcli-ai/cloudcli",
+  "name": "@command-center-ai/command-center",
   "version": "1.37.2",
-  "productName": "CloudCLI",
+  "productName": "Command Center",
   "description": "A web-based UI for Claude Code CLI",
   "type": "module",
   "main": "dist-server/server/index.js",
   "bin": {
-    "cloudcli": "dist-server/server/modules/cli/cli.js"
+    "command-center": "dist-server/server/modules/cli/cli.js"
   },
   "files": [
     "electron/",
@@ -18,7 +18,7 @@
     "scripts/",
     "README.md"
   ],
-  "homepage": "https://cloudcli.ai",
+  "homepage": "https://command-center.ai",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/siteboon/claudecodeui.git"
@@ -59,10 +59,10 @@
     "prepare": "husky"
   },
   "build": {
-    "appId": "ai.cloudcli.desktop",
-    "productName": "CloudCLI",
+    "appId": "ai.command-center.desktop",
+    "productName": "Command Center",
     "asar": false,
-    "artifactName": "cloudcli-desktop-${version}-${os}-${arch}.${ext}",
+    "artifactName": "command-center-desktop-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release/desktop"
     },
@@ -81,9 +81,9 @@
     ],
     "protocols": [
       {
-        "name": "CloudCLI",
+        "name": "Command Center",
         "schemes": [
-          "cloudcli"
+          "command-center"
         ]
       }
     ],
@@ -95,13 +95,13 @@
         "dmg"
       ],
       "extendInfo": {
-        "CFBundleName": "CloudCLI",
-        "CFBundleDisplayName": "CloudCLI",
+        "CFBundleName": "Command Center",
+        "CFBundleDisplayName": "Command Center",
         "CFBundleURLTypes": [
           {
-            "CFBundleURLName": "CloudCLI",
+            "CFBundleURLName": "Command Center",
             "CFBundleURLSchemes": [
-              "cloudcli"
+              "command-center"
             ]
           }
         ]
@@ -122,7 +122,7 @@
     "claude code",
     "claude-code",
     "claude-code-ui",
-    "cloudcli",
+    "command-center",
     "codex",
     "cursor",
     "cursor-cli",
@@ -134,7 +134,7 @@
     "ui",
     "mobile IDE"
   ],
-  "author": "CloudCLI UI Contributors",
+  "author": "Command Center Contributors",
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.165",

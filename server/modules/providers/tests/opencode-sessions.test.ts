@@ -334,7 +334,7 @@ test('OpenCode sessions provider strips <images_input> from user turns and expos
 
     // Rewrite the user text part with the tagged prompt the runtime sends.
     const taggedPrompt = appendImagesInputTag('Look at this screenshot.', [
-      { path: 'C:/Users/x/.cloudcli/assets/shot.png' },
+      { path: 'C:/Users/x/.command-center/assets/shot.png' },
     ]);
     const db = new Database(path.join(tempRoot, '.local', 'share', 'opencode', 'opencode.db'));
     try {
@@ -351,7 +351,7 @@ test('OpenCode sessions provider strips <images_input> from user turns and expos
     const userMessage = history.messages.find((message) => message.kind === 'text' && message.role === 'user');
 
     assert.equal(userMessage?.content, 'Look at this screenshot.');
-    assert.deepEqual(userMessage?.images, [{ path: 'C:/Users/x/.cloudcli/assets/shot.png' }]);
+    assert.deepEqual(userMessage?.images, [{ path: 'C:/Users/x/.command-center/assets/shot.png' }]);
   } finally {
     restoreHomeDir();
     await rm(tempRoot, { recursive: true, force: true });
@@ -472,14 +472,14 @@ const seedOpenCodeSession = async (
   }
 };
 
-test('OpenCode synchronizer preserves the title assigned when CloudCLI creates a session', { concurrency: false }, async () => {
+test('OpenCode synchronizer preserves the title assigned when Command Center creates a session', { concurrency: false }, async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'opencode-session-sync-app-'));
   const workspacePath = path.join(tempRoot, 'workspace');
   await mkdir(workspacePath, { recursive: true });
   const restoreHomeDir = patchHomeDir(tempRoot);
 
   try {
-    // Both provider-owned values differ from the CloudCLI title so either one
+    // Both provider-owned values differ from the Command Center title so either one
     // leaking through would change the assertion below.
     await seedOpenCodeSession(tempRoot, workspacePath, {
       sessionId: 'oc-app-1',

@@ -1,12 +1,12 @@
 FROM docker/sandbox-templates:codex
 
 USER root
-COPY shared/install-cloudcli.sh /tmp/install-cloudcli.sh
-RUN chmod +x /tmp/install-cloudcli.sh && /tmp/install-cloudcli.sh
+COPY shared/install-command-center.sh /tmp/install-command-center.sh
+RUN chmod +x /tmp/install-command-center.sh && /tmp/install-command-center.sh
 
 USER agent
 RUN --mount=type=cache,target=/tmp/npm-cache,sharing=locked,mode=0777 \
-    npm install -g @cloudcli-ai/cloudcli \
+    npm install -g @command-center-ai/command-center \
       --cache=/tmp/npm-cache \
       --fetch-retries=5 \
       --fetch-retry-mintimeout=20000 \
@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/tmp/npm-cache,sharing=locked,mode=0777 \
       --fetch-timeout=600000 \
       --no-audit \
       --no-fund && \
-    cloudcli --version
+    command-center --version
 
-COPY --chown=agent:agent shared/start-cloudcli.sh /home/agent/.cloudcli-start.sh
-RUN echo '. ~/.cloudcli-start.sh' >> /home/agent/.bashrc
+COPY --chown=agent:agent shared/start-command-center.sh /home/agent/.command-center-start.sh
+RUN echo '. ~/.command-center-start.sh' >> /home/agent/.bashrc

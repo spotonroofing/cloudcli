@@ -1,6 +1,6 @@
-# Contributing to CloudCLI UI
+# Contributing to Command Center
 
-Thanks for your interest in contributing to CloudCLI UI! Before you start, please take a moment to read through this guide.
+Thanks for your interest in contributing to Command Center! Before you start, please take a moment to read through this guide.
 
 ## Before You Start
 

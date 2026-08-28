@@ -1,6 +1,6 @@
-# PUNCHLIST cloudcli-ui3
+# PUNCHLIST command-center-ui3
 
-Goal: third polish round on the CloudCLI fork. Sharper corners, quieter focus states, claude.ai-parity model switcher, corrected context-window math surfaced everywhere, a handoff button, a slimmer composer, and a first catch-up pass against upstream plus groundwork for moving the server onto an always-on host. The app already runs the Claude.ai-style design system from rounds 1-2; DESIGN.md in the repo root is the source of truth.
+Goal: third polish round on the Command Center fork. Sharper corners, quieter focus states, claude.ai-parity model switcher, corrected context-window math surfaced everywhere, a handoff button, a slimmer composer, and a first catch-up pass against upstream plus groundwork for moving the server onto an always-on host. The app already runs the Claude.ai-style design system from rounds 1-2; DESIGN.md in the repo root is the source of truth.
 
 Final acceptance: every checkbox below checked off in this file, each verified in the running app at http://127.0.0.1:4747 at desktop width, committed per phase, pushed at the end.
 

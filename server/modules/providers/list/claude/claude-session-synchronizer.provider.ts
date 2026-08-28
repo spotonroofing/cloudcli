@@ -53,7 +53,7 @@ export class ClaudeSessionSynchronizer implements IProviderSessionSynchronizer {
   /**
    * Discovery-time origin for a row that discovery itself creates: always
    * 'external'. The transcript `entrypoint` marker stopped distinguishing app
-   * runs on 2026-08-22 (Claude CLI 2.1.235 stamps headless `claude -p` runs
+   * runs on 2026-08-22 (Claude Code CLI 2.1.235 stamps headless `claude -p` runs
    * 'sdk-ts', same as the app's SDK runtime), so a row discovery has to create
    * was not started through the app: app sessions pre-create their DB row and
    * discovery only updates it (see sessionsDb.createSession, which keeps the

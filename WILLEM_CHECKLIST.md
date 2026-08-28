@@ -1,6 +1,6 @@
 # WILLEM_CHECKLIST — the human gates left after the mini migration build
 
-Everything below needs you specifically (a login, a device in your hand, or a judgment call). Everything else from the spec is built, tested, and running. The app lives at https://spoton-worker.tail6e1056.ts.net — username `willem`, password in Bitwarden under "CloudCLI mini (live) — willem".
+Everything below needs you specifically (a login, a device in your hand, or a judgment call). Everything else from the spec is built, tested, and running. The app lives at https://spoton-worker.tail6e1056.ts.net — username `willem`, password in Bitwarden under "Command Center mini (live) — willem".
 
 ## Phone bring-up (spec A6)
 1. On your iPhone, open the Tailscale app and set VPN On Demand to Always, for both Wi-Fi and Cellular.
@@ -19,7 +19,7 @@ Everything below needs you specifically (a login, a device in your hand, or a ju
 8. Railway CLI: run `railway login` in a terminal on the mini (the old token expired). Until then, workers cannot read Railway variables from this machine.
 
 ## Backup first delivery (spec A9)
-9. The nightly 3:30am backup archives ~/.claude and ~/.cloudcli locally and delivers off-mini via Taildrop to SILO or KEG — but the whole fleet was offline during the build, so no delivery has happened yet. Power on SILO (or KEG) overnight once and accept the incoming Taildrop file; after that it is automatic any night a machine is on.
+9. The nightly 3:30am backup archives ~/.claude and ~/.command-center locally and delivers off-mini via Taildrop to SILO or KEG — but the whole fleet was offline during the build, so no delivery has happened yet. Power on SILO (or KEG) overnight once and accept the incoming Taildrop file; after that it is automatic any night a machine is on.
 
 ## Acceptance items you wanted eyes on (spec 11)
 10. OTP round-trip: the next time a login wall wants a code during a real run, you get a decision-needed notification and answer it in chat — try it once end to end.

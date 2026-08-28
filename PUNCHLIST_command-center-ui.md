@@ -1,6 +1,6 @@
-# PUNCHLIST cloudcli-ui
+# PUNCHLIST command-center-ui
 
-Goal: strip CloudCLI's desktop chrome down to a chat-first, Claude.ai-feeling interface for the Orca-docked planner view, and wire new sessions to boot the planner automatically. Desktop only; the mobile/responsive views keep every existing tab and control untouched. Upstream is frozen; these are our own iterations.
+Goal: strip Command Center's desktop chrome down to a chat-first, Claude.ai-feeling interface for the Orca-docked planner view, and wire new sessions to boot the planner automatically. Desktop only; the mobile/responsive views keep every existing tab and control untouched. Upstream is frozen; these are our own iterations.
 
 Final acceptance: at http://127.0.0.1:4747 in a project-scoped view, the desktop UI shows only what these items leave standing, every remaining control works, and a new session boots the planner for that project without typing.
 
@@ -33,7 +33,7 @@ Done check: agent-browser snapshot of a scoped session page shows the new bubble
 Goal and scope: remove desktop chrome. Removal-only phase; shell and sidebar components.
 Dependencies: phase 1 tokens (any surviving chrome inherits them). Parallelism: solo.
 
-- [x] 1. CloudCLI branding/wordmark removed everywhere on desktop (sidebar header text/logo and anywhere else upstream branding surfaces).
+- [x] 1. Command Center branding/wordmark removed everywhere on desktop (sidebar header text/logo and anywhere else upstream branding surfaces).
 - [x] 2. Projects tab removed from the desktop sidebar; Conversations and Archive remain.
 - [x] 3. Running-sessions tab removed on desktop.
 - [x] 4. Ctrl+K shortcut hint removed from the search box.
@@ -72,7 +72,7 @@ Goal and scope: session-creation flow and command wiring.
 Dependencies: phase 3 (scoping supplies the project). Parallelism: solo.
 
 - [x] 19. Sidebar-header create button relabeled New Session (refresh button stays); it creates a session in the current scoped project.
-- [x] 20. A newly created session automatically sends the planner boot for that project. Read ~/.claude/commands/planner.md first: if CloudCLI's session layer can invoke Claude Code slash commands, boot by sending /planner with the project argument that command expects; if it cannot, send the equivalent full boot text the command performs, templated with the scoped project's name and paths (the per-project planner dirs under spoton-worker/planner/<project>/). One source of truth: derive the text from the command file, do not hand-copy a stale prompt.
-- [x] 21. Typing /planner in the composer triggers the same boot in the current session, recognized natively by CloudCLI's command handling.
+- [x] 20. A newly created session automatically sends the planner boot for that project. Read ~/.claude/commands/planner.md first: if Command Center's session layer can invoke Claude Code slash commands, boot by sending /planner with the project argument that command expects; if it cannot, send the equivalent full boot text the command performs, templated with the scoped project's name and paths (the per-project planner dirs under spoton-worker/planner/<project>/). One source of truth: derive the text from the command file, do not hand-copy a stale prompt.
+- [x] 21. Typing /planner in the composer triggers the same boot in the current session, recognized natively by Command Center's command handling.
 
 Done check: agent-browser creates a new session in a scoped project and the first message in the transcript is the planner boot (slash or templated text) for that project; typing /planner in an existing session sends the same; bundle rebuilt and served. Fresh-context verifier on the diff. Commit, push. Final line of the run states which boot path shipped (slash passthrough or templated text).

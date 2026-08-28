@@ -6,14 +6,16 @@ import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 
+import { getLegacyDataDirectory, readRenamedEnvironmentVariable } from '../shared/runtime-anchors.js';
+
 /**
- * Installs the versioned local server runtime used by CloudCLI Desktop.
+ * Installs the versioned local server runtime used by Command Center Desktop.
  *
  * Server bundles are cached under:
- *   ~/.cloudcli/server/<version>/dist-server/server/index.js
+ *   <runtime data directory>/server/<version>/dist-server/server/index.js
  */
 
-const DEFAULT_INSTALL_ROOT = path.join(os.homedir(), '.cloudcli', 'server');
+const DEFAULT_INSTALL_ROOT = path.join(getLegacyDataDirectory(os.homedir()), 'server');
 const DEFAULT_BUNDLE_BASE_URL = 'https://github.com/siteboon/claudecodeui/releases/download';
 const MAX_REDIRECTS = 5;
 const LOCAL_DOWNLOAD_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
@@ -33,9 +35,9 @@ export class ServerInstaller {
     version,
     platform = process.platform,
     arch = process.arch,
-    installRoot = process.env.CLOUDCLI_SERVER_DIR || DEFAULT_INSTALL_ROOT,
-    bundleBaseUrl = process.env.CLOUDCLI_SERVER_BUNDLE_URL || DEFAULT_BUNDLE_BASE_URL,
-    bundleReleaseTag = process.env.CLOUDCLI_SERVER_BUNDLE_RELEASE_TAG || '',
+    installRoot = readRenamedEnvironmentVariable('SERVER_DIR') || DEFAULT_INSTALL_ROOT,
+    bundleBaseUrl = readRenamedEnvironmentVariable('SERVER_BUNDLE_URL') || DEFAULT_BUNDLE_BASE_URL,
+    bundleReleaseTag = readRenamedEnvironmentVariable('SERVER_BUNDLE_RELEASE_TAG') || '',
     onLog,
   } = {}) {
     if (!version) throw new Error('ServerInstaller requires the app version');
@@ -59,7 +61,7 @@ export class ServerInstaller {
   }
 
   getBundleName() {
-    return `cloudcli-local-server-${this.version}-${this.platform}-${this.arch}.tar.gz`;
+    return `command-center-local-server-${this.version}-${this.platform}-${this.arch}.tar.gz`;
   }
 
   getBundleUrl() {

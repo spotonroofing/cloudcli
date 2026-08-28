@@ -8,7 +8,7 @@
    Overriding every local candidate to the sans's exact metrics makes mono
    and sans line boxes congruent: centering a mono box IS baseline-sharing. */
 @font-face {
-  font-family: 'CloudCLI Mono';
+  font-family: 'Command Center Mono';
   src:
     local('SF Mono'),
     local('SFMono-Regular'),
@@ -90,7 +90,7 @@
     /* The metric-corrected mono face (declared above) leads the stack so every
        font-mono number shares the sans baseline; raw system monos are the
        emergency fallback only. */
-    --font-mono: 'CloudCLI Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    --font-mono: 'Command Center Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
     /* Nav design tokens */
     --nav-glass-bg: 44 22% 96% / 0.7;

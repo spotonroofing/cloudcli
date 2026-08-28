@@ -14,6 +14,13 @@ import type { LLMProvider } from '@/shared/types.js';
 import { normalizeProjectPath, wrapMachineMessage } from '@/shared/utils.js';
 import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/websocket/index.js';
 
+import {
+  getLegacyDataDirectory,
+  getLegacyProjectDirectory,
+  LEGACY_RUNTIME_ANCHORS,
+  readRenamedEnvironmentVariable,
+} from '../../../shared/runtime-anchors.js';
+
 import { findUnpushedHandoff } from './handoff-push.js';
 import { UnitIdentityCache, hiddenTwinUnits, summarizeHidden, type TwinChain } from './chain-twins.js';
 
@@ -1708,7 +1715,7 @@ class WatchdogService {
   // ----- Monday self-maintenance (spec B9) -----
 
   /**
-   * Dispatches the weekly maintenance run into the CloudCLI project: upstream
+   * Dispatches the weekly maintenance run into the Command Center project: upstream
    * delta classification with backend-safe auto-apply through the dispatch →
    * dev-verify → promote loop, plus the Claude Code CLI version assessment.
    * Silent when safe, decision-needed when judgment-shaped, silence when
@@ -1716,7 +1723,7 @@ class WatchdogService {
    * the manual-trigger test mode.
    */
   async runMaintenance(classifyOnly = false): Promise<{ started: boolean }> {
-    const repo = process.env.CLOUDCLI_REPO || path.join(os.homedir(), 'Projects', 'cloudcli');
+    const repo = readRenamedEnvironmentVariable('REPO') || getLegacyProjectDirectory();
     log(`maintenance run starting${classifyOnly ? ' (classify-only)' : ''}`);
 
     const prompt = buildMaintenancePrompt(repo, classifyOnly);
@@ -1823,10 +1830,12 @@ function buildMaintenancePrompt(repo: string, classifyOnly: boolean): string {
       + 'nothing, promote nothing, update nothing, and send no notifications. For anything you would '
       + 'have applied or escalated, journal what the full run would have done.\n'
     : '';
-  return `You are the Monday self-maintenance run for the CloudCLI fork on the Mac mini. Work in ${repo}.
+  const devLaunchdLabel = `${LEGACY_RUNTIME_ANCHORS.launchdLabelPrefix}-dev`;
+  const databasePath = path.join(getLegacyDataDirectory(), 'auth.db');
+  return `You are the Monday self-maintenance run for the Command Center fork on the Mac mini. Work in ${repo}.
 Append one line per finding to ~/forge-logs/monday-maintenance/JOURNAL.md as: HH:MM | item | classification | detail. Create the folder if missing.
 ${mode}
-1. Upstream CloudCLI: ensure a git remote "upstream" exists pointing at https://github.com/siteboon/claudecodeui (add it if missing), git fetch upstream, and compare the upstream default branch against HEAD. Classify each new upstream commit as backend-safe (server-only, no frontend or build-surface changes), frontend-touching, or skip (release chores). Backend-safe commits: apply them, run npm run build and npm test, verify the dev instance boots healthy (launchctl kickstart -k gui/$(id -u)/com.spoton.cloudcli-dev then curl http://127.0.0.1:4748/health), then promote with the "promote" CLI; every applied change gets a descriptive commit. Frontend-touching commits: never apply; send ONE decision-needed notification summarizing them via POST http://127.0.0.1:4747/api/watchdog/notify with header x-api-key read at runtime from ~/.cloudcli/auth.db (sqlite3: SELECT api_key FROM api_keys WHERE is_active=1 LIMIT 1). Never print that key.
+1. Upstream Command Center: ensure a git remote "upstream" exists pointing at https://github.com/siteboon/claudecodeui (add it if missing), git fetch upstream, and compare the upstream default branch against HEAD. Classify each new upstream commit as backend-safe (server-only, no frontend or build-surface changes), frontend-touching, or skip (release chores). Backend-safe commits: apply them, run npm run build and npm test, verify the dev instance boots healthy (launchctl kickstart -k gui/$(id -u)/${devLaunchdLabel} then curl http://127.0.0.1:4748/health), then promote with the "promote" CLI; every applied change gets a descriptive commit. Frontend-touching commits: never apply; send ONE decision-needed notification summarizing them via POST http://127.0.0.1:4747/api/watchdog/notify with header x-api-key read at runtime from ${databasePath} (sqlite3: SELECT api_key FROM api_keys WHERE is_active=1 LIMIT 1). Never print that key.
 2. Claude Code CLI: compare the installed "claude --version" against the latest available version. If behind, read the release notes for the gap and assess impact on this fork (SDK behavior, flags the launchers pin, classifier or model changes) and on the planner/worker doctrine (~/Projects/spoton-worker/PLANNER.md, planner/reference/ including dispatch.md, and ~/.claude/commands/worker.md). Safe updates and doctrine touch-ups: apply silently with commits. Judgment-shaped changes (a breaking change, a new feature worth adopting, a doctrine rewrite): one decision-needed notification instead of silent edits.
 3. A category with nothing to do gets a "nothing to do" journal line and NO notification. Total silence toward Willem is the correct outcome when everything is current.
 Never push the scratch repo. Keep the final summary to a few lines.`;

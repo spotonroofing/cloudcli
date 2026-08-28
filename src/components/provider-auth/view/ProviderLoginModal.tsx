@@ -65,11 +65,11 @@ const getProviderCommand = ({
 };
 
 const getProviderTitle = (provider: LLMProvider) => {
-  if (provider === 'claude') return 'Claude CLI Login';
+  if (provider === 'claude') return 'Claude Code CLI Login';
   if (provider === 'cursor') return 'Cursor CLI Login';
   if (provider === 'codex') return 'Codex CLI Login';
   if (provider === 'opencode') return 'OpenCode CLI Login';
-  return 'Claude CLI Login';
+  return 'Claude Code CLI Login';
 };
 
 export default function ProviderLoginModal({

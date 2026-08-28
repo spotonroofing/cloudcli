@@ -19,6 +19,8 @@ import {
   toImageAttachments,
 } from '@/shared/image-attachments.js';
 
+import { getLegacyDataDirectory } from '../../../shared/runtime-anchors.js';
+
 // 1x1 transparent PNG
 const PNG_BYTES = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
@@ -53,7 +55,7 @@ async function createSymlinkIfSupported(
 
 test('normalizeImageDescriptors accepts objects and bare paths, drops junk', () => {
   const descriptors = normalizeImageDescriptors([
-    { path: '.cloudcli/assets/a.png', name: 'a.png', mimeType: 'image/png' },
+    { path: '.command-center/assets/a.png', name: 'a.png', mimeType: 'image/png' },
     'scripts/pic.jpg',
     { name: 'no-path.png' },
     42,
@@ -62,7 +64,7 @@ test('normalizeImageDescriptors accepts objects and bare paths, drops junk', () 
   ]);
 
   assert.deepEqual(descriptors, [
-    { path: '.cloudcli/assets/a.png', name: 'a.png', mimeType: 'image/png' },
+    { path: '.command-center/assets/a.png', name: 'a.png', mimeType: 'image/png' },
     { path: 'scripts/pic.jpg' },
   ]);
   assert.deepEqual(normalizeImageDescriptors(undefined), []);
@@ -88,8 +90,8 @@ test('normalizeAttachmentDescriptors preserves file metadata and identifies imag
 test('appendFilesInputTag and parseFilesInputTag round-trip non-image files', () => {
   const prompt = 'Summarize the attached materials.';
   const tagged = appendFilesInputTag(prompt, [
-    { path: 'C:\\Users\\x\\.cloudcli\\assets\\brief.pdf', name: 'Brief (final).pdf' },
-    { path: '/tmp/cloudcli-assets/data.csv', name: 'data.csv' },
+    { path: 'C:\\Users\\x\\.command-center\\assets\\brief.pdf', name: 'Brief (final).pdf' },
+    { path: '/tmp/command-center-assets/data.csv', name: 'data.csv' },
   ]);
 
   assert.ok(tagged.includes('<files_input>'));
@@ -97,12 +99,12 @@ test('appendFilesInputTag and parseFilesInputTag round-trip non-image files', ()
   assert.deepEqual(parseFilesInputTag(tagged), {
     text: prompt,
     filePaths: [
-      'C:/Users/x/.cloudcli/assets/brief.pdf',
-      '/tmp/cloudcli-assets/data.csv',
+      'C:/Users/x/.command-center/assets/brief.pdf',
+      '/tmp/command-center-assets/data.csv',
     ],
     attachments: [
-      { path: 'C:/Users/x/.cloudcli/assets/brief.pdf', name: 'Brief final.pdf' },
-      { path: '/tmp/cloudcli-assets/data.csv', name: 'data.csv' },
+      { path: 'C:/Users/x/.command-center/assets/brief.pdf', name: 'Brief final.pdf' },
+      { path: '/tmp/command-center-assets/data.csv', name: 'data.csv' },
     ],
   });
 });
@@ -110,21 +112,21 @@ test('appendFilesInputTag and parseFilesInputTag round-trip non-image files', ()
 test('parseFilesInputTag handles Windows-flattened provider prompts', () => {
   const flattened = appendFilesInputTag(
     'inspect this',
-    [{ path: 'C:/Users/x/.cloudcli/assets/report.docx', name: 'report.docx' }],
+    [{ path: 'C:/Users/x/.command-center/assets/report.docx', name: 'report.docx' }],
   ).replace(/\s*\r?\n\s*/g, ' ');
 
   const parsed = parseFilesInputTag(flattened);
   assert.equal(parsed.text, 'inspect this');
   assert.deepEqual(parsed.attachments, [
-    { path: 'C:/Users/x/.cloudcli/assets/report.docx', name: 'report.docx' },
+    { path: 'C:/Users/x/.command-center/assets/report.docx', name: 'report.docx' },
   ]);
 });
 
 test('appendImagesInputTag and parseImagesInputTag round-trip', () => {
   const prompt = 'Describe these screenshots.\n\nFocus on the header.';
   const tagged = appendImagesInputTag(prompt, [
-    { path: '.cloudcli/assets/1-a.png' },
-    { path: '.cloudcli\\assets\\2-b.jpg' },
+    { path: '.command-center/assets/1-a.png' },
+    { path: '.command-center\\assets\\2-b.jpg' },
   ]);
 
   assert.ok(tagged.startsWith(prompt));
@@ -135,13 +137,13 @@ test('appendImagesInputTag and parseImagesInputTag round-trip', () => {
   const parsed = parseImagesInputTag(tagged);
   assert.equal(parsed.text, prompt);
   // Backslashes are normalized so references stay portable.
-  assert.deepEqual(parsed.imagePaths, ['.cloudcli/assets/1-a.png', '.cloudcli/assets/2-b.jpg']);
+  assert.deepEqual(parsed.imagePaths, ['.command-center/assets/1-a.png', '.command-center/assets/2-b.jpg']);
 });
 
 test('original filenames round-trip through the tag', () => {
   const tagged = appendImagesInputTag('compare these', [
-    { path: 'C:/Users/x/.cloudcli/assets/1-a.png', name: 'screenshot (final).png' },
-    { path: 'C:/Users/x/.cloudcli/assets/2-b.jpg' },
+    { path: 'C:/Users/x/.command-center/assets/1-a.png', name: 'screenshot (final).png' },
+    { path: 'C:/Users/x/.command-center/assets/2-b.jpg' },
   ]);
 
   const parsed = parseImagesInputTag(tagged);
@@ -149,8 +151,8 @@ test('original filenames round-trip through the tag', () => {
   // Parentheses are dropped from names so the "(original name: ...)" suffix
   // stays parseable; the path-only entry carries no name.
   assert.deepEqual(parsed.attachments, [
-    { path: 'C:/Users/x/.cloudcli/assets/1-a.png', name: 'screenshot final.png' },
-    { path: 'C:/Users/x/.cloudcli/assets/2-b.jpg' },
+    { path: 'C:/Users/x/.command-center/assets/1-a.png', name: 'screenshot final.png' },
+    { path: 'C:/Users/x/.command-center/assets/2-b.jpg' },
   ]);
 });
 
@@ -158,13 +160,13 @@ test('only the LAST images_input block is treated as the attachment carrier', ()
   const userTypedTag = 'What does <images_input> mean in this codebase?';
   const tagged = appendImagesInputTag(
     `${userTypedTag}\n\n<images_input>\nfake user block\n</images_input>\n\nAlso check this.`,
-    [{ path: 'C:/Users/x/.cloudcli/assets/real.png' }],
+    [{ path: 'C:/Users/x/.command-center/assets/real.png' }],
   );
 
   const parsed = parseImagesInputTag(tagged);
   assert.ok(parsed.text.includes('fake user block'));
   assert.ok(parsed.text.includes('Also check this.'));
-  assert.deepEqual(parsed.imagePaths, ['C:/Users/x/.cloudcli/assets/real.png']);
+  assert.deepEqual(parsed.imagePaths, ['C:/Users/x/.command-center/assets/real.png']);
 });
 
 test('appendImagesInputTag without images returns the prompt untouched', () => {
@@ -175,14 +177,14 @@ test('appendImagesInputTag without images returns the prompt untouched', () => {
 test('parseImagesInputTag handles prompts flattened to one line for cmd.exe shims', () => {
   // Windows spawn runtimes collapse newlines before passing the argument to
   // .cmd-shimmed CLIs; the persisted prompt is then a single line.
-  const flattened = appendImagesInputTag('now?', [{ path: 'C:/Users/x/.cloudcli/assets/a.jpg' }])
+  const flattened = appendImagesInputTag('now?', [{ path: 'C:/Users/x/.command-center/assets/a.jpg' }])
     .replace(/\s*\r?\n\s*/g, ' ')
     .trim();
 
   assert.ok(!flattened.includes('\n'));
   const parsed = parseImagesInputTag(flattened);
   assert.equal(parsed.text, 'now?');
-  assert.deepEqual(parsed.imagePaths, ['C:/Users/x/.cloudcli/assets/a.jpg']);
+  assert.deepEqual(parsed.imagePaths, ['C:/Users/x/.command-center/assets/a.jpg']);
 });
 
 test('parseImagesInputTag leaves text without a tag untouched', () => {
@@ -314,19 +316,19 @@ test('buildClaudeUserContent accepts images under a symlinked cwd', async (t) =>
 
 test('buildCodexInputItems emits text plus absolute local_image paths', () => {
   const cwd = path.join(os.tmpdir(), 'codex-project');
-  const items = buildCodexInputItems('Describe this image:', [{ path: '.cloudcli/assets/pic.jpg' }], cwd);
+  const items = buildCodexInputItems('Describe this image:', [{ path: '.command-center/assets/pic.jpg' }], cwd);
 
   assert.equal(items.length, 2);
   assert.deepEqual(items[0], { type: 'text', text: 'Describe this image:' });
   assert.equal(items[1].type, 'local_image');
   const imageItem = items[1] as Extract<(typeof items)[number], { type: 'local_image' }>;
   assert.ok(path.isAbsolute(imageItem.path));
-  assert.equal(imageItem.path, path.resolve(cwd, '.cloudcli/assets/pic.jpg'));
+  assert.equal(imageItem.path, path.resolve(cwd, '.command-center/assets/pic.jpg'));
 });
 
 test('isAllowedImageSourcePath only accepts the upload store and the run cwd', () => {
   const cwd = path.join(os.tmpdir(), 'some-project');
-  const uploadStore = path.join(os.homedir(), '.cloudcli', 'assets');
+  const uploadStore = path.join(getLegacyDataDirectory(os.homedir()), 'assets');
 
   assert.equal(isAllowedImageSourcePath(path.join(uploadStore, 'shot.png'), cwd), true);
   assert.equal(isAllowedImageSourcePath(path.join(cwd, 'docs', 'diagram.png'), cwd), true);

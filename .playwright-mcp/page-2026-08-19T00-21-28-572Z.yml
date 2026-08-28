@@ -11,13 +11,13 @@
           - generic [ref=f7e30]: "180"
           - button "New chat" [ref=f7e31] [cursor=pointer]
       - generic [ref=f7e33]:
-        - 'link "Claude [Pasted text #1 +6 lines] cloudcli · <1m" [ref=f7e34] [cursor=pointer]':
+        - 'link "Claude [Pasted text #1 +6 lines] command-center · <1m" [ref=f7e34] [cursor=pointer]':
           - /url: /session/9be1e9de-9fd2-4354-89ad-966ddcbd44ce
           - img "Claude" [ref=f7e36]
           - generic [ref=f7e39]:
             - generic [ref=f7e40]: "[Pasted text #1 +6 lines]"
             - generic [ref=f7e41]:
-              - generic [ref=f7e42]: cloudcli
+              - generic [ref=f7e42]: command-center
               - generic [ref=f7e43]: ·
               - time [ref=f7e44]: <1m
         - link "Claude Reply with only the No project · 4m" [ref=f7e47] [cursor=pointer]:
@@ -29,22 +29,22 @@
               - generic [ref=f7e55]: No project
               - generic [ref=f7e56]: ·
               - time [ref=f7e57]: 4m
-        - link "Claude Reply with only the cloudcli · 7m" [ref=f7e60] [cursor=pointer]:
+        - link "Claude Reply with only the command-center · 7m" [ref=f7e60] [cursor=pointer]:
           - /url: /session/b575dbd9-59df-410d-86de-aced01bb9e29
           - img "Claude" [ref=f7e62]
           - generic [ref=f7e65]:
             - generic [ref=f7e66]: Reply with only the
             - generic [ref=f7e67]:
-              - generic [ref=f7e68]: cloudcli
+              - generic [ref=f7e68]: command-center
               - generic [ref=f7e69]: ·
               - time [ref=f7e70]: 7m
-        - link "Claude Boot (or re-ground) this cloudcli · 9m" [ref=f7e73] [cursor=pointer]:
+        - link "Claude Boot (or re-ground) this command-center · 9m" [ref=f7e73] [cursor=pointer]:
           - /url: /session/f5e2213b-152e-4707-9196-379566323a5f
           - img "Claude" [ref=f7e75]
           - generic [ref=f7e78]:
             - generic [ref=f7e79]: Boot (or re-ground) this
             - generic [ref=f7e80]:
-              - generic [ref=f7e81]: cloudcli
+              - generic [ref=f7e81]: command-center
               - generic [ref=f7e82]: ·
               - time [ref=f7e83]: 9m
         - link "Claude First, run git pull; if it conflicts or the tree is dirty, skip the pull and note it at the top of the report. Make no o C:\\Users\\KEG\\Projects\\qb-automations · 10m" [ref=f7e86] [cursor=pointer]:
@@ -128,11 +128,11 @@
               - generic [ref=f7e198]: C:\Users\SILO
               - generic [ref=f7e199]: ·
               - time [ref=f7e200]: 46m
-        - link "Claude First, in each of cloudcli, orca-app, and spoton-claude-config under this folder, run git pull; if any conflicts or has C:\\Users\\KEG\\Projects · 46m" [ref=f7e203] [cursor=pointer]:
+        - link "Claude First, in each of command-center, orca-app, and spoton-claude-config under this folder, run git pull; if any conflicts or has C:\\Users\\KEG\\Projects · 46m" [ref=f7e203] [cursor=pointer]:
           - /url: /session/f08d12fa-58dc-4aec-a82e-03ad7a9ee26d
           - img "Claude" [ref=f7e205]
           - generic [ref=f7e208]:
-            - generic [ref=f7e209]: First, in each of cloudcli, orca-app, and spoton-claude-config under this folder, run git pull; if any conflicts or has
+            - generic [ref=f7e209]: First, in each of command-center, orca-app, and spoton-claude-config under this folder, run git pull; if any conflicts or has
             - generic [ref=f7e210]:
               - generic [ref=f7e211]: C:\Users\KEG\Projects
               - generic [ref=f7e212]: ·
@@ -374,5 +374,5 @@
       - button "Load older conversations" [ref=f7e554] [cursor=pointer]
     - button "Settings" [ref=f7e558] [cursor=pointer]
   - generic [ref=f7e566]:
-    - heading "Loading CloudCLI" [level=2] [ref=f7e569]
+    - heading "Loading Command Center" [level=2] [ref=f7e569]
     - paragraph [ref=f7e570]: Setting up your workspace...

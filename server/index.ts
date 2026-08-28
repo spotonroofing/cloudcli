@@ -3,7 +3,6 @@
 import './load-env.js';
 import fs, { promises as fsPromises } from 'fs';
 import path from 'path';
-import os from 'os';
 import http from 'http';
 
 import express, { type NextFunction, type Request, type Response } from 'express';
@@ -18,6 +17,7 @@ import {
 import { createWebSocketServer } from '@/modules/websocket/index.js';
 
 import { getConnectableHost } from '../shared/networkHosts.js';
+import { getLegacyDataDirectory, readRenamedEnvironmentVariable } from '../shared/runtime-anchors.js';
 
 import { createGitModule } from './modules/git/index.js';
 import {
@@ -57,8 +57,9 @@ const __dirname = getModuleDirectory(import.meta.url);
 const APP_ROOT = findApplicationRoot(__dirname);
 // Frontend artifact directory. The dev instance overrides this (dist-dev) so a
 // dev build can never change what live serves from APP_ROOT/dist.
-const FRONTEND_DIST = process.env.CLOUDCLI_FRONTEND_DIST
-    ? path.resolve(process.env.CLOUDCLI_FRONTEND_DIST)
+const configuredFrontendDist = readRenamedEnvironmentVariable('FRONTEND_DIST');
+const FRONTEND_DIST = configuredFrontendDist
+    ? path.resolve(configuredFrontendDist)
     : path.join(APP_ROOT, 'dist');
 const installMode = fs.existsSync(path.join(APP_ROOT, '.git')) ? 'git' : 'npm';
 // Version of the code that is actually running, captured once at process
@@ -181,7 +182,7 @@ app.use('/api/file-tree', authenticateToken, fileTreeRoutes);
 // Projects API Routes (protected)
 app.use('/api/projects', authenticateToken, projectModuleRoutes);
 
-// Chat attachment upload/serving (global ~/.cloudcli/assets store, protected)
+// Chat attachment upload/serving (global runtime assets store, protected)
 app.use('/api/assets', authenticateToken, assetsRoutes);
 
 // Git API Routes (protected)
@@ -253,7 +254,7 @@ app.use(express.static(FRONTEND_DIST, {
 // Frontend now uses window.location for WebSocket URLs
 
 // Chat uploads live under /api/assets (server/modules/assets), which stores
-// images and general files in the global ~/.cloudcli/assets folder.
+// images and general files in the global runtime assets folder.
 
 // Serve React app for all other routes (excluding static files)
 app.get('*', (req, res) => {
@@ -309,12 +310,12 @@ const HOST = process.env.HOST || '127.0.0.1';
 const DISPLAY_HOST = getConnectableHost(HOST);
 const VITE_PORT = process.env.VITE_PORT || 5173;
 // Per-instance marker so two instances (live 4747 / dev 4748) never clobber
-// each other's file. The unsuffixed legacy name is kept when CLOUDCLI_INSTANCE
+// each other's file. The unsuffixed legacy name is kept when the instance
 // is unset because electron/localServer.js discovers the server through it.
+const commandCenterInstance = readRenamedEnvironmentVariable('INSTANCE');
 const LOCAL_SERVER_MARKER_PATH = path.join(
-    os.homedir(),
-    '.cloudcli',
-    process.env.CLOUDCLI_INSTANCE ? `local-server-${process.env.CLOUDCLI_INSTANCE}.json` : 'local-server.json'
+    getLegacyDataDirectory(),
+    commandCenterInstance ? `local-server-${commandCenterInstance}.json` : 'local-server.json'
 );
 
 function getErrorCode(error: unknown): string | undefined {
@@ -392,12 +393,12 @@ async function startServer() {
 
             console.log('');
             console.log(terminalTextStyles.dim('═'.repeat(63)));
-            console.log(`  ${terminalTextStyles.bright('CloudCLI Server - Ready')}`);
+            console.log(`  ${terminalTextStyles.bright('Command Center Server - Ready')}`);
             console.log(terminalTextStyles.dim('═'.repeat(63)));
             console.log('');
             console.log(`${terminalTextStyles.info('[INFO]')} Server URL:  ${terminalTextStyles.bright('http://' + DISPLAY_HOST + ':' + SERVER_PORT)}`);
             console.log(`${terminalTextStyles.info('[INFO]')} Installed at: ${terminalTextStyles.dim(appInstallPath)}`);
-            console.log(`${terminalTextStyles.tip('[TIP]')}  Run "cloudcli status" for full configuration details`);
+            console.log(`${terminalTextStyles.tip('[TIP]')}  Run "command-center status" for full configuration details`);
             console.log('');
 
             // Start watching the projects folder for changes

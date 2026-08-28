@@ -1,6 +1,6 @@
-# PUNCHLIST cloudcli-ui6
+# PUNCHLIST command-center-ui6
 
-Goal: projects and chats become strictly what Willem creates, models report honest names and windows, and the chrome loses everything unused. The ccsync relay retirement already ran; ~/forge-logs/cloudcli-ui6/purged-sessions.txt lists the removed foreign transcripts.
+Goal: projects and chats become strictly what Willem creates, models report honest names and windows, and the chrome loses everything unused. The ccsync relay retirement already ran; ~/forge-logs/command-center-ui6/purged-sessions.txt lists the removed foreign transcripts.
 
 Whole-file rules: read DESIGN.md in the repo root before any UI work; it is the source of truth. Reuse the closest existing pattern; never introduce a parallel style. Ensure .gitignore excludes .env before any git add. Check each item off in this file as verified. Claims are checked against actual tool results. Confirm visible changes hold at a phone viewport. You have ample context; do not stop, summarize, or suggest a new session on account of context limits. After the final phase verifies, run the repo's documented promote flow (dev verify, drain, promote to live).
 

@@ -8,6 +8,7 @@ import SystemSettingsTab from '../view/tabs/SystemSettingsTab';
 import { useSettingsController } from '../hooks/useSettingsController';
 import { useWebPush } from '../../../hooks/useWebPush';
 import type { SettingsProps } from '../types/types';
+import { getDesktopNotificationsBridge } from '../../../shared/desktopBridge';
 
 type DesktopNotificationsState = {
   enabled: boolean;
@@ -22,7 +23,7 @@ function Settings({ isOpen, initialTab = 'system', projects = [] }: SettingsProp
   const desktopNotificationsBridge = useMemo(() => (
     typeof window === 'undefined'
       ? null
-      : ((window as any).cloudcliDesktopNotifications || null)
+      : getDesktopNotificationsBridge()
   ), []);
   const [desktopNotificationsState, setDesktopNotificationsState] = useState<DesktopNotificationsState | null>(null);
   const {

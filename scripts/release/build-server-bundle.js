@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readRenamedEnvironmentVariable } from '../../shared/runtime-anchors.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..', '..');
@@ -106,10 +107,10 @@ function sha256(filePath) {
   });
 }
 
-const platform = mapPlatform(process.env.CLOUDCLI_BUNDLE_PLATFORM || process.platform);
-const arch = mapArch(process.env.CLOUDCLI_BUNDLE_ARCH || process.arch);
+const platform = mapPlatform(readRenamedEnvironmentVariable('BUNDLE_PLATFORM') || process.platform);
+const arch = mapArch(readRenamedEnvironmentVariable('BUNDLE_ARCH') || process.arch);
 const version = packageJson.version;
-const bundleName = `cloudcli-local-server-${version}-${platform}-${arch}.tar.gz`;
+const bundleName = `command-center-local-server-${version}-${platform}-${arch}.tar.gz`;
 const bundleRoot = path.join(rootDir, 'release', 'local-server');
 const stageDir = path.join(bundleRoot, `.stage-${version}-${platform}-${arch}`);
 const archivePath = path.join(bundleRoot, bundleName);

@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { LEGACY_RUNTIME_ANCHORS } from '../../shared/runtime-anchors.js';
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
@@ -20,7 +21,7 @@ const givenRoots = args.filter((arg) => !arg.startsWith('--'));
 const ROOTS = givenRoots.length
   ? givenRoots
   : [path.join(os.homedir(), '.claude', 'projects'), path.join(os.homedir(), '.claude-dev', 'projects')];
-const LOG = path.join(os.homedir(), 'forge-logs', 'cloudcli-scrub', 'scrub.log');
+const LOG = path.join(os.homedir(), 'forge-logs', LEGACY_RUNTIME_ANCHORS.scrubLogDirectoryName, 'scrub.log');
 const QUIET_MS = 10 * 60 * 1000;
 
 // Twilio API Key SID (with its `:secret` basic-auth tail when present), the

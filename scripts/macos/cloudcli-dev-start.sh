@@ -5,6 +5,11 @@
 # CLAUDE_CONFIG_DIR does not see the default Keychain login.
 set -u
 
+SCRIPT_DIR="${0:A:h}"
+NODE=$(command -v node || echo /usr/local/bin/node)
+eval "$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --shell)"
+CONFIGURED_REPO=$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --environment REPO)
+
 DEV_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude-dev}"
 mkdir -p "$DEV_DIR/projects"
 
@@ -23,8 +28,8 @@ fi
 
 [[ -f "$DEV_DIR/.claude.json" ]] || cp "$HOME/.claude.json" "$DEV_DIR/.claude.json" 2>/dev/null || true
 
-cd "${CLOUDCLI_REPO:?CLOUDCLI_REPO must point at the repo root}"
+cd "${CONFIGURED_REPO:-$COMMAND_CENTER_RUNTIME_PROJECT_DIR}"
 # Build isolation (ui9 A1): dev runs its own artifacts. dist/ and dist-server/
 # belong to live and are written only by promote.sh.
-export CLOUDCLI_FRONTEND_DIST="$PWD/dist-dev"
+export COMMAND_CENTER_FRONTEND_DIST="$PWD/dist-dev"
 exec node dist-server-dev/server/index.js

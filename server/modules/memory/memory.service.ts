@@ -725,7 +725,7 @@ async function runCuratedEdit(instruction: string, extraCommitPaths: string[]): 
 
   curatedEditsInFlight += 1;
   const claudeExecutable = resolveClaudeCodeExecutablePath(process.env.CLAUDE_CLI_PATH);
-  const emptyMcpConfigPath = path.join(os.tmpdir(), 'cloudcli-empty-mcp.json');
+  const emptyMcpConfigPath = path.join(os.tmpdir(), 'command-center-empty-mcp.json');
   try {
     await fsPromises.writeFile(emptyMcpConfigPath, '{"mcpServers":{}}\n', { mode: 0o600 });
     // --no-session-persistence: a one-off edit must not leave a transcript

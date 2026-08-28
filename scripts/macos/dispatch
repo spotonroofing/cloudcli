@@ -18,7 +18,7 @@
 # watchdog stores it and the worker pane's phase navigator renders it.
 # Validation happens here;
 # execution is handed to dispatch-chain-runner, spawned fully detached (own
-# session) so a CloudCLI server restart or promote mid-chain never touches a
+# session) so a Command Center server restart or promote mid-chain never touches a
 # running chain. Each phase runs as a fresh headless `claude -p` session with
 # the commit gate between phases; progress journals to ~/forge-logs/<slug>/
 # and the runner reports boundaries to the watchdog, which wakes the
@@ -49,9 +49,13 @@
 # reaches the jobs view; the executing or finished unit is refused.
 set -u
 
+SCRIPT_DIR="${0:A:h}"
+NODE=$(command -v node || echo /usr/local/bin/node)
+eval "$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --shell)"
+
 PROJECTS_ROOT="$HOME/Projects"
 SERVER_URL="${DISPATCH_SERVER_URL:-http://127.0.0.1:4747}"
-DB_PATH="${DISPATCH_DB_PATH:-$HOME/.cloudcli/auth.db}"
+DB_PATH="${DISPATCH_DB_PATH:-$COMMAND_CENTER_RUNTIME_DATA_DIR/auth.db}"
 
 # Refuses a prompt file whose engine header names an engine the runner lacks.
 check_engine_header() {

@@ -9,7 +9,7 @@
 //
 // usage: node scripts/dev/check-pinned-transcript.mjs <jsonl> <sessionId> <cwd> [seconds] [cdpPort]
 //   The page under test must already be open in the CDP Chrome (port 9500 by
-//   default, the ~/browser-profiles/cloudcli instance) on the dev origin.
+//   default, the ~/browser-profiles/command-center instance) on the dev origin.
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 

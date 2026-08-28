@@ -76,7 +76,7 @@ const writeCodexTranscript = async (
   return filePath;
 };
 
-test('Codex synchronizer preserves the title assigned when CloudCLI creates a session', { concurrency: false }, async () => {
+test('Codex synchronizer preserves the title assigned when Command Center creates a session', { concurrency: false }, async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'codex-session-sync-app-'));
   const workspacePath = path.join(tempRoot, 'workspace');
   await mkdir(workspacePath, { recursive: true });
@@ -86,7 +86,7 @@ test('Codex synchronizer preserves the title assigned when CloudCLI creates a se
     await writeCodexTranscript(tempRoot, 'codex-app-1', workspacePath, 'Provider transcript title must not win');
     await withIsolatedDatabase(async () => {
       // The app allocates its own id and later maps the provider id onto it,
-      // exactly as a message sent from cloudcli does.
+      // exactly as a message sent from command-center does.
       sessionsDb.createAppSession('app-1', 'codex', workspacePath, 'Fix the login redirect');
       sessionsDb.assignProviderSessionId('app-1', 'codex-app-1');
 

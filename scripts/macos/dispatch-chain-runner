@@ -3,7 +3,7 @@
 #
 #   dispatch-chain-runner <repo> <slug> <phase-file ...>
 #
-# Spawned fully detached (own session) by the dispatch CLI, so a CloudCLI
+# Spawned fully detached (own session) by the dispatch CLI, so a Command Center
 # server restart or promote mid-chain never touches a running chain. Each
 # phase runs as a fresh headless session in the repo — `claude -p` or
 # `codex exec`, per unit (codex job 2) — with the same commit gate, journal
@@ -39,8 +39,12 @@
 # for the better part of an hour so the chain-end planner wake is never lost.
 set -u
 
+SCRIPT_DIR="${0:A:h}"
+NODE=$(command -v node || echo /usr/local/bin/node)
+eval "$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --shell)"
+
 SERVER_URL="${DISPATCH_SERVER_URL:-http://127.0.0.1:4747}"
-DB_PATH="${DISPATCH_DB_PATH:-$HOME/.cloudcli/auth.db}"
+DB_PATH="${DISPATCH_DB_PATH:-$COMMAND_CENTER_RUNTIME_DATA_DIR/auth.db}"
 
 [[ $# -ge 3 ]] || { print -u2 "usage: dispatch-chain-runner <repo> <slug> <phase-file ...>"; exit 64; }
 REPO="$1"; SLUG="$2"; shift 2
@@ -725,7 +729,7 @@ write_verify_prompt() {
     cat <<'VERIFY_AUTH_EOF'
 For authenticated checks against dev, mint a short-lived JWT from the dev database and send it as a Bearer token (the API-testing recipe from CLAUDE.md):
 
-  DEV_DB="$HOME/.cloudcli-dev/auth.db"
+  DEV_DB="$COMMAND_CENTER_RUNTIME_DEV_DATA_DIR/auth.db"
   DEV_JWT_SECRET=$(/usr/bin/sqlite3 "$DEV_DB" "SELECT value FROM app_config WHERE key='jwt_secret';")
   DEV_USER_ID=$(/usr/bin/sqlite3 "$DEV_DB" "SELECT id FROM users WHERE is_active=1 ORDER BY id LIMIT 1;")
   DEV_USERNAME=$(/usr/bin/sqlite3 "$DEV_DB" "SELECT username FROM users WHERE id=$DEV_USER_ID;")

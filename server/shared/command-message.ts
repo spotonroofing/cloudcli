@@ -1,5 +1,5 @@
 /**
- * The tagged wrapper CloudCLI (and Claude Code itself) uses to serialize a
+ * The tagged wrapper Command Center (and Claude Code itself) uses to serialize a
  * slash command into a plain-text user message:
  *
  *   <command-message>{one-line description}</command-message>

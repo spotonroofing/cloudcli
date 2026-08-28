@@ -890,7 +890,7 @@ router.get(
   }),
 );
 
-// Edit-and-resend response versions (ui9 B3): CloudCLI-side bookkeeping over
+// Edit-and-resend response versions (ui9 B3): Command Center-side bookkeeping over
 // an untouched Claude transcript. Flat rows; the client groups and resolves.
 router.get(
   '/sessions/:sessionId/message-versions',

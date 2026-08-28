@@ -1,16 +1,20 @@
 #!/bin/zsh
-# Nightly backup of the mini's session history and CloudCLI state (spec A9).
-# Tarballs ~/.claude (transcripts, config) and ~/.cloudcli (DB, assets, push
-# subscriptions) into ~/backups/cloudcli-nightly/, rotates to the last 7, then
+# Nightly backup of the mini's session history and Command Center state (spec A9).
+# Tarballs ~/.claude (transcripts, config) and the centralized runtime data
+# directory (DB, assets, push subscriptions), rotates to the last 7, then
 # delivers the newest archive off-mini via Taildrop to the first reachable
 # fleet target. The local archive is kept either way, so a night with the whole
 # fleet offline still produces a restorable backup; delivery is retried the
 # next night by design.
 set -u
 
+SCRIPT_DIR="${0:A:h}"
+NODE=$(command -v node || echo /usr/local/bin/node)
+eval "$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --shell)"
+
 STAMP=$(date +%Y%m%d-%H%M%S)
-DEST_DIR="$HOME/backups/cloudcli-nightly"
-LOG="$HOME/forge-logs/cloudcli-backup/backup.log"
+DEST_DIR="$HOME/backups/$COMMAND_CENTER_RUNTIME_NIGHTLY_BACKUP_DIR_NAME"
+LOG="$HOME/forge-logs/$COMMAND_CENTER_RUNTIME_BACKUP_LOG_DIR_NAME/backup.log"
 FLEET_TARGETS=(silo desktop-2vr4mlt-1)
 TAILSCALE="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 [[ -x "$TAILSCALE" ]] || TAILSCALE=$(command -v tailscale)
@@ -23,7 +27,7 @@ ARCHIVE="$DEST_DIR/mini-backup-$STAMP.tar.gz"
 tar -czf "$ARCHIVE" \
     --exclude '.claude/ccsync/node_modules' \
     --exclude '.claude/shell-snapshots' \
-    -C "$HOME" .claude .cloudcli 2>> "$LOG"
+    -C "$HOME" .claude "${COMMAND_CENTER_RUNTIME_DATA_DIR:t}" 2>> "$LOG"
 RC=$?
 if [[ $RC -ne 0 && ! -s "$ARCHIVE" ]]; then
     log "tarball FAILED rc=$RC"

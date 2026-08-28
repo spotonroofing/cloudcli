@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.spoton.cloudcli-live</string>
+    <string>__LAUNCHD_PREFIX__-live</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -22,9 +22,9 @@
     <integer>10</integer>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/forge-logs/cloudcli-service/live.out.log</string>
+    <string>__HOME__/forge-logs/__SERVICE_LOG_DIR__/live.out.log</string>
     <key>StandardErrorPath</key>
-    <string>__HOME__/forge-logs/cloudcli-service/live.err.log</string>
+    <string>__HOME__/forge-logs/__SERVICE_LOG_DIR__/live.err.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -32,7 +32,7 @@
         <string>0.0.0.0</string>
         <key>SERVER_PORT</key>
         <string>4747</string>
-        <key>CLOUDCLI_INSTANCE</key>
+        <key>COMMAND_CENTER_INSTANCE</key>
         <string>live</string>
         <key>PATH</key>
         <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:__HOME__/.local/bin:__HOME__/.npm-global/bin:__HOME__/Library/pnpm</string>

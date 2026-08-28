@@ -72,7 +72,7 @@ const behaviors: Array<{
   { key: 'recoveryNotices', label: 'Recovery notices', description: 'Posts notifications and system rows for limit recovery, switches, and parking.', section: 'Dispatch' },
   { key: 'resourceAlerts', label: 'Resource alerts', description: 'Checks disk and memory pressure and reports threshold crossings.', section: 'Machine' },
   { key: 'weeklySelfTest', label: 'Weekly push self-test', description: 'Sends the Monday notification delivery self-test.', section: 'Machine' },
-  { key: 'weeklyMaintenance', label: 'Weekly maintenance run', description: 'Spawns the Monday CloudCLI maintenance session.', section: 'Machine' },
+  { key: 'weeklyMaintenance', label: 'Weekly maintenance run', description: 'Spawns the Monday Command Center maintenance session.', section: 'Machine' },
 ];
 
 const usageThresholdRows: Array<{ key: UsageThresholdKey; label: string; description: string }> = [

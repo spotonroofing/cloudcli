@@ -16,13 +16,13 @@
         - generic [ref=f1e143]:
           - generic [ref=f1e144]: "1"
           - button "New chat" [ref=f1e145] [cursor=pointer]
-      - 'link "Claude [Pasted text #1 +6 lines] cloudcli · <1m" [ref=f1e148] [cursor=pointer]':
+      - 'link "Claude [Pasted text #1 +6 lines] command-center · <1m" [ref=f1e148] [cursor=pointer]':
         - /url: /session/9be1e9de-9fd2-4354-89ad-966ddcbd44ce
         - img "Claude" [ref=f1e150]
         - generic [ref=f1e153]:
           - generic [ref=f1e154]: "[Pasted text #1 +6 lines]"
           - generic [ref=f1e155]:
-            - generic [ref=f1e156]: cloudcli
+            - generic [ref=f1e156]: command-center
             - generic [ref=f1e157]: ·
             - time [ref=f1e158]: <1m
     - button "Settings" [ref=f1e164] [cursor=pointer]

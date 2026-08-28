@@ -83,7 +83,7 @@ function showStatus(dependencies: CliServiceDependencies): void {
   const claudeProjectsPath = path.join(dependencies.homeDirectory, '.claude', 'projects');
   const environmentFilePath = path.join(dependencies.applicationRoot, '.env');
 
-  output.log(`\n${terminalTextStyles.bright('CloudCLI UI - Status')}\n`);
+  output.log(`\n${terminalTextStyles.bright('Command Center - Status')}\n`);
   output.log(terminalTextStyles.dim('═'.repeat(60)));
   output.log(`\n${terminalTextStyles.info('[INFO]')} Version: ${terminalTextStyles.bright(dependencies.packageMetadata.version)}`);
   output.log(`\n${terminalTextStyles.info('[INFO]')} Installation Directory:`);
@@ -117,24 +117,24 @@ function showStatus(dependencies: CliServiceDependencies): void {
     : terminalTextStyles.warn('[WARN] Not found (using defaults)')}`);
   output.log(`\n${terminalTextStyles.dim('═'.repeat(60))}`);
   output.log(`\n${terminalTextStyles.tip('[TIP]')} Hints:`);
-  output.log(`      ${terminalTextStyles.dim('>')} Use ${terminalTextStyles.bright('cloudcli --port 8080')} to run on a custom port`);
-  output.log(`      ${terminalTextStyles.dim('>')} Use ${terminalTextStyles.bright('cloudcli --database-path /path/to/db')} for custom database`);
-  output.log(`      ${terminalTextStyles.dim('>')} Run ${terminalTextStyles.bright('cloudcli help')} for all options`);
+  output.log(`      ${terminalTextStyles.dim('>')} Use ${terminalTextStyles.bright('command-center --port 8080')} to run on a custom port`);
+  output.log(`      ${terminalTextStyles.dim('>')} Use ${terminalTextStyles.bright('command-center --database-path /path/to/db')} for custom database`);
+  output.log(`      ${terminalTextStyles.dim('>')} Run ${terminalTextStyles.bright('command-center help')} for all options`);
   output.log(`      ${terminalTextStyles.dim('>')} Access the UI at http://localhost:${environment.SERVER_PORT || environment.PORT || '3001'}\n`);
 }
 
 function showHelp(dependencies: CliServiceDependencies): void {
   dependencies.output.log(`
 ╔═══════════════════════════════════════════════════════════════╗
-║              CloudCLI - Command Line Tool               ║
+║              Command Center - Command Line Tool               ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 Usage:
   claude-code-ui [command] [options]
-  cloudcli [command] [options]
+  command-center [command] [options]
 
 Commands:
-  start            Start the CloudCLI server (default)
+  start            Start the Command Center server (default)
   sandbox          Manage Docker sandbox environments
   status           Show configuration and data locations
   update           Update to the latest version
@@ -148,16 +148,16 @@ Options:
   -v, --version               Show version information
 
 Examples:
-  $ cloudcli                        # Start with defaults
-  $ cloudcli --port 8080            # Start on port 8080
-  $ cloudcli sandbox ~/my-project   # Run in a Docker sandbox
-  $ cloudcli status                 # Show configuration
+  $ command-center                        # Start with defaults
+  $ command-center --port 8080            # Start on port 8080
+  $ command-center sandbox ~/my-project   # Run in a Docker sandbox
+  $ command-center status                 # Show configuration
 
 Environment Variables:
   SERVER_PORT         Set server port (default: 3001)
   PORT                Set server port (default: 3001) (LEGACY)
   DATABASE_PATH       Set custom database location
-  CLAUDE_CLI_PATH     Set custom Claude CLI path
+  CLAUDE_CLI_PATH     Set custom Claude Code CLI path
   CONTEXT_WINDOW      Context window for models outside the per-model catalog (default: 160000)
 
 Documentation:
@@ -180,7 +180,7 @@ export function createCliService(dependencies: CliServiceDependencies): CliAppli
       const currentVersion = dependencies.packageMetadata.version;
       if (isNewerVersion(latestVersion, currentVersion)) {
         dependencies.output.log(`\n${terminalTextStyles.warn('[UPDATE]')} New version available: ${terminalTextStyles.bright(latestVersion)} (current: ${currentVersion})`);
-        dependencies.output.log(`         Run ${terminalTextStyles.bright('cloudcli update')} to update\n`);
+        dependencies.output.log(`         Run ${terminalTextStyles.bright('command-center update')} to update\n`);
         return true;
       }
       if (!silent) {
@@ -206,11 +206,11 @@ export function createCliService(dependencies: CliServiceDependencies): CliAppli
     try {
       dependencies.output.log(`${terminalTextStyles.info('[INFO]')} Updating ${dependencies.packageMetadata.version}...`);
       dependencies.updateGlobalPackage();
-      dependencies.output.log(`${terminalTextStyles.ok('[OK]')} Update complete! Restart cloudcli to use the new version.`);
+      dependencies.output.log(`${terminalTextStyles.ok('[OK]')} Update complete! Restart command-center to use the new version.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       dependencies.output.error(`${terminalTextStyles.error('[ERROR]')} Update failed: ${message}`);
-      dependencies.output.log(`${terminalTextStyles.tip('[TIP]')} Try running manually: npm update -g @cloudcli-ai/cloudcli`);
+      dependencies.output.log(`${terminalTextStyles.tip('[TIP]')} Try running manually: npm update -g @command-center-ai/command-center`);
     }
   };
 
@@ -248,7 +248,7 @@ export function createCliService(dependencies: CliServiceDependencies): CliAppli
           return 0;
         default:
           dependencies.output.error(`\n❌ Unknown command: ${parsedArguments.command}`);
-          dependencies.output.log('   Run "cloudcli help" for usage information.\n');
+          dependencies.output.log('   Run "command-center help" for usage information.\n');
           return 1;
       }
     },

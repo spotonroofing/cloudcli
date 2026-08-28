@@ -110,7 +110,7 @@ const MUST_PASS = [
   'echo hi >> server/index.ts',
   'echo hi > /tmp/out.txt',
   `echo hi >> ${HOME}/forge-logs/codexint/JOURNAL.md`,
-  `cat x > ${HOME}/Projects/spoton-worker/planner/cloudcli/lessons/a.md`,
+  `cat x > ${HOME}/Projects/spoton-worker/planner/command-center/lessons/a.md`,
   'ls > /dev/null 2>&1',
   'npm run build 2>&1 | tail -5',
   'mv src/a.ts src/b.ts',

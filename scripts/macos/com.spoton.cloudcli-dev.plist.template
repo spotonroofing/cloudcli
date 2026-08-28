@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.spoton.cloudcli-dev</string>
+    <string>__LAUNCHD_PREFIX__-dev</string>
 
     <key>ProgramArguments</key>
     <array>
         <string>/bin/zsh</string>
-        <string>__REPO__/scripts/macos/cloudcli-dev-start.sh</string>
+        <string>__REPO__/scripts/macos/__LEGACY_STEM__-dev-start.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
@@ -21,9 +21,9 @@
     <false/>
 
     <key>StandardOutPath</key>
-    <string>__HOME__/forge-logs/cloudcli-service/dev.out.log</string>
+    <string>__HOME__/forge-logs/__SERVICE_LOG_DIR__/dev.out.log</string>
     <key>StandardErrorPath</key>
-    <string>__HOME__/forge-logs/cloudcli-service/dev.err.log</string>
+    <string>__HOME__/forge-logs/__SERVICE_LOG_DIR__/dev.err.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -31,13 +31,13 @@
         <string>127.0.0.1</string>
         <key>SERVER_PORT</key>
         <string>4748</string>
-        <key>CLOUDCLI_INSTANCE</key>
+        <key>COMMAND_CENTER_INSTANCE</key>
         <string>dev</string>
         <key>DATABASE_PATH</key>
-        <string>__HOME__/.cloudcli-dev/auth.db</string>
+        <string>__DEV_DATA_DIR__/auth.db</string>
         <key>CLAUDE_CONFIG_DIR</key>
         <string>__HOME__/.claude-dev</string>
-        <key>CLOUDCLI_REPO</key>
+        <key>COMMAND_CENTER_REPO</key>
         <string>__REPO__</string>
         <key>PATH</key>
         <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:__HOME__/.local/bin:__HOME__/.npm-global/bin:__HOME__/Library/pnpm</string>

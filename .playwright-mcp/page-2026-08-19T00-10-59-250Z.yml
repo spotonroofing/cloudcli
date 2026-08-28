@@ -15,7 +15,7 @@
             - img "Claude" [ref=f1e72]
             - generic [ref=f1e75]:
               - generic [ref=f1e76]: Claude Code
-              - generic "Claude CLI is not authenticated. Run claude /login or configure ANTHROPIC_API_KEY." [ref=f1e77]
+              - generic "Claude Code CLI is not authenticated. Run claude /login or configure ANTHROPIC_API_KEY." [ref=f1e77]
           - button "Login" [ref=f1e78] [cursor=pointer]
         - generic [ref=f1e80]:
           - generic [ref=f1e81]:

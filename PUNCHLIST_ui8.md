@@ -1,4 +1,4 @@
-# PUNCHLIST_ui8 — CloudCLI feedback round 2: session hygiene, sidebar redo, themes, workspace refinement, account switcher
+# PUNCHLIST_ui8 — Command Center feedback round 2: session hygiene, sidebar redo, themes, workspace refinement, account switcher
 
 ## Goal
 
@@ -6,7 +6,7 @@ Willem's second feedback round, on the promoted ui7 build (live = 4d37a12; itera
 
 ## Stack and decisions already made
 
-- Self-surgery, dev-first: build and verify on dev (4748) only; do not touch live (4747) and do not run promote. Dev restart cycle: `npm run build`, then `launchctl kickstart -k gui/$(id -u)/com.spoton.cloudcli-dev`, then `curl http://127.0.0.1:4748/health`.
+- Self-surgery, dev-first: build and verify on dev (4748) only; do not touch live (4747) and do not run promote. Dev restart cycle: `npm run build`, then `launchctl kickstart -k gui/$(id -u)/com.spoton.command-center-dev`, then `curl http://127.0.0.1:4748/health`.
 - Session visibility rule (Willem's): project chat lists and the Chats feed show only his chats (origin null or planner). Dispatch, direct, and external sessions live only in the worker pane run switcher. Every dispatched phase is its own session added to the switcher; only Willem manually chatting in the worker pane continues a session.
 - Root cause already established: out-of-process dispatch phase sessions are discovered with no origin (10 such rows exist, titled with the `<!-- browser -->` phase prompts), so the app treats them as Willem's chats. The dispatch-chain-runner and/or synchronizer must stamp origin=dispatch plus the chain slug; the existing setSessionOrigin path and the 2026-08-22 retag script are precedent.
 - cswap is the account engine: `/Users/spoton-worker/.local/bin/cswap` v0.24+, `--json` on list/status/switch; disable/enable, swap/move for reorder, add-token for adding. The UI shells out to it server-side; never store or print tokens.
@@ -92,7 +92,7 @@ Done check: on dev, drag the divider (geometry asserts), reload shows 50/50 defa
 
 ## Phase 6 — Account switcher (cswap)
 
-Goal: switch and monitor Claude accounts from inside CloudCLI. Files: a new server module shelling to cswap, a switcher UI + panel. Dependencies: phase 4 (themed). Parallelism: server module and panel UI in parallel, wire last.
+Goal: switch and monitor Claude accounts from inside Command Center. Files: a new server module shelling to cswap, a switcher UI + panel. Dependencies: phase 4 (themed). Parallelism: server module and panel UI in parallel, wire last.
 
 - [x] Server module wraps cswap with `--json` (list, status, switch <target>, disable/enable <target>, swap <a> <b>) and exposes guarded endpoints; add-account uses the add-token flow with the token accepted through a masked input and passed via stdin — no token in argv, logs, DB, or client state after submit. (server/modules/accounts behind authenticateToken; invocations serialized, targets rejected if flag-shaped, cswap runs with CLAUDE_CONFIG_DIR stripped so every instance manages the one machine-global account; add-token writes the token to cswap stdin only — a dummy-token add round-trip left zero hits for the token in logs/DB, and the account was removed after.)
 - [x] Switcher trigger placed sensibly (sidebar footer by Settings is the default call); shows the active account; opens the accounts panel. (Footer row above Settings, AtSign icon + active email from /api/accounts/status, both form factors — mobile via the drawer footer.)

@@ -19,3 +19,13 @@ test('machine message parsing survives the whitespace-flattened CLI shape', () =
     content: 'Check chain state. Do not act blind.',
   });
 });
+
+test('machine message parsing accepts the legacy envelope for one release', () => {
+  const legacyStem = ['cloud', 'cli'].join('');
+  const wrapped = `<${legacyStem}-message-origin>watchdog</${legacyStem}-message-origin>\n`
+    + `<${legacyStem}-machine-message>Keep compatibility.</${legacyStem}-machine-message>`;
+  assert.deepEqual(parseMachineMessage(wrapped), {
+    origin: 'watchdog',
+    content: 'Keep compatibility.',
+  });
+});

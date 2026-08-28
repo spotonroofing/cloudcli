@@ -16,7 +16,7 @@ import { AppError } from '@/shared/utils.js';
  * and Keychain truth between accounts. An instance that runs with its own
  * CLAUDE_CONFIG_DIR (dev on 4748) instead gets the freshly switched credential
  * mirrored into its config-dir-scoped Keychain service after a switch — the
- * same mirror scripts/macos/cloudcli-dev-start.sh performs at boot.
+ * same mirror the macOS dev launcher performs at boot.
  */
 
 const CSWAP_BIN = process.env.CSWAP_PATH || path.join(os.homedir(), '.local', 'bin', 'cswap');
@@ -25,7 +25,7 @@ const parkDirectory = (): string => (
   process.env.CSWAP_PARK_DIR || path.join(os.homedir(), 'forge-logs', 'cswap-parked')
 );
 
-/** Default Keychain item cswap and the claude CLI share for the active login. */
+/** Default Keychain item cswap and the Claude Code CLI share for the active login. */
 const DEFAULT_KEYCHAIN_SERVICE = 'Claude Code-credentials';
 
 const cswapEnv = (): NodeJS.ProcessEnv => {
@@ -235,7 +235,7 @@ const mirrorCredentialsToInstance = async (): Promise<boolean> => {
     if (!creds) {
       return false;
     }
-    // The claude CLI scopes its Keychain service by the sha256 of the raw,
+    // The Claude Code CLI scopes its Keychain service by the sha256 of the raw,
     // NFC-normalized CLAUDE_CONFIG_DIR value (first 8 hex chars).
     const digest = crypto
       .createHash('sha256')

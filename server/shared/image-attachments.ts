@@ -1,11 +1,12 @@
 import { promises as fs, realpathSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+
+import { getLegacyDataDirectory } from '../../shared/runtime-anchors.js';
 
 /**
  * Shared chat-attachment plumbing for every provider runtime.
  *
- * Uploaded chat files are persisted once in the global `~/.cloudcli/assets`
+ * Uploaded chat files are persisted once in the global runtime assets
  * folder and referenced by absolute path everywhere else:
  * - Claude: paths are read back into base64 `image` content blocks.
  * - Codex: paths become `local_image` input items.
@@ -19,7 +20,7 @@ import path from 'node:path';
 
 /** Global storage folder for uploaded chat image attachments. */
 export function getGlobalImageAssetsDir(): string {
-  return path.join(os.homedir(), '.cloudcli', 'assets');
+  return path.join(getLegacyDataDirectory(), 'assets');
 }
 
 export type ImageAttachmentDescriptor = {
