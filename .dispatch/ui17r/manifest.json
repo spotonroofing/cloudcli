@@ -1,0 +1,95 @@
+[
+ {
+  "name": "Heap under budget",
+  "tasks": [
+   "Remaining holder found and cut",
+   "Memory budget passes twice"
+  ]
+ },
+ {
+  "name": "Fast mode per chain",
+  "tasks": [
+   "Chain flag, route and dispatch fast",
+   "Runner reads it per build unit",
+   "Bolt toggle in the chain header",
+   "Verify never fast, tested"
+  ]
+ },
+ {
+  "name": "Verify never stops a chain",
+  "tasks": [
+   "Runner records the fail and continues",
+   "Notification per failure, wake lists them",
+   "Red mark while running, tested"
+  ]
+ },
+ {
+  "name": "Durations inline",
+  "tasks": [
+   "Duration right after the label, all rows",
+   "Thinking group compact",
+   "Tool rows: label, time, preview",
+   "Family test and design note"
+  ]
+ },
+ {
+  "name": "Drop highlight holds",
+  "tasks": [
+   "Cause found, no flicker over children",
+   "Ramped, tested"
+  ]
+ },
+ {
+  "name": "Ring breathing, no blur",
+  "tasks": [
+   "Opacity-only breathing",
+   "Geometry and marks untouched"
+  ]
+ },
+ {
+  "name": "Mobile taskbar",
+  "tasks": [
+   "Bottom taskbar, equal segments",
+   "Hides on composer focus",
+   "Worker header and full-screen jobs",
+   "Bottom row fits at 390px",
+   "Mobile design notes"
+  ]
+ },
+ {
+  "name": "Clear takes two taps",
+  "tasks": [
+   "Armed state, second tap clears",
+   "Undo kept, both panes"
+  ]
+ },
+ {
+  "name": "Download in the top bar",
+  "tasks": [
+   "Floating button removed",
+   "Bare icon in both top bars"
+  ]
+ },
+ {
+  "name": "Uniform job rows",
+  "tasks": [
+   "One row style for every unit",
+   "Append defaults to phase"
+  ]
+ },
+ {
+  "name": "Fast mode bolt",
+  "tasks": [
+   "Bolt icon replaces the fast tag",
+   "Menu row unchanged"
+  ]
+ },
+ {
+  "name": "Account switcher look",
+  "tasks": [
+   "Original Claude mark, no background",
+   "Add account removed",
+   "One row anatomy for both providers"
+  ]
+ }
+]

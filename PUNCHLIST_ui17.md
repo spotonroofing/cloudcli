@@ -51,6 +51,8 @@ Goal: Willem's laptop sits at 64 percent memory idle with a quarter of it in the
 - [x] Fix the top holders in order of measured size with a before-and-after number each: evict transcripts of sessions not in view beyond a small recent set (a bounded cache, re-fetch on return), keep only the paged window of a transcript mounted, dispose listeners, intervals and observers on unmount, hold images as URLs not blobs, and let the jobs history render its long tail cheaply. Budgets: heap after the whole scenario within 25 percent of the heap at load; DOM nodes bounded by the visible page of each list; zero detached nodes growing over the scenario; zero intervals left from unmounted components.
 - [x] Add the memory scenario to the committed measurement script under `scripts/perf/` from Job 0 so both budgets run together, and record the numbers and rules in the performance section of `design/motion.md`.
 
+- [ ] (ui17 verify finding, 2026-08-28) The full memory scenario still grows the heap 25.5 percent against the 25 percent budget after 1824317; find the remaining retained holder from the stage-by-stage numbers the script already records (the streaming stage was the suspect) and cut it, so the committed script's memory scenario passes with margin (target under 20 percent). Done check for this item: the script prints the memory budget as a pass twice in a row.
+
 Done check: the committed script runs the memory scenario against dev and prints each budget with a pass; the summary carries baseline and after numbers side by side; regression tests for the eviction and disposal changes. Commit.
 
 ## Job 3 — Sidebar footer: planner and worker activity as small monochrome icons (2026-08-28, Willem). Verify: no
@@ -166,3 +168,14 @@ Goal: Willem wants to run chain jobs in Codex fast mode when he chooses. A chain
 - [ ] `design/worker-pane-and-jobs.md` documents the toggle and the rule (next job, never the running one, never verify).
 
 Done check: on dev with a stub chain: flipping the toggle stores the flag and the next stub unit's launch carries the fast tier while the running unit does not, the verify launch does not, the journal line says fast, the row shows the bolt; `dispatch fast` flips it from the shell; regression tests on the runner's launch arguments and the route. Commit.
+
+## Job 14 — A failed verify never stops the chain (2026-08-28, Willem: make it never happen again). Verify: yes
+
+Goal: three chains today died because one unit's verify came back FAIL (ui17 on a 25.5 versus 25 percent budget), killing every queued unit and parking the next job's work. The verify verdict stays valuable, but it must not be a kill switch. Files: `scripts/macos/dispatch-chain-runner` (verify handling, rewind, park), the watchdog chain routes and records (`server/modules/watchdog/`), the jobs column failure rendering, `design/worker-pane-and-jobs.md`, the planner's dispatch reference is updated by the planner (say so in the summary).
+
+- [ ] On VERIFY: FAIL the runner records the verdict on that unit (status verify-failed, the reason line), leaves its commit on main, does not kill the unit already building, does not rewind, does not park, and continues the chain; the chain ends `completed with N verify failures` and the terminal wake lists them with their reasons and resume points so the planner appends fix units.
+- [ ] A decision-needed notification fires at the moment of each verify failure (not a wake), naming the unit and reason, so Willem sees it in the moment.
+- [ ] The jobs column marks the unit with the red ring and X (Job 1's mark) while the chain keeps running; the chain header shows the failure count.
+- [ ] The only things that still stop a chain: a build unit that lands no commit (the commit gate), a usage limit the runner cannot recover from, and an explicit pause; regression tests cover verify-fail-continues, the notification, and the terminal wake payload.
+
+Done check: on dev with a stub chain whose second unit's verify answers FAIL, the third unit still runs and the chain completes with one recorded verify failure, the notification fired, the wake payload lists the failure, the row shows the red mark; tests pass. Commit.
