@@ -20,6 +20,8 @@ import { isNotificationSoundEnabled } from '../../utils/notificationSound';
 
 import WorkspaceView from './workspace/WorkspaceView';
 import { useWorkspace } from './workspace/useWorkspace';
+import SeasonalTouch from './seasonal/SeasonalTouch';
+import './seasonal/SeasonalTouch.css';
 
 type RunningSessionApiItem = {
   sessionId?: unknown;
@@ -461,6 +463,7 @@ function AppContentInner() {
         // Desktop is chat-only (phase 2 chrome strip): no tab navigation from the palette.
         onShowTab={isMobile ? setActiveTab : undefined}
       />
+      <SeasonalTouch />
       {usageAlertToasts.length > 0 && (
         <div
           className="pointer-events-none fixed bottom-4 right-4 z-[9999] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2"

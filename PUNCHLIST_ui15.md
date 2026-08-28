@@ -139,7 +139,7 @@ Done check: on dev: a message with three local images and one remote URL renders
 
 Goal: subtle, date-gated delight on a few dates that matter to Willem: Halloween, the Christmas season, September 5, and April 1. The specifics are deliberately unspecified: design them yourself, tasteful and quiet, nothing intrusive, nothing that interferes with work, reduced-motion respected, and keep the details out of this file, the summary, and the commit message (use "feat(ui): seasonal touches"). They must survive future frontend iteration (small, self-contained, date-gated at one integration point).
 
-- [ ] Ship the surprises as described above; verify each renders only within its date window (mocked clock) and that normal days show nothing; summary says only "seasonal touches shipped and date-verified".
+- [x] Ship the surprises as described above; verify each renders only within its date window (mocked clock) and that normal days show nothing; summary says only "seasonal touches shipped and date-verified".
 
 Done check: mocked-date renders for each window plus a normal-day nothing-check; no spoilers anywhere. Commit.
 
