@@ -93,6 +93,7 @@ function ChatInterface({
   const {
     provider,
     currentProviderEffort,
+    currentProviderFastMode,
     currentProviderEffortOptions,
     currentProviderModel,
     permissionMode,
@@ -104,6 +105,7 @@ function ChatInterface({
     providerModelActions,
     selectProviderModel,
     selectProviderEffort,
+    selectCodexFastMode,
     resolvePermissionModeForProvider,
   } = useChatProviderState({
     selectedSession,
@@ -288,6 +290,7 @@ function ChatInterface({
     cyclePermissionMode,
     currentProviderModel,
     currentProviderEffort,
+    currentProviderFastMode,
     isLoading: isProcessing,
     holdQueuedFlush,
     processingSessions,
@@ -528,6 +531,14 @@ function ChatInterface({
     }
   }, [currentSessionId, provider, selectProviderEffort, selectedSession?.id]);
 
+  const handleSelectComposerFastMode = useCallback(async (enabled: boolean) => {
+    try {
+      await selectCodexFastMode(enabled, currentSessionId || selectedSession?.id || null);
+    } catch (error) {
+      console.error('Error changing fast mode for the active Codex session:', error);
+    }
+  }, [currentSessionId, selectCodexFastMode, selectedSession?.id]);
+
   // The inline thinking indicator hides while a permission request is pending
   // (the permission banner is the active status surface then).
   const paneActivity = pendingPermissionRequests.length === 0 ? sessionActivity : null;
@@ -689,8 +700,10 @@ function ChatInterface({
           isBootLocked={viewingBootSession}
           onAbortSession={handleAbortSession}
           effort={currentProviderEffort}
+          fastMode={currentProviderFastMode}
           availableEffortOptions={currentProviderEffortOptions}
           onSelectEffort={handleSelectComposerEffort}
+          onSelectFastMode={handleSelectComposerFastMode}
           model={currentProviderModel}
           provider={provider}
           modelGroups={composerModelGroups}

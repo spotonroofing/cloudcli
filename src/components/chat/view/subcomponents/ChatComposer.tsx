@@ -106,8 +106,10 @@ interface ChatComposerProps {
   isBootLocked?: boolean;
   onAbortSession: () => void;
   effort: string;
+  fastMode: boolean;
   availableEffortOptions: NonNullable<ProviderModelOption['effort']>['values'];
   onSelectEffort: (effort: string) => void;
+  onSelectFastMode: (enabled: boolean) => void;
   model: string;
   provider: LLMProvider;
   /** The Claude and OpenAI catalogs the switcher lists, each under its provider mark. */
@@ -176,8 +178,10 @@ export default function ChatComposer({
   isBootLocked = false,
   onAbortSession,
   effort,
+  fastMode,
   availableEffortOptions,
   onSelectEffort,
+  onSelectFastMode,
   model,
   provider,
   modelGroups,
@@ -541,8 +545,10 @@ export default function ChatComposer({
 
               <ComposerModelMenu
                 effort={effort}
+                fastMode={fastMode}
                 effortOptions={availableEffortOptions}
                 onSelectEffort={onSelectEffort}
+                onSelectFastMode={onSelectFastMode}
                 model={model}
                 provider={provider}
                 modelGroups={modelGroups}

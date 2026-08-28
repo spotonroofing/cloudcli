@@ -64,6 +64,7 @@ interface UseChatComposerStateArgs {
    */
   currentProviderModel: string;
   currentProviderEffort: string;
+  currentProviderFastMode: boolean;
   isLoading: boolean;
   /** Holds the queued-draft idle flush while the pane's shell view owns the session (ui14 job 11). */
   holdQueuedFlush?: boolean;
@@ -315,6 +316,7 @@ export function useChatComposerState({
   resolvePermissionModeForProvider,
   currentProviderModel,
   currentProviderEffort,
+  currentProviderFastMode,
   isLoading,
   holdQueuedFlush = false,
   processingSessions,
@@ -1004,6 +1006,7 @@ export function useChatComposerState({
     return {
       model: currentProviderModel,
       effort: currentProviderEffort,
+      fastMode: currentProviderFastMode,
       permissionMode: resolvePermissionModeForProvider(provider, permissionMode),
       toolsSettings,
       skipPermissions: toolsSettings?.skipPermissions || false,
@@ -1011,6 +1014,7 @@ export function useChatComposerState({
     };
   }, [
     currentProviderEffort,
+    currentProviderFastMode,
     currentProviderModel,
     permissionMode,
     provider,

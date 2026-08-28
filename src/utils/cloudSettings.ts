@@ -38,6 +38,7 @@ export const SYNCED_SETTING_KEYS = [
   'claude-effort',
   'cursor-effort',
   'codex-effort',
+  'codex-fast-mode',
   'opencode-effort',
   'workspace-layout-v1',
   'project-windows-v1',

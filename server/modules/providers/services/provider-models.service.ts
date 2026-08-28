@@ -14,9 +14,14 @@ import { AppError } from '@/shared/utils.js';
 
 /** Session-row access the service needs, narrowed so tests can stub it. */
 type ProviderModelsSessionStore = {
-  getSessionById(sessionId: string): { model: string | null; effort: string | null } | null;
+  getSessionById(sessionId: string): {
+    model: string | null;
+    effort: string | null;
+    fast_mode: number | null;
+  } | null;
   setSessionModel(sessionId: string, model: string): void;
   setSessionEffort(sessionId: string, effort: string): void;
+  setSessionFastMode(sessionId: string, enabled: boolean): void;
 };
 
 /** SQLite catalog operations used by the Providers service and its unit fakes. */
@@ -213,7 +218,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
 
   const readRecordedSessionSelection = (
     sessionId: string,
-  ): { model: string | null; effort: string | null } | null => {
+  ): { model: string | null; effort: string | null; fastMode: boolean | null } | null => {
     const session = sessions.getSessionById(sessionId);
     if (!session) {
       return null;
@@ -222,6 +227,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
     return {
       model: session.model?.trim() || null,
       effort: session.effort?.trim() || null,
+      fastMode: session.fast_mode === null ? null : session.fast_mode === 1,
     };
   };
 
@@ -256,6 +262,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
       sessionId: normalizedSessionId,
       model: normalizedModel,
       effort: recordedSelection.effort,
+      fastMode: recordedSelection.fastMode,
       source: 'session',
     };
   };
@@ -291,6 +298,33 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
     };
   };
 
+  /** Records an explicit fast-tier choice for one Codex session. */
+  const setSessionFastMode = (
+    provider: LLMProvider,
+    sessionId: string,
+    enabled: boolean,
+  ): { provider: LLMProvider; sessionId: string; fastMode: boolean; source: 'session' } | null => {
+    if (provider !== 'codex') {
+      throw new AppError('Fast mode is available only for Codex sessions.', {
+        code: 'FAST_MODE_UNSUPPORTED_PROVIDER',
+        statusCode: 400,
+      });
+    }
+
+    const normalizedSessionId = sessionId.trim();
+    if (!normalizedSessionId || !readRecordedSessionSelection(normalizedSessionId)) {
+      return null;
+    }
+
+    sessions.setSessionFastMode(normalizedSessionId, enabled);
+    return {
+      provider,
+      sessionId: normalizedSessionId,
+      fastMode: enabled,
+      source: 'session',
+    };
+  };
+
   /**
    * Answers "which model is this session using?" for every display surface.
    *
@@ -317,6 +351,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
           sessionId: normalizedSessionId,
           model: recordedSelection.model,
           effort: recordedSelection.effort,
+          fastMode: recordedSelection.fastMode,
           source: 'session',
         };
       }
@@ -333,6 +368,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
           sessionId: normalizedSessionId,
           model: resolvedProviderModel,
           effort: recordedSelection?.effort ?? null,
+          fastMode: recordedSelection?.fastMode ?? null,
           source: 'provider',
         };
       }
@@ -342,6 +378,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
         sessionId: normalizedSessionId,
         model: normalizedRequestedModel || providerCatalog.DEFAULT,
         effort: recordedSelection?.effort ?? null,
+        fastMode: recordedSelection?.fastMode ?? null,
         source: normalizedRequestedModel ? 'session' : 'default',
       };
     }
@@ -352,6 +389,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
         sessionId: null,
         model: normalizedRequestedModel,
         effort: null,
+        fastMode: null,
         source: 'session',
       };
     }
@@ -362,6 +400,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
       sessionId: null,
       model: providerCatalog.DEFAULT,
       effort: null,
+      fastMode: null,
       source: 'default',
     };
   };
@@ -395,6 +434,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
     deleteCustomModel,
     setSessionModel,
     setSessionEffort,
+    setSessionFastMode,
     resolveSessionModel,
     resolveResumeModel,
   };

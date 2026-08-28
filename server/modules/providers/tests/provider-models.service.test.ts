@@ -25,10 +25,15 @@ const createCurrentActiveModel = (
 const createSessionStore = (
   rows: Record<string, string | null> = {},
   efforts: Record<string, string | null> = {},
+  fastModes: Record<string, boolean | null> = {},
 ) => {
   const sessions = new Map(Object.entries(rows).map(([sessionId, model]) => [
     sessionId,
-    { model, effort: efforts[sessionId] ?? null },
+    {
+      model,
+      effort: efforts[sessionId] ?? null,
+      fast_mode: fastModes[sessionId] == null ? null : fastModes[sessionId] ? 1 : 0,
+    },
   ]));
   return {
     sessions,
@@ -44,6 +49,12 @@ const createSessionStore = (
       const session = sessions.get(sessionId);
       if (session) {
         session.effort = effort;
+      }
+    },
+    setSessionFastMode: (sessionId: string, enabled: boolean) => {
+      const session = sessions.get(sessionId);
+      if (session) {
+        session.fast_mode = enabled ? 1 : 0;
       }
     },
   };
@@ -233,6 +244,7 @@ test('setSessionModel records the model on the session row', () => {
     sessionId: 'session-1',
     model: 'opus',
     effort: null,
+    fastMode: null,
     source: 'session',
   });
   assert.equal(sessions.sessions.get('session-1')?.model, 'opus');
@@ -269,9 +281,29 @@ test('setSessionEffort ignores sessions that have no row yet', () => {
   assert.equal(sessions.sessions.size, 0);
 });
 
+test('setSessionFastMode records explicit on and off choices for Codex sessions', () => {
+  const sessions = createSessionStore({ 'session-1': 'gpt-5.6-sol' });
+  const { service } = createTestService({ sessions });
+
+  assert.deepEqual(service.setSessionFastMode('codex', 'session-1', true), {
+    provider: 'codex',
+    sessionId: 'session-1',
+    fastMode: true,
+    source: 'session',
+  });
+  assert.equal(sessions.sessions.get('session-1')?.fast_mode, 1);
+
+  service.setSessionFastMode('codex', 'session-1', false);
+  assert.equal(sessions.sessions.get('session-1')?.fast_mode, 0);
+});
+
 test('resolveSessionModel prefers the recorded session model', async () => {
   const { service } = createTestService({
-    sessions: createSessionStore({ 'session-1': 'haiku' }, { 'session-1': 'high' }),
+    sessions: createSessionStore(
+      { 'session-1': 'haiku' },
+      { 'session-1': 'high' },
+      { 'session-1': true },
+    ),
     activeModel: () => 'provider-reported',
   });
 
@@ -282,6 +314,7 @@ test('resolveSessionModel prefers the recorded session model', async () => {
 
   assert.equal(resolved.model, 'haiku');
   assert.equal(resolved.effort, 'high');
+  assert.equal(resolved.fastMode, true);
   assert.equal(resolved.source, 'session');
 });
 

@@ -13,7 +13,15 @@
  * - getActiveCodexSessions() - List all active sessions
  */
 
-import { Codex } from '@openai/codex-sdk';
+import {
+  Codex,
+  type ApprovalMode,
+  type CodexOptions,
+  type ModelReasoningEffort,
+  type SandboxMode,
+  type Thread,
+  type ThreadEvent,
+} from '@openai/codex-sdk';
 
 import {
   appendFilesInputTag,
@@ -23,15 +31,61 @@ import {
 import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index.js';
 import { parseCommandMessage } from '@/shared/command-message.js';
 import { createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
+import type { AnyRecord, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/types.js';
 
-const activeCodexSessions = new Map();
+type ActiveCodexSession = {
+  thread: Thread;
+  codex: Codex;
+  status: 'running' | 'aborted' | 'completed';
+  abortController: AbortController;
+  startedAt: string;
+};
 
-function readUsageNumber(value) {
+type CodexRunOptions = AnyRecord & {
+  sessionId?: string;
+  sessionSummary?: string;
+  cwd?: string;
+  projectPath?: string;
+  model?: string;
+  effort?: string;
+  images?: unknown;
+  files?: unknown;
+  permissionMode?: string;
+  fastMode?: boolean;
+  mcpPolicy?: string;
+};
+
+const activeCodexSessions = new Map<string, ActiveCodexSession>();
+
+const CODEX_REASONING_EFFORTS = new Set<ModelReasoningEffort>([
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+]);
+
+type RunNotification = {
+  userId: string | number | null;
+  provider: string;
+  sessionId: string | null;
+  sessionName?: string | null;
+  error?: unknown;
+  stopReason?: string;
+};
+
+// The notification orchestrator is still JavaScript, so TypeScript infers its
+// default-null destructuring too narrowly. These aliases describe the real
+// cross-module call contract used by every provider runtime.
+const reportRunFailed = notifyRunFailed as (input: RunNotification) => void;
+const reportRunStopped = notifyRunStopped as (input: RunNotification) => void;
+
+function readUsageNumber(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function extractCodexTokenBudget(event) {
+function extractCodexTokenBudget(event: AnyRecord) {
   const info = event?.info || event?.payload?.info || event?.usage?.info;
   const usage = info?.total_token_usage || event?.usage?.total_token_usage || event?.usage;
   if (!usage || typeof usage !== 'object') {
@@ -59,7 +113,7 @@ function extractCodexTokenBudget(event) {
  * @param {object} event - SDK event
  * @returns {object} - Transformed event for WebSocket
  */
-function transformCodexEvent(event) {
+function transformCodexEvent(event: AnyRecord): AnyRecord {
   // Map SDK event types to a consistent format
   switch (event.type) {
     case 'item.started':
@@ -197,7 +251,9 @@ function transformCodexEvent(event) {
  * @param {string} permissionMode - 'default', 'acceptEdits', or 'bypassPermissions'
  * @returns {object} - { sandboxMode, approvalPolicy }
  */
-function mapPermissionModeToCodexOptions(permissionMode) {
+function mapPermissionModeToCodexOptions(
+  permissionMode: string,
+): { sandboxMode: SandboxMode; approvalPolicy: ApprovalMode } {
   switch (permissionMode) {
     case 'acceptEdits':
       return {
@@ -219,12 +275,32 @@ function mapPermissionModeToCodexOptions(permissionMode) {
 }
 
 /**
- * Execute a Codex query with streaming
- * @param {string} command - The prompt to send
- * @param {object} options - Options including cwd, sessionId, model, permissionMode
- * @param {WebSocket|object} ws - WebSocket connection or response writer
+ * Builds the request-scoped CLI config used by the Codex SDK.
+ *
+ * The SDK has no service-tier thread option in 0.147, but its constructor
+ * forwards config values as `--config` overrides to that bundled CLI.
+ * Explicitly selecting `default` when fast mode is off prevents a host-level
+ * Codex config from leaking the fast tier into chains or ordinary sessions.
+ * Exported for provider runtime tests guarding this billing-sensitive boundary.
  */
-export async function queryCodex(command, options = {}, ws, context) {
+export function buildCodexRuntimeConfig(
+  fastMode: boolean,
+  mcpPolicy: unknown,
+): NonNullable<CodexOptions['config']> {
+  return {
+    ...(mcpPolicy === 'none' ? { mcp_servers: {} } : {}),
+    service_tier: fastMode ? 'fast' : 'default',
+    features: { fast_mode: true },
+  };
+}
+
+/** Executes one Codex SDK turn and streams normalized events to its writer. */
+export async function queryCodex(
+  command: string,
+  options: AnyRecord = {},
+  ws: ProviderRuntimeWriter,
+  context: ProviderRuntimeContext,
+): Promise<void> {
   const {
     sessionId,
     sessionSummary,
@@ -234,8 +310,9 @@ export async function queryCodex(command, options = {}, ws, context) {
     effort,
     images,
     files,
-    permissionMode = 'default'
-  } = options;
+    permissionMode = 'default',
+    fastMode = false,
+  } = options as CodexRunOptions;
 
   // Callers pass the stable app session id; the SDK resumes threads with the
   // provider-native id recorded on the session row.
@@ -248,26 +325,35 @@ export async function queryCodex(command, options = {}, ws, context) {
   const catalog = await context.getProviderModels();
   const selectedModel = catalog.OPTIONS.find((option) => option.value === resolvedModel) || null;
   const allowedEfforts = selectedModel?.effort?.values?.map((value) => value.value) || [];
-  const resolvedEffort = typeof effort === 'string' && effort !== 'default' && allowedEfforts.includes(effort)
-    ? effort
+  const resolvedEffort = typeof effort === 'string'
+    && effort !== 'default'
+    && allowedEfforts.includes(effort)
+    && CODEX_REASONING_EFFORTS.has(effort as ModelReasoningEffort)
+    ? effort as ModelReasoningEffort
     : undefined;
 
-  let codex;
-  let thread;
+  let codex: Codex;
+  let thread: Thread;
   // Provider-native thread id (starts as the resume id, or is captured from
   // the stream for brand-new sessions).
   let capturedSessionId = providerSessionId;
   let sessionCreatedSent = false;
-  let terminalFailure = null;
+  let terminalFailure: unknown = null;
   const abortController = new AbortController();
   // Session-map key: the app session id when the caller supplied one, else
   // the provider-native thread id once captured (legacy/direct API callers).
   const sessionKey = () => sessionId || capturedSessionId || null;
 
   try {
-    codex = new Codex(options.mcpPolicy === 'none'
-      ? { config: { mcp_servers: {} } }
-      : undefined);
+    const runtimeConfig = buildCodexRuntimeConfig(fastMode === true, options.mcpPolicy);
+    console.info('[Codex] SDK options', {
+      sessionId: sessionId ?? null,
+      serviceTier: runtimeConfig.service_tier,
+      fastMode: fastMode === true,
+    });
+    codex = new Codex({
+      config: runtimeConfig,
+    });
 
     const threadOptions = {
       workingDirectory,
@@ -284,7 +370,7 @@ export async function queryCodex(command, options = {}, ws, context) {
       thread = codex.startThread(threadOptions);
     }
 
-    const registerSession = (id) => {
+    const registerSession = (id: string | null | undefined): void => {
       if (!id) {
         return;
       }
@@ -317,9 +403,12 @@ export async function queryCodex(command, options = {}, ws, context) {
     });
 
     for await (const event of streamedTurn.events) {
+      const rawEvent = event as ThreadEvent & AnyRecord;
       // Capture thread/session id lazily from the stream (Codex emits this asynchronously).
       if (event.type === 'thread.started') {
-        const discoveredSessionId = event.thread_id || event.id || null;
+        const discoveredSessionId = typeof event.thread_id === 'string'
+          ? event.thread_id
+          : typeof rawEvent.id === 'string' ? rawEvent.id : null;
         if (discoveredSessionId && !capturedSessionId) {
           capturedSessionId = discoveredSessionId;
           registerSession(sessionKey());
@@ -340,7 +429,7 @@ export async function queryCodex(command, options = {}, ws, context) {
         break;
       }
       if (sessionKey()) {
-        const session = activeCodexSessions.get(sessionKey());
+        const session = activeCodexSessions.get(sessionKey() as string);
         if (session?.status === 'aborted') {
           break;
         }
@@ -350,7 +439,7 @@ export async function queryCodex(command, options = {}, ws, context) {
         continue;
       }
 
-      const transformed = transformCodexEvent(event);
+      const transformed = transformCodexEvent(rawEvent);
 
       // Normalize the transformed event into NormalizedMessage(s) via adapter
       const normalizedMsgs = context.normalizeMessage(transformed, capturedSessionId || sessionId || null);
@@ -361,7 +450,7 @@ export async function queryCodex(command, options = {}, ws, context) {
       if (event.type === 'turn.failed' && !terminalFailure) {
         terminalFailure = event.error || new Error('Turn failed');
         // Notifications are app-facing, so they carry the app session id.
-        notifyRunFailed({
+        reportRunFailed({
           userId: ws?.userId || null,
           provider: 'codex',
           sessionId: sessionId || capturedSessionId || null,
@@ -372,7 +461,7 @@ export async function queryCodex(command, options = {}, ws, context) {
 
       // Extract and send token usage if available (normalized to match Claude format)
       if (event.type === 'turn.completed') {
-        const tokenBudget = extractCodexTokenBudget(event);
+        const tokenBudget = extractCodexTokenBudget(rawEvent);
         if (tokenBudget) {
           sendMessage(ws, createNormalizedMessage({ kind: 'status', text: 'token_budget', tokenBudget, sessionId: capturedSessionId || sessionId || null, provider: 'codex' }));
         }
@@ -381,7 +470,7 @@ export async function queryCodex(command, options = {}, ws, context) {
 
     // Send the terminal completion event — skipped for aborted runs, whose
     // terminal `complete` (aborted: true) was already sent by abort-session.
-    const runSession = sessionKey() ? activeCodexSessions.get(sessionKey()) : null;
+    const runSession = sessionKey() ? activeCodexSessions.get(sessionKey() as string) : null;
     const runAborted = runSession?.status === 'aborted' || abortController.signal.aborted;
     if (!runAborted) {
       sendMessage(ws, createCompleteMessage({
@@ -391,7 +480,7 @@ export async function queryCodex(command, options = {}, ws, context) {
         exitCode: terminalFailure ? 1 : 0,
       }));
       if (!terminalFailure) {
-        notifyRunStopped({
+        reportRunStopped({
           userId: ws?.userId || null,
           provider: 'codex',
           sessionId: sessionId || capturedSessionId || null,
@@ -402,11 +491,11 @@ export async function queryCodex(command, options = {}, ws, context) {
     }
 
   } catch (error) {
-    const session = sessionKey() ? activeCodexSessions.get(sessionKey()) : null;
+    const session = sessionKey() ? activeCodexSessions.get(sessionKey() as string) : null;
     const wasAborted =
       session?.status === 'aborted' ||
-      error?.name === 'AbortError' ||
-      String(error?.message || '').toLowerCase().includes('aborted');
+      (error instanceof Error && error.name === 'AbortError') ||
+      String(error instanceof Error ? error.message : error).toLowerCase().includes('aborted');
 
     if (!wasAborted) {
       console.error('[Codex] Error:', error);
@@ -415,7 +504,7 @@ export async function queryCodex(command, options = {}, ws, context) {
       const installed = await context.isProviderInstalled();
       const errorContent = !installed
         ? 'Codex CLI is not configured. Please set up authentication first.'
-        : error.message;
+        : error instanceof Error ? error.message : String(error);
 
       sendMessage(ws, createNormalizedMessage({ kind: 'error', content: errorContent, sessionId: capturedSessionId || sessionId || null, provider: 'codex' }));
       sendMessage(ws, createCompleteMessage({
@@ -424,7 +513,7 @@ export async function queryCodex(command, options = {}, ws, context) {
         exitCode: 1,
       }));
       if (!terminalFailure) {
-        notifyRunFailed({
+        reportRunFailed({
           userId: ws?.userId || null,
           provider: 'codex',
           sessionId: sessionId || capturedSessionId || null,
@@ -437,7 +526,7 @@ export async function queryCodex(command, options = {}, ws, context) {
   } finally {
     // Update session status
     if (sessionKey()) {
-      const session = activeCodexSessions.get(sessionKey());
+      const session = activeCodexSessions.get(sessionKey() as string);
       if (session) {
         session.status = session.status === 'aborted' ? 'aborted' : 'completed';
       }
@@ -450,7 +539,7 @@ export async function queryCodex(command, options = {}, ws, context) {
  * @param {string} sessionId - Session ID to abort
  * @returns {boolean} - Whether abort was successful
  */
-export function abortCodexSession(sessionId) {
+export function abortCodexSession(sessionId: string): boolean {
   const session = activeCodexSessions.get(sessionId);
 
   if (!session) {
@@ -472,7 +561,7 @@ export function abortCodexSession(sessionId) {
  * @param {string} sessionId - Session ID to check
  * @returns {boolean} - Whether session is active
  */
-export function isCodexSessionActive(sessionId) {
+export function isCodexSessionActive(sessionId: string): boolean {
   const session = activeCodexSessions.get(sessionId);
   return session?.status === 'running';
 }
@@ -481,8 +570,16 @@ export function isCodexSessionActive(sessionId) {
  * Get all active sessions
  * @returns {Array} - Array of active session info
  */
-export function getActiveCodexSessions() {
-  const sessions = [];
+export function getActiveCodexSessions(): Array<{
+  id: string;
+  status: ActiveCodexSession['status'];
+  startedAt: string;
+}> {
+  const sessions: Array<{
+    id: string;
+    status: ActiveCodexSession['status'];
+    startedAt: string;
+  }> = [];
 
   for (const [id, session] of activeCodexSessions.entries()) {
     if (session.status === 'running') {
@@ -507,7 +604,7 @@ export const codexRuntime = {
  * @param {WebSocket|object} ws - WebSocket or response writer
  * @param {object} data - Data to send
  */
-function sendMessage(ws, data) {
+function sendMessage(ws: ProviderRuntimeWriter, data: unknown): void {
   try {
     if (ws.isSSEStreamWriter || ws.isWebSocketWriter) {
       // Writer handles stringification (SSEStreamWriter or WebSocketWriter)

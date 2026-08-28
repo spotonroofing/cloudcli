@@ -36,6 +36,8 @@ type SessionRow = {
   model: string | null;
   /** Reasoning effort this session runs with; NULL until the app records one. */
   effort: string | null;
+  /** 1/0 when this Codex session records a fast-mode choice; NULL until then. */
+  fast_mode: number | null;
   isArchived: number;
   created_at: string;
   updated_at: string;
@@ -50,7 +52,7 @@ type RecentSessionsPage = {
 // list/feed reader prefers the app-owned attach-to-project choice without each
 // call site repeating the COALESCE. Writes always name real columns explicitly.
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, chain_phase, booted, boot_state, jsonl_path, custom_name, model, effort, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, chain_phase, booted, boot_state, jsonl_path, custom_name, model, effort, fast_mode, isArchived, created_at, updated_at';
 
 // WHERE-clause form of the same preference (SQLite cannot reference SELECT
 // aliases in WHERE).
@@ -535,6 +537,21 @@ export const sessionsDb = {
     ).run(effort, sessionId);
   },
 
+  /**
+   * Records whether this Codex session uses the fast service tier.
+   *
+   * Both on and off are explicit values so reopening the session never falls
+   * through to a provider default that may have changed in the meantime.
+   */
+  setSessionFastMode(sessionId: string, enabled: boolean): void {
+    const db = getConnection();
+    db.prepare(
+      `UPDATE sessions
+       SET fast_mode = ?
+       WHERE session_id = ?`
+    ).run(enabled ? 1 : 0, sessionId);
+  },
+
   updateSessionCustomName(sessionId: string, customName: string): void {
     const db = getConnection();
     db.prepare(
@@ -695,7 +712,7 @@ export const sessionsDb = {
         `SELECT sessions.session_id, sessions.provider, sessions.provider_session_id,
                 COALESCE(sessions.assigned_project_path, sessions.project_path) AS project_path,
                 sessions.assigned_project_path, sessions.jsonl_path, sessions.custom_name,
-                sessions.model, sessions.effort, sessions.isArchived, sessions.created_at, sessions.updated_at
+                sessions.model, sessions.effort, sessions.fast_mode, sessions.isArchived, sessions.created_at, sessions.updated_at
          FROM sessions
          LEFT JOIN projects ON projects.project_path = COALESCE(sessions.assigned_project_path, sessions.project_path)
          WHERE ${visibilityClause}

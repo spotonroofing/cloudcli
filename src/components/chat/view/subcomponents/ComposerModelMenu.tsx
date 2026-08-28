@@ -9,7 +9,7 @@ import ProviderMark from '../../../llm-provider-logo/ProviderMark';
 import { DEFAULT_EFFORT_VALUE } from '../../constants/providerEffort';
 import { useComposerMenuAnchor } from '../../hooks/useComposerMenuAnchor';
 import { Badge } from '../../../../shared/view/ui';
-import { SwapText } from '../../../../shared/view/beui';
+import { BeuiSwitch, SwapText } from '../../../../shared/view/beui';
 
 import {
   ComposerMenuHeading,
@@ -55,9 +55,11 @@ const PROVIDER_GROUP_NAMES: Partial<Record<LLMProvider, string>> = {
 
 interface ComposerModelMenuProps {
   effort: string;
+  fastMode: boolean;
   /** Effort values the active provider/model actually accepts; empty hides the section. */
   effortOptions: EffortOption[];
   onSelectEffort: (effort: string) => void;
+  onSelectFastMode: (enabled: boolean) => void;
   model: string;
   provider: LLMProvider;
   /** The catalogs the switcher lists; all empty (and not loading) hides the section. */
@@ -68,8 +70,10 @@ interface ComposerModelMenuProps {
 
 export default function ComposerModelMenu({
   effort,
+  fastMode,
   effortOptions,
   onSelectEffort,
+  onSelectFastMode,
   model,
   provider,
   modelGroups,
@@ -110,6 +114,7 @@ export default function ComposerModelMenu({
   const selectedValue = selectedModelOption?.value ?? model;
 
   const hasEffortSection = effortOptions.length > 0;
+  const hasFastMode = provider === 'codex';
   const hasModelSection = modelGroups.some((group) => group.options.length > 0) || modelsLoading;
   if (!hasEffortSection && !hasModelSection) {
     return null;
@@ -125,7 +130,7 @@ export default function ComposerModelMenu({
   );
 
   const ariaLabel = t('composer.modelMenu', {
-    defaultValue: 'Select model and reasoning effort',
+    defaultValue: 'Select model, reasoning effort, and speed',
   });
 
   const renderModelRow = (groupProvider: LLMProvider, option: ProviderModelOption) => (
@@ -171,6 +176,14 @@ export default function ComposerModelMenu({
             <SwapText value={currentEffortLabel}>{currentEffortLabel}</SwapText>
           </span>
         )}
+        {hasFastMode && fastMode && (
+          <span
+            data-slot="composer-fast-tag"
+            className="shrink-0 rounded bg-muted px-1 py-px text-[9px] font-medium lowercase leading-none text-muted-foreground"
+          >
+            fast
+          </span>
+        )}
         <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
       </button>
 
@@ -200,6 +213,28 @@ export default function ComposerModelMenu({
                       </span>
                     }
                   />
+                  {hasFastMode && (
+                    <div
+                      role="none"
+                      data-slot="composer-fast-mode-row"
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm text-foreground/90 transition-colors hover:bg-accent"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate leading-5">
+                          {t('composer.fastMode', { defaultValue: 'Fast mode' })}
+                        </span>
+                        <span className="mt-0.5 block whitespace-nowrap text-xs leading-4 text-muted-foreground">
+                          {t('composer.fastModeHint', { defaultValue: '1.5x speed, 2.5x usage' })}
+                        </span>
+                      </span>
+                      <BeuiSwitch
+                        checked={fastMode}
+                        onCheckedChange={onSelectFastMode}
+                        ariaLabel={t('composer.fastMode', { defaultValue: 'Fast mode' })}
+                        className="shrink-0 scale-75"
+                      />
+                    </div>
+                  )}
                 </>
               )}
 

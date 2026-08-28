@@ -426,6 +426,25 @@ const parseSessionEffortPayload = (payload: unknown): string => {
   return effort;
 };
 
+const parseSessionFastModePayload = (payload: unknown): boolean => {
+  if (!payload || typeof payload !== 'object') {
+    throw new AppError('Request body must be an object.', {
+      code: 'INVALID_REQUEST_BODY',
+      statusCode: 400,
+    });
+  }
+
+  const enabled = (payload as Record<string, unknown>).fastMode;
+  if (typeof enabled !== 'boolean') {
+    throw new AppError('fastMode must be a boolean.', {
+      code: 'INVALID_FAST_MODE',
+      statusCode: 400,
+    });
+  }
+
+  return enabled;
+};
+
 const parseModelRecordId = (value: unknown): number => {
   const rawRecordId = readPathParam(value, 'recordId').trim();
   if (!/^\d+$/.test(rawRecordId)) {
@@ -580,6 +599,20 @@ router.post(
     // before the session gateway created its row.
     res.json(createApiSuccessResponse(
       stored ?? { provider, sessionId, effort, source: 'session' as const },
+    ));
+  }),
+);
+
+/** Records the fast service-tier choice for one Codex app session. */
+router.post(
+  '/:provider/sessions/:sessionId/active-fast-mode',
+  asyncHandler(async (req: Request, res: Response) => {
+    const provider = parseProvider(req.params.provider);
+    const sessionId = parseSessionId(req.params.sessionId);
+    const fastMode = parseSessionFastModePayload(req.body);
+    const stored = providerModelsService.setSessionFastMode(provider, sessionId, fastMode);
+    res.json(createApiSuccessResponse(
+      stored ?? { provider, sessionId, fastMode, source: 'session' as const },
     ));
   }),
 );

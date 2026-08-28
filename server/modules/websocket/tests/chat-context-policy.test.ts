@@ -50,11 +50,11 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
 
 const request = { user: { id: 1 } } as AuthenticatedWebSocketRequest;
 
-test('planner turns receive the project allowlist and dispatch turns receive the empty MCP policy', async () => {
+test('planner turns receive the project allowlist and dispatch turns disable MCP and Codex fast mode', async () => {
   await withIsolatedDatabase(async () => {
     const projectPath = '/workspace/context-project';
     sessionsDb.createAppSession('planner-session', 'claude', projectPath, 'Planner', 'planner');
-    sessionsDb.createAppSession('dispatch-session', 'claude', projectPath, 'Dispatch', 'dispatch');
+    sessionsDb.createAppSession('dispatch-session', 'codex', projectPath, 'Dispatch', 'dispatch');
 
     const calls: Array<{ command: string; options: AnyRecord }> = [];
     const socket = new TestSocket();
@@ -73,13 +73,20 @@ test('planner turns receive the project allowlist and dispatch turns receive the
 
     try {
       await socket.receive({ type: 'chat.send', sessionId: 'planner-session', content: 'planner turn' });
-      await socket.receive({ type: 'chat.send', sessionId: 'dispatch-session', content: 'dispatch turn' });
+      await socket.receive({
+        type: 'chat.send',
+        sessionId: 'dispatch-session',
+        content: 'dispatch turn',
+        options: { fastMode: true },
+      });
 
       assert.equal(calls[0]?.command, 'planner turn');
       assert.equal(calls[0]?.options.mcpPolicy, 'planner');
       assert.deepEqual(calls[0]?.options.allowedMcpServers, ['spoton-core', 'playwright']);
       assert.equal(calls[1]?.command, 'dispatch turn');
       assert.equal(calls[1]?.options.mcpPolicy, 'none');
+      assert.equal(calls[1]?.options.fastMode, false);
+      assert.equal(sessionsDb.getSessionById('dispatch-session')?.fast_mode, 0);
     } finally {
       connectedClients.delete(socket as unknown as WebSocket);
     }

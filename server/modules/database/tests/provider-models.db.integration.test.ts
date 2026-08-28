@@ -66,6 +66,8 @@ test('provider model repository stores custom rows only and maintains session re
     assert.equal(sessionsDb.getSessionById('session-1')?.model, 'gateway/model-v2');
     // A rename keeps the same underlying model, so its effort stays applicable.
     assert.equal(sessionsDb.getSessionById('session-1')?.effort, 'high');
+    sessionsDb.setSessionFastMode('session-1', true);
+    assert.equal(sessionsDb.getSessionById('session-1')?.fast_mode, 1);
 
     const removed = providerModelsDb.deleteCustomProviderModel(
       'codex',

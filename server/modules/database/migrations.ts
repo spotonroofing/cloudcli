@@ -439,6 +439,14 @@ const addSessionEffortColumn = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'effort', 'TEXT');
 };
 
+/** Adds the explicit per-session Codex fast-mode choice (NULL means not chosen yet). */
+const addSessionFastModeColumn = (db: Database): void => {
+  const sessionsTableInfo = getTableInfo(db, 'sessions');
+  const columnNames = sessionsTableInfo.map((column) => column.name);
+
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'fast_mode', 'BOOLEAN');
+};
+
 /**
  * Adds the app-owned `assigned_project_path` column (claude.ai model).
  *
@@ -664,6 +672,7 @@ export const runMigrations = (db: Database) => {
     addProviderSessionIdMapping(db);
     addSessionModelColumn(db);
     addSessionEffortColumn(db);
+    addSessionFastModeColumn(db);
     addSessionAssignedProjectColumn(db);
     addSessionWorkerColumns(db);
     addSessionBootedColumn(db);

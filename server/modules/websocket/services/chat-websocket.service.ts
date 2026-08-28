@@ -393,16 +393,21 @@ async function handleChatSend(
     clientOptions.allowedMcpServers = dependencies.resolvePlannerMcpServers?.(session.project_path ?? '') ?? [];
   } else if (session.origin === 'dispatch' || session.origin === 'maintenance') {
     clientOptions.mcpPolicy = 'none';
+    // Chains always run at the standard tier, even if a browser sent a stale
+    // fast-mode option or the host's Codex config defaults to fast.
+    clientOptions.fastMode = false;
   }
 
-  // Record what this turn runs with so reopening the session later restores the
-  // same model and reasoning effort, and so the resume path has a
-  // session-scoped model answer to use.
+  // Record what this turn runs with so reopening the session later restores
+  // the same model, reasoning effort, and interactive fast-tier choice.
   if (typeof clientOptions.model === 'string' && clientOptions.model.trim()) {
     providerModelsService.setSessionModel(provider, sessionId, clientOptions.model);
   }
   if (typeof clientOptions.effort === 'string' && clientOptions.effort.trim()) {
     providerModelsService.setSessionEffort(provider, sessionId, clientOptions.effort);
+  }
+  if (provider === 'codex' && typeof clientOptions.fastMode === 'boolean') {
+    providerModelsService.setSessionFastMode(provider, sessionId, clientOptions.fastMode);
   }
 
   // Edit-and-resend (ui9 B3): the send carries which prior exchange it

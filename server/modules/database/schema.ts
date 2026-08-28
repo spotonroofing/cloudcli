@@ -110,11 +110,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     custom_name TEXT,
     project_path TEXT,
     jsonl_path TEXT,
-    -- Model and reasoning effort this session runs with. Written when the user
-    -- changes either selection and on every send, so reopening a session
-    -- restores its exact runtime configuration instead of provider defaults.
+    -- Model, reasoning effort, and Codex fast-mode choice this session runs
+    -- with. Written when the user changes a selection and on every send, so
+    -- reopening a session restores its exact runtime configuration instead of
+    -- provider defaults.
     model TEXT,
     effort TEXT,
+    fast_mode BOOLEAN,
     -- App-owned project assignment (attach-to-project). The filesystem
     -- synchronizer never touches it; reads prefer it over the cwd-derived
     -- project_path.

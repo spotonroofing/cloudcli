@@ -139,7 +139,7 @@ test('conversation search streams title matches before transcript results', asyn
   });
 });
 
-test('reasoning effort is persisted and returned with the active session model', async () => {
+test('reasoning effort and fast mode persist with the active Codex session model', async () => {
   await withProviderServer(async (baseUrl, workspacePath) => {
     sessionsDb.createAppSession('effort-session', 'codex', workspacePath);
 
@@ -159,16 +159,33 @@ test('reasoning effort is persisted and returned with the active session model',
     assert.equal(updatePayload.data.effort, 'ultra');
     assert.equal(sessionsDb.getSessionById('effort-session')?.effort, 'ultra');
 
+    const fastModeResponse = await fetch(
+      `${baseUrl}/api/providers/codex/sessions/effort-session/active-fast-mode`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ fastMode: true }),
+      },
+    );
+    const fastModePayload = await fastModeResponse.json() as {
+      data: { fastMode: boolean; sessionId: string };
+    };
+
+    assert.equal(fastModeResponse.status, 200);
+    assert.equal(fastModePayload.data.fastMode, true);
+    assert.equal(sessionsDb.getSessionById('effort-session')?.fast_mode, 1);
+
     const readResponse = await fetch(
       `${baseUrl}/api/providers/codex/sessions/effort-session/active-model`,
     );
     const readPayload = await readResponse.json() as {
-      data: { effort: string | null; sessionId: string };
+      data: { effort: string | null; fastMode: boolean | null; sessionId: string };
     };
 
     assert.equal(readResponse.status, 200);
     assert.equal(readPayload.data.sessionId, 'effort-session');
     assert.equal(readPayload.data.effort, 'ultra');
+    assert.equal(readPayload.data.fastMode, true);
   });
 });
 

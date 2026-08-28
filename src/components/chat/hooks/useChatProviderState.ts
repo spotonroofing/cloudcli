@@ -96,6 +96,7 @@ type SessionSelectionApiResponse = {
     sessionId?: string | null;
     model?: string | null;
     effort?: string | null;
+    fastMode?: boolean | null;
     /**
      * `session` and `provider` are real answers for this session; `default`
      * means the backend had nothing recorded and returned the catalog default,
@@ -110,6 +111,7 @@ type SessionProviderSelection = {
   sessionId: string;
   model: string | null;
   effort: string | null;
+  fastMode: boolean | null;
 };
 
 const getSessionSelectionKey = (provider: LLMProvider, sessionId: string): string => (
@@ -135,6 +137,9 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       return acc;
     }, {});
   });
+  const [codexFastMode, setCodexFastMode] = useState(
+    () => localStorage.getItem('codex-fast-mode') === 'true',
+  );
   const [opencodeModel, setOpenCodeModel] = useState<string>(() => {
     return localStorage.getItem('opencode-model') || FALLBACK_DEFAULT_MODEL.opencode;
   });
@@ -159,6 +164,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   const sessionSelectionLoadRequestIdRef = useRef(0);
   const sessionModelMutationIdRef = useRef(0);
   const sessionEffortMutationIdRef = useRef(0);
+  const sessionFastModeMutationIdRef = useRef(0);
 
   const setStoredProviderModel = useCallback((targetProvider: LLMProvider, model: string) => {
     if (targetProvider === 'claude') {
@@ -190,6 +196,11 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
         : { ...previous, [targetProvider]: effort }
     ));
     writeSetting(`${targetProvider}-effort`, effort);
+  }, []);
+
+  const setStoredCodexFastMode = useCallback((enabled: boolean) => {
+    setCodexFastMode(enabled);
+    writeSetting('codex-fast-mode', String(enabled));
   }, []);
 
   const loadProviderModels = useCallback(async () => {
@@ -447,18 +458,27 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     }
   }, [providerEfforts, providerModels, reconcileStoredEffort]);
 
-  // Another tab or device changed a model or effort preference: apply it
+  // Another tab or device changed a model, effort, or Codex fast-mode
+  // preference: apply it
   // live. `selected-provider` is deliberately not applied here; while a
   // session is open it mirrors that session's provider, so applying a remote
   // value would fight the session and ping-pong between devices.
   useEffect(() => onSettingChange(
-    ['claude-model', 'cursor-model', 'codex-model', 'opencode-model', ...PROVIDERS.map((p) => `${p}-effort`)],
+    [
+      'claude-model',
+      'cursor-model',
+      'codex-model',
+      'opencode-model',
+      'codex-fast-mode',
+      ...PROVIDERS.map((p) => `${p}-effort`),
+    ],
     (key, value) => {
       if (!value) return;
       if (key === 'claude-model') setClaudeModel(value);
       else if (key === 'cursor-model') setCursorModel(value);
       else if (key === 'codex-model') setCodexModel(value);
       else if (key === 'opencode-model') setOpenCodeModel(value);
+      else if (key === 'codex-fast-mode') setCodexFastMode(value === 'true');
       else {
         const target = key.replace(/-effort$/, '') as LLMProvider;
         setProviderEfforts((previous) => (previous[target] === value ? previous : { ...previous, [target]: value }));
@@ -524,7 +544,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       : getDefaultPermissionModeForProvider(targetProvider);
   }, [getDefaultPermissionModeForProvider, getPermissionModesForProvider]);
 
-  /** Model and reasoning effort recorded for the open session by the backend. */
+  /** Model, reasoning effort, and fast-tier choice recorded for the open session. */
   const [sessionSelection, setSessionSelection] = useState<SessionProviderSelection | null>(null);
   const selectedSessionId = selectedSession?.id?.trim() || null;
   const selectedSessionProvider = selectedSession?.__provider ?? provider;
@@ -576,6 +596,9 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
           sessionId: selectedSessionId,
           model: body.success && resolvedModel && body.data?.source !== 'default' ? resolvedModel : null,
           effort: body.success ? resolvedEffort : null,
+          fastMode: body.success && typeof body.data?.fastMode === 'boolean'
+            ? body.data.fastMode
+            : null,
         });
       } catch (error) {
         if (
@@ -589,6 +612,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
             sessionId: selectedSessionId,
             model: null,
             effort: null,
+            fastMode: null,
           });
         }
       }
@@ -658,6 +682,9 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
         effort: current?.provider === targetProvider && current.sessionId === normalizedSessionId
           ? current.effort
           : body.data?.effort?.trim() || null,
+        fastMode: current?.provider === targetProvider && current.sessionId === normalizedSessionId
+          ? current.fastMode
+          : typeof body.data?.fastMode === 'boolean' ? body.data.fastMode : null,
       }));
     }
     return { scope: 'session' as const, model: storedModel };
@@ -694,6 +721,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       sessionId: normalizedSessionId,
       model: previousSelection?.model ?? null,
       effort,
+      fastMode: previousSelection?.fastMode ?? null,
     });
 
     try {
@@ -721,6 +749,9 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
             ? current.model
             : previousSelection?.model ?? null,
           effort: storedEffort,
+          fastMode: current?.provider === targetProvider && current.sessionId === normalizedSessionId
+            ? current.fastMode
+            : previousSelection?.fastMode ?? null,
         }));
       }
 
@@ -742,6 +773,84 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     }
   }, [sessionSelection, setStoredProviderEffort]);
 
+  /** Applies the synced Codex default and persists an explicit session choice. */
+  const selectCodexFastMode = useCallback(async (
+    enabled: boolean,
+    sessionId?: string | null,
+  ) => {
+    setStoredCodexFastMode(enabled);
+
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+    if (!normalizedSessionId) {
+      return { scope: 'default' as const, fastMode: enabled };
+    }
+
+    sessionSelectionLoadRequestIdRef.current += 1;
+    const mutationId = sessionFastModeMutationIdRef.current + 1;
+    sessionFastModeMutationIdRef.current = mutationId;
+    const targetSessionKey = getSessionSelectionKey('codex', normalizedSessionId);
+    const previousSelection = sessionSelection?.provider === 'codex'
+      && sessionSelection.sessionId === normalizedSessionId
+      ? sessionSelection
+      : null;
+
+    setSessionSelection({
+      provider: 'codex',
+      sessionId: normalizedSessionId,
+      model: previousSelection?.model ?? null,
+      effort: previousSelection?.effort ?? null,
+      fastMode: enabled,
+    });
+
+    try {
+      const response = await authenticatedFetch(
+        `/api/providers/codex/sessions/${encodeURIComponent(normalizedSessionId)}/active-fast-mode`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ fastMode: enabled }),
+        },
+      );
+      const body = (await response.json()) as SessionSelectionApiResponse;
+      if (!response.ok || !body.success) {
+        throw new Error('Unable to change fast mode for this session.');
+      }
+
+      const storedFastMode = typeof body.data?.fastMode === 'boolean' ? body.data.fastMode : enabled;
+      if (
+        sessionFastModeMutationIdRef.current === mutationId
+        && selectedSessionKeyRef.current === targetSessionKey
+      ) {
+        setSessionSelection((current) => ({
+          provider: 'codex',
+          sessionId: normalizedSessionId,
+          model: current?.provider === 'codex' && current.sessionId === normalizedSessionId
+            ? current.model
+            : previousSelection?.model ?? null,
+          effort: current?.provider === 'codex' && current.sessionId === normalizedSessionId
+            ? current.effort
+            : previousSelection?.effort ?? null,
+          fastMode: storedFastMode,
+        }));
+      }
+
+      return { scope: 'session' as const, fastMode: storedFastMode };
+    } catch (error) {
+      if (
+        sessionFastModeMutationIdRef.current === mutationId
+        && selectedSessionKeyRef.current === targetSessionKey
+      ) {
+        setSessionSelection((current) => (
+          current?.provider === 'codex'
+          && current.sessionId === normalizedSessionId
+          && current.fastMode === enabled
+            ? previousSelection
+            : current
+        ));
+      }
+      throw error;
+    }
+  }, [sessionSelection, setStoredCodexFastMode]);
+
   // The open session's model wins over the per-provider default, so switching
   // sessions shows (and sends) what each session actually runs with.
   const currentProviderModel = sessionModel ?? providerModels[provider];
@@ -757,6 +866,9 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
         ?? DEFAULT_EFFORT_VALUE,
     );
   }, [activeSessionSelection?.effort, currentProviderModel, provider, providerEfforts, reconcileStoredEffort]);
+  const currentProviderFastMode = provider === 'codex'
+    ? activeSessionSelection?.fastMode ?? codexFastMode
+    : false;
   const currentProviderModelOptions = useMemo(
     () => providerModelCatalog[provider]?.OPTIONS ?? [],
     [provider, providerModelCatalog],
@@ -884,6 +996,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     codexModel,
     setCodexModel,
     currentProviderEffort,
+    currentProviderFastMode,
     currentProviderEffortOptions,
     currentProviderModel,
     currentProviderModelOptions,
@@ -901,6 +1014,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     providerModelActions,
     selectProviderModel,
     selectProviderEffort,
+    selectCodexFastMode,
     resolvePermissionModeForProvider,
   };
 }
