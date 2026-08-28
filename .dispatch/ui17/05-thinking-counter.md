@@ -2,10 +2,10 @@
 <!-- verify: no -->
 <!-- engine: codex -->
 <!-- model: gpt-5.6-sol -->
-<!-- effort: medium -->
-<!-- name: Thinking counter inline -->
-<!-- tasks: Counter back beside the word | Other rows unchanged, tested -->
-Execute Job 5 of PUNCHLIST_ui17.md in this repo (the thinking indicator's counter sits next to the word again). The goal and items are that job's section and checkboxes in PUNCHLIST_ui17.md; read only that job's section plus the whole-file rules block at the top (including the run rules), the recent git log, and the files the job names; trust repo state over this prompt when they disagree, and check each item off in the file the moment it is verified. Done when the job's done check passes against the dev instance.
+<!-- effort: high -->
+<!-- name: Durations inline -->
+<!-- tasks: Duration right after the label, all rows | Thinking group compact | Tool rows: label, time, preview | Family test and design note -->
+Execute Job 5 of PUNCHLIST_ui17.md in this repo (durations on every status row sit inline after the label, thought through as a family). The goal and items are that job's section and checkboxes in PUNCHLIST_ui17.md; read only that job's section plus the whole-file rules block at the top (including the run rules), the recent git log, and the files the job names; trust repo state over this prompt when they disagree, and check each item off in the file the moment it is verified. Done when the job's done check passes against the dev instance.
 
 Before running a command that changes state (restarts, deletes, config edits), check that the evidence supports that specific action; a signal that matches a known failure can have a different cause. Rebuild and restart dev only when the done check needs the running instance to show the change, and never twice when once serves.
 

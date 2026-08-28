@@ -75,15 +75,16 @@ Goal: the account switcher drawer got provider headers with logos, but the Claud
 
 Done check: on dev with agent-browser, both provider headers render the same mark component with no background element behind the glyph; no "Add account" text exists in the drawer; the ChatGPT row is the same component as the Claude rows and starts with a number; 390px holds. Commit.
 
-## Job 5 — Thinking indicator: the counter sits next to the word again (2026-08-28, Willem). Verify: no
+## Job 5 — Durations on status rows, thought through (2026-08-28, Willem, widened). Verify: no
 
-Goal: the response-in-progress row (pixel grid, status word, elapsed counter) now puts the counter at the far right edge of the row, apparently matching the tool-call rows' right-aligned duration slot; that is a different element. The thinking indicator returns to its original layout: grid, word, and the counter directly to the right of the word in the same compact group. Only this indicator changes; tool rows, agent rows and every other status row keep their right-aligned duration. Files: `src/components/chat/view/subcomponents/ActivityIndicator.tsx` (and whatever wrapper or shared row class ui15 job 4's "exact durations on status rows" or job 14's "one anatomy for indicator rows" applied to it), `design/transcript-rows.md`; git history around 72e46a1 and ecff4e3 shows where it moved.
+Goal: ui15 job 4 put every duration in a right-aligned meta slot, and it reads badly: the thinking indicator's counter floats at the far right edge away from its word, the "Thought for" row shows its seconds stranded on the right with a chevron, and tool rows do the same. Willem wants the whole family rethought so a duration sits where the eye already is. Files: `src/components/chat/view/subcomponents/ActivityIndicator.tsx`, the thinking, tool-call, agent, research, memory and watchdog row components (the indicator row family from ui15 job 14), `design/transcript-rows.md`; git history around 72e46a1 and ecff4e3 shows where the durations moved.
 
-- [ ] The elapsed counter renders inline right after the status word (a small gap, same baseline, same mono muted style as before), not pushed to the row's right edge; the row is no longer full-width justify-between for this indicator.
-- [ ] Nothing else moves: tool-call, agent, research, memory and watchdog rows keep their duration in the right-aligned meta slot; regression test asserting the indicator's counter is adjacent to the word (their bounding boxes within 12px) while a tool row's duration is right-aligned.
-- [ ] `design/transcript-rows.md` notes the exception in one line.
+- [ ] One rule for every status row: the duration sits inline immediately after the row's label in the muted mono meta style ("Thought for 19.1s", "Bash 0.3s", the grid word then "47.7s"), a small fixed gap, same baseline; the right edge of a row holds only its expand chevron and nothing else. Live counters tick in that same inline slot.
+- [ ] The thinking indicator (grid, word, counter) is a compact left-aligned group, never full-width justify-between.
+- [ ] Tool rows keep their command preview after the label; the duration goes between the label and the preview ("Bash 0.3s  F=..."), and the preview truncates, never the duration; line-count details stay in the preview's muted style.
+- [ ] Regression test on the family: each row type renders its duration within 12px of its label and no duration element sits in the row's trailing slot; `design/transcript-rows.md` documents the rule with one example per row type.
 
-Done check: on dev during a running turn, the activity indicator's counter left edge sits within 12px of the word's right edge while a tool row's duration stays at the row's right edge; tests pass; phone holds. Commit.
+Done check: on dev during a running turn and on a loaded transcript with tool, thought, agent and memory rows, every duration's left edge sits within 12px of its label's right edge and the trailing slot contains only the chevron; tests pass; phone holds. Commit.
 
 ## Job 6 — File drop highlight holds steady while a file is over the pane (2026-08-28, Willem). Verify: no
 
