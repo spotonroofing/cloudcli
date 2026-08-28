@@ -95,6 +95,8 @@ export interface ThinkingProps {
   activeLabel: string;
   /** Settled header label once done. */
   doneLabel: string;
+  /** Muted status metadata between the label and disclosure chevron. */
+  meta?: ReactNode;
   /** Search mode: the query line above the source rows. */
   query?: string;
   /** Muted context block above the rows (a subagent's prompt excerpt). */
@@ -113,6 +115,7 @@ export function Thinking({
   icon,
   activeLabel,
   doneLabel,
+  meta,
   query,
   intro,
   rows = [],
@@ -185,6 +188,7 @@ export function Thinking({
             {doneLabel}
           </span>
         )}
+        {meta}
         <span className="grid size-4 shrink-0 place-items-center">
           <motion.span
             aria-hidden="true"

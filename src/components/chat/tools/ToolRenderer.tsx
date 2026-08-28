@@ -2,6 +2,7 @@ import React, { memo, useMemo, useCallback } from 'react';
 
 import type { Project } from '../../../types/app';
 import type { SubagentChildTool } from '../types/types';
+import StatusDuration from '../view/subcomponents/StatusDuration';
 
 import { getToolConfig } from './configs/toolConfigs';
 import { OneLineDisplay, BashCommandDisplay, CollapsibleDisplay, ToolDiffViewer, MarkdownContent, FileListContent, TodoListContent, TaskListContent, TextContent, QuestionAnswerContent, SubagentContainer } from './components';
@@ -32,6 +33,9 @@ interface ToolRendererProps {
     currentToolIndex: number;
     isComplete: boolean;
   };
+  startedAt?: string | number | Date;
+  durationMs?: number;
+  isRunning?: boolean;
 }
 
 // Exact denial messages from the Claude runtime adapter — other providers can't reliably signal denial
@@ -42,8 +46,8 @@ const CLAUDE_DENIAL_MESSAGES = [
   'permission request cancelled',
 ];
 
-function deriveToolStatus(toolResult: any): ToolStatus {
-  if (!toolResult) return 'running';
+function deriveToolStatus(toolResult: any, isRunning: boolean): ToolStatus {
+  if (!toolResult) return isRunning ? 'running' : 'completed';
   if (toolResult.isError) {
     const content = String(toolResult.content || '').toLowerCase().trim();
     if (CLAUDE_DENIAL_MESSAGES.some((msg) => content.includes(msg))) {
@@ -70,7 +74,10 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
   showRawParameters = false,
   rawToolInput,
   isSubagentContainer,
-  subagentState
+  subagentState,
+  startedAt,
+  durationMs,
+  isRunning = false,
 }) => {
   const config = getToolConfig(toolName);
   const displayConfig: any = mode === 'input' ? config.input : config.result;
@@ -86,9 +93,12 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
 
   // Only derive and show status badge on input renders
   const toolStatus = useMemo(
-    () => mode === 'input' ? deriveToolStatus(toolResult) : undefined,
-    [mode, toolResult],
+    () => mode === 'input' ? deriveToolStatus(toolResult, isRunning) : undefined,
+    [mode, toolResult, isRunning],
   );
+  const durationMeta = mode === 'input'
+    ? <StatusDuration startedAt={startedAt} durationMs={durationMs} running={isRunning} />
+    : undefined;
 
   const handleAction = useCallback(() => {
     if (displayConfig?.action === 'open-file' && onFileOpen) {
@@ -105,6 +115,9 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
         toolInput={toolInput}
         toolResult={toolResult}
         subagentState={subagentState}
+        startedAt={startedAt}
+        durationMs={durationMs}
+        isRunning={isRunning}
       />
     );
   }
@@ -137,6 +150,7 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
         output={output}
         isError={Boolean(toolResult?.isError)}
         status={toolStatus !== 'completed' ? toolStatus : undefined}
+        durationMeta={durationMeta}
         // Commands stay collapsed by default — including failures; the leading
         // status icon marks errors and the output expands via the chevron.
         defaultOpen={false}
@@ -164,6 +178,7 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
         colorScheme={displayConfig.colorScheme}
         resultId={mode === 'input' ? `tool-result-${toolId}` : undefined}
         status={toolStatus !== 'completed' ? toolStatus : undefined}
+        durationMeta={durationMeta}
       />
     );
   }
@@ -191,6 +206,7 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
         rawContent={rawToolInput}
         toolName={toolName}
         toolId={toolId}
+        durationMeta={durationMeta}
       />
     );
   }
@@ -303,6 +319,7 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
         defaultOpen={defaultOpen}
         onTitleClick={handleTitleClick}
         statusIcon={statusIcon}
+        durationMeta={durationMeta}
         showRawParameters={mode === 'input' && showRawParameters}
         rawContent={rawToolInput}
       >

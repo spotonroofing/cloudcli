@@ -26,6 +26,7 @@ interface PlanDisplayProps {
   rawContent?: string;
   toolName: string;
   toolId?: string;
+  durationMeta?: React.ReactNode;
 }
 
 export const PlanDisplay: React.FC<PlanDisplayProps> = ({
@@ -36,6 +37,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
   showRawParameters = false,
   rawContent,
   toolName: _toolName,
+  durationMeta,
 }) => {
   const permissionCtx = usePermission();
 
@@ -68,6 +70,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
             <CardTitle className="text-sm font-semibold">
               {isStreaming ? <Shimmer>{title}</Shimmer> : title}
             </CardTitle>
+            {durationMeta}
           </div>
           <CollapsibleTrigger className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
             <ChevronsUpDown className="h-4 w-4" />

@@ -13,7 +13,7 @@ import { MessageScroller } from '../../../../shared/view/beui';
 import { Loader } from '../../../../shared/view/beui/Loader';
 
 import ActivityIndicator from './ActivityIndicator';
-import MessageComponent, { InterruptedMarker } from './MessageComponent';
+import MessageComponent from './MessageComponent';
 import MessageVersionNavigator from './MessageVersionNavigator';
 import ToolGroupContainer from './ToolGroupContainer';
 import ChatExportMenu from './ChatExportMenu';
@@ -265,6 +265,19 @@ function ChatMessagesPane({
     return finals;
   }, [visibleMessages]);
 
+  // Only the newest turn may own live tool/agent indicators. Historical
+  // unresolved rows, including rows above a confirmed interrupt, stay still.
+  const runningTurnMessages = useMemo(() => {
+    const active = new WeakSet<ChatMessage>();
+    if (!isProcessing) return active;
+    for (let index = visibleMessages.length - 1; index >= 0; index -= 1) {
+      const message = visibleMessages[index];
+      active.add(message);
+      if (message.type === 'user') break;
+    }
+    return active;
+  }, [isProcessing, visibleMessages]);
+
   return (
     <MessageScroller
       className="relative min-h-0 flex-1"
@@ -366,6 +379,7 @@ function ChatMessagesPane({
                       showThinking={showThinking}
                       selectedProject={selectedProject}
                       provider={provider}
+                      isTurnRunning={item.messages.some((message) => runningTurnMessages.has(message))}
                     />
                     {groupNav && onSelectVersion && (
                       <MessageVersionNavigator nav={groupNav} onSelect={onSelectVersion} />
@@ -401,6 +415,7 @@ function ChatMessagesPane({
                     editingMessageId={editingMessageId}
                     onSaveEditMessage={onSaveEditMessage}
                     onCancelEditMessage={onCancelEditMessage}
+                    isTurnRunning={runningTurnMessages.has(item)}
                   />
                   {messageNav && onSelectVersion && (
                     <MessageVersionNavigator
@@ -412,20 +427,6 @@ function ChatMessagesPane({
                 </Fragment>
               );
             });
-          })()}
-
-          {/* Dead-tail marker: a turn killed without the CLI writing its
-              `[Request interrupted...]` row (server restart, process death)
-              leaves an unresolved tool call at the transcript tail. An
-              explicit marker row is never a tool row, so this cannot double
-              up with one. */}
-          {!isProcessing && !isBootingSession && (() => {
-            const tail = visibleMessages[visibleMessages.length - 1];
-            return tail?.isToolUse && !tail.toolResult ? (
-              <div className="chat-message assistant px-3 sm:px-0">
-                <InterruptedMarker />
-              </div>
-            ) : null;
           })()}
 
           <ActivityIndicator activity={activity} />

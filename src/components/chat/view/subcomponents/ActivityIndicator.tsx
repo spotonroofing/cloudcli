@@ -13,54 +13,22 @@ type ActivityIndicatorProps = {
   activity: SessionActivity | null;
 };
 
-const EXIT_ANIMATION_MS = 220;
 const SHIMMER_DURATION_S = 1.4;
-/** How long each status word (and its bound loader animation) holds before rotating. */
-const ROTATION_HOLD_DS = 65;
-
-/**
- * Each status word is bound to one of the three beautifului pixel-grid loader
- * animations; the pair rotates together while the turn stays in flight.
- */
-const STATUS_ROTATION: Array<{ word: string; variant: PixelLoaderVariant }> = [
-  { word: 'Thinking', variant: 'drive' },
-  { word: 'Working', variant: 'dots' },
-  { word: 'Churning', variant: 'orbit' },
-];
+const PHASE_PRESENTATION: Record<'thinking' | 'writing', { word: string; variant: PixelLoaderVariant }> = {
+  thinking: { word: 'Thinking', variant: 'drive' },
+  writing: { word: 'Writing', variant: 'dots' },
+};
 
 /**
  * Inline response-in-progress indicator, rendered in the message flow where
  * the reply will appear: the beautifului.dev Loading State — pixel-grid
- * loader left of a shimmering status word, plus a live elapsed counter in
- * mono tabular figures. The word and its loader animation rotate together
- * with activity; a server status line overrides the word. Rendered only while
- * the viewed session has an entry in the processing map; it fades out the
- * moment that entry is removed. Interrupting lives on the composer's
- * send/stop button.
+ * loader left of the real current phase plus its phase-local elapsed counter.
+ * Tool phases render no generic row because the tool row itself owns the live
+ * status and counter. Interrupting lives on the composer's send/stop button.
  */
 export default function ActivityIndicator({ activity }: ActivityIndicatorProps) {
-  const [renderedActivity, setRenderedActivity] = useState<SessionActivity | null>(activity);
-  const [isExiting, setIsExiting] = useState(false);
-  const startedAt = renderedActivity?.startedAt ?? null;
+  const startedAt = activity?.phaseStartedAt ?? null;
   const [elapsedDeciseconds, setElapsedDeciseconds] = useState(0);
-
-  useEffect(() => {
-    if (activity) {
-      setRenderedActivity(activity);
-      setIsExiting(false);
-      return;
-    }
-
-    if (!renderedActivity) return;
-
-    setIsExiting(true);
-    const timer = setTimeout(() => {
-      setRenderedActivity(null);
-      setIsExiting(false);
-    }, EXIT_ANIMATION_MS);
-
-    return () => clearTimeout(timer);
-  }, [activity, renderedActivity]);
 
   useEffect(() => {
     if (startedAt === null) return;
@@ -70,10 +38,10 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
     return () => clearInterval(timer);
   }, [startedAt]);
 
-  if (!renderedActivity) return null;
+  if (!activity || activity.phase === 'tool') return null;
 
-  const rotation = STATUS_ROTATION[Math.floor(elapsedDeciseconds / ROTATION_HOLD_DS) % STATUS_ROTATION.length];
-  const label = (renderedActivity.statusText || rotation.word).replace(/\.+$/, '');
+  const presentation = PHASE_PRESENTATION[activity.phase];
+  const label = presentation.word;
 
   const totalSeconds = elapsedDeciseconds / 10;
   const elapsedLabel = totalSeconds < 60
@@ -81,10 +49,10 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
     : `${Math.floor(totalSeconds / 60)}m ${(totalSeconds % 60).toFixed(1)}s`;
 
   return (
-    <div className={isExiting ? 'chat-activity-exit' : 'chat-activity-enter'}>
+    <div className="chat-activity-enter" data-phase={activity.phase}>
       <style>{TEXT_SHIMMER_KEYFRAMES}</style>
       <div className="flex items-center gap-2.5 text-sm" role="status" data-testid="activity-indicator">
-        <PixelLoader variant={rotation.variant} className="shrink-0" />
+        <PixelLoader variant={presentation.variant} className="shrink-0" />
         <span className="sr-only">{label}</span>
         <span
           key={label}

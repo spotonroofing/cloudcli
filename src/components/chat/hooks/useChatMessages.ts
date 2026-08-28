@@ -13,6 +13,36 @@ function formatToolResultContent(content: unknown): string {
   return toolUseErrorMatch ? toolUseErrorMatch[1] : text;
 }
 
+function elapsedMs(start: unknown, end: unknown): number | undefined {
+  const startMs = new Date(start as string | number | Date).getTime();
+  const endMs = new Date(end as string | number | Date).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return undefined;
+  return endMs - startMs;
+}
+
+/**
+ * Reasoning rows settle when their provider event lands. The nearest prior
+ * renderable provider event is the phase boundary (user prompt, tool result,
+ * or prior assistant output); control/status frames never reset the clock.
+ */
+function completedPhaseDuration(messages: NormalizedMessage[], index: number): number | undefined {
+  const current = messages[index];
+  if (typeof current.durationMs === 'number') return current.durationMs;
+  for (let previousIndex = index - 1; previousIndex >= 0; previousIndex -= 1) {
+    const previous = messages[previousIndex];
+    if (
+      previous.kind === 'status'
+      || previous.kind === 'permission_request'
+      || previous.kind === 'permission_cancelled'
+      || previous.kind === 'session_created'
+    ) {
+      continue;
+    }
+    return elapsedMs(previous.timestamp, current.timestamp);
+  }
+  return undefined;
+}
+
 type ParsedTaskNotification = {
   status: string;
   summary: string;
@@ -67,6 +97,7 @@ export type SessionMemoryUpdate = {
   id: number;
   files: string[];
   diffs: Record<string, string[]>;
+  durationMs?: number | null;
   createdAt: string;
 };
 
@@ -90,6 +121,7 @@ export function mergeMemoryUpdateRows(
       isMemoryUpdate: true,
       memoryFiles: update.files,
       memoryDiffs: update.diffs,
+      durationMs: typeof update.durationMs === 'number' ? update.durationMs : undefined,
     }));
   if (fresh.length === 0) return messages;
 
@@ -126,9 +158,11 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
     }
   }
 
-  for (const msg of messages) {
+  for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
+    const msg = messages[messageIndex];
     const sharedMetadata = {
       id: msg.id,
+      messageOrigin: msg.messageOrigin,
       displayText: msg.displayText,
       commandName: msg.commandName,
       commandMessage: msg.commandMessage,
@@ -228,8 +262,14 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
               content: formatToolResultContent(tr.content),
               isError: Boolean(tr.isError),
               toolUseResult: (tr as any).toolUseResult,
+              timestamp: tr.timestamp,
             }
           : null;
+        const durationMs = typeof msg.durationMs === 'number'
+          ? msg.durationMs
+          : toolResult?.timestamp
+            ? elapsedMs(msg.timestamp, toolResult.timestamp)
+            : undefined;
 
         converted.push({
           type: 'assistant',
@@ -240,6 +280,7 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
           toolInput: typeof msg.toolInput === 'string' ? msg.toolInput : JSON.stringify(msg.toolInput ?? '', null, 2),
           toolId: msg.toolId,
           toolResult,
+          durationMs,
           isSubagentContainer,
           subagentState: isSubagentContainer
             ? {
@@ -260,6 +301,7 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
             content: msg.content,
             timestamp: msg.timestamp,
             isThinking: true,
+            durationMs: completedPhaseDuration(messages, messageIndex),
             ...sharedMetadata,
           });
         }
@@ -303,6 +345,7 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
           isMemoryUpdate: true,
           memoryFiles: Array.isArray(msg.memoryFiles) ? msg.memoryFiles : [],
           memoryDiffs: msg.memoryDiffs ?? {},
+          durationMs: typeof msg.durationMs === 'number' ? msg.durationMs : undefined,
           ...sharedMetadata,
         });
         break;
@@ -362,6 +405,21 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
 
       default:
         break;
+    }
+  }
+
+  // A confirmed interrupt is the only fallback end boundary for unresolved
+  // tool and agent rows. Settle every row in that turn at the marker so no
+  // spinner or live counter survives below "Interrupted".
+  for (let index = 0; index < converted.length; index += 1) {
+    const marker = converted[index];
+    if (!marker.isInterruptMarker) continue;
+    for (let priorIndex = index - 1; priorIndex >= 0; priorIndex -= 1) {
+      const prior = converted[priorIndex];
+      if (prior.type === 'user') break;
+      if (!prior.isToolUse || prior.toolResult) continue;
+      prior.durationMs ??= elapsedMs(prior.timestamp, marker.timestamp);
+      if (prior.subagentState) prior.subagentState.isComplete = true;
     }
   }
 

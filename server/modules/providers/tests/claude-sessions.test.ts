@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { ClaudeSessionsProvider } from '@/modules/providers/list/claude/claude-sessions.provider.js';
+import { wrapMachineMessage } from '@/shared/utils.js';
 
 const SESSION_ID = 'session-1';
 
@@ -12,6 +13,21 @@ const SKILL_BODY = [
   '',
   'This skill helps you build LLM-powered applications with Claude.',
 ].join('\n');
+
+test('claude: watchdog prompts keep explicit origin live and on reload', () => {
+  const provider = new ClaudeSessionsProvider();
+  const content = wrapMachineMessage('Check the dispatched chain.', 'watchdog');
+  for (const rawContent of [content, [{ type: 'text', text: content }]]) {
+    const messages = provider.normalizeMessage({
+      uuid: `watchdog-${typeof rawContent}`,
+      timestamp: '2026-08-27T10:00:00.000Z',
+      message: { role: 'user', content: rawContent },
+    }, SESSION_ID);
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].content, 'Check the dispatched chain.');
+    assert.equal(messages[0].messageOrigin, 'watchdog');
+  }
+});
 
 test('claude: injected skill bodies are hidden even without the isMeta flag', () => {
   const provider = new ClaudeSessionsProvider();

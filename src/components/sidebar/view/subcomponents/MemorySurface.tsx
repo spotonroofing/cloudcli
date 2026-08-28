@@ -142,7 +142,7 @@ export default function MemorySurface({ open, onClose, t }: MemorySurfaceProps) 
         )}
       </div>
 
-      <div className="border-t border-border/60 px-3 pb-3 pt-2" data-slot="memory-prompt">
+      <div className="border-t border-border/60 px-3 py-3" data-slot="memory-prompt">
         <PromptInput onSubmit={onSubmit} status={running ? 'submitted' : 'ready'}>
           <div className="flex items-end px-2 pb-1.5">
             <PromptInputBody className="min-w-0 flex-1">
@@ -151,7 +151,7 @@ export default function MemorySurface({ open, onClose, t }: MemorySurfaceProps) 
                 value={instruction}
                 onChange={(event) => setInstruction(event.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder={t('memory.prompt', 'Remember that...')}
+                placeholder={t('memory.prompt', 'Iterate memory...')}
                 aria-label={t('memory.promptLabel', 'Edit memory')}
                 disabled={running}
                 className="px-2 py-1.5 leading-5 md:text-[13px]"

@@ -10,6 +10,7 @@ import {
   generateMessageId,
   getOpenCodeDatabasePath,
   normalizeProviderTimestamp,
+  parseMachineMessage,
   readObjectRecord,
   readJsonRecord,
   readOptionalString,
@@ -402,10 +403,11 @@ export class OpenCodeSessionsProvider implements IProviderSessions {
 
       if (partType === 'text') {
         const rawContent = extractText(partData);
+        const machineMessage = messageRole === 'user' ? parseMachineMessage(rawContent) : null;
         // User prompts sent with attachments carry an <images_input> path
         // list; strip it for display and surface the paths as images.
         const parsedImages = messageRole === 'user'
-          ? parseImagesInputTag(rawContent)
+          ? parseImagesInputTag(machineMessage?.content ?? rawContent)
           : { text: rawContent, attachments: [] };
         const parsedFiles = messageRole === 'user'
           ? parseFilesInputTag(parsedImages.text)
@@ -423,6 +425,7 @@ export class OpenCodeSessionsProvider implements IProviderSessions {
             kind: 'text',
             role: messageRole === 'user' ? 'user' : 'assistant',
             content: parsedFiles.text,
+            messageOrigin: machineMessage?.origin,
             images: parsedImages.attachments.length > 0 ? parsedImages.attachments : undefined,
             files: parsedFiles.attachments.length > 0 ? parsedFiles.attachments : undefined,
           }));

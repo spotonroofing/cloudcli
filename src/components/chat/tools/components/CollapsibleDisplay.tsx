@@ -9,6 +9,7 @@ interface CollapsibleDisplayProps {
   defaultOpen?: boolean;
   action?: React.ReactNode;
   statusIcon?: React.ReactNode;
+  durationMeta?: React.ReactNode;
   onTitleClick?: () => void;
   children: React.ReactNode;
   showRawParameters?: boolean;
@@ -22,6 +23,7 @@ export const CollapsibleDisplay: React.FC<CollapsibleDisplayProps> = ({
   defaultOpen = false,
   action,
   statusIcon,
+  durationMeta,
   onTitleClick,
   children,
   showRawParameters = false,
@@ -36,6 +38,7 @@ export const CollapsibleDisplay: React.FC<CollapsibleDisplayProps> = ({
         open={defaultOpen}
         action={action}
         statusIcon={statusIcon}
+        durationMeta={durationMeta}
         onTitleClick={onTitleClick}
       >
         {children}

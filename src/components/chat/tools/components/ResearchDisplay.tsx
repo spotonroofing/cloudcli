@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { cn } from '../../../../lib/utils';
 import { AgentDisclosure, CitationList, SPRING_SWAP } from '../../../../shared/view/beui';
 import type { CitationItem } from '../../../../shared/view/beui';
+import StatusDuration from '../../view/subcomponents/StatusDuration';
 
 import { ToolRowStatusIcon, firstErrorLine } from './ToolRowStatus';
 
@@ -13,6 +14,9 @@ interface ResearchDisplayProps {
   toolName: string;
   toolInput: unknown;
   toolResult?: { content?: unknown; isError?: boolean } | null;
+  startedAt?: string | number | Date;
+  durationMs?: number;
+  running?: boolean;
 }
 
 const parseInputObject = (toolInput: unknown): Record<string, any> => {
@@ -39,12 +43,19 @@ const domainOf = (url: string): string | null => {
  * result actually carried (title + URL favicon rows, opening in a new tab).
  * Sources are never synthesized: no result, no rows.
  */
-export const ResearchDisplay: React.FC<ResearchDisplayProps> = ({ toolName, toolInput, toolResult }) => {
+export const ResearchDisplay: React.FC<ResearchDisplayProps> = ({
+  toolName,
+  toolInput,
+  toolResult,
+  startedAt,
+  durationMs,
+  running: runningOverride,
+}) => {
   const reduce = useReducedMotion() ?? false;
   const [open, setOpen] = useState(false);
   const isFetch = toolName === 'WebFetch';
   const input = useMemo(() => parseInputObject(toolInput), [toolInput]);
-  const running = !toolResult;
+  const running = runningOverride ?? !toolResult;
   const failed = Boolean(toolResult?.isError);
   const url = String(input.url || '');
   const query = isFetch ? (domainOf(url) || url) : String(input.query || '');
@@ -120,6 +131,7 @@ export const ResearchDisplay: React.FC<ResearchDisplayProps> = ({ toolName, tool
             {sources.length} {sources.length === 1 ? 'source' : 'sources'}
           </span>
         )}
+        <StatusDuration startedAt={startedAt} durationMs={durationMs} running={running} />
         {/* Fixed size-4 chevron slot per the shared tool-row right-edge column. */}
         <span className="grid size-4 shrink-0 place-items-center">
           {expandable && (

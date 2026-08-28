@@ -3,6 +3,7 @@ import React from 'react';
 import type { SubagentChildTool } from '../../types/types';
 import { Thinking } from '../../../../shared/view/beui';
 import type { ThinkingRow } from '../../../../shared/view/beui';
+import StatusDuration from '../../view/subcomponents/StatusDuration';
 
 interface SubagentContainerProps {
   toolInput: unknown;
@@ -12,6 +13,9 @@ interface SubagentContainerProps {
     currentToolIndex: number;
     isComplete: boolean;
   };
+  startedAt?: string | number | Date;
+  durationMs?: number;
+  isRunning?: boolean;
 }
 
 const getCompactToolDisplay = (toolName: string, toolInput: unknown): string => {
@@ -74,6 +78,9 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
   toolInput,
   toolResult,
   subagentState,
+  startedAt,
+  durationMs,
+  isRunning = false,
 }) => {
   const parsedInput = typeof toolInput === 'string' ? (() => {
     try { return JSON.parse(toolInput); } catch { return {}; }
@@ -83,25 +90,27 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
   const description = parsedInput?.description || 'Running task';
   const prompt = parsedInput?.prompt || '';
   const { childTools, isComplete } = subagentState;
+  const settled = isComplete || !isRunning;
 
   const rows: ThinkingRow[] = childTools.map((child, index) => ({
     key: child.toolId || `${child.toolName}-${index}`,
     primary: child.toolName,
     secondary: getCompactToolDisplay(child.toolName, child.toolInput) || undefined,
     mono: true,
-    state: !isComplete && index === childTools.length - 1 ? 'active' : 'done',
+    state: !settled && index === childTools.length - 1 ? 'active' : 'done',
     isError: Boolean(child.toolResult?.isError),
   }));
 
-  const resultText = isComplete && toolResult ? extractResultText(toolResult.content) : null;
+  const resultText = settled && toolResult ? extractResultText(toolResult.content) : null;
 
   return (
     <div className="my-0.5">
       <Thinking
         mode="steps"
-        working={!isComplete}
+        working={!settled}
         activeLabel={description}
         doneLabel={`${description} · ${subagentType}, ${childTools.length} ${childTools.length === 1 ? 'tool' : 'tools'}`}
+        meta={<StatusDuration startedAt={startedAt} durationMs={durationMs} running={!settled} />}
         intro={prompt ? (
           <span className="line-clamp-4 whitespace-pre-wrap break-words">{prompt}</span>
         ) : undefined}

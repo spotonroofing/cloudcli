@@ -47,6 +47,7 @@ export function createMemoryRouter(): express.Router {
             id: row.id,
             files: parseJson<string[]>(row.files_json, []).filter((entry) => typeof entry === 'string'),
             diffs: parseJson<Record<string, string[]>>(row.diffs_json, {}),
+            durationMs: row.duration_ms,
             createdAt: row.created_at,
           })),
         }),

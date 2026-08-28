@@ -15,6 +15,7 @@ interface BashCommandDisplayProps {
   isError?: boolean;
   status?: ToolStatus;
   defaultOpen?: boolean;
+  durationMeta?: React.ReactNode;
 }
 
 /**
@@ -30,6 +31,7 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
   isError = false,
   status,
   defaultOpen = false,
+  durationMeta,
 }) => {
   const reduce = useReducedMotion() ?? false;
   const trimmedOutput = (output || '').replace(/\s+$/, '');
@@ -100,6 +102,7 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
             {outputLineCount} {outputLineCount === 1 ? 'line' : 'lines'}
           </span>
         )}
+        {durationMeta}
 
         {/* Fixed chevron slot: every tool row ends in this size-4 slot so the
             chevrons share one right-edge column regardless of content. */}

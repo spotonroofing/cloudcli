@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Ban, BookMarked, ChevronDown, Info, Pencil, RotateCcw, Wrench } from 'lucide-react';
+import { Ban, BookMarked, ChevronDown, Cpu, Info, Pencil, RotateCcw, Wrench } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 
 import type {
@@ -22,6 +22,7 @@ import ChatMessageFiles from './ChatMessageFiles';
 import { Markdown } from './Markdown';
 import MessageCopyControl from './MessageCopyControl';
 import MessageSpeakControl from './MessageSpeakControl';
+import StatusDuration from './StatusDuration';
 
 type DiffLine = {
   type: string;
@@ -54,6 +55,8 @@ type MessageComponentProps = {
   onSaveEditMessage?: (message: ChatMessage, content: string) => void;
   /** Cancel/Escape from the inline editor: restores the original bubble. */
   onCancelEditMessage?: () => void;
+  /** True only for rows in the currently running tail turn. */
+  isTurnRunning?: boolean;
 };
 
 type InteractiveOption = {
@@ -94,7 +97,15 @@ export function InterruptedMarker() {
  * "Thought for a few seconds" row anatomy exactly (icon slot, type, chevron,
  * expand behavior); the files live behind the expand, one row each.
  */
-export function MemoryUpdatedMarker({ files, diffs = {} }: { files: string[]; diffs?: Record<string, string[]> }) {
+export function MemoryUpdatedMarker({
+  files,
+  diffs = {},
+  durationMs,
+}: {
+  files: string[];
+  diffs?: Record<string, string[]>;
+  durationMs?: number;
+}) {
   const { t } = useTranslation('chat');
   return (
     <div data-slot="memory-updated-marker">
@@ -104,6 +115,7 @@ export function MemoryUpdatedMarker({ files, diffs = {} }: { files: string[]; di
         icon={<BookMarked aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />}
         activeLabel={t('memoryUpdated', { defaultValue: 'Memory updated' })}
         doneLabel={t('memoryUpdated', { defaultValue: 'Memory updated' })}
+        meta={<StatusDuration durationMs={durationMs} />}
         footer={files.map((file) => {
           // One trace row per file (the Thinking row anatomy), and under it
           // the server's excerpt of the real change (ui14 job 3): plain diff
@@ -126,6 +138,44 @@ export function MemoryUpdatedMarker({ files, diffs = {} }: { files: string[]; di
           );
         })}
       />
+    </div>
+  );
+}
+
+/** Machine-to-planner prompt: compact meta row, never a user bubble. */
+function MachineMessageRow({ content }: { content: string }) {
+  const reduce = useReducedMotion() ?? false;
+  const [open, setOpen] = useState(false);
+  const summary = content.replace(/\s+/g, ' ').trim();
+  return (
+    <div data-slot="machine-message-row" data-origin="watchdog" className="my-0.5 w-full">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="group/machine flex min-h-7 w-full items-center gap-2 rounded-md py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span className="grid size-4 shrink-0 place-items-center text-sky-600 dark:text-sky-400">
+          <Cpu aria-hidden="true" className="size-3.5" />
+        </span>
+        <span className="shrink-0 text-xs font-medium text-sky-700 dark:text-sky-300">Watchdog</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70">{summary}</span>
+        <motion.span
+          aria-hidden="true"
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={reduce ? { duration: 0 } : SPRING_SWAP}
+          className="grid size-4 shrink-0 place-items-center text-muted-foreground/50 group-hover/machine:text-muted-foreground"
+        >
+          <ChevronDown className="size-3.5" />
+        </motion.span>
+      </button>
+      <AgentDisclosure open={open}>
+        <div className="pl-6 pt-1.5">
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted/80 p-3 font-mono text-[11px] leading-4 text-muted-foreground/80">
+            {content}
+          </pre>
+        </div>
+      </AgentDisclosure>
     </div>
   );
 }
@@ -310,7 +360,7 @@ function UserMessageEditor({ initialText, onCancel, onSave }: {
   );
 }
 
-const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, isTurnFinal, onRerun, onEditMessage, editingMessageId, onSaveEditMessage, onCancelEditMessage }: MessageComponentProps) => {
+const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, isTurnFinal, onRerun, onEditMessage, editingMessageId, onSaveEditMessage, onCancelEditMessage, isTurnRunning = false }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   const reduceMotion = useReducedMotion() ?? false;
   // Evaluated once per mount: a row that pops in must not replay on re-render.
@@ -382,6 +432,14 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
     );
   }
 
+  if (message.messageOrigin === 'watchdog') {
+    return (
+      <div className="chat-message machine px-3 sm:px-0" data-message-timestamp={message.timestamp || undefined}>
+        <MachineMessageRow content={formattedMessageContent} />
+      </div>
+    );
+  }
+
   // One error row for the whole app (ui14 job 12): every session-level error
   // — limit messages, provider errors, anything that used to render as the
   // red "Error" block — is the same themed tool-row anatomy: leading red
@@ -400,6 +458,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
         <MemoryUpdatedMarker
           files={Array.isArray(message.memoryFiles) ? message.memoryFiles : []}
           diffs={message.memoryDiffs}
+          durationMs={message.durationMs}
         />
       </div>
     );
@@ -518,6 +577,9 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                 toolName={message.toolName}
                 toolInput={message.toolInput}
                 toolResult={message.toolResult}
+                startedAt={message.timestamp}
+                durationMs={message.durationMs}
+                running={isTurnRunning && !message.toolResult}
               />
             ) : message.isToolUse ? (
               <>
@@ -543,6 +605,9 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                     rawToolInput={typeof message.toolInput === 'string' ? message.toolInput : undefined}
                     isSubagentContainer={message.isSubagentContainer}
                     subagentState={message.subagentState}
+                    startedAt={message.timestamp}
+                    durationMs={message.durationMs}
+                    isRunning={isTurnRunning && !message.toolResult}
                   />
                 )}
 
@@ -661,7 +726,8 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                 mode="reasoning"
                 working={false}
                 activeLabel={t('claudeStatus.actions.thinking', { defaultValue: 'Thinking' })}
-                doneLabel={t('claudeStatus.thought', { defaultValue: 'Thought for a few seconds' })}
+                doneLabel={t('claudeStatus.thought', { defaultValue: 'Thought for' })}
+                meta={<StatusDuration durationMs={message.durationMs} />}
               >
                 <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
                   {message.content}
@@ -676,7 +742,8 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                     mode="reasoning"
                     working={false}
                     activeLabel={t('claudeStatus.actions.thinking', { defaultValue: 'Thinking' })}
-                    doneLabel={t('claudeStatus.thought', { defaultValue: 'Thought for a few seconds' })}
+                    doneLabel={t('claudeStatus.thought', { defaultValue: 'Thought for' })}
+                    meta={<StatusDuration durationMs={message.durationMs} />}
                   >
                     <div className="whitespace-pre-wrap">
                       {message.reasoning}

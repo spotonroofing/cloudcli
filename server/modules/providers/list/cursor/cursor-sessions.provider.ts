@@ -8,6 +8,7 @@ import type { AnyRecord, FetchHistoryOptions, FetchHistoryResult, NormalizedMess
 import {
   createNormalizedMessage,
   generateMessageId,
+  parseMachineMessage,
   readObjectRecord,
   sanitizeLeafDirectoryName,
   sliceTailPage,
@@ -87,6 +88,7 @@ function extractUserTextAndImages(
   role: 'user' | 'assistant',
 ): {
   text: string;
+  messageOrigin?: 'watchdog';
   images?: Array<{ path: string; name?: string }>;
   files?: Array<{ path: string; name?: string }>;
 } {
@@ -95,10 +97,12 @@ function extractUserTextAndImages(
     return { text: unwrapped };
   }
 
-  const parsedImages = parseImagesInputTag(unwrapped);
+  const machineMessage = parseMachineMessage(unwrapped);
+  const parsedImages = parseImagesInputTag(machineMessage?.content ?? unwrapped);
   const parsedFiles = parseFilesInputTag(parsedImages.text);
   return {
     text: parsedFiles.text,
+    messageOrigin: machineMessage?.origin,
     images: parsedImages.attachments.length > 0 ? parsedImages.attachments : undefined,
     files: parsedFiles.attachments.length > 0 ? parsedFiles.attachments : undefined,
   };
@@ -477,17 +481,7 @@ export class CursorSessionsProvider implements IProviderSessions {
                 text = unwrapUserQueryText(content.message.content, role);
               }
             }
-            const { text: cleanText, images, files } = role === 'user'
-              ? (() => {
-                const parsedImages = parseImagesInputTag(text);
-                const parsedFiles = parseFilesInputTag(parsedImages.text);
-                return {
-                  text: parsedFiles.text,
-                  images: parsedImages.attachments.length > 0 ? parsedImages.attachments : undefined,
-                  files: parsedFiles.attachments.length > 0 ? parsedFiles.attachments : undefined,
-                };
-              })()
-              : { text, images: undefined, files: undefined };
+            const { text: cleanText, messageOrigin, images, files } = extractUserTextAndImages(text, role);
             if (cleanText?.trim() || images || files) {
               messages.push(createNormalizedMessage({
                 id: baseId,
@@ -497,6 +491,7 @@ export class CursorSessionsProvider implements IProviderSessions {
                 kind: 'text',
                 role,
                 content: cleanText,
+                messageOrigin,
                 images,
                 files,
                 sequence: blob.sequence,
@@ -550,7 +545,7 @@ export class CursorSessionsProvider implements IProviderSessions {
             }
 
             if (part?.type === 'text' && part?.text) {
-              const { text: normalizedPartText, images, files } = extractUserTextAndImages(part.text, role);
+              const { text: normalizedPartText, messageOrigin, images, files } = extractUserTextAndImages(part.text, role);
               if (!normalizedPartText && !images && !files) {
                 continue;
               }
@@ -562,6 +557,7 @@ export class CursorSessionsProvider implements IProviderSessions {
                 kind: 'text',
                 role,
                 content: normalizedPartText,
+                messageOrigin,
                 images,
                 files,
                 sequence: blob.sequence,
@@ -603,7 +599,7 @@ export class CursorSessionsProvider implements IProviderSessions {
           && content.content.trim()
           && !isInternalCursorText(content.content)
         ) {
-          const { text: normalizedText, images, files } = extractUserTextAndImages(content.content, role);
+          const { text: normalizedText, messageOrigin, images, files } = extractUserTextAndImages(content.content, role);
           if (!normalizedText && !images && !files) {
             continue;
           }
@@ -615,6 +611,7 @@ export class CursorSessionsProvider implements IProviderSessions {
             kind: 'text',
             role,
             content: normalizedText,
+            messageOrigin,
             images,
             files,
             sequence: blob.sequence,
@@ -634,6 +631,7 @@ export class CursorSessionsProvider implements IProviderSessions {
             content: msg.content,
             isError: msg.isError,
             toolUseResult: msg.toolUseResult,
+            timestamp: msg.timestamp,
           };
         }
       }

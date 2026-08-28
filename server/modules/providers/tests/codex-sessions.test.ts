@@ -7,6 +7,7 @@ import test from 'node:test';
 import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
 import { CodexSessionSynchronizer } from '@/modules/providers/list/codex/codex-session-synchronizer.provider.js';
 import { CodexSessionsProvider } from '@/modules/providers/list/codex/codex-sessions.provider.js';
+import { wrapMachineMessage } from '@/shared/utils.js';
 
 const patchHomeDir = (nextHomeDir: string) => {
   const original = os.homedir;
@@ -15,6 +16,17 @@ const patchHomeDir = (nextHomeDir: string) => {
     (os as any).homedir = original;
   };
 };
+
+test('Codex history keeps watchdog origin metadata on its user row', () => {
+  const provider = new CodexSessionsProvider();
+  const [row] = provider.normalizeMessage({
+    uuid: 'watchdog-1',
+    timestamp: '2026-08-27T10:00:00.000Z',
+    message: { role: 'user', content: wrapMachineMessage('Inspect the run.', 'watchdog') },
+  }, 'session-1');
+  assert.equal(row.content, 'Inspect the run.');
+  assert.equal(row.messageOrigin, 'watchdog');
+});
 
 async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promise<void> {
   const previousDatabasePath = process.env.DATABASE_PATH;

@@ -5,7 +5,7 @@ import { sessionsDb } from '@/modules/database/index.js';
 import { parseFilesInputTag, toImageAttachments } from '@/shared/image-attachments.js';
 import type { IProviderSessions } from '@/shared/interfaces.js';
 import type { AnyRecord, FetchHistoryOptions, FetchHistoryResult, NormalizedMessage } from '@/shared/types.js';
-import { createNormalizedMessage, generateMessageId, readObjectRecord, sliceTailPage } from '@/shared/utils.js';
+import { createNormalizedMessage, generateMessageId, parseMachineMessage, readObjectRecord, sliceTailPage } from '@/shared/utils.js';
 
 const PROVIDER = 'codex';
 
@@ -663,7 +663,8 @@ export class CodexSessionsProvider implements IProviderSessions {
               .filter(Boolean)
               .join('\n')
           : String(raw.message.content || '');
-      const parsedFiles = parseFilesInputTag(content);
+      const machineMessage = parseMachineMessage(content);
+      const parsedFiles = parseFilesInputTag(machineMessage?.content ?? content);
       const rawImages = Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : undefined;
       const files = parsedFiles.attachments.length > 0 ? parsedFiles.attachments : undefined;
       if (!parsedFiles.text.trim() && !rawImages && !files) {
@@ -677,6 +678,7 @@ export class CodexSessionsProvider implements IProviderSessions {
         kind: 'text',
         role: 'user',
         content: parsedFiles.text,
+        messageOrigin: machineMessage?.origin,
         images: rawImages,
         files,
       })];
@@ -915,7 +917,7 @@ export class CodexSessionsProvider implements IProviderSessions {
       if (msg.kind === 'tool_use' && msg.toolId && toolResultMap.has(msg.toolId)) {
         const toolResult = toolResultMap.get(msg.toolId);
         if (toolResult) {
-          msg.toolResult = { content: toolResult.content, isError: toolResult.isError };
+          msg.toolResult = { content: toolResult.content, isError: toolResult.isError, timestamp: toolResult.timestamp };
         }
       }
     }

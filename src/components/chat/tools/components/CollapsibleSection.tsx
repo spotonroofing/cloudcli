@@ -12,6 +12,7 @@ interface CollapsibleSectionProps {
   action?: React.ReactNode;
   /** Leading status icon (ui12 job 10): ramped spinner / error glyph at row start. */
   statusIcon?: React.ReactNode;
+  durationMeta?: React.ReactNode;
   onTitleClick?: () => void;
   children: React.ReactNode;
   className?: string;
@@ -31,6 +32,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   open = false,
   action,
   statusIcon,
+  durationMeta,
   onTitleClick,
   children,
   className = '',
@@ -87,6 +89,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             {title}
           </button>
           {action && <span className="shrink-0">{action}</span>}
+          {durationMeta}
           <span className="ml-auto flex shrink-0 items-center">{chevron}</span>
         </div>
       ) : (
@@ -102,6 +105,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           )}
           <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70">{title}</span>
           {action && <span className="shrink-0">{action}</span>}
+          {durationMeta}
           {chevron}
         </button>
       )}

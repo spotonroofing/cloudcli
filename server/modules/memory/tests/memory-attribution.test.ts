@@ -104,6 +104,8 @@ test('concurrent planner and worker memory writes land on their own sessions', a
     assert.equal(workerRows.length, 1);
     assert.deepEqual(JSON.parse(plannerRows[0].files_json), ['PROJECT.md']);
     assert.deepEqual(JSON.parse(workerRows[0].files_json), ['lessons/new-lesson.md', 'sessions/summary.md']);
+    assert.ok((plannerRows[0].duration_ms ?? 0) >= 2_400);
+    assert.ok((workerRows[0].duration_ms ?? 0) >= 2_400);
 
     const plannerDiffs = JSON.parse(plannerRows[0].diffs_json ?? '{}') as Record<string, string[]>;
     const workerDiffs = JSON.parse(workerRows[0].diffs_json ?? '{}') as Record<string, string[]>;

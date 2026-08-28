@@ -322,6 +322,7 @@ CREATE TABLE IF NOT EXISTS memory_updates (
     session_id TEXT NOT NULL,
     files_json TEXT NOT NULL,
     diffs_json TEXT,
+    duration_ms INTEGER,
     created_at TEXT NOT NULL
 );
 `;

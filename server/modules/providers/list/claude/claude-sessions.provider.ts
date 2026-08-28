@@ -7,7 +7,7 @@ import type { IProviderSessions } from '@/shared/interfaces.js';
 import type { AnyRecord, FetchHistoryOptions, FetchHistoryResult, NormalizedMessage } from '@/shared/types.js';
 import { parseFilesInputTag } from '@/shared/image-attachments.js';
 import { commandDisplayText, extractTaggedContent, parseCommandMessage } from '@/shared/command-message.js';
-import { createNormalizedMessage, generateMessageId, readObjectRecord, sliceTailPage } from '@/shared/utils.js';
+import { createNormalizedMessage, generateMessageId, parseMachineMessage, readObjectRecord, sliceTailPage } from '@/shared/utils.js';
 import { sessionsDb } from '@/modules/database/index.js';
 
 const PROVIDER = 'claude';
@@ -15,6 +15,7 @@ const PROVIDER = 'claude';
 type ClaudeToolResult = {
   content: unknown;
   isError: boolean;
+  timestamp?: string;
   subagentTools?: unknown;
   toolUseResult?: unknown;
 };
@@ -325,6 +326,20 @@ export class ClaudeSessionsProvider implements IProviderSessions {
             }));
           } else if (part.type === 'text') {
             const text = part.text || '';
+            const machineMessage = parseMachineMessage(text);
+            if (machineMessage) {
+              messages.push(createNormalizedMessage({
+                id: `${baseId}_text_${partIndex}`,
+                sessionId,
+                timestamp: ts,
+                provider: PROVIDER,
+                kind: 'text',
+                role: 'user',
+                content: machineMessage.content,
+                messageOrigin: machineMessage.origin,
+              }));
+              continue;
+            }
             if (isInterruptText(text)) {
               messages.push(createNormalizedMessage({
                 id: `${baseId}_text_${partIndex}`,
@@ -398,6 +413,21 @@ export class ClaudeSessionsProvider implements IProviderSessions {
         }
       } else if (typeof raw.message.content === 'string') {
         const text = raw.message.content;
+        const machineMessage = parseMachineMessage(text);
+
+        if (machineMessage) {
+          messages.push(createNormalizedMessage({
+            id: baseId,
+            sessionId,
+            timestamp: ts,
+            provider: PROVIDER,
+            kind: 'text',
+            role: 'user',
+            content: machineMessage.content,
+            messageOrigin: machineMessage.origin,
+          }));
+          return messages;
+        }
 
         if (isInterruptText(text)) {
           messages.push(createNormalizedMessage({
@@ -635,6 +665,7 @@ export class ClaudeSessionsProvider implements IProviderSessions {
             toolResultMap.set(part.tool_use_id, {
               content: part.content,
               isError: Boolean(part.is_error),
+              timestamp: raw.timestamp,
               subagentTools: raw.subagentTools,
               toolUseResult: raw.toolUseResult,
             });
@@ -661,6 +692,7 @@ export class ClaudeSessionsProvider implements IProviderSessions {
             : JSON.stringify(toolResult.content),
           isError: toolResult.isError,
           toolUseResult: toolResult.toolUseResult,
+          timestamp: toolResult.timestamp,
         };
         msg.subagentTools = toolResult.subagentTools;
       }

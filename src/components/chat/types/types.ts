@@ -43,6 +43,8 @@ export interface ChatMessage {
   id?: string;
   type: string;
   content?: string;
+  /** Explicit producer identity for a user-role turn not authored by Willem. */
+  messageOrigin?: 'watchdog';
   displayText?: string;
   timestamp: string | number | Date;
   images?: ChatImage[];
@@ -73,6 +75,8 @@ export interface ChatMessage {
   memoryFiles?: string[];
   /** Per-file excerpt of the real change (plain diff lines), keyed by path. */
   memoryDiffs?: Record<string, string[]>;
+  /** Exact elapsed time for a completed status-bearing row. */
+  durationMs?: number;
   isSubagentContainer?: boolean;
   subagentState?: {
     childTools: SubagentChildTool[];

@@ -202,6 +202,14 @@ export type MessageKind =
   | 'memory_update';
 
 /**
+ * Explicit producer identity for a user-role transcript turn that was not
+ * authored by the person using the app. Providers preserve this metadata so
+ * the client can render machine-to-planner traffic as a meta row both live and
+ * after history reload. Never infer this value from prompt wording.
+ */
+export type MessageOrigin = 'watchdog';
+
+/**
  * Event kinds added by the chat gateway layer on top of provider message kinds.
  *
  * These are app-level realtime events (subscription acks, sidebar deltas,
@@ -247,6 +255,8 @@ export type NormalizedMessage = {
   seq?: number;
   role?: 'user' | 'assistant';
   content?: string;
+  /** Explicit producer of a non-human user-role turn. */
+  messageOrigin?: MessageOrigin;
   /**
    * Optional display-oriented metadata used by providers that need to expose
    * richer transcript artifacts without introducing a brand-new message kind.
@@ -280,7 +290,11 @@ export type NormalizedMessage = {
     content?: string;
     isError?: boolean;
     toolUseResult?: unknown;
+    /** Provider timestamp at which the tool result settled. */
+    timestamp?: string;
   };
+  /** Exact elapsed time for a completed status-bearing row. */
+  durationMs?: number;
   isError?: boolean;
   text?: string;
   tokens?: number;

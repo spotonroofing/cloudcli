@@ -59,6 +59,8 @@ export interface NormalizedMessage {
   // kind-specific fields (flat for simplicity)
   role?: 'user' | 'assistant';
   content?: string;
+  /** Explicit producer identity for machine-authored user-role turns. */
+  messageOrigin?: 'watchdog';
   /**
    * Mirrors optional transcript metadata from the server.
    *
@@ -85,7 +87,9 @@ export interface NormalizedMessage {
   toolName?: string;
   toolInput?: unknown;
   toolId?: string;
-  toolResult?: { content: string; isError: boolean; toolUseResult?: unknown } | null;
+  toolResult?: { content: string; isError: boolean; toolUseResult?: unknown; timestamp?: string } | null;
+  /** Exact elapsed time for a completed status-bearing row. */
+  durationMs?: number;
   isError?: boolean;
   text?: string;
   tokens?: number;

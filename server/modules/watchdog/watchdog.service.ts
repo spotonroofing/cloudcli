@@ -10,7 +10,7 @@ import { providerRuntimeService, providerTokenUsageService, sessionsService } fr
 import { sendFleetNotification } from '@/modules/notifications/index.js';
 import { settingsService, type WatchdogBehavior } from '@/modules/settings/index.js';
 import type { LLMProvider } from '@/shared/types.js';
-import { normalizeProjectPath } from '@/shared/utils.js';
+import { normalizeProjectPath, wrapMachineMessage } from '@/shared/utils.js';
 import { WS_OPEN_STATE, chatRunRegistry, connectedClients } from '@/modules/websocket/index.js';
 
 import { findUnpushedHandoff } from './handoff-push.js';
@@ -1338,7 +1338,7 @@ class WatchdogService {
       end: () => undefined,
     };
     await runner(
-      prompt,
+      wrapMachineMessage(prompt, 'watchdog'),
       {
         projectPath,
         cwd: projectPath,
@@ -1453,7 +1453,7 @@ class WatchdogService {
     try {
       await providerRuntimeService.run(
         provider,
-        prompt,
+        wrapMachineMessage(prompt, 'watchdog'),
         {
           sessionId,
           cwd: projectPath,

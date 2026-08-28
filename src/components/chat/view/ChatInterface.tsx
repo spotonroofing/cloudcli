@@ -4,6 +4,11 @@ import { ArrowDownIcon } from 'lucide-react';
 
 import { useWebSocket } from '../../../contexts/WebSocketContext';
 import PermissionContext from '../../../contexts/PermissionContext';
+import type { SessionActivityPhase } from '../../../hooks/useSessionProtection';
+import { useSessionStore } from '../../../stores/useSessionStore';
+import type { LLMProvider } from '../../../types/app';
+import { copyTextToClipboard } from '../../../utils/clipboard';
+import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
 import type { ChatInterfaceProps, ChatMessage } from '../types/types';
 import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
@@ -13,17 +18,30 @@ import { createQueuedMessageId } from '../utils/chatStorage';
 import { useMemoryUpdates } from '../hooks/useMemoryUpdates';
 import { useMessageVersions } from '../hooks/useMessageVersions';
 import { findEditGroupId } from '../utils/messageVersions';
-import { useSessionStore } from '../../../stores/useSessionStore';
-import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
-import { copyTextToClipboard } from '../../../utils/clipboard';
-import type { LLMProvider } from '../../../types/app';
-import { convertMarkdownToPlainText } from './subcomponents/MessageCopyControl';
 
+import { convertMarkdownToPlainText } from './subcomponents/MessageCopyControl';
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
 import { ChatProjectContext } from './subcomponents/ChatProjectContext';
 import CommandResultModal from './subcomponents/CommandResultModal';
 import type { ProviderModelGroup } from './subcomponents/ComposerModelMenu';
+
+function inferLivePhase(messages: ChatMessage[], runStartedAt: number): SessionActivityPhase | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const rowStartedAt = new Date(message.timestamp).getTime();
+    const resultAt = message.toolResult?.timestamp
+      ? new Date(message.toolResult.timestamp).getTime()
+      : Number.NaN;
+    if (Math.max(rowStartedAt, resultAt) < runStartedAt) return null;
+    if (message.isMemoryUpdate || message.isInterruptMarker) continue;
+    if (message.isToolUse) return message.toolResult ? 'thinking' : 'tool';
+    if (message.isThinking) return 'thinking';
+    if (message.type === 'assistant' && String(message.content || '').trim()) return 'writing';
+    if (message.type === 'user') return 'thinking';
+  }
+  return null;
+}
 
 function ChatInterface({
   isActive,
@@ -170,6 +188,18 @@ function ChatInterface({
     messageVersions: messageVersionView,
     memoryUpdates,
   });
+  const activeSessionKey = selectedSession?.id || currentSessionId || null;
+
+  // Externally driven turns arrive through persisted-tail refreshes rather
+  // than live provider frames. Infer their phase from only rows newer than
+  // this run so the visible indicator and tool counter stay truthful too.
+  useEffect(() => {
+    if (!activeSessionKey || !sessionActivity) return;
+    const phase = inferLivePhase(chatMessages, sessionActivity.startedAt);
+    if (phase && phase !== sessionActivity.phase) {
+      onSessionProcessing?.(activeSessionKey, { phase });
+    }
+  }, [activeSessionKey, chatMessages, onSessionProcessing, sessionActivity]);
 
   // Palette convenience: "Copy last response" copies the newest assistant
   // text of the open chat as plain text (same conversion as the copy button).
@@ -292,8 +322,6 @@ function ChatInterface({
   // until the run completes). An error during the attempt, or a turn that ends
   // without a ready message, flips to a retryable failure.
   // ------------------------------------------------------------------
-  const activeSessionKey = selectedSession?.id || currentSessionId || null;
-
   // Report the internally tracked session — set by the load/reset effects,
   // not derived from the selectedSession prop — so the pane header can catch
   // this surface holding a different session than the one it claims.

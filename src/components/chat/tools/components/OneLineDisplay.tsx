@@ -25,6 +25,7 @@ interface OneLineDisplayProps {
   toolResult?: any;
   toolId?: string;
   status?: ToolStatus;
+  durationMeta?: React.ReactNode;
 }
 
 /**
@@ -46,6 +47,7 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
   toolResult,
   toolId,
   status,
+  durationMeta,
 }) => {
   // Fixed size-4 slot at the row's right edge so trailing controls line up
   // with the chevron column of expandable tool rows.
@@ -75,6 +77,7 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
           {displayName}
         </button>
         <span className="ml-auto flex flex-shrink-0 items-center gap-1">
+          {durationMeta}
           {chevronSlot}
         </span>
       </div>
@@ -95,6 +98,7 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
             {secondary}
           </span>
         )}
+        {durationMeta}
         {toolResult ? (
           <a
             href={`#tool-result-${toolId}`}
@@ -127,6 +131,7 @@ export const OneLineDisplay: React.FC<OneLineDisplayProps> = ({
           {secondary}
         </span>
       )}
+      {durationMeta}
       {chevronSlot}
     </div>
   );

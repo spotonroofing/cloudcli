@@ -560,6 +560,12 @@ const addMemoryUpdateDiffsColumn = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'memory_updates', columnNames, 'diffs_json', 'TEXT');
 };
 
+/** Adds the exact watcher-to-flush duration shown on completed memory rows. */
+const addMemoryUpdateDurationColumn = (db: Database): void => {
+  const columnNames = getTableInfo(db, 'memory_updates').map((column) => column.name);
+  addColumnToTableIfNotExists(db, 'memory_updates', columnNames, 'duration_ms', 'INTEGER');
+};
+
 /**
  * ui15 job 2: queued messages became a per-session stack. The old table keyed
  * one row per session; rebuild it with client message ids and append order,
@@ -665,6 +671,7 @@ export const runMigrations = (db: Database) => {
     retitleCommentShapedSessionNames(db);
     addProjectPlannerMemoryColumn(db);
     addMemoryUpdateDiffsColumn(db);
+    addMemoryUpdateDurationColumn(db);
     ensureProjectsForSessionPaths(db);
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id)');

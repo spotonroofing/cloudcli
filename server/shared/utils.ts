@@ -23,6 +23,7 @@ import type {
   AnyRecord,
   ApiSuccessShape,
   AppErrorOptions,
+  MessageOrigin,
   NormalizedMessage,
   ProviderCurrentActiveModel,
   ProviderModelsDefinition,
@@ -58,6 +59,52 @@ type NormalizedMessageInput =
     sessionId?: string | null;
     timestamp?: string | null;
   } & Record<string, unknown>;
+
+// ---------------------------
+//----------------- MACHINE MESSAGE ORIGIN UTILITIES ------------
+const MACHINE_MESSAGE_ORIGIN_OPEN = '<cloudcli-message-origin>';
+const MACHINE_MESSAGE_ORIGIN_CLOSE = '</cloudcli-message-origin>';
+const MACHINE_MESSAGE_BODY_OPEN = '<cloudcli-machine-message>';
+const MACHINE_MESSAGE_BODY_CLOSE = '</cloudcli-machine-message>';
+
+/**
+ * Wraps a machine-authored provider prompt in explicit origin metadata.
+ * Watchdog and maintenance modules use this before launching a provider turn;
+ * provider history adapters remove the envelope and expose `messageOrigin`.
+ * Keeping the marker inside the provider prompt makes the identity survive
+ * providers whose native transcript formats do not retain custom fields.
+ */
+export function wrapMachineMessage(content: string, origin: MessageOrigin): string {
+  return [
+    `${MACHINE_MESSAGE_ORIGIN_OPEN}${origin}${MACHINE_MESSAGE_ORIGIN_CLOSE}`,
+    MACHINE_MESSAGE_BODY_OPEN,
+    content,
+    MACHINE_MESSAGE_BODY_CLOSE,
+  ].join('\n');
+}
+
+/**
+ * Reads the explicit machine-origin envelope written by
+ * `wrapMachineMessage`. Ordinary prompts return null. The parser accepts
+ * newline-preserving SDK transcripts and whitespace-flattened CLI transcripts
+ * without inspecting the prompt's natural-language wording.
+ */
+export function parseMachineMessage(content: string): { origin: MessageOrigin; content: string } | null {
+  const originStart = content.indexOf(MACHINE_MESSAGE_ORIGIN_OPEN);
+  const originEnd = content.indexOf(MACHINE_MESSAGE_ORIGIN_CLOSE, originStart + MACHINE_MESSAGE_ORIGIN_OPEN.length);
+  const bodyStart = content.indexOf(MACHINE_MESSAGE_BODY_OPEN, originEnd + MACHINE_MESSAGE_ORIGIN_CLOSE.length);
+  const bodyEnd = content.lastIndexOf(MACHINE_MESSAGE_BODY_CLOSE);
+  if (originStart !== 0 || originEnd < 0 || bodyStart < 0 || bodyEnd < bodyStart) {
+    return null;
+  }
+
+  const rawOrigin = content.slice(originStart + MACHINE_MESSAGE_ORIGIN_OPEN.length, originEnd).trim();
+  if (rawOrigin !== 'watchdog') {
+    return null;
+  }
+  const body = content.slice(bodyStart + MACHINE_MESSAGE_BODY_OPEN.length, bodyEnd).trim();
+  return { origin: rawOrigin, content: body };
+}
 
 // ---------------------------
 //----------------- HTTP HANDLER UTILITIES ------------

@@ -4,7 +4,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ServerEvent } from '../../../contexts/WebSocketContext';
 import { showCompletionTitleIndicator } from '../../../utils/pageTitleNotification';
 import { playChatCompletionSound, playNotificationSound } from '../../../utils/notificationSound';
-import type { MarkSessionIdle, MarkSessionProcessing } from '../../../hooks/useSessionProtection';
+import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityPhase } from '../../../hooks/useSessionProtection';
 import type { PendingPermissionRequest } from '../types/types';
 import type { ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionStore, NormalizedMessage } from '../../../stores/useSessionStore';
@@ -19,6 +19,15 @@ const isActionablePermissionRequest = (request: { toolName?: unknown } | null | 
 const hasActionablePermissionRequests = (requests: Array<{ toolName?: unknown }> | null | undefined): boolean => {
   return Array.isArray(requests) && requests.some((request) => isActionablePermissionRequest(request));
 };
+
+function statusPhase(text: unknown): SessionActivityPhase | null {
+  if (typeof text !== 'string') return null;
+  const normalized = text.toLowerCase();
+  if (normalized.includes('writ')) return 'writing';
+  if (normalized.includes('think') || normalized.includes('reason')) return 'thinking';
+  if (normalized.includes('tool')) return 'tool';
+  return null;
+}
 
 interface UseChatRealtimeHandlersArgs {
   isActive: boolean;
@@ -213,6 +222,7 @@ export function useChatRealtimeHandlers({
         const text = (msg.content as string) || '';
         if (!text) return;
         accumulatedStreamRef.current += text;
+        if (sid) onSessionProcessing?.(sid, { phase: 'writing' });
         if (!streamTimerRef.current) {
           streamTimerRef.current = window.setTimeout(() => {
             streamTimerRef.current = null;
@@ -240,6 +250,7 @@ export function useChatRealtimeHandlers({
           sessionStore.finalizeStreaming(sid);
         }
         accumulatedStreamRef.current = '';
+        if (sid) onSessionProcessing?.(sid, { phase: 'thinking' });
         return;
       }
 
@@ -249,6 +260,18 @@ export function useChatRealtimeHandlers({
       // queued_message_updated broadcast.
       if (sid && msg.role === 'user' && typeof msg.queuedMessageId === 'string') {
         settleQueuedMessageDelivered(sid, msg.queuedMessageId);
+      }
+
+      if (sid) {
+        if (msg.kind === 'thinking') {
+          onSessionProcessing?.(sid, { phase: 'thinking' });
+        } else if (msg.kind === 'tool_use') {
+          onSessionProcessing?.(sid, { phase: msg.toolResult ? 'thinking' : 'tool' });
+        } else if (msg.kind === 'tool_result') {
+          onSessionProcessing?.(sid, { phase: 'thinking' });
+        } else if (msg.kind === 'text' && msg.role === 'assistant') {
+          onSessionProcessing?.(sid, { phase: 'writing' });
+        }
       }
 
       // --- All other messages: route to store ---
@@ -379,8 +402,9 @@ export function useChatRealtimeHandlers({
             // it), so never fall back to the viewed session here — a stray
             // status attributed to the open chat re-arms its spinner and can
             // wedge the composer in the queue-instead-of-send state.
+            const phase = statusPhase(msg.text);
             onSessionProcessing?.(msg.sessionId, {
-              statusText: msg.text as string,
+              ...(phase ? { phase } : {}),
               canInterrupt: msg.canInterrupt !== false,
             });
           }

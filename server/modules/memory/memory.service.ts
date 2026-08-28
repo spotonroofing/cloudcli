@@ -281,9 +281,10 @@ async function flushBurst(sessionId: string): Promise<void> {
   }
 
   const createdAt = new Date().toISOString();
+  const durationMs = Math.max(0, Date.now() - burst.startedAt);
   let rowId: number;
   try {
-    rowId = memoryUpdatesDb.insert({ sessionId, files, diffs, createdAt });
+    rowId = memoryUpdatesDb.insert({ sessionId, files, diffs, durationMs, createdAt });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[Memory] Failed to persist memory update', { sessionId, files, error: message });
@@ -299,6 +300,7 @@ async function flushBurst(sessionId: string): Promise<void> {
     kind: 'memory_update',
     memoryFiles: files,
     memoryDiffs: diffs,
+    durationMs,
   };
 
   // A live run's writer assigns `seq` and buffers the frame for reconnect

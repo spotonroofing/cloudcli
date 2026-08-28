@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, Provider } from '../../types/types';
 import type { Project } from '../../../../types/app';
 import type { ToolGroupItem } from '../../utils/toolGrouping';
+import { statusStartedAt } from '../../utils/statusDuration';
 import { getToolConfig } from '../../tools';
 import {
   AgentDisclosure,
@@ -16,6 +17,7 @@ import {
 } from '../../../../shared/view/beui';
 
 import MessageComponent from './MessageComponent';
+import StatusDuration from './StatusDuration';
 
 type DiffLine = {
   type: string;
@@ -37,6 +39,8 @@ interface ToolGroupContainerProps {
   showThinking?: boolean;
   selectedProject?: Project | null;
   provider: Provider | string;
+  /** True when this group belongs to the currently running tail turn. */
+  isTurnRunning?: boolean;
 }
 
 function parseToolInput(toolInput: unknown): unknown {
@@ -81,6 +85,7 @@ export default function ToolGroupContainer({
   showThinking,
   selectedProject,
   provider,
+  isTurnRunning = false,
 }: ToolGroupContainerProps) {
   const reduce = useReducedMotion() ?? false;
   const [isExpanded, setIsExpanded] = useState(false);
@@ -89,9 +94,24 @@ export default function ToolGroupContainer({
   const icon = getToolGroupIcon(config.icon, group.toolName);
   // beautifului Thinking (coding mode) header treatment: the label shimmers
   // while any tool in the run is still awaiting its result, then settles.
-  const working = group.messages.some((message) => !message.toolResult);
+  const working = isTurnRunning && group.messages.some((message) => !message.toolResult);
   const stamp = group.timestamp ? new Date(group.timestamp).getTime() : 0;
   const animateIn = Boolean(animateFrom && stamp > animateFrom && !reduce);
+  const groupDurationMs = useMemo(() => {
+    if (working) return undefined;
+    const start = statusStartedAt(group.messages[0]?.timestamp);
+    let end: number | null = null;
+    for (const message of group.messages) {
+      const messageStart = statusStartedAt(message.timestamp);
+      const resultEnd = statusStartedAt(message.toolResult?.timestamp);
+      const durationEnd = messageStart !== null && typeof message.durationMs === 'number'
+        ? messageStart + message.durationMs
+        : null;
+      const candidate = resultEnd ?? durationEnd;
+      if (candidate !== null && (end === null || candidate > end)) end = candidate;
+    }
+    return start !== null && end !== null && end >= start ? end - start : undefined;
+  }, [group.messages, working]);
 
   const preview = useMemo(() => {
     const visiblePreviews = group.messages
@@ -152,6 +172,11 @@ export default function ToolGroupContainer({
         {preview && (
           <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/55">{preview}</span>
         )}
+        <StatusDuration
+          startedAt={group.messages[0]?.timestamp}
+          durationMs={groupDurationMs}
+          running={working}
+        />
         <motion.span
           aria-hidden="true"
           animate={{ rotate: isExpanded ? 180 : 0 }}
@@ -179,6 +204,7 @@ export default function ToolGroupContainer({
               showThinking={showThinking}
               selectedProject={selectedProject}
               provider={provider}
+              isTurnRunning={isTurnRunning}
             />
           ))}
         </div>

@@ -1,9 +1,15 @@
 import { useCallback, useState } from 'react';
 
+export type SessionActivityPhase = 'thinking' | 'writing' | 'tool';
+
 export interface SessionActivity {
   /** Provider-supplied status line; null renders the default activity label. */
   statusText: string | null;
   canInterrupt: boolean;
+  /** Actual visible phase of the running turn. */
+  phase: SessionActivityPhase;
+  /** Client epoch at which the current phase began. */
+  phaseStartedAt: number;
   /**
    * When this request was first marked as processing (client clock). Drives
    * the elapsed-time display and the stale `chat_subscribed` idle-ack guard.
@@ -17,12 +23,13 @@ export type SessionActivitySnapshot = {
   sessionId: string;
   statusText?: string | null;
   canInterrupt?: boolean;
+  phase?: SessionActivityPhase;
   startedAt?: number;
 };
 
 export type MarkSessionProcessing = (
   sessionId?: string | null,
-  activity?: { statusText?: string | null; canInterrupt?: boolean },
+  activity?: { statusText?: string | null; canInterrupt?: boolean; phase?: SessionActivityPhase },
 ) => void;
 
 export type MarkSessionIdle = (
@@ -50,6 +57,8 @@ const sessionActivityMapsMatch = (
       !rightActivity
       || leftActivity.statusText !== rightActivity.statusText
       || leftActivity.canInterrupt !== rightActivity.canInterrupt
+      || leftActivity.phase !== rightActivity.phase
+      || leftActivity.phaseStartedAt !== rightActivity.phaseStartedAt
       || leftActivity.startedAt !== rightActivity.startedAt
     ) {
       return false;
@@ -79,10 +88,14 @@ export function useSessionProtection() {
 
     setProcessingSessions((prev) => {
       const existing = prev.get(sessionId);
+      const phase = activity?.phase ?? existing?.phase ?? 'thinking';
+      const phaseChanged = Boolean(existing && phase !== existing.phase);
       const next: SessionActivity = {
         statusText:
           activity?.statusText !== undefined ? activity.statusText : existing?.statusText ?? null,
         canInterrupt: activity?.canInterrupt ?? existing?.canInterrupt ?? true,
+        phase,
+        phaseStartedAt: phaseChanged ? Date.now() : existing?.phaseStartedAt ?? Date.now(),
         startedAt: existing?.startedAt ?? Date.now(),
       };
 
@@ -90,6 +103,7 @@ export function useSessionProtection() {
         existing
         && existing.statusText === next.statusText
         && existing.canInterrupt === next.canInterrupt
+        && existing.phase === next.phase
       ) {
         return prev;
       }
@@ -144,11 +158,16 @@ export function useSessionProtection() {
           typeof snapshot.startedAt === 'number' && Number.isFinite(snapshot.startedAt) && snapshot.startedAt > 0
             ? snapshot.startedAt
             : undefined;
+        const runChanged = Boolean(existing && snapshotStartedAt && snapshotStartedAt !== existing.startedAt);
 
         updated.set(sessionId, {
           statusText:
             snapshot.statusText !== undefined ? snapshot.statusText : existing?.statusText ?? null,
           canInterrupt: snapshot.canInterrupt ?? existing?.canInterrupt ?? true,
+          phase: snapshot.phase ?? (runChanged ? 'thinking' : existing?.phase) ?? 'thinking',
+          phaseStartedAt: runChanged
+            ? snapshotStartedAt as number
+            : existing?.phaseStartedAt ?? snapshotStartedAt ?? now,
           startedAt: snapshotStartedAt ?? existing?.startedAt ?? now,
         });
       }
