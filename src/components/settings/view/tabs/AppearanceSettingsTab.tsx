@@ -61,10 +61,18 @@ export default function AppearanceSettingsTab({
               </SelectTrigger>
               <SelectContent>
                 {COLOR_THEMES.map((theme) => (
-                  <SelectItem key={theme.id} value={theme.id} textValue={theme.label}>
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="truncate">{theme.label}</span>
-                      <ThemePaletteDots themeId={theme.id} />
+                  <SelectItem
+                    key={theme.id}
+                    value={theme.id}
+                    textValue={theme.label}
+                    className="group/theme-option relative"
+                  >
+                    <span className="relative min-w-0 flex-1">
+                      <span>{theme.label}</span>
+                      <ThemePaletteDots
+                        themeId={theme.id}
+                        className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/theme-option:opacity-100 group-focus-visible/theme-option:opacity-100"
+                      />
                     </span>
                   </SelectItem>
                 ))}

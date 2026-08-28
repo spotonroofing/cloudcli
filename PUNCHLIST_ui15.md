@@ -107,8 +107,8 @@ Done check: on dev: System tab first with rotation settings functional; two diff
 
 Goal: the theme picker looks intentional and the theme list stops being thin. Files: themes definitions, the theme dropdown, DESIGN.md. Dependencies: none.
 
-- [ ] Theme dropdown: palette dots right-aligned in the row, visible only on the hovered (or focused) option so labels never truncate, and a touch bigger.
-- [ ] Add a set of new fully-layered themes (roughly double the current count): each with independently designed surfaces, inks, borders, and accents (the ui10 layered-theme bar), monochromatic-icon friendly, no one-hue-everywhere recolors; name them plainly; every theme verified against the mark, rings, and semantic status colors.
+- [x] Theme dropdown: palette dots right-aligned in the row, visible only on the hovered (or focused) option so labels never truncate, and a touch bigger.
+- [x] Add a set of new fully-layered themes (roughly double the current count): each with independently designed surfaces, inks, borders, and accents (the ui10 layered-theme bar), monochromatic-icon friendly, no one-hue-everywhere recolors; name them plainly; every theme verified against the mark, rings, and semantic status colors.
 
 Done check: on dev: dots render right-aligned on hover only and larger; each new theme switches all four token families (computed styles) and passes a quick contrast sanity on text tokens. Willem's eye judges taste. Commit.
 

@@ -483,6 +483,348 @@
     --nav-input-bg: 36 10% 15.5% / 0.5;
     --nav-input-focus-ring: 185 38% 58% / 0.25;
   }
+
+  /* Glacier — blue ice surfaces, warm mineral ink, alpine-water accent. */
+  [data-theme='glacier']:not(.dark) {
+    --background: 205 28% 95.5%;
+    --foreground: 24 14% 9%;
+    --card: 205 35% 99%;
+    --card-foreground: 24 14% 9%;
+    --popover: 205 35% 99%;
+    --popover-foreground: 24 14% 9%;
+    --primary: 197 52% 34%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 205 20% 89.5%;
+    --secondary-foreground: 24 10% 18%;
+    --muted: 205 20% 89.5%;
+    --muted-foreground: 214 7% 39%;
+    --accent: 205 20% 89.5%;
+    --accent-foreground: 24 10% 18%;
+    --border: 205 18% 84.5%;
+    --input: 205 18% 84.5%;
+    --ring: 197 52% 34%;
+    --beam-ink: 210 10% 42%;
+    --nav-glass-bg: 205 28% 95.5% / 0.7;
+    --nav-tab-glow: 197 52% 34% / 0.18;
+    --nav-tab-ring: 197 52% 34% / 0.10;
+    --nav-float-ring: 205 18% 84.5% / 0.5;
+    --nav-divider-color: 205 18% 84.5% / 0.5;
+    --nav-input-bg: 205 20% 89.5% / 0.5;
+    --nav-input-focus-ring: 197 52% 34% / 0.22;
+  }
+
+  [data-theme='glacier'].dark {
+    --background: 218 16% 8%;
+    --foreground: 34 12% 91%;
+    --card: 218 14% 12%;
+    --card-foreground: 34 12% 91%;
+    --popover: 218 14% 12%;
+    --popover-foreground: 34 12% 91%;
+    --primary: 197 46% 62%;
+    --primary-foreground: 202 30% 8%;
+    --secondary: 218 11% 16%;
+    --secondary-foreground: 34 12% 91%;
+    --muted: 218 11% 16%;
+    --muted-foreground: 214 7% 62%;
+    --accent: 218 11% 16%;
+    --accent-foreground: 34 12% 91%;
+    --border: 218 11% 16%;
+    --input: 218 11% 23%;
+    --ring: 197 46% 62%;
+    --beam-ink: 205 16% 77%;
+    --nav-glass-bg: 218 14% 12% / 0.55;
+    --nav-tab-glow: 197 46% 62% / 0.25;
+    --nav-tab-ring: 197 46% 62% / 0.15;
+    --nav-float-ring: 218 11% 16% / 0.3;
+    --nav-divider-color: 218 11% 16% / 0.5;
+    --nav-input-bg: 218 11% 16% / 0.5;
+    --nav-input-focus-ring: 197 46% 62% / 0.25;
+  }
+
+  /* Plum — lilac-chalk surfaces, aubergine ink, antique-gold accent. */
+  [data-theme='plum']:not(.dark) {
+    --background: 330 18% 96%;
+    --foreground: 286 22% 9%;
+    --card: 340 25% 99%;
+    --card-foreground: 286 22% 9%;
+    --popover: 340 25% 99%;
+    --popover-foreground: 286 22% 9%;
+    --primary: 42 70% 31%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 330 14% 90.5%;
+    --secondary-foreground: 286 14% 18%;
+    --muted: 330 14% 90.5%;
+    --muted-foreground: 300 7% 39%;
+    --accent: 330 14% 90.5%;
+    --accent-foreground: 286 14% 18%;
+    --border: 330 12% 85%;
+    --input: 330 12% 85%;
+    --ring: 42 70% 31%;
+    --beam-ink: 300 10% 42%;
+    --nav-glass-bg: 330 18% 96% / 0.7;
+    --nav-tab-glow: 42 70% 31% / 0.18;
+    --nav-tab-ring: 42 70% 31% / 0.10;
+    --nav-float-ring: 330 12% 85% / 0.5;
+    --nav-divider-color: 330 12% 85% / 0.5;
+    --nav-input-bg: 330 14% 90.5% / 0.5;
+    --nav-input-focus-ring: 42 70% 31% / 0.22;
+  }
+
+  [data-theme='plum'].dark {
+    --background: 287 15% 8%;
+    --foreground: 35 18% 91%;
+    --card: 287 13% 12%;
+    --card-foreground: 35 18% 91%;
+    --popover: 287 13% 12%;
+    --popover-foreground: 35 18% 91%;
+    --primary: 44 56% 62%;
+    --primary-foreground: 42 30% 8%;
+    --secondary: 287 10% 16%;
+    --secondary-foreground: 35 18% 91%;
+    --muted: 287 10% 16%;
+    --muted-foreground: 292 7% 62%;
+    --accent: 287 10% 16%;
+    --accent-foreground: 35 18% 91%;
+    --border: 287 10% 16%;
+    --input: 287 10% 23%;
+    --ring: 44 56% 62%;
+    --beam-ink: 42 16% 77%;
+    --nav-glass-bg: 287 13% 12% / 0.55;
+    --nav-tab-glow: 44 56% 62% / 0.25;
+    --nav-tab-ring: 44 56% 62% / 0.15;
+    --nav-float-ring: 287 10% 16% / 0.3;
+    --nav-divider-color: 287 10% 16% / 0.5;
+    --nav-input-bg: 287 10% 16% / 0.5;
+    --nav-input-focus-ring: 44 56% 62% / 0.25;
+  }
+
+  /* Marine — sea-glass surfaces, deep navy ink, signal-coral accent. */
+  [data-theme='marine']:not(.dark) {
+    --background: 168 18% 95%;
+    --foreground: 219 30% 9%;
+    --card: 170 25% 99%;
+    --card-foreground: 219 30% 9%;
+    --popover: 170 25% 99%;
+    --popover-foreground: 219 30% 9%;
+    --primary: 8 62% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 168 14% 89%;
+    --secondary-foreground: 219 18% 18%;
+    --muted: 168 14% 89%;
+    --muted-foreground: 205 8% 39%;
+    --accent: 168 14% 89%;
+    --accent-foreground: 219 18% 18%;
+    --border: 168 13% 84%;
+    --input: 168 13% 84%;
+    --ring: 8 62% 38%;
+    --beam-ink: 205 10% 41%;
+    --nav-glass-bg: 168 18% 95% / 0.7;
+    --nav-tab-glow: 8 62% 38% / 0.18;
+    --nav-tab-ring: 8 62% 38% / 0.10;
+    --nav-float-ring: 168 13% 84% / 0.5;
+    --nav-divider-color: 168 13% 84% / 0.5;
+    --nav-input-bg: 168 14% 89% / 0.5;
+    --nav-input-focus-ring: 8 62% 38% / 0.22;
+  }
+
+  [data-theme='marine'].dark {
+    --background: 205 20% 7.5%;
+    --foreground: 45 15% 91%;
+    --card: 205 17% 11.5%;
+    --card-foreground: 45 15% 91%;
+    --popover: 205 17% 11.5%;
+    --popover-foreground: 45 15% 91%;
+    --primary: 10 65% 65%;
+    --primary-foreground: 8 35% 8%;
+    --secondary: 205 14% 15.5%;
+    --secondary-foreground: 45 15% 91%;
+    --muted: 205 14% 15.5%;
+    --muted-foreground: 198 8% 61%;
+    --accent: 205 14% 15.5%;
+    --accent-foreground: 45 15% 91%;
+    --border: 205 14% 15.5%;
+    --input: 205 14% 22%;
+    --ring: 10 65% 65%;
+    --beam-ink: 195 16% 76%;
+    --nav-glass-bg: 205 17% 11.5% / 0.55;
+    --nav-tab-glow: 10 65% 65% / 0.25;
+    --nav-tab-ring: 10 65% 65% / 0.15;
+    --nav-float-ring: 205 14% 15.5% / 0.3;
+    --nav-divider-color: 205 14% 15.5% / 0.5;
+    --nav-input-bg: 205 14% 15.5% / 0.5;
+    --nav-input-focus-ring: 10 65% 65% / 0.25;
+  }
+
+  /* Lichen — pale mineral surfaces, slate ink, olive accent. */
+  [data-theme='lichen']:not(.dark) {
+    --background: 62 18% 94.5%;
+    --foreground: 214 20% 10%;
+    --card: 58 26% 99%;
+    --card-foreground: 214 20% 10%;
+    --popover: 58 26% 99%;
+    --popover-foreground: 214 20% 10%;
+    --primary: 88 38% 31%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 75 12% 88.5%;
+    --secondary-foreground: 214 14% 19%;
+    --muted: 75 12% 88.5%;
+    --muted-foreground: 205 7% 39%;
+    --accent: 75 12% 88.5%;
+    --accent-foreground: 214 14% 19%;
+    --border: 75 11% 83.5%;
+    --input: 75 11% 83.5%;
+    --ring: 88 38% 31%;
+    --beam-ink: 205 9% 41%;
+    --nav-glass-bg: 62 18% 94.5% / 0.7;
+    --nav-tab-glow: 88 38% 31% / 0.18;
+    --nav-tab-ring: 88 38% 31% / 0.10;
+    --nav-float-ring: 75 11% 83.5% / 0.5;
+    --nav-divider-color: 75 11% 83.5% / 0.5;
+    --nav-input-bg: 75 12% 88.5% / 0.5;
+    --nav-input-focus-ring: 88 38% 31% / 0.22;
+  }
+
+  [data-theme='lichen'].dark {
+    --background: 72 9% 7.5%;
+    --foreground: 205 12% 90%;
+    --card: 72 8% 11.5%;
+    --card-foreground: 205 12% 90%;
+    --popover: 72 8% 11.5%;
+    --popover-foreground: 205 12% 90%;
+    --primary: 84 34% 59%;
+    --primary-foreground: 84 24% 8%;
+    --secondary: 72 7% 15.5%;
+    --secondary-foreground: 205 12% 90%;
+    --muted: 72 7% 15.5%;
+    --muted-foreground: 180 6% 60%;
+    --accent: 72 7% 15.5%;
+    --accent-foreground: 205 12% 90%;
+    --border: 72 7% 15.5%;
+    --input: 72 7% 22%;
+    --ring: 84 34% 59%;
+    --beam-ink: 92 12% 75%;
+    --nav-glass-bg: 72 8% 11.5% / 0.55;
+    --nav-tab-glow: 84 34% 59% / 0.25;
+    --nav-tab-ring: 84 34% 59% / 0.15;
+    --nav-float-ring: 72 7% 15.5% / 0.3;
+    --nav-divider-color: 72 7% 15.5% / 0.5;
+    --nav-input-bg: 72 7% 15.5% / 0.5;
+    --nav-input-focus-ring: 84 34% 59% / 0.25;
+  }
+
+  /* Berry — blue-slate surfaces, walnut ink, berry accent. */
+  [data-theme='berry']:not(.dark) {
+    --background: 218 18% 95.5%;
+    --foreground: 20 20% 9%;
+    --card: 220 25% 99%;
+    --card-foreground: 20 20% 9%;
+    --popover: 220 25% 99%;
+    --popover-foreground: 20 20% 9%;
+    --primary: 328 48% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 218 14% 89.5%;
+    --secondary-foreground: 20 14% 18%;
+    --muted: 218 14% 89.5%;
+    --muted-foreground: 218 7% 39%;
+    --accent: 218 14% 89.5%;
+    --accent-foreground: 20 14% 18%;
+    --border: 218 12% 84.5%;
+    --input: 218 12% 84.5%;
+    --ring: 328 48% 38%;
+    --beam-ink: 218 10% 42%;
+    --nav-glass-bg: 218 18% 95.5% / 0.7;
+    --nav-tab-glow: 328 48% 38% / 0.18;
+    --nav-tab-ring: 328 48% 38% / 0.10;
+    --nav-float-ring: 218 12% 84.5% / 0.5;
+    --nav-divider-color: 218 12% 84.5% / 0.5;
+    --nav-input-bg: 218 14% 89.5% / 0.5;
+    --nav-input-focus-ring: 328 48% 38% / 0.22;
+  }
+
+  [data-theme='berry'].dark {
+    --background: 225 15% 8%;
+    --foreground: 32 16% 91%;
+    --card: 225 13% 12%;
+    --card-foreground: 32 16% 91%;
+    --popover: 225 13% 12%;
+    --popover-foreground: 32 16% 91%;
+    --primary: 330 45% 66%;
+    --primary-foreground: 330 25% 8%;
+    --secondary: 225 10% 16%;
+    --secondary-foreground: 32 16% 91%;
+    --muted: 225 10% 16%;
+    --muted-foreground: 225 7% 62%;
+    --accent: 225 10% 16%;
+    --accent-foreground: 32 16% 91%;
+    --border: 225 10% 16%;
+    --input: 225 10% 23%;
+    --ring: 330 45% 66%;
+    --beam-ink: 225 14% 77%;
+    --nav-glass-bg: 225 13% 12% / 0.55;
+    --nav-tab-glow: 330 45% 66% / 0.25;
+    --nav-tab-ring: 330 45% 66% / 0.15;
+    --nav-float-ring: 225 10% 16% / 0.3;
+    --nav-divider-color: 225 10% 16% / 0.5;
+    --nav-input-bg: 225 10% 16% / 0.5;
+    --nav-input-focus-ring: 330 45% 66% / 0.25;
+  }
+
+  /* Sienna — sage-gray surfaces, violet-black ink, fired-clay accent. */
+  [data-theme='sienna']:not(.dark) {
+    --background: 150 12% 95%;
+    --foreground: 272 15% 9%;
+    --card: 150 18% 99%;
+    --card-foreground: 272 15% 9%;
+    --popover: 150 18% 99%;
+    --popover-foreground: 272 15% 9%;
+    --primary: 25 58% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 9% 89.5%;
+    --secondary-foreground: 272 11% 18%;
+    --muted: 150 9% 89.5%;
+    --muted-foreground: 160 5% 38%;
+    --accent: 150 9% 89.5%;
+    --accent-foreground: 272 11% 18%;
+    --border: 150 9% 84.5%;
+    --input: 150 9% 84.5%;
+    --ring: 25 58% 38%;
+    --beam-ink: 160 8% 42%;
+    --nav-glass-bg: 150 12% 95% / 0.7;
+    --nav-tab-glow: 25 58% 38% / 0.18;
+    --nav-tab-ring: 25 58% 38% / 0.10;
+    --nav-float-ring: 150 9% 84.5% / 0.5;
+    --nav-divider-color: 150 9% 84.5% / 0.5;
+    --nav-input-bg: 150 9% 89.5% / 0.5;
+    --nav-input-focus-ring: 25 58% 38% / 0.22;
+  }
+
+  [data-theme='sienna'].dark {
+    --background: 255 10% 8%;
+    --foreground: 42 16% 91%;
+    --card: 255 8% 12%;
+    --card-foreground: 42 16% 91%;
+    --popover: 255 8% 12%;
+    --popover-foreground: 42 16% 91%;
+    --primary: 28 52% 63%;
+    --primary-foreground: 25 30% 8%;
+    --secondary: 255 7% 16%;
+    --secondary-foreground: 42 16% 91%;
+    --muted: 255 7% 16%;
+    --muted-foreground: 255 5% 62%;
+    --accent: 255 7% 16%;
+    --accent-foreground: 42 16% 91%;
+    --border: 255 7% 16%;
+    --input: 255 7% 23%;
+    --ring: 28 52% 63%;
+    --beam-ink: 42 14% 77%;
+    --nav-glass-bg: 255 8% 12% / 0.55;
+    --nav-tab-glow: 28 52% 63% / 0.25;
+    --nav-tab-ring: 28 52% 63% / 0.15;
+    --nav-float-ring: 255 7% 16% / 0.3;
+    --nav-divider-color: 255 7% 16% / 0.5;
+    --nav-input-bg: 255 7% 16% / 0.5;
+    --nav-input-focus-ring: 28 52% 63% / 0.25;
+  }
 }
 
 @layer base {

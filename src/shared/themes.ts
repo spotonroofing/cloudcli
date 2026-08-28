@@ -59,6 +59,54 @@ export const COLOR_THEMES: ColorTheme[] = [
       dark: ['hsl(36 14% 8%)', 'hsl(36 10% 15.5%)', 'hsl(42 20% 90%)', 'hsl(185 38% 58%)'],
     },
   },
+  {
+    id: 'glacier',
+    label: 'Glacier',
+    dots: {
+      light: ['hsl(205 28% 95.5%)', 'hsl(205 20% 89.5%)', 'hsl(24 14% 9%)', 'hsl(197 52% 34%)'],
+      dark: ['hsl(218 16% 8%)', 'hsl(218 11% 16%)', 'hsl(34 12% 91%)', 'hsl(197 46% 62%)'],
+    },
+  },
+  {
+    id: 'plum',
+    label: 'Plum',
+    dots: {
+      light: ['hsl(330 18% 96%)', 'hsl(330 14% 90.5%)', 'hsl(286 22% 9%)', 'hsl(42 70% 31%)'],
+      dark: ['hsl(287 15% 8%)', 'hsl(287 10% 16%)', 'hsl(35 18% 91%)', 'hsl(44 56% 62%)'],
+    },
+  },
+  {
+    id: 'marine',
+    label: 'Marine',
+    dots: {
+      light: ['hsl(168 18% 95%)', 'hsl(168 14% 89%)', 'hsl(219 30% 9%)', 'hsl(8 62% 38%)'],
+      dark: ['hsl(205 20% 7.5%)', 'hsl(205 14% 15.5%)', 'hsl(45 15% 91%)', 'hsl(10 65% 65%)'],
+    },
+  },
+  {
+    id: 'lichen',
+    label: 'Lichen',
+    dots: {
+      light: ['hsl(62 18% 94.5%)', 'hsl(75 12% 88.5%)', 'hsl(214 20% 10%)', 'hsl(88 38% 31%)'],
+      dark: ['hsl(72 9% 7.5%)', 'hsl(72 7% 15.5%)', 'hsl(205 12% 90%)', 'hsl(84 34% 59%)'],
+    },
+  },
+  {
+    id: 'berry',
+    label: 'Berry',
+    dots: {
+      light: ['hsl(218 18% 95.5%)', 'hsl(218 14% 89.5%)', 'hsl(20 20% 9%)', 'hsl(328 48% 38%)'],
+      dark: ['hsl(225 15% 8%)', 'hsl(225 10% 16%)', 'hsl(32 16% 91%)', 'hsl(330 45% 66%)'],
+    },
+  },
+  {
+    id: 'sienna',
+    label: 'Sienna',
+    dots: {
+      light: ['hsl(150 12% 95%)', 'hsl(150 9% 89.5%)', 'hsl(272 15% 9%)', 'hsl(25 58% 38%)'],
+      dark: ['hsl(255 10% 8%)', 'hsl(255 7% 16%)', 'hsl(42 16% 91%)', 'hsl(28 52% 63%)'],
+    },
+  },
 ];
 
 export const DEFAULT_COLOR_THEME = 'steel-blue';
