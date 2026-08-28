@@ -104,3 +104,25 @@ Goal: the running job's segmented ring in the jobs column breathes with a blur t
 - [ ] Nothing else in the ring changes (segment geometry, colors, the check and the red X from Job 1).
 
 Done check: on dev with the stub running job, the animated segment's computed style shows no filter at any sampled frame and its opacity moves between the two values; tests pass. Commit.
+
+## Job 8 — Mobile navigation: one bottom taskbar, worker reachable, nothing clipped (2026-08-28, Willem). Verify: no
+
+Goal: on a phone the app is hard to move around in. From a planner chat there is no way to reach the project's worker; tapping a worker from the footer activity drawer opens it under a header that still says "Planner" with the model switcher clipped off the right edge; the window selector (file tree, git panel, shell) does nothing on mobile. Willem asked for the simplest possible navigation and left the exact shape to the planner: the decision is a bottom taskbar, no header swap button (one mechanism, not two). Files: the mobile shell and top bar (`src/components/main-content/`, `src/components/app/`, the mobile top bar and its window selector), `WorkerPane.tsx`, `JobsSidebar.tsx`, the composer bottom row, `design/mobile.md`, `design/worker-pane-and-jobs.md`; the memory repo has a lesson with a Playwright WebKit iPhone recipe for checks.
+
+- [ ] Bottom taskbar, phone viewports only: a fixed bar at the bottom of the screen above the safe area with wide equal-width segments splitting the width evenly: Planner and Worker always, plus one segment per tool window the user opened (Files, Git, Shell) so two segments read 50/50 and three read in thirds; tapping a segment shows that window full-screen; the active segment is marked in the app's monochrome language (ink shift, no color); labels only, no icons, so they stay readable at any count; the bar hides with a ramped slide the moment the composer takes focus (keyboard up) and returns when focus leaves, never leaving dead space above the keyboard.
+- [ ] The window selector in the top bar opens tool windows as taskbar segments on mobile (or is hidden on mobile if the taskbar makes it redundant; pick one and say which in the summary); nothing in the top bar is a dead control.
+- [ ] Worker on mobile: the Worker segment shows the project's worker session full-screen; its header says Worker (never Planner) and carries the jobs button; the jobs view opens as a full-screen takeover on mobile with a clear way back (the taskbar stays underneath it).
+- [ ] Composer bottom row fits at 390px in both planner and worker: the model switcher label compacts (model name, effort as a short tag) and nothing is clipped or pushed off screen; the counter, history, switcher, usage and handoff controls all remain tappable.
+- [ ] The footer activity drawer's session taps land in the right pane on mobile (a worker opens as the Worker segment, a planner as Planner).
+- [ ] `design/mobile.md` documents the taskbar (segments, hide-on-focus, full-screen windows) and the mobile header rules.
+
+Done check: with the WebKit iPhone recipe at 393x852: the taskbar shows Planner and Worker at equal width, opening the shell adds a third equal segment, tapping Worker renders the worker header and the jobs button, the jobs view fills the screen and closes back, focusing the composer hides the bar and blurring restores it, the bottom row's controls all lie inside the viewport; desktop unchanged (no taskbar above the phone breakpoint); tests for the segment math. Commit.
+
+## Job 9 — Clearing the composer takes two taps (2026-08-28, Willem). Verify: no
+
+Goal: the clear control (the one that wipes the text and the attachments; it sits with the character counter) fires on one tap and Willem has lost drafts to it. It needs a confirmation on both desktop and mobile. Files: `ChatComposer.tsx` and its clear/undo pieces (ui15 job 2), `design/composer.md`.
+
+- [ ] First tap arms the control: it changes to a short "Tap again to clear" state in place (ramped swap, monochrome), stays armed for about 2 seconds or until the pointer leaves, and disarms on its own; the second tap within that window clears text and attachments. Keyboard: Escape disarms. The existing undo after a clear stays.
+- [ ] Both panes, desktop and phone; `design/composer.md` documents the two-tap rule.
+
+Done check: on dev, one click leaves the draft and attachments intact and shows the armed state; a second click within 2 seconds clears them and undo restores; waiting 3 seconds between clicks leaves the draft intact; tests pass; 390px holds. Commit.
