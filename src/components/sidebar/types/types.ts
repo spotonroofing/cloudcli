@@ -60,6 +60,10 @@ export type RunningRunInfo = {
   chainPhase: number | null;
   /** Manifest name of the chain unit, when the chain is known to the watchdog. */
   chainPhaseName: string | null;
+  /** Raw provider model id, used only to derive the short run label. */
+  model: string | null;
+  /** Run start timestamp from the live registry. */
+  startedAt: number | string | null;
 };
 
 /**

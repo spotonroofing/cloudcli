@@ -124,6 +124,29 @@ test('a chain keeps its first dispatching planner across re-registration', async
   });
 });
 
+test('terminal job snapshots retain the runner failure reason', async () => {
+  await withIsolatedDatabase(() => {
+    const projectPath = '/workspace/failed-job';
+    appConfigDb.set('watchdog_terminal_wakes', '0');
+    projectsDb.createProjectPath(projectPath);
+    watchdogService.registerChain({
+      slug: 'failed-job-stub',
+      projectPath,
+      phases: 1,
+      manifest: [{ name: 'Polish jobs', tasks: ['Build', 'Check'], kind: 'phase' }],
+    });
+
+    watchdogService.chainEvent('failed-job-stub', 'phase-start', { phase: 1 });
+    watchdogService.chainEvent('failed-job-stub', 'failed', {
+      phase: 1,
+      summaryTail: 'Build command exited 1.',
+    });
+
+    const snapshot = watchdogService.listWorkerRuns(projectPath).chains['failed-job-stub'];
+    assert.equal(snapshot.manifest?.[0]?.failureReason, 'Build command exited 1.');
+  });
+});
+
 test('an auto-recovering limit posts a recovery notice without waking a planner', async () => {
   await withIsolatedDatabase(() => {
     const projectPath = '/workspace/recovery-project';

@@ -10,6 +10,7 @@ import { usePaletteOps } from '../../../contexts/PaletteOpsContext';
 import type { LLMProvider } from '../../../types/app';
 import type { ActiveSessionRow, RunningRunInfo, SidebarProps } from '../types/types';
 import { titleFromPrompt } from '../../../../shared/sessionTitle.js';
+import { workerRunLabel } from '../../../utils/workerRunLabel';
 
 import SidebarCollapsed from './subcomponents/SidebarCollapsed';
 import SidebarContent from './subcomponents/SidebarContent';
@@ -254,14 +255,19 @@ function Sidebar({
       const run = info?.run ?? null;
       let label: string;
       if (kind === 'worker') {
-        if (origin === 'maintenance') {
-          label = 'Maintenance: Monday self-check';
-        } else if (run?.chainSlug) {
+        if (run?.chainSlug) {
           label = run.chainPhase
             ? `${run.chainSlug} Job ${run.chainPhase}${run.chainPhaseName ? ` - ${run.chainPhaseName}` : ''}`
             : run.chainSlug;
         } else {
-          label = info?.title || `run ${sessionId.slice(0, 8)}`;
+          label = run
+            ? workerRunLabel({
+                origin: run.origin,
+                provider: run.provider,
+                model: run.model,
+                startedAt: run.startedAt,
+              })
+            : 'One-off worker';
         }
       } else {
         label = info?.title || t('running.untitledSession', 'New session');

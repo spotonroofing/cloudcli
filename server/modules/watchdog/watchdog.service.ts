@@ -55,6 +55,8 @@ export type ChainJobMeta = {
   commitHash?: string;
   commitSubject?: string;
   taskTimes?: (number | null)[];
+  /** One-line source detail captured when this job fails or stops. */
+  failureReason?: string;
   /**
    * Verify stage (ui14 job 10): the runner's fresh-context verifier runs
    * against the job's commit while the next job builds. Absent on units the
@@ -142,6 +144,8 @@ type WorkerRun = {
   title: string | null;
   state: 'running' | 'finished' | 'stopped';
   model: string | null;
+  /** Original run start, distinct from last transcript activity. */
+  startedAt: number | string | null;
   lastActivity: string | null;
   /** Whole-session token cost from the provider's transcript or rollout. */
   tokenCount: number | null;
@@ -847,6 +851,9 @@ class WatchdogService {
         } else {
           meta.verify = event === 'verify-end' ? 'passed' : 'failed';
           meta.verifyEndedAt = Date.now();
+          if (event === 'verify-failed' && detail.summaryTail) {
+            meta.failureReason = detail.summaryTail.slice(-2000);
+          }
         }
       }
       if (detail?.summaryTail) {
@@ -886,6 +893,10 @@ class WatchdogService {
     }
     if (detail?.summaryTail) {
       chain.lastSummaryTail = detail.summaryTail.slice(-2000);
+      if ((event === 'failed' || event === 'stopped') && chain.currentPhase != null) {
+        const meta = chain.jobs[chain.currentPhase] ?? (chain.jobs[chain.currentPhase] = {});
+        meta.failureReason = chain.lastSummaryTail;
+      }
     }
     // Honest run state: a phase session is live only between phase-start and
     // phase-end/terminal — never inferred from a session row's age.
@@ -1028,6 +1039,7 @@ class WatchdogService {
         title: null,
         state: 'running' as const,
         model: run.model,
+        startedAt: run.startedAt,
         lastActivity: new Date(run.lastEventAt).toISOString(),
         tokenCount: null,
       }));
@@ -1085,6 +1097,7 @@ class WatchdogService {
         title,
         state,
         model: row.model ?? live?.model ?? null,
+        startedAt: row.created_at ?? live?.startedAt ?? null,
         lastActivity: row.updated_at ?? row.created_at ?? null,
         tokenCount: null,
       };
@@ -1970,6 +1983,9 @@ export function parseJobMeta(value: unknown): Record<number, ChainJobMeta> {
     }
     if (Array.isArray(entry.taskTimes)) {
       meta.taskTimes = entry.taskTimes.map((t) => (Number.isFinite(Number(t)) && t !== null ? Number(t) : null));
+    }
+    if (typeof entry.failureReason === 'string' && entry.failureReason.trim()) {
+      meta.failureReason = entry.failureReason.trim().slice(-2000);
     }
     if (entry.verify === 'running' || entry.verify === 'passed' || entry.verify === 'failed' || entry.verify === 'stopped') {
       meta.verify = entry.verify;

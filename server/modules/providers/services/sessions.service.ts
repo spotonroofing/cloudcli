@@ -163,6 +163,7 @@ export const sessionsService = {
     title: string | null;
     chainSlug: string | null;
     chainPhase: number | null;
+    model: string | null;
   }> {
     // Origin, owning project, title, and chain identity are joined from the
     // DB so the sidebar can split planner vs worker activity, shimmer project
@@ -214,6 +215,7 @@ export const sessionsService = {
         title,
         chainSlug: row?.chain_slug ?? null,
         chainPhase: row?.chain_phase ?? null,
+        model: row?.model ?? null,
       };
     });
   },

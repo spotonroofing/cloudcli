@@ -122,8 +122,8 @@ export function TodoStatusIcon({
   status: TodoListItemStatus;
   progress?: number;
   /**
-   * Job ring (ui12 job 8): while in-progress, render a static circle
-   * segmented per task with small gaps; the first `done` segments fill green.
+   * Job ring: render a static circle segmented per task with small gaps.
+   * Completed segments use the active tone; failed/unreached segments turn red.
    */
   segments?: { done: number; total: number };
   /**
@@ -147,10 +147,7 @@ export function TodoStatusIcon({
   // Idle rings segmented and static (ui13 job 7): a job with a manifest shows
   // its segmented ring from the start — muted and motionless while pending,
   // alive (fills, working-segment glow) once in progress.
-  const hasSegments =
-    (status === 'in-progress' || status === 'pending' || centerSpinner)
-    && segments !== undefined
-    && segments.total > 0;
+  const hasSegments = segments !== undefined && segments.total > 0;
 
   // Completion sweep arming: only a completed status that arrives while this
   // icon is mounted in another state sweeps — loaded history renders settled.
@@ -326,8 +323,8 @@ export function TodoStatusIcon({
 /**
  * The segmented job ring (ui12 job 8, shared with the rail in ui13 job 7):
  * one arc per task with small gaps inside a viewBox-24 svg. Pending renders
- * every segment muted and static; in-progress fills the first `done`
- * segments, and the segment being worked pulses with the white glow
+ * every segment muted and static; active/terminal jobs retain the first
+ * `done` segments, failed/unreached segments turn red, and the segment being worked pulses with the white glow
  * (`animate-segment-glow`, on the row-breathe beat; static full-ink under
  * reduced motion).
  */
@@ -351,9 +348,10 @@ export function JobRingSegments({
       {Array.from({ length: segments.total }, (_, i) => {
         const frac = 1 / segments.total;
         const gap = Math.min(0.05, frac / 3);
-        const done = (status === 'in-progress' || status === 'completed') && i < segments.done;
+        const done = i < segments.done;
         const working =
           status === 'in-progress' && i === segments.done && segments.done < segments.total;
+        const failed = status === 'cancelled' && !done;
         return (
           <circle
             key={i}
@@ -372,12 +370,13 @@ export function JobRingSegments({
             className={cn(
               'transition-[color,opacity] duration-300',
               done && (tone === 'mono' ? 'text-foreground' : 'text-status-done'),
+              failed && 'text-rose-600 dark:text-rose-400',
               working
                 && cn(
                   tone === 'mono' ? 'text-foreground' : 'text-status-working',
                   !reduce && 'animate-segment-glow',
                 ),
-              !done && !working && 'text-status-idle opacity-40',
+              !done && !working && !failed && 'text-status-idle opacity-40',
             )}
           />
         );

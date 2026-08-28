@@ -36,6 +36,7 @@ type RunningSessionApiItem = {
   chainSlug?: unknown;
   chainPhase?: unknown;
   chainPhaseName?: unknown;
+  model?: unknown;
 };
 
 const RUN_ORIGINS = ['planner', 'direct', 'dispatch', 'external', 'maintenance'] as const;
@@ -244,6 +245,10 @@ function AppContentInner() {
             chainSlug: typeof session.chainSlug === 'string' ? session.chainSlug : null,
             chainPhase: typeof session.chainPhase === 'number' ? session.chainPhase : null,
             chainPhaseName: typeof session.chainPhaseName === 'string' ? session.chainPhaseName : null,
+            model: typeof session.model === 'string' ? session.model : null,
+            startedAt: typeof session.startedAt === 'number' || typeof session.startedAt === 'string'
+              ? session.startedAt
+              : null,
           })),
       );
 

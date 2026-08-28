@@ -4,6 +4,7 @@ import type React from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
 import WorkerPane from '../../worker-pane/WorkerPane';
+import { JOBS_COLUMN_BASIS } from '../../worker-pane/JobsSidebar';
 import FileTree from '../../file-tree/view/FileTree';
 import GitPanel from '../../git-panel/view/GitPanel';
 import ErrorBoundary from '../../main-content/view/ErrorBoundary';
@@ -407,7 +408,7 @@ export default function WorkspaceRow({
       jobsTakeover={jobsTakeover}
       onJobsViewOpenChange={handleJobsViewOpenChange}
     />
-  ), jobsColumnOpen ? 'min(15rem, 33.333cqw)' : undefined);
+  ), jobsColumnOpen ? JOBS_COLUMN_BASIS : undefined);
 
   pushPane('files', auxiliaryPaneMinWidth, (
     <WindowPane

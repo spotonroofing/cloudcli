@@ -17,8 +17,9 @@ import { ActionSwapIcon } from '../../shared/view/beui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { Project, ProjectSession } from '../../types/app';
 import { titleFromPrompt } from '../../../shared/sessionTitle.js';
+import { workerRunLabel } from '../../utils/workerRunLabel';
 
-import JobsSidebar, { type ChainSnapshot, type JobGroup } from './JobsSidebar';
+import JobsSidebar, { JOBS_COLUMN_BASIS, type ChainSnapshot, type JobGroup } from './JobsSidebar';
 import {
   findWorkerFollowTarget,
   preserveWorkerSessionSelection,
@@ -81,19 +82,20 @@ type WorkerRun = {
   state: 'running' | 'finished' | 'stopped';
   model: string | null;
   lastActivity: string | null;
+  /** Honest run start; used for chain-less labels and history grouping. */
+  startedAt: number | string | null;
   /** Whole-session token cost from the provider transcript or rollout. */
   tokenCount: number | null;
 };
 
 /**
- * Chain runs read "slug Job N - name" from the dispatch manifest (never the
- * bare slug repeated); then the session title, then a short honest id — never
- * a provider placeholder.
+ * Chain runs read "slug Job N - name" from the dispatch manifest. Chain-less
+ * runs use kind, short model, and Eastern start time, never prompt or id text.
  */
 const runLabel = (run: WorkerRun, chains: Record<string, ChainSnapshot>): string => {
   // Monday maintenance runs are a system kind, labeled as such (spec B9).
   if (run.origin === 'maintenance') {
-    return 'Maintenance: Monday self-check';
+    return workerRunLabel(run);
   }
   if (run.chainSlug) {
     if (run.chainPhase) {
@@ -105,7 +107,7 @@ const runLabel = (run: WorkerRun, chains: Record<string, ChainSnapshot>): string
     }
     return run.chainSlug;
   }
-  return titleFromPrompt(run.title) || `run ${run.sessionId.slice(0, 8)}`;
+  return workerRunLabel(run);
 };
 
 type WorkerPaneProps = {
@@ -398,7 +400,9 @@ export default function WorkerPane({
         run: { label: runLabel(run, chains), state: run.state },
         sessions: { 1: run.sessionId },
         tokenCounts: { 1: run.tokenCount },
-        startedAt: run.lastActivity ? Date.parse(run.lastActivity) : 0,
+        startedAt: typeof run.startedAt === 'number'
+          ? run.startedAt
+          : run.startedAt ? Date.parse(run.startedAt) : 0,
       })),
   ].sort((a, b) => b.startedAt - a.startedAt);
   const handleOpenSession = (sessionId: string) => {
@@ -570,7 +574,7 @@ export default function WorkerPane({
               'min-h-0 min-w-0 overflow-hidden',
               jobsFullPane ? 'flex-1' : 'flex-shrink-0 border-l border-border/60',
             )}
-            style={jobsFullPane ? undefined : { width: 'min(15rem, 33.333cqw)' }}
+            style={jobsFullPane ? undefined : { width: JOBS_COLUMN_BASIS }}
           >
             <JobsSidebar
               groups={jobGroups}

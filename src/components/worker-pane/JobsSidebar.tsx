@@ -8,7 +8,10 @@ import { MarqueeLabel } from '../../shared/view/beui/MarqueeLabel';
 import { SwapText } from '../../shared/view/beui/SwapText';
 import { TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
 import { EASE_OUT, SPRING_SWAP } from '../../shared/view/beui/ease';
-import { Skeleton } from '../../shared/view/ui';
+import { Skeleton, Tooltip } from '../../shared/view/ui';
+
+/** Side-column width: exactly 20px over ui14 below the 260px cap. */
+export const JOBS_COLUMN_BASIS = 'min(16.25rem, calc(33.333cqw + 1.25rem))';
 
 /** One unit of a dispatch manifest: a compiled job or an appended task. */
 export type ChainManifestEntry = {
@@ -26,6 +29,8 @@ export type ChainManifestEntry = {
   commitHash?: string;
   commitSubject?: string;
   taskTimes?: (number | null)[];
+  /** Runner detail captured when this job failed or stopped. */
+  failureReason?: string;
   /** Verify stage (ui14 job 10): the runner's fresh-context verifier ran
    *  against the job's commit; absent where the runner never verified. */
   verify?: 'running' | 'passed' | 'failed' | 'stopped';
@@ -76,6 +81,7 @@ type Unit = {
   commitHash?: string;
   commitSubject?: string;
   taskTimes?: (number | null)[];
+  failureReason?: string;
   /** Verify stage state for the drawer's verify row (ui14 job 10). */
   verify?: 'running' | 'passed' | 'failed' | 'stopped';
   verifyStartedAt?: number;
@@ -108,7 +114,9 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
     const index = i + 1;
     let status: TodoListItemStatus = 'pending';
     const paused = chain.status === 'paused' && index === current;
-    if (chain.status === 'completed' || index < current) {
+    if (entry.verify === 'failed') {
+      status = 'cancelled';
+    } else if (chain.status === 'completed' || index < current) {
       status = 'completed';
     } else if (index === current) {
       status = chain.status === 'running' ? 'in-progress' : 'cancelled';
@@ -128,6 +136,7 @@ function chainUnits(chain: ChainSnapshot): Unit[] {
       commitHash: entry.commitHash,
       commitSubject: entry.commitSubject,
       taskTimes: entry.taskTimes,
+      failureReason: entry.failureReason,
       verify: entry.verify,
       verifyStartedAt: entry.verifyStartedAt,
       verifyEndedAt: entry.verifyEndedAt,
@@ -190,6 +199,12 @@ function taskDurationMs(unit: Unit, taskIndex: number): number | null {
   return end - start;
 }
 
+/** Start boundary for the task currently running, if the watchdog observed it. */
+function taskStartedAt(unit: Unit, taskIndex: number): number | null {
+  const start = taskIndex === 0 ? unit.startedAt : unit.taskTimes?.[taskIndex - 1];
+  return start == null ? null : start;
+}
+
 /** Live elapsed counter for a running job's footer: ticks from its start event. */
 function LiveElapsed({ startedAt }: { startedAt: number }) {
   const [now, setNow] = useState(() => Date.now());
@@ -231,9 +246,13 @@ function JobFooter({ unit }: { unit: Unit }) {
       {showCommit && (
         <>
           <span className="flex-shrink-0 font-mono text-[10px] tabular-nums">{unit.commitHash}</span>
-          <MarqueeLabel active={hovered} className="flex-1">
-            {unit.commitSubject ?? ''}
-          </MarqueeLabel>
+          <div className="min-w-0 flex-1 overflow-hidden [&>.relative]:max-w-full">
+            <Tooltip content={unit.commitSubject} position="top">
+              <MarqueeLabel active={hovered} className="min-w-0 max-w-full">
+                {unit.commitSubject ?? ''}
+              </MarqueeLabel>
+            </Tooltip>
+          </div>
         </>
       )}
       <span className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/50">
@@ -292,63 +311,48 @@ function JobTokenRow({ tokenCount }: { tokenCount: number | null | undefined }) 
   );
 }
 
-type VerifyState = 'running' | 'passed' | 'failed' | 'stopped';
-
-const verifyRowStatus: Record<VerifyState, TodoListItemStatus> = {
-  running: 'in-progress',
-  passed: 'completed',
-  failed: 'cancelled',
-  stopped: 'cancelled',
-};
-
-const verifyRowLabel: Record<VerifyState, string> = {
-  running: 'Verifying',
-  passed: 'Verified',
-  failed: 'Verify failed',
-  stopped: 'Verify stopped',
-};
-
 /**
- * Verify row on a job's drawer (ui14 job 10), after the commit footer: the
- * runner's fresh-context verify stage, which runs against the job's commit
- * while the next job builds. Task-style status icon (working ring, check,
- * X on failure), the stage label, and its duration right-aligned in the meta
- * style (live while running). Clicking opens the verifier's session when
- * one exists. Absent on jobs the runner never verified.
+ * A task-style verify row exists only while the runner's verifier is truly
+ * live. Settled verifier records remain data, not standing UI rows.
  */
 function VerifyRow({ unit, onOpenSession }: { unit: Unit; onOpenSession: (sessionId: string) => void }) {
-  if (!unit.verify) {
+  if (unit.verify !== 'running') {
     return null;
   }
-  const status = verifyRowStatus[unit.verify];
-  const running = unit.verify === 'running';
-  const duration = unit.verifyStartedAt != null && unit.verifyEndedAt != null
-    ? unit.verifyEndedAt - unit.verifyStartedAt
-    : null;
   const sessionId = unit.verifySessionId;
   return (
     <li
       data-slot="jobs-sidebar-verify"
-      data-status={status}
-      data-live={running ? 'true' : undefined}
+      data-status="in-progress"
+      data-live="true"
       onClick={sessionId ? () => onOpenSession(sessionId) : undefined}
       className={cn(
         'flex min-h-5 items-center gap-1.5 text-[11px] leading-4',
-        status === 'completed' && 'text-muted-foreground/45',
-        status === 'in-progress' && 'text-foreground',
-        status === 'cancelled' && 'text-muted-foreground/60',
+        'text-foreground',
         sessionId && 'cursor-pointer hover:text-foreground',
       )}
     >
       <span className="flex-shrink-0 scale-[0.7]">
-        <TodoStatusIcon status={status} />
+        <TodoStatusIcon status="in-progress" />
       </span>
-      <span className="min-w-0 truncate">{verifyRowLabel[unit.verify]}</span>
+      <span className="min-w-0 truncate">Verifying {unit.name}</span>
       <span className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/45">
-        {running && unit.verifyStartedAt != null
-          ? <LiveElapsed startedAt={unit.verifyStartedAt} />
-          : duration != null ? formatDuration(duration) : null}
+        {unit.verifyStartedAt != null ? <LiveElapsed startedAt={unit.verifyStartedAt} /> : null}
       </span>
+    </li>
+  );
+}
+
+/** Failure detail at the foot of a failed/stopped job drawer, kept to one line. */
+function FailureReason({ unit }: { unit: Unit }) {
+  if (unit.status !== 'cancelled') return null;
+  const reason = (unit.failureReason ?? 'Job stopped before completion.').replace(/\s+/g, ' ').trim();
+  return (
+    <li
+      data-slot="jobs-sidebar-failure-reason"
+      className="min-h-5 truncate text-[11px] leading-4 text-rose-600 dark:text-rose-400"
+    >
+      {reason}
     </li>
   );
 }
@@ -377,6 +381,9 @@ function taskStatus(unit: Unit, taskIndex: number): TodoListItemStatus {
   const done = displayedDone(unit);
   if (taskIndex < done) {
     return 'completed';
+  }
+  if (unit.status === 'cancelled' && unit.done != null && taskIndex === done) {
+    return 'cancelled';
   }
   if (taskIndex === done && unit.status === 'in-progress') {
     return 'in-progress';
@@ -408,7 +415,20 @@ export type JobGroup = {
 };
 
 /** A unit with its bottom-to-top position in the flat list (1 = oldest). */
-type PositionedUnit = Unit & { position: number };
+type PositionedUnit = Unit & { position: number; historyStartedAt: number };
+
+type HistoryPeriod = { year: string; month: string; monthKey: string; monthLabel: string };
+
+function historyPeriod(startedAt: number): HistoryPeriod {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'America/New_York',
+  }).formatToParts(new Date(startedAt));
+  const year = parts.find((part) => part.type === 'year')?.value ?? 'Unknown';
+  const month = parts.find((part) => part.type === 'month')?.value ?? 'Unknown';
+  return { year, month, monthKey: `${year}-${month}`, monthLabel: month };
+}
 
 type JobsSidebarProps = {
   /** Every run of the project, newest first. */
@@ -458,6 +478,7 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
         ...unit,
         sessionId: group.sessions[unit.index],
         tokenCount: group.tokenCounts?.[unit.index] ?? null,
+        historyStartedAt: unit.startedAt ?? group.startedAt,
         position: 0,
       });
     }
@@ -488,6 +509,16 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
     seenCountRef.current = stacked.length;
   }, [stacked.length]);
 
+  const periods = stacked.map((unit) => historyPeriod(unit.historyStartedAt));
+  const monthDoneCounts = new Map<string, number>();
+  const yearDoneCounts = new Map<string, number>();
+  stacked.forEach((unit, index) => {
+    if (unit.kind !== 'phase' || unit.status !== 'completed') return;
+    const period = periods[index];
+    monthDoneCounts.set(period.monthKey, (monthDoneCounts.get(period.monthKey) ?? 0) + 1);
+    yearDoneCounts.set(period.year, (yearDoneCounts.get(period.year) ?? 0) + 1);
+  });
+
   return (
     <section
       aria-label="Jobs"
@@ -513,8 +544,13 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
       ) : (
       <ol ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <AnimatePresence initial={false}>
-          {stacked.map((unit) => {
-            const hasDrawer = unit.tasks.length > 0 || unit.tokenCount != null;
+          {stacked.map((unit, unitIndex) => {
+            const hasDrawer = unit.tasks.length > 0
+              || unit.tokenCount != null
+              || unit.engine != null
+              || unit.commitHash != null
+              || unit.status === 'cancelled'
+              || unit.verify === 'running';
             const drawerOpen = hasDrawer
               && (drawerOverrides[unit.key] ?? unit.key === defaultOpenKey);
             // Jobs are the navigation (ui13 job 2): a unit with a session
@@ -539,9 +575,37 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
               unit.paused && 'text-foreground',
               (hasDrawer || navigable) && 'group-hover/row:text-foreground',
             );
+            const period = periods[unitIndex];
+            const previousPeriod = unitIndex > 0 ? periods[unitIndex - 1] : null;
+            const crossedYear = previousPeriod != null && previousPeriod.year !== period.year;
+            const crossedMonth = previousPeriod != null && previousPeriod.monthKey !== period.monthKey;
             return (
+              <React.Fragment key={unit.key}>
+              {crossedYear && (
+                <li
+                  data-slot="jobs-sidebar-year-group"
+                  data-period={period.year}
+                  className="mt-2 flex min-h-6 items-center border-t border-border/50 px-1.5 pt-1.5 text-[11px] font-medium text-foreground"
+                >
+                  <span>{period.year}</span>
+                  <span className="ml-auto text-[10px] font-normal tabular-nums text-muted-foreground">
+                    {yearDoneCounts.get(period.year) ?? 0} done
+                  </span>
+                </li>
+              )}
+              {crossedMonth && (
+                <li
+                  data-slot="jobs-sidebar-month-group"
+                  data-period={period.monthKey}
+                  className="mt-1 flex min-h-6 items-center px-1.5 text-[11px] font-medium text-muted-foreground"
+                >
+                  <span>{period.monthLabel}</span>
+                  <span className="ml-auto text-[10px] font-normal tabular-nums text-muted-foreground/70">
+                    {monthDoneCounts.get(period.monthKey) ?? 0} done
+                  </span>
+                </li>
+              )}
               <motion.li
-                key={unit.key}
                 initial={reduce ? { opacity: 1 } : { opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={
@@ -619,15 +683,16 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                           // fills as check-offs land, its working segment
                           // glowing. A manifest-less job keeps a plain circle
                           // (ramped spinner while working).
-                          segments={
-                            unit.tasks.length > 0
-                            && (unit.status === 'in-progress' || unit.status === 'pending' || unit.verify === 'running')
-                              ? {
-                                  done: unit.verify === 'running' ? unit.tasks.length : displayedDone(unit),
-                                  total: unit.tasks.length,
-                                }
-                              : undefined
-                          }
+                          segments={unit.tasks.length > 0
+                            && (unit.status !== 'cancelled'
+                              || (unit.done != null && unit.done < unit.tasks.length))
+                            ? {
+                                done: unit.status === 'completed' || unit.verify === 'running'
+                                  ? unit.tasks.length
+                                  : displayedDone(unit),
+                                total: unit.tasks.length,
+                              }
+                            : undefined}
                         />
                       )}
                     </span>
@@ -729,22 +794,24 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                 </div>
                 {hasDrawer && (
                   <AgentDisclosure open={drawerOpen} data-slot="jobs-sidebar-drawer">
-                    <ul className="pb-0.5 pl-9">
+                    <ul className="pb-0.5 pl-5">
                       {unit.tasks.map((task, taskIndex) => {
                         const status = taskStatus(unit, taskIndex);
                         // Per-task duration (ui13 job 14): completed tasks
                         // only, and only where the timing honestly exists.
                         const duration = status === 'completed' ? taskDurationMs(unit, taskIndex) : null;
+                        const liveStartedAt = status === 'in-progress' ? taskStartedAt(unit, taskIndex) : null;
                         return (
                           <li
                             key={`${unit.key}-${taskIndex}`}
                             data-slot="jobs-sidebar-task"
                             data-status={status}
                             className={cn(
-                              'flex min-h-5 items-center gap-1.5 text-[11px] leading-4',
+                              'group/task flex min-h-5 items-center gap-1.5 text-[11px] leading-4',
                               status === 'completed' && 'text-muted-foreground/45',
                               status === 'in-progress' && 'text-foreground',
                               status === 'pending' && 'text-muted-foreground/50',
+                              status === 'cancelled' && 'text-rose-600 dark:text-rose-400',
                               // The working task row breathes (ui12 job 8).
                               status === 'in-progress' && !reduce && 'animate-row-breathe',
                             )}
@@ -757,14 +824,22 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                             <span className={cn('min-w-0 truncate', status === 'completed' && 'line-through')}>
                               {task}
                             </span>
-                            {duration != null && (
+                            {liveStartedAt != null ? (
                               <span
                                 data-slot="jobs-sidebar-task-duration"
-                                className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/45"
+                                data-live="true"
+                                className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-status-working"
+                              >
+                                <LiveElapsed startedAt={liveStartedAt} />
+                              </span>
+                            ) : duration != null ? (
+                              <span
+                                data-slot="jobs-sidebar-task-duration"
+                                className="touch:opacity-100 ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/45 opacity-0 transition-opacity group-hover/task:opacity-100"
                               >
                                 {formatDuration(duration)}
                               </span>
-                            )}
+                            ) : null}
                           </li>
                         );
                       })}
@@ -772,10 +847,12 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                       <JobTokenRow tokenCount={unit.tokenCount} />
                       <JobFooter unit={unit} />
                       <VerifyRow unit={unit} onOpenSession={onOpenSession} />
+                      <FailureReason unit={unit} />
                     </ul>
                   </AgentDisclosure>
                 )}
               </motion.li>
+              </React.Fragment>
             );
           })}
         </AnimatePresence>
