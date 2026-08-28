@@ -23,6 +23,12 @@ import {
   SESSION_MESSAGES_PAGE_SIZE,
 } from './sessionMessagePagination';
 import type { SessionMessagesRequestOptions } from './sessionMessagePagination';
+import {
+  ACTIVE_SESSION_MESSAGE_LIMIT,
+  HIDDEN_SESSION_MESSAGE_LIMIT,
+  boundedTail,
+  touchSessionSlot,
+} from './sessionSlotCache';
 
 // ─── NormalizedMessage (mirrors server/adapters/types.js) ────────────────────
 
@@ -625,7 +631,17 @@ async function refreshLatestSlotFromServer(
 
 const STALE_THRESHOLD_MS = 30_000;
 
-const MAX_REALTIME_MESSAGES = 500;
+function compactHiddenSlot(slot: SessionSlot): void {
+  const serverMessages = boundedTail(slot.serverMessages, HIDDEN_SESSION_MESSAGE_LIMIT);
+  const realtimeMessages = boundedTail(slot.realtimeMessages, HIDDEN_SESSION_MESSAGE_LIMIT);
+  if (serverMessages === slot.serverMessages && realtimeMessages === slot.realtimeMessages) return;
+
+  slot.serverMessages = serverMessages;
+  slot.realtimeMessages = realtimeMessages;
+  slot.offset = serverMessages.length;
+  slot.hasMore = slot.hasMore || slot.total > serverMessages.length;
+  recomputeMergedIfNeeded(slot);
+}
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
@@ -644,15 +660,29 @@ export function useSessionStore() {
   }, []);
 
   const setActiveSession = useCallback((sessionId: string | null) => {
+    const previousSessionId = activeSessionIdRef.current;
+    if (previousSessionId && previousSessionId !== sessionId) {
+      const previousSlot = storeRef.current.get(previousSessionId);
+      if (previousSlot) compactHiddenSlot(previousSlot);
+    }
     activeSessionIdRef.current = sessionId;
+    if (sessionId && storeRef.current.has(sessionId)) {
+      touchSessionSlot(
+        storeRef.current,
+        sessionId,
+        createEmptySlot,
+        sessionId,
+      );
+    }
   }, []);
 
   const getSlot = useCallback((sessionId: string): SessionSlot => {
-    const store = storeRef.current;
-    if (!store.has(sessionId)) {
-      store.set(sessionId, createEmptySlot());
-    }
-    return store.get(sessionId)!;
+    return touchSessionSlot(
+      storeRef.current,
+      sessionId,
+      createEmptySlot,
+      activeSessionIdRef.current,
+    );
   }, []);
 
   const has = useCallback((sessionId: string) => {
@@ -797,8 +827,11 @@ export function useSessionStore() {
         ? msg
         : { ...msg, sessionId };
     let updated = [...slot.realtimeMessages, normalizedMessage];
-    if (updated.length > MAX_REALTIME_MESSAGES) {
-      updated = updated.slice(-MAX_REALTIME_MESSAGES);
+    const realtimeLimit = sessionId === activeSessionIdRef.current
+      ? ACTIVE_SESSION_MESSAGE_LIMIT
+      : HIDDEN_SESSION_MESSAGE_LIMIT;
+    if (updated.length > realtimeLimit) {
+      updated = updated.slice(-realtimeLimit);
     }
     slot.realtimeMessages = updated;
     recomputeMergedIfNeeded(slot);
@@ -817,8 +850,11 @@ export function useSessionStore() {
         : { ...msg, sessionId },
     );
     let updated = [...slot.realtimeMessages, ...normalizedMessages];
-    if (updated.length > MAX_REALTIME_MESSAGES) {
-      updated = updated.slice(-MAX_REALTIME_MESSAGES);
+    const realtimeLimit = sessionId === activeSessionIdRef.current
+      ? ACTIVE_SESSION_MESSAGE_LIMIT
+      : HIDDEN_SESSION_MESSAGE_LIMIT;
+    if (updated.length > realtimeLimit) {
+      updated = updated.slice(-realtimeLimit);
     }
     slot.realtimeMessages = updated;
     recomputeMergedIfNeeded(slot);

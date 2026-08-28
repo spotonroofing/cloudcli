@@ -17,7 +17,7 @@ import { applyMessageVersions, type MessageVersionView } from '../utils/messageV
 import { mergeMemoryUpdateRows, normalizedToChatMessages } from './useChatMessages';
 import type { SessionMemoryUpdate } from './useChatMessages';
 
-const INITIAL_VISIBLE_MESSAGES = 100;
+const INITIAL_VISIBLE_MESSAGES = 30;
 
 interface UseChatSessionStateArgs {
   isActive: boolean;

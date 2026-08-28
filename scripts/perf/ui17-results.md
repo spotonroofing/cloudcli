@@ -30,3 +30,29 @@ The React Profiler pass repeats each interaction separately so profiler instrume
 | Layout-affecting keyframes | 0 | 0 | 0 |
 
 The largest measured cause was the jobs tree: unmounting 238 hidden task descendants and avoiding list-wide hover state cut jobs script work 74.5% and its longest task from 138ms to zero. Session-scoped websocket handling, identity-preserving polls, shared clocks, and stable worker/jobs inputs cut chat-switch main-thread work 37.8%; the slowest first paint fell 61.6%. A live 69KB worker-runs response initially produced a 65ms sidebar-sweep task after the other fixes; concurrent reconciliation removed it on the final run. The dot's mutation observer now preserves an in-flight spring, and the app animation budget reduced both hidden and offscreen running-animation counts to zero.
+
+## Job 2 memory footprint
+
+The authenticated baseline and final run used 1440×1000, a long real planner transcript, a live worker transcript, 172 jobs, and five visible chat rows. The baseline worker produced 2,346 transcript mutations; the final worker produced 4,340. The harness collected garbage before each snapshot and counted heap, DOM nodes, detached trees, listeners, live interval owners, and object URLs. Raw baseline evidence is in `/Users/spoton-worker/forge-logs/ui17/memory-baseline/`; the passing final JSON and traces are in `/Users/spoton-worker/forge-logs/ui17/memory-final-pass/`.
+
+| Memory stage | Baseline heap | After heap | Baseline DOM | After DOM | Baseline listeners | After listeners |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Load | 36.12MB | 23.00MB | 6,778 | 4,126 | 1,581 | 829 |
+| After 30 chat switches | 45.83MB | 24.82MB | 7,699 | 4,070 | 1,451 | 786 |
+| After 10 minutes streaming idle | 48.28MB | 28.26MB | 8,275 | 4,778 | 1,473 | 811 |
+| After 20 jobs drawers and 20 Memory surfaces | 47.43MB | 28.16MB | 8,272 | 4,737 | 1,473 | 812 |
+
+| Holder/budget | Baseline | After | Change or limit |
+| --- | ---: | ---: | ---: |
+| Whole-scenario heap growth | 31.3% | 22.4% | ≤25% |
+| Heap added by 30 chat switches | 9.70MB | 1.82MB | −81.3% |
+| Final absolute heap | 47.43MB | 28.16MB | −40.6% |
+| Final mounted jobs / total history | 172 / 172 | 40 / 172 | −76.7% mounted |
+| Final largest transcript pane | 55 rows | 52 rows | ≤120 rows |
+| Detached-tree growth | 0 | 0 | 0 |
+| Interval owners introduced by closed surfaces | 0 | 0 | 0 |
+| Final object URLs | 0 | 0 | 0 |
+
+The largest baseline DOM holder was the jobs subtree: 3,559 descendants, 49.5% of the confirming page count. Replace-in-place 40-row history paging cut the final page from 8,272 to 4,737 nodes while preserving access to all 172 jobs. The unbounded per-pane session map is now a three-slot LRU; switching away compacts a slot to its newest row, returning re-fetches a 20-message page, the mounted initial window is 30 messages, and a running session retains at most 80 realtime messages instead of 500. Attachments already used owned/revoked object URLs, and the measured detached-tree and closed-surface interval-owner growth were both zero, so no speculative disposal rewrite was made.
+
+The original baseline used the React-enabled browser required for Job 0 profiler counts. Heap verification now uses a second clean browser showing the same workspace because a confirming heap snapshot found React DevTools' fiber maps as the largest remaining observer-owned arrays; the React-enabled browser continues to produce the interaction traces and render counts in the same command. The clean-session result is the tab footprint, while the single-process script still prints both Job 0 and Job 2 budgets together.

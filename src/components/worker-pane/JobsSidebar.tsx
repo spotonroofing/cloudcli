@@ -12,6 +12,8 @@ import { useSharedNow } from '../../hooks/useSharedNow';
 
 /** Side-column width: exactly 20px over ui14 below the 260px cap. */
 export const JOBS_COLUMN_BASIS = 'min(16.25rem, calc(33.333cqw + 1.25rem))';
+/** One replace-in-place history page; the long tail never stays mounted. */
+export const JOBS_HISTORY_PAGE_SIZE = 40;
 
 /** One unit of a dispatch manifest: a compiled job or an appended task. */
 export type ChainManifestEntry = {
@@ -523,10 +525,9 @@ type JobsSidebarProps = {
 /**
  * The jobs list (ui12 phase 5 sidebar; a side column or full-pane view since
  * ui14 job 1): the primary status surface for the project's dispatched runs,
- * toggled by the worker top bar's job sign. One continuous list across every
- * run of the project, ordered bottom-to-top — the oldest run's job 1 at the
- * bottom, later jobs and later runs stacking upward, the newest (or queued)
- * job on top — with the full history scrollable in place. Every job is a
+ * toggled by the worker top bar's job sign. One chronological history across
+ * every run of the project, ordered newest first and paged in replace-in-place
+ * windows so its long tail does not remain in the DOM. Every job is a
  * collapsible task drawer; task rows carry check/working/idle status icons,
  * the job row's ring advances with its done/total counter, and entries
  * stagger in as a manifest (or an append) lands.
@@ -576,7 +577,28 @@ function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }
     : null;
   const [drawerOverrides, setDrawerOverrides] = useState<Record<string, boolean>>({});
   const [tappedTask, setTappedTask] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(0);
   const listRef = useRef<HTMLOListElement>(null);
+
+  const historyPageCount = Math.max(1, Math.ceil(stacked.length / JOBS_HISTORY_PAGE_SIZE));
+  const activeUnitIndex = activeSessionId
+    ? stacked.findIndex((unit) => unit.sessionId === activeSessionId)
+    : -1;
+  const pageStart = historyPage * JOBS_HISTORY_PAGE_SIZE;
+  const visibleStacked = stacked.slice(pageStart, pageStart + JOBS_HISTORY_PAGE_SIZE);
+
+  useEffect(() => {
+    setHistoryPage((page) => Math.min(page, historyPageCount - 1));
+  }, [historyPageCount]);
+
+  useEffect(() => {
+    if (activeUnitIndex < 0) return;
+    setHistoryPage(Math.floor(activeUnitIndex / JOBS_HISTORY_PAGE_SIZE));
+  }, [activeSessionId, activeUnitIndex]);
+
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 });
+  }, [historyPage]);
 
   // Populate animation: units past the previously rendered count are new (a
   // manifest landing or an append) and stagger in one by one; settled rows
@@ -601,6 +623,7 @@ function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }
     <section
       aria-label="Jobs"
       data-slot="jobs-sidebar"
+      data-history-total={stacked.length}
       className="flex h-full min-w-0 flex-col bg-muted/20"
     >
       {loading && groups.length === 0 ? (
@@ -622,7 +645,8 @@ function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }
       ) : (
       <ol ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <AnimatePresence initial={false}>
-          {stacked.map((unit, unitIndex) => {
+          {visibleStacked.map((unit, pageIndex) => {
+            const unitIndex = pageStart + pageIndex;
             const hasDrawer = unit.tasks.length > 0
               || unit.tokenCount != null
               || unit.engine != null
@@ -932,6 +956,35 @@ function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }
           })}
         </AnimatePresence>
       </ol>
+      )}
+      {!loading && stacked.length > JOBS_HISTORY_PAGE_SIZE && (
+        <nav
+          aria-label="Jobs history pages"
+          data-slot="jobs-history-pages"
+          className="flex min-h-8 items-center justify-between border-t border-border/50 px-2 text-[11px] text-muted-foreground"
+        >
+          <button
+            type="button"
+            data-slot="jobs-history-newer"
+            disabled={historyPage === 0}
+            onClick={() => setHistoryPage((page) => Math.max(0, page - 1))}
+            className="rounded-sm px-1.5 py-1 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-30"
+          >
+            Newer
+          </button>
+          <span className="font-mono text-[10px] tabular-nums text-muted-foreground/60">
+            {historyPage + 1} / {historyPageCount}
+          </span>
+          <button
+            type="button"
+            data-slot="jobs-history-older"
+            disabled={historyPage >= historyPageCount - 1}
+            onClick={() => setHistoryPage((page) => Math.min(historyPageCount - 1, page + 1))}
+            className="rounded-sm px-1.5 py-1 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-30"
+          >
+            Older
+          </button>
+        </nav>
       )}
     </section>
   );

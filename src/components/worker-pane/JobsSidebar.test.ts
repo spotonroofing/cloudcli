@@ -4,7 +4,12 @@ import test from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import JobsSidebar, { JOBS_COLUMN_BASIS, type ChainSnapshot, type JobGroup } from './JobsSidebar';
+import JobsSidebar, {
+  JOBS_COLUMN_BASIS,
+  JOBS_HISTORY_PAGE_SIZE,
+  type ChainSnapshot,
+  type JobGroup,
+} from './JobsSidebar';
 
 const renderJobs = (groups: JobGroup[]) => renderToStaticMarkup(createElement(JobsSidebar, {
   groups,
@@ -338,4 +343,24 @@ test('older months and years render clean grouping rows with completed-job count
   assert.match(markup, /data-slot="jobs-sidebar-month-group" data-period="2025-December"/);
   assert.ok(markup.indexOf('history-0') < markup.indexOf('history-1'));
   assert.ok(markup.indexOf('history-1') < markup.indexOf('history-2'));
+});
+
+test('long jobs history mounts one replace-in-place page', () => {
+  const groups: JobGroup[] = Array.from({ length: JOBS_HISTORY_PAGE_SIZE + 25 }, (_, index) => ({
+    chain: null,
+    run: { label: `Run ${index}`, state: 'finished' },
+    sessions: { 1: `session-${index}` },
+    startedAt: Date.now() - index,
+  }));
+
+  const markup = renderJobs(groups);
+  assert.equal(
+    (markup.match(/data-slot="jobs-sidebar-row"/g) ?? []).length,
+    JOBS_HISTORY_PAGE_SIZE,
+  );
+  assert.match(markup, new RegExp(`data-history-total="${JOBS_HISTORY_PAGE_SIZE + 25}"`));
+  assert.match(markup, /data-slot="jobs-history-pages"/);
+  assert.match(markup, /data-slot="jobs-history-newer" disabled=""/);
+  assert.match(markup, /data-slot="jobs-history-older"/);
+  assert.match(markup, />1 \/ 2</);
 });
