@@ -13,7 +13,9 @@ import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useProjectsState } from '../../hooks/useProjectsState';
 import { useCloudSync } from '../../hooks/useCloudSync';
 import { useQueuedMessageAutoSend } from '../../hooks/useQueuedMessageAutoSend';
+import { useAnimationBudget } from '../../hooks/useAnimationBudget';
 import { writeSetting } from '../../utils/cloudSettings';
+import { preserveJsonEqual } from '../../utils/preserveEqual';
 import { useAuth } from '../auth/context/AuthContext';
 import { api } from '../../utils/api';
 import { isNotificationSoundEnabled } from '../../utils/notificationSound';
@@ -72,6 +74,7 @@ export default function AppContent() {
 }
 
 function AppContentInner() {
+  useAnimationBudget();
   const navigate = useNavigate();
   const location = useLocation();
   const { sessionId, projectId } = useParams<{ sessionId?: string; projectId?: string }>();
@@ -231,8 +234,7 @@ function AppContentInner() {
 
       // Sidebar identity: planner/worker counters and project-row shimmer key
       // off each live run's origin and owning project.
-      setRunningRuns(
-        sessions
+      const nextRunningRuns = sessions
           .filter((session): session is RunningSessionApiItem & { sessionId: string } =>
             typeof session.sessionId === 'string' && session.sessionId.length > 0)
           .map((session) => ({
@@ -249,8 +251,8 @@ function AppContentInner() {
             startedAt: typeof session.startedAt === 'number' || typeof session.startedAt === 'string'
               ? session.startedAt
               : null,
-          })),
-      );
+          }));
+      setRunningRuns((previous) => preserveJsonEqual(previous, nextRunningRuns));
 
       syncProcessingSessions(
         sessions

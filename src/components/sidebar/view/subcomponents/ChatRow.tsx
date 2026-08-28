@@ -60,9 +60,6 @@ export default function ChatRow({
 }: ChatRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editingName, setEditingName] = useState('');
-  // Hover marquee (pre-ui12 scan, restored ui13 job 3): mouse enter/leave is
-  // effectively fine-pointer only — touch taps navigate before hover matters.
-  const [rowHovered, setRowHovered] = useState(false);
   const [wakeTarget, setWakeTarget] = useState(isWatchdogWakeTarget);
 
   useEffect(() => {
@@ -109,8 +106,7 @@ export default function ChatRow({
       data-testid={dataTestId}
       data-slot="chat-row"
       onClick={handleClick}
-      onMouseEnter={() => setRowHovered(true)}
-      onMouseLeave={() => setRowHovered(false)}
+      data-marquee-hover
       className={cn(
         'group relative flex min-w-0 items-center gap-2 rounded-lg py-2 pl-3 pr-3 text-left transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
@@ -160,7 +156,7 @@ export default function ChatRow({
         </span>
       ) : (
         <span className="min-w-0 flex-1">
-          <MarqueeLabel active={rowHovered} className="text-[13px] font-normal leading-4">
+          <MarqueeLabel active={false} activateOnParentHover className="text-[13px] font-normal leading-4">
             {title}
           </MarqueeLabel>
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground">

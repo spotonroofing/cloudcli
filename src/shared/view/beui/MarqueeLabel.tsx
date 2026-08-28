@@ -17,6 +17,7 @@ const ROW_RETURN = { duration: 0.4, ease: EASE_OUT } as const;
 
 export function MarqueeLabel({
   active,
+  activateOnParentHover = false,
   children,
   className,
   mode = 'loop',
@@ -24,6 +25,8 @@ export function MarqueeLabel({
   stopImmediately = false,
 }: {
   active: boolean;
+  /** Listen to the nearest data-marquee-hover host without re-rendering it. */
+  activateOnParentHover?: boolean;
   children: string;
   className?: string;
   /** Jobs task rows scan to the end once, then return; navigation rows loop. */
@@ -37,6 +40,21 @@ export function MarqueeLabel({
   const viewportRef = useRef<HTMLSpanElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
   const [distance, setDistance] = useState(0);
+  const [parentHovered, setParentHovered] = useState(false);
+
+  useEffect(() => {
+    if (!activateOnParentHover) return;
+    const host = viewportRef.current?.closest<HTMLElement>('[data-marquee-hover]');
+    if (!host) return;
+    const enter = () => setParentHovered(true);
+    const leave = () => setParentHovered(false);
+    host.addEventListener('pointerenter', enter);
+    host.addEventListener('pointerleave', leave);
+    return () => {
+      host.removeEventListener('pointerenter', enter);
+      host.removeEventListener('pointerleave', leave);
+    };
+  }, [activateOnParentHover]);
 
   useEffect(() => {
     const measure = () => {
@@ -58,7 +76,7 @@ export function MarqueeLabel({
     return () => observer.disconnect();
   }, [mode]);
 
-  const running = active && distance > 0 && !reduce;
+  const running = (active || parentHovered) && distance > 0 && !reduce;
 
   return (
     <span
@@ -68,7 +86,7 @@ export function MarqueeLabel({
     >
       <motion.span
         className="flex w-max items-center gap-6 whitespace-nowrap"
-        animate={{ x: running ? (mode === 'once' ? [0, -distance, 0] : [0, -distance]) : 0 }}
+        animate={{ x: running ? [0, -distance, 0] : 0 }}
         transition={
           running
             ? mode === 'once'
@@ -79,8 +97,9 @@ export function MarqueeLabel({
                   delay: startDelay,
                 }
               : {
-                duration: Math.max(2.4, distance / 34),
-                ease: 'linear',
+                duration: Math.max(2.4, distance / 34) * 2,
+                ease: EASE_IN_OUT,
+                times: [0, 0.5, 1],
                 repeat: Number.POSITIVE_INFINITY,
                 repeatDelay: 2,
                 delay: startDelay,

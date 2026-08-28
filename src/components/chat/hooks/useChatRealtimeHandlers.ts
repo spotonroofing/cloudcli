@@ -15,6 +15,7 @@ import type { SessionStore, NormalizedMessage } from '../../../stores/useSession
 import { sessionUpsertRefreshTarget } from '../utils/messageHistoryRefreshCoordinator';
 import { mergeTokenBudget } from '../utils/tokenBudget';
 import { settleQueuedMessageDelivered } from '../utils/chatStorage';
+import { frameTargetsSession } from '../utils/chatFrameScope';
 
 const isActionablePermissionRequest = (request: { toolName?: unknown } | null | undefined): boolean => {
   return request?.toolName !== 'ExitPlanMode' && request?.toolName !== 'exit_plan_mode';
@@ -124,9 +125,10 @@ export function useChatRealtimeHandlers({
 
       const activeViewSessionId = activeViewSessionIdRef.current;
       const sid = (typeof msg.sessionId === 'string' && msg.sessionId) || activeViewSessionId;
+      const targetsActiveSession = frameTargetsSession(sid, activeViewSessionId);
 
       // Record replay progress for every sequenced live event.
-      if (sid && typeof msg.seq === 'number') {
+      if (targetsActiveSession && sid && typeof msg.seq === 'number') {
         const known = lastSeqRef.current.get(sid) ?? 0;
         if (msg.seq > known) {
           lastSeqRef.current.set(sid, msg.seq);
@@ -141,7 +143,7 @@ export function useChatRealtimeHandlers({
         case 'chat_subscribed': {
           // Ack for chat.subscribe: authoritative processing state plus any
           // pending tool-permission prompts for the run.
-          if (!sid) return;
+          if (!sid || !targetsActiveSession) return;
 
           if (msg.isProcessing) {
             onSessionProcessing?.(sid);
@@ -171,7 +173,7 @@ export function useChatRealtimeHandlers({
 
         case 'protocol_error': {
           console.error('[Chat] Protocol error:', msg.code, msg.error);
-          if (sid) {
+          if (sid && targetsActiveSession) {
             // Surface the failure in the conversation and stop the spinner —
             // the run never started (or was rejected), so no `complete` follows.
             onSessionIdle?.(sid);
@@ -222,6 +224,10 @@ export function useChatRealtimeHandlers({
         default:
           break;
       }
+
+      // Provider rows and status belong only to the pane that renders their
+      // session. Other panes keep their row stores and React trees untouched.
+      if (!targetsActiveSession) return;
 
       /* -------------------------------------------------------------- */
       /*  Provider NormalizedMessage handling                            */

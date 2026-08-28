@@ -1,5 +1,5 @@
 import { Hammer, MessageSquare, Milestone, Plus, Terminal, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import ChatInterface from '../chat/view/ChatInterface';
 import PaneShell from '../app/workspace/PaneShell';
@@ -18,6 +18,7 @@ import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from 
 import type { Project, ProjectSession } from '../../types/app';
 import { titleFromPrompt } from '../../../shared/sessionTitle.js';
 import { workerRunLabel } from '../../utils/workerRunLabel';
+import { preserveJsonEqual } from '../../utils/preserveEqual';
 
 import JobsSidebar, { JOBS_COLUMN_BASIS, type ChainSnapshot, type JobGroup } from './JobsSidebar';
 import {
@@ -245,8 +246,13 @@ export default function WorkerPane({
       const body = (await response.json()) as {
         data?: { runs?: WorkerRun[]; chains?: Record<string, ChainSnapshot> };
       };
-      setRuns(body.data?.runs ?? []);
-      setChains(body.data?.chains ?? {});
+      // A live run can change while the user is sweeping a 100+ row history.
+      // Keep that network reconciliation interruptible so pointer and wheel
+      // input retain the main-thread budget even when the payload is new.
+      startTransition(() => {
+        setRuns((previous) => preserveJsonEqual(previous, body.data?.runs ?? []));
+        setChains((previous) => preserveJsonEqual(previous, body.data?.chains ?? {}));
+      });
     } catch {
       // transient; the poll retries
     } finally {
@@ -266,7 +272,7 @@ export default function WorkerPane({
 
   // The server sorts worker runs newest-first. Verifier rows remain in the
   // jobs navigator but never become the pane's implicit follow target.
-  const followTarget = findWorkerFollowTarget(runs);
+  const followTarget = useMemo(() => findWorkerFollowTarget(runs), [runs]);
 
   // A visible worker transcript counts as seen. Including the processing map
   // makes the completion render clear a response mark that may have landed in
@@ -344,7 +350,7 @@ export default function WorkerPane({
     [onInputFocusChange],
   );
 
-  const handleSelectRun = (run: WorkerRun) => {
+  const handleSelectRun = useCallback((run: WorkerRun) => {
     // Picking the current build/direct target resumes immediate follow; an
     // older run or verifier is an intentional one-minute pin.
     setManualPinUntil(workerSessionPinUntil(run, followTarget));
@@ -357,7 +363,7 @@ export default function WorkerPane({
         booted: Boolean(run.booted),
       }),
     );
-  };
+  }, [followTarget]);
 
   const handleNewWorkerSession = () => {
     setManualPinUntil(workerSessionPinUntil(null, followTarget));
@@ -378,7 +384,7 @@ export default function WorkerPane({
   // project (ui14 job 1): each chain is a group carrying the sessions its
   // units have, each chain-less run is a one-row group, newest first. Every
   // selection routes through handleSelectRun so pin/auto-follow holds.
-  const jobGroups: JobGroup[] = [
+  const jobGroups = useMemo<JobGroup[]>(() => [
     ...Object.values(chains).map((chain) => {
       const sessions: Record<number, string> = {};
       const tokenCounts: Record<number, number | null> = {};
@@ -403,14 +409,18 @@ export default function WorkerPane({
           ? run.startedAt
           : run.startedAt ? Date.parse(run.startedAt) : 0,
       })),
-  ].sort((a, b) => b.startedAt - a.startedAt);
-  const handleOpenSession = (sessionId: string) => {
+  ].sort((a, b) => b.startedAt - a.startedAt), [chains, runs]);
+  const handleOpenSession = useCallback((sessionId: string) => {
     const target = runs.find((run) => run.sessionId === sessionId);
     if (target) {
       handleSelectRun(target);
     }
-  };
+  }, [handleSelectRun, runs]);
   const jobsFullPane = jobsTakeover || isMobile;
+  const handleOpenJobSession = useCallback((sessionId: string) => {
+    handleOpenSession(sessionId);
+    if (jobsFullPane) setJobsViewOpen(false);
+  }, [handleOpenSession, jobsFullPane, setJobsViewOpen]);
 
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -577,12 +587,7 @@ export default function WorkerPane({
               groups={jobGroups}
               loading={!runsLoaded}
               activeSessionId={paneSession?.id ?? null}
-              onOpenSession={(sessionId) => {
-                handleOpenSession(sessionId);
-                if (jobsFullPane) {
-                  setJobsViewOpen(false);
-                }
-              }}
+              onOpenSession={handleOpenJobSession}
             />
           </div>
         )}

@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
-
 import { formatStatusDuration, statusStartedAt } from '../../utils/statusDuration';
+import { useSharedNow } from '../../../../hooks/useSharedNow';
 
 type StatusDurationProps = {
   startedAt?: string | number | Date;
@@ -20,15 +19,7 @@ export default function StatusDuration({
   className = '',
 }: StatusDurationProps) {
   const start = statusStartedAt(startedAt);
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (!running || start === null) return;
-    const update = () => setNow(Date.now());
-    update();
-    const timer = window.setInterval(update, 100);
-    return () => window.clearInterval(timer);
-  }, [running, start]);
+  const now = useSharedNow(running && start !== null, 100);
 
   const elapsed = running && start !== null
     ? Math.max(0, now - start)

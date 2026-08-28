@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/view/beui';
 import { NumberTicker } from '../../../../shared/view/beui/NumberTicker';
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
+import { useSharedNow } from '../../../../hooks/useSharedNow';
 
 import {
   ACTIVITY_PRESENTATIONS,
@@ -35,7 +36,7 @@ function normalizeStatusWord(statusText: string | null | undefined): string | nu
  */
 export default function ActivityIndicator({ activity }: ActivityIndicatorProps) {
   const startedAt = activity?.phaseStartedAt ?? null;
-  const [elapsedDeciseconds, setElapsedDeciseconds] = useState(0);
+  const now = useSharedNow(startedAt !== null, 100);
   const reduceMotion = useReducedMotion() ?? false;
   const reduceMotionRef = useRef(reduceMotion);
   const recentIndicesRef = useRef<number[]>([0]);
@@ -49,14 +50,6 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
   useEffect(() => {
     reduceMotionRef.current = reduceMotion;
   }, [reduceMotion]);
-
-  useEffect(() => {
-    if (startedAt === null) return;
-    const update = () => setElapsedDeciseconds(Math.max(0, Math.floor((Date.now() - startedAt) / 100)));
-    update();
-    const timer = setInterval(update, 100);
-    return () => clearInterval(timer);
-  }, [startedAt]);
 
   useEffect(() => {
     const runStartedAt = activity?.startedAt ?? null;
@@ -109,6 +102,7 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
   const label = overrideWord ?? presentation.word;
   const swapStyle = { opacity: swapVisible ? 1 : 0 };
 
+  const elapsedDeciseconds = startedAt === null ? 0 : Math.max(0, Math.floor((now - startedAt) / 100));
   const totalSeconds = elapsedDeciseconds / 10;
   const elapsedLabel = totalSeconds < 60
     ? `${totalSeconds.toFixed(1)}s`

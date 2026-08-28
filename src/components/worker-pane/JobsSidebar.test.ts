@@ -251,8 +251,8 @@ test('a committed verify failure repaired by its superseding unit reads as done 
   };
 
   const markup = renderJobs([
-    { chain: repair, run: null, sessions: { 1: 'repair-session' }, startedAt: repair.startedAt },
     { chain: failed, run: null, sessions: { 1: 'original-session' }, startedAt: failed.startedAt },
+    { chain: repair, run: null, sessions: { 1: 'repair-session' }, startedAt: repair.startedAt },
   ]);
   assert.equal((markup.match(/data-slot="jobs-sidebar-row"/g) ?? []).length, 1);
   assert.match(markup, /data-chain="original"[^>]*data-status="completed"/);

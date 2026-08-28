@@ -8,6 +8,7 @@ import { MarqueeLabel } from '../../shared/view/beui/MarqueeLabel';
 import { TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
 import { EASE_OUT, SPRING_SWAP } from '../../shared/view/beui/ease';
 import { Skeleton, Tooltip } from '../../shared/view/ui';
+import { useSharedNow } from '../../hooks/useSharedNow';
 
 /** Side-column width: exactly 20px over ui14 below the 260px cap. */
 export const JOBS_COLUMN_BASIS = 'min(16.25rem, calc(33.333cqw + 1.25rem))';
@@ -253,11 +254,7 @@ function taskDurationMs(unit: Unit, taskIndex: number): number | null {
 
 /** Live elapsed counter for a running job's footer: ticks from its start event. */
 function LiveElapsed({ startedAt }: { startedAt: number }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const now = useSharedNow(true, 1000);
   return <>{formatDuration(now - startedAt)}</>;
 }
 
@@ -266,7 +263,6 @@ function LiveElapsed({ startedAt }: { startedAt: number }) {
  * from the total-time row so the drawer's reading order stays deterministic.
  */
 function JobCommitRow({ unit }: { unit: Unit }) {
-  const [hovered, setHovered] = useState(false);
   if (!unit.commitHash) {
     return null;
   }
@@ -274,15 +270,14 @@ function JobCommitRow({ unit }: { unit: Unit }) {
     <li
       data-slot="jobs-sidebar-job-commit"
       data-commit={unit.commitHash}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      data-marquee-hover
       className="flex min-h-5 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground/60"
     >
       <GitCommitHorizontal className="h-3 w-3 flex-shrink-0 scale-[0.9]" aria-hidden="true" />
       <span className="flex-shrink-0 font-mono text-[10px] tabular-nums">{unit.commitHash}</span>
       <div className="min-w-0 flex-1 overflow-hidden [&>.relative]:max-w-full">
         <Tooltip content={unit.commitSubject} position="top">
-          <MarqueeLabel active={hovered} className="min-w-0 max-w-full">
+          <MarqueeLabel active={false} activateOnParentHover className="min-w-0 max-w-full">
             {unit.commitSubject ?? ''}
           </MarqueeLabel>
         </Tooltip>
@@ -531,7 +526,7 @@ type JobsSidebarProps = {
  * the job row's ring advances with its done/total counter, and entries
  * stagger in as a manifest (or an append) lands.
  */
-export default function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }: JobsSidebarProps) {
+function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }: JobsSidebarProps) {
   const reduce = useReducedMotion() ?? false;
   const repairTruth = repairedFailureTruth(groups);
 
@@ -575,10 +570,6 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
     ? `${newest.chain.slug}:${newest.chain.currentPhase ?? 1}`
     : null;
   const [drawerOverrides, setDrawerOverrides] = useState<Record<string, boolean>>({});
-  // Hover state is list-wide rather than timer-per-row. Marquee measurement
-  // stays in effects and pointer leave cancels label motion immediately.
-  const [hoveredJob, setHoveredJob] = useState<string | null>(null);
-  const [hoveredTask, setHoveredTask] = useState<string | null>(null);
   const [tappedTask, setTappedTask] = useState<string | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
 
@@ -710,8 +701,7 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                   data-status={unit.paused ? 'paused' : unit.status}
                   data-drawer={hasDrawer ? (drawerOpen ? 'open' : 'closed') : undefined}
                   data-active={active ? 'true' : undefined}
-                  onMouseEnter={() => setHoveredJob(unit.key)}
-                  onMouseLeave={() => setHoveredJob((current) => (current === unit.key ? null : current))}
+                  data-marquee-hover
                   className={cn(
                     'group/row relative flex w-full items-center gap-2 rounded-md px-1.5 text-left',
                     unit.kind === 'task' ? 'min-h-7 pl-4' : 'min-h-8',
@@ -793,7 +783,8 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                         )}
                       >
                         <MarqueeLabel
-                          active={hoveredJob === unit.key}
+                          active={false}
+                          activateOnParentHover
                           startDelay={0.18}
                           stopImmediately
                           className="flex-initial"
@@ -804,7 +795,8 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                     ) : (
                       <span className={titleClasses}>
                         <MarqueeLabel
-                          active={hoveredJob === unit.key}
+                          active={false}
+                          activateOnParentHover
                           startDelay={0.18}
                           stopImmediately
                           className="flex-initial"
@@ -858,13 +850,13 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                     </motion.span>
                   ) : null}
                 </div>
-                {hasDrawer && (
+                {hasDrawer && drawerOpen && (
                   <AgentDisclosure open={drawerOpen} data-slot="jobs-sidebar-drawer">
                     <ul className="pb-0.5 pl-5">
                       {unit.tasks.map((task, taskIndex) => {
                         const status = taskStatus(unit, taskIndex);
                         const taskKey = `${unit.key}-${taskIndex}`;
-                        const reveal = hoveredTask === taskKey || tappedTask === taskKey;
+                        const reveal = tappedTask === taskKey;
                         // Per-task duration (ui13 job 14): completed tasks
                         // only, and only where the timing honestly exists.
                         const duration = status === 'completed' ? taskDurationMs(unit, taskIndex) : null;
@@ -874,8 +866,7 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                             data-slot="jobs-sidebar-task"
                             data-status={status}
                             data-reveal={reveal ? 'true' : undefined}
-                            onMouseEnter={() => setHoveredTask(taskKey)}
-                            onMouseLeave={() => setHoveredTask((current) => (current === taskKey ? null : current))}
+                            data-marquee-hover
                             onPointerUp={(event) => {
                               if (event.pointerType !== 'mouse') {
                                 setTappedTask((current) => (current === taskKey ? null : taskKey));
@@ -888,6 +879,7 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                               status === 'pending' && 'text-muted-foreground/50',
                               status === 'cancelled' && 'text-rose-600 dark:text-rose-400',
                               reveal && status !== 'cancelled' && 'text-foreground',
+                              status !== 'cancelled' && 'hover:text-foreground',
                               // The working task row breathes (ui12 job 8).
                               status === 'in-progress' && !reduce && 'animate-row-breathe',
                             )}
@@ -900,10 +892,11 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                                 through and back on the shared ramped marquee. */}
                             <MarqueeLabel
                               active={reveal}
+                              activateOnParentHover
                               mode="once"
                               startDelay={0.18}
                               stopImmediately
-                              className={cn(status === 'completed' && !reveal && 'line-through')}
+                              className={cn(status === 'completed' && !reveal && 'line-through group-hover/task:no-underline')}
                             >
                               {task}
                             </MarqueeLabel>
@@ -912,7 +905,7 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                                 data-slot="jobs-sidebar-task-duration"
                                 className={cn(
                                   'ml-auto flex-shrink-0 pl-2 font-mono text-[10px] tabular-nums text-muted-foreground/45 transition-opacity',
-                                  reveal ? 'opacity-100' : 'opacity-0',
+                                  reveal ? 'opacity-100' : 'opacity-0 group-hover/task:opacity-100',
                                 )}
                               >
                                 {formatDuration(duration)}
@@ -940,3 +933,7 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
     </section>
   );
 }
+
+JobsSidebar.displayName = 'JobsSidebar';
+
+export default React.memo(JobsSidebar);

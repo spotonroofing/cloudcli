@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight, Edit3, Folder, FolderOpen, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
@@ -144,7 +143,6 @@ export default function SidebarProjectItem({
   const isSelected = selectedProject?.projectId === project.projectId;
   const isEditing = editingProject === project.projectId;
   const sessionCountDisplay = getSessionCountDisplay(project, sessions);
-  const [hovered, setHovered] = useState(false);
   // Activity shimmer: the project row carries the beam while any of its
   // sessions runs; expanding hands the shimmer to the running chat rows —
   // every hand-off is the engine's fade, never a hard cutoff. A worker
@@ -258,8 +256,7 @@ export default function SidebarProjectItem({
               toggleProject();
             }
           }}
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
+          data-marquee-hover
           data-open-highlight={showOpenHighlight || undefined}
           className={cn(
             'group/project relative hidden min-h-9 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg px-2 text-sm outline-none md:flex',
@@ -274,7 +271,7 @@ export default function SidebarProjectItem({
           <ProjectIcon project={project} expanded={isExpanded} />
 
           <span className="flex min-w-0 flex-1 items-center">
-            <MarqueeLabel active={hovered} className="max-w-full flex-initial">{project.displayName}</MarqueeLabel>
+            <MarqueeLabel active={false} activateOnParentHover className="max-w-full flex-initial">{project.displayName}</MarqueeLabel>
             <span className="shrink-0 pl-1.5 text-[10px] tabular-nums text-muted-foreground/70" data-slot="project-session-count">
               {sessionCountDisplay}
             </span>

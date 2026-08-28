@@ -51,6 +51,7 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
   const y = useMotionValue(0);
   const opacity = useMotionValue(0);
   const hasPositionRef = useRef(false);
+  const travelingRef = useRef(false);
   const activeKeyRef = useRef(activeKey);
   const animationRef = useRef<ReturnType<typeof animate> | null>(null);
   activeKeyRef.current = activeKey;
@@ -98,6 +99,9 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
 
   /** Re-seat the dot with no travel (layout shifted around it). */
   const snapIndicator = useCallback(() => {
+    // Selection updates can add/remove response marks inside a row. That
+    // child-list mutation must not cancel the dot's own in-flight spring.
+    if (travelingRef.current) return;
     const key = activeKeyRef.current;
     if (!key) return;
     const destination = measure(key);
@@ -107,6 +111,7 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
       // this spot, so a fade floats over unrelated rows. The next resize
       // with the row back re-seats the dot.
       animationRef.current?.stop();
+      travelingRef.current = false;
       opacity.set(0);
       hasPositionRef.current = false;
       return;
@@ -128,6 +133,7 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
   useLayoutEffect(() => {
     if (!activeKey) {
       animationRef.current?.stop();
+      travelingRef.current = false;
       animate(opacity, 0, FADE);
       hasPositionRef.current = false;
       return;
@@ -135,12 +141,15 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
 
     const destination = measure(activeKey);
     if (destination === null) {
+      animationRef.current?.stop();
+      travelingRef.current = false;
       animate(opacity, 0, FADE);
       hasPositionRef.current = false;
       return;
     }
 
     animationRef.current?.stop();
+    travelingRef.current = false;
     opacity.set(1);
 
     if (!hasPositionRef.current || reduce) {
@@ -166,6 +175,7 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
     const midpointY = (startY + destination.y) / 2;
     const controlY = destination.y + (midpointY - destination.y) * longJumpProgress;
 
+    travelingRef.current = true;
     animationRef.current = animate(0, 1, {
       ...BOUNCE_SPRING,
       stiffness: BOUNCE_SPRING.stiffness - 60 * longJumpProgress,
@@ -178,6 +188,7 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
       onComplete: () => {
         x.set(destination.x);
         y.set(destination.y);
+        travelingRef.current = false;
       },
     });
   }, [activeKey, measure, opacity, reduce, x, y]);
@@ -211,6 +222,7 @@ export function BounceIndicator({ activeKey, containerRef, className }: BounceIn
 
   useLayoutEffect(() => () => {
     animationRef.current?.stop();
+    travelingRef.current = false;
   }, []);
 
   return (

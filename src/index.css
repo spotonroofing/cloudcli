@@ -1547,7 +1547,7 @@
   }
   
   .animate-spin {
-    animation: spin 1s linear infinite;
+    animation: spin 1s cubic-bezier(0.77, 0, 0.175, 1) infinite;
   }
 
   /* Sidebar activity-counter breathing (ui8 phase 3): a slow opacity/filter
@@ -1564,7 +1564,7 @@
   }
 
   .animate-counter-breathe {
-    animation: counter-breathe 2.6s ease-in-out infinite;
+    animation: counter-breathe 2.6s cubic-bezier(0.77, 0, 0.175, 1) infinite;
   }
 
   /* Ramped spinner rotation (ui12 job 8): the shared partial-circle working
@@ -1599,7 +1599,7 @@
   }
 
   .animate-row-breathe {
-    animation: row-breathe 2.4s ease-in-out infinite;
+    animation: row-breathe 2.4s cubic-bezier(0.77, 0, 0.175, 1) infinite;
   }
 
   /* Completion sweep (ui12 job 8): a full-circle stroke draw then fade on a
@@ -1614,7 +1614,7 @@
     65% {
       stroke-dashoffset: 0;
       opacity: 1;
-      animation-timing-function: ease-out;
+      animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
     }
     100% {
       stroke-dashoffset: 0;
@@ -1643,7 +1643,7 @@
   }
 
   .animate-segment-glow {
-    animation: segment-glow 2.4s ease-in-out infinite;
+    animation: segment-glow 2.4s cubic-bezier(0.77, 0, 0.175, 1) infinite;
     will-change: opacity, filter;
   }
 
@@ -1752,10 +1752,19 @@
       opacity: 0;
     }
   }
+
+  /* Performance law (ui17 job 0): indefinite motion is inert when it cannot
+     be seen. One shared observer stamps off-screen animation hosts; the page
+     visibility stamp stops every CSS animation while the tab is hidden. */
+  [data-animation-offscreen],
+  [data-animation-offscreen] *,
+  html[data-document-hidden] * {
+    animation-play-state: paused !important;
+  }
   
   /* Force hardware acceleration for smoother animation on mobile */
   .loading-spinner {
-    animation: spin 1s linear infinite;
+    animation: spin 1s cubic-bezier(0.77, 0, 0.175, 1) infinite;
     will-change: transform;
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
@@ -1855,7 +1864,7 @@
   }
 
   .settings-content-enter {
-    animation: settings-fade-in 150ms ease-out;
+    animation: settings-fade-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   @keyframes chat-activity-enter {
@@ -1954,7 +1963,7 @@
 
   /* Search result highlight flash */
   .search-highlight-flash {
-    animation: search-flash 4s ease-out;
+    animation: search-flash 4s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   @keyframes search-flash {
