@@ -26,6 +26,7 @@ import type { SessionMessagesRequestOptions } from './sessionMessagePagination';
 import {
   ACTIVE_SESSION_MESSAGE_LIMIT,
   HIDDEN_SESSION_MESSAGE_LIMIT,
+  boundPersistedWindow,
   boundedTail,
   touchSessionSlot,
 } from './sessionSlotCache';
@@ -599,6 +600,15 @@ async function refreshLatestSlotFromServer(
     console.warn(`[SessionStore] Could not bridge latest history for ${sessionId}; retaining cached suffix.`);
     return { applied: false, changed, deferred: false };
   }
+
+  // An automatic tail refresh may overlap the cached page and append every
+  // new persisted row. Without re-applying the request boundary, a streaming
+  // worker grows this array for its entire run even though the transcript DOM
+  // continues to show only a page. Keep exactly the requested latest window;
+  // older rows remain available from the server through fetchMore.
+  const boundedWindow = boundPersistedWindow(nextServerMessages, limit, nextHasMore);
+  nextServerMessages = boundedWindow.items;
+  nextHasMore = boundedWindow.hasMore;
 
   const retainedServerMessages = reuseArrayWhenElementsMatch(
     previousServerMessages,

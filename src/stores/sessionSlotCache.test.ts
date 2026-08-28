@@ -5,6 +5,7 @@ import {
   ACTIVE_SESSION_MESSAGE_LIMIT,
   HIDDEN_SESSION_MESSAGE_LIMIT,
   SESSION_SLOT_CACHE_LIMIT,
+  boundPersistedWindow,
   boundedTail,
   touchSessionSlot,
 } from './sessionSlotCache';
@@ -78,4 +79,29 @@ test('the visible realtime tail shares the transcript DOM budget', () => {
   assert.equal(bounded.length, ACTIVE_SESSION_MESSAGE_LIMIT);
   assert.equal(bounded[0], 'row-4');
   assert.equal(bounded.at(-1), `row-${ACTIVE_SESSION_MESSAGE_LIMIT + 3}`);
+});
+
+test('automatic persisted refreshes retain only their latest requested page', () => {
+  const firstRefresh = boundPersistedWindow(
+    Array.from({ length: 25 }, (_, index) => `row-${index}`),
+    20,
+    false,
+  );
+
+  assert.deepEqual(
+    firstRefresh.items,
+    Array.from({ length: 20 }, (_, index) => `row-${index + 5}`),
+  );
+  assert.equal(firstRefresh.hasMore, true);
+
+  const nextRefresh = boundPersistedWindow(
+    [...firstRefresh.items, 'row-25', 'row-26'],
+    20,
+    firstRefresh.hasMore,
+  );
+
+  assert.equal(nextRefresh.items.length, 20);
+  assert.equal(nextRefresh.items[0], 'row-7');
+  assert.equal(nextRefresh.items.at(-1), 'row-26');
+  assert.equal(nextRefresh.hasMore, true);
 });

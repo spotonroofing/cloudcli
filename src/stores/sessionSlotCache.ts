@@ -7,6 +7,24 @@ export function boundedTail<T>(items: T[], limit: number): T[] {
 }
 
 /**
+ * Keeps an automatic latest-page refresh from turning into an ever-growing
+ * persisted transcript cache. Trimming means older rows remain available via
+ * pagination even when the server says the fetched sequence reached its
+ * beginning.
+ */
+export function boundPersistedWindow<T>(
+  items: T[],
+  limit: number,
+  hasMore: boolean,
+): { items: T[]; hasMore: boolean } {
+  const bounded = boundedTail(items, limit);
+  return {
+    items: bounded,
+    hasMore: hasMore || bounded !== items,
+  };
+}
+
+/**
  * Marks one session slot as most recently used and trims the cache without
  * ever evicting the session currently shown by this ChatInterface.
  */
