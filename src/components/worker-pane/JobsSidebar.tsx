@@ -1,4 +1,4 @@
-import { ChevronDown, Cpu, GitCommitHorizontal, Hash, MessageSquare, Pause } from 'lucide-react';
+import { ChevronDown, Clock3, Cpu, GitCommitHorizontal, Hash, MessageSquare, Pause } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -199,12 +199,6 @@ function taskDurationMs(unit: Unit, taskIndex: number): number | null {
   return end - start;
 }
 
-/** Start boundary for the task currently running, if the watchdog observed it. */
-function taskStartedAt(unit: Unit, taskIndex: number): number | null {
-  const start = taskIndex === 0 ? unit.startedAt : unit.taskTimes?.[taskIndex - 1];
-  return start == null ? null : start;
-}
-
 /** Live elapsed counter for a running job's footer: ticks from its start event. */
 function LiveElapsed({ startedAt }: { startedAt: number }) {
   const [now, setNow] = useState(() => Date.now());
@@ -216,53 +210,58 @@ function LiveElapsed({ startedAt }: { startedAt: number }) {
 }
 
 /**
- * Commit footer on a job's drawer (ui13 job 14), directly after its last task
- * row: what the job shipped — short hash + commit subject (marquee when long)
- * — with the job's total duration right-aligned in the tasks' meta style, all
- * monochromatic. A running job shows the footer with a live elapsed counter
- * that settles into the final duration at completion; idle jobs show none.
+ * Commit metadata on a job's drawer: what the job shipped, kept separate
+ * from the total-time row so the drawer's reading order stays deterministic.
  */
-function JobFooter({ unit }: { unit: Unit }) {
+function JobCommitRow({ unit }: { unit: Unit }) {
   const [hovered, setHovered] = useState(false);
-  // A just-ended job reads in-progress until the next phase starts; endedAt
-  // is what settles the ticking counter into the final duration.
-  const running = unit.status === 'in-progress';
-  const showCommit = Boolean(unit.commitHash);
-  const showElapsed = running && unit.startedAt != null && unit.endedAt == null;
-  if (!showCommit && !showElapsed) {
+  if (!unit.commitHash) {
     return null;
   }
-  const duration = unit.startedAt != null && unit.endedAt != null ? unit.endedAt - unit.startedAt : null;
   return (
     <li
-      data-slot="jobs-sidebar-job-footer"
-      data-live={showElapsed ? 'true' : undefined}
+      data-slot="jobs-sidebar-job-commit"
       data-commit={unit.commitHash}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className="flex min-h-5 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground/60"
     >
       <GitCommitHorizontal className="h-3 w-3 flex-shrink-0 scale-[0.9]" aria-hidden="true" />
-      {showCommit && (
-        <>
-          <span className="flex-shrink-0 font-mono text-[10px] tabular-nums">{unit.commitHash}</span>
-          <div className="min-w-0 flex-1 overflow-hidden [&>.relative]:max-w-full">
-            <Tooltip content={unit.commitSubject} position="top">
-              <MarqueeLabel active={hovered} className="min-w-0 max-w-full">
-                {unit.commitSubject ?? ''}
-              </MarqueeLabel>
-            </Tooltip>
-          </div>
-        </>
-      )}
-      <span className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/50">
-        {/* Day-old jobs carry their date next to the duration (ui14 job 12). */}
-        {!showElapsed && unit.endedAt != null && formatJobDate(unit.endedAt) && (
+      <span className="flex-shrink-0 font-mono text-[10px] tabular-nums">{unit.commitHash}</span>
+      <div className="min-w-0 flex-1 overflow-hidden [&>.relative]:max-w-full">
+        <Tooltip content={unit.commitSubject} position="top">
+          <MarqueeLabel active={hovered} className="min-w-0 max-w-full">
+            {unit.commitSubject ?? ''}
+          </MarqueeLabel>
+        </Tooltip>
+      </div>
+    </li>
+  );
+}
+
+/** Job total at the drawer's bottom, live while building and fixed afterward. */
+function JobTotalRow({ unit }: { unit: Unit }) {
+  const running = unit.status === 'in-progress' && unit.endedAt == null;
+  if (unit.startedAt == null || (!running && unit.endedAt == null)) {
+    return null;
+  }
+  const duration = unit.endedAt != null ? unit.endedAt - unit.startedAt : null;
+  const date = unit.endedAt != null ? formatJobDate(unit.endedAt) : null;
+  return (
+    <li
+      data-slot="jobs-sidebar-job-total"
+      data-live={running ? 'true' : undefined}
+      className="flex min-h-5 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground/60"
+    >
+      <Clock3 className="h-3 w-3 flex-shrink-0 scale-[0.9]" aria-hidden="true" />
+      <span>Total</span>
+      <span className="ml-auto flex-shrink-0 pl-2 font-mono text-[10px] tabular-nums text-muted-foreground/50">
+        {date && (
           <span data-slot="jobs-sidebar-job-date" className="pr-1.5">
-            {formatJobDate(unit.endedAt)}
+            {date}
           </span>
         )}
-        {showElapsed ? <LiveElapsed startedAt={unit.startedAt!} /> : duration != null ? formatDuration(duration) : null}
+        {running ? <LiveElapsed startedAt={unit.startedAt} /> : formatDuration(duration!)}
       </span>
     </li>
   );
@@ -312,32 +311,51 @@ function JobTokenRow({ tokenCount }: { tokenCount: number | null | undefined }) 
 }
 
 /**
- * A task-style verify row exists only while the runner's verifier is truly
- * live. Settled verifier records remain data, not standing UI rows.
+ * The verifier's task-style row sits directly below the build tasks. It
+ * ticks while live, then settles to its terminal label and measured time.
  */
 function VerifyRow({ unit, onOpenSession }: { unit: Unit; onOpenSession: (sessionId: string) => void }) {
-  if (unit.verify !== 'running') {
+  if (!unit.verify) {
     return null;
   }
   const sessionId = unit.verifySessionId;
+  const running = unit.verify === 'running';
+  const status: TodoListItemStatus = running
+    ? 'in-progress'
+    : unit.verify === 'passed'
+      ? 'completed'
+      : 'cancelled';
+  const label = running
+    ? `Verifying ${unit.name}`
+    : unit.verify === 'passed'
+      ? 'Verified'
+      : unit.verify === 'failed'
+        ? 'Verify failed'
+        : 'Verify stopped';
+  const duration = unit.verifyStartedAt != null && unit.verifyEndedAt != null
+    ? unit.verifyEndedAt - unit.verifyStartedAt
+    : null;
   return (
     <li
       data-slot="jobs-sidebar-verify"
-      data-status="in-progress"
-      data-live="true"
+      data-status={status}
+      data-live={running ? 'true' : undefined}
       onClick={sessionId ? () => onOpenSession(sessionId) : undefined}
       className={cn(
         'flex min-h-5 items-center gap-1.5 text-[11px] leading-4',
-        'text-foreground',
+        running ? 'text-foreground' : 'text-muted-foreground/60',
+        status === 'cancelled' && 'text-rose-600 dark:text-rose-400',
         sessionId && 'cursor-pointer hover:text-foreground',
       )}
     >
       <span className="flex-shrink-0 scale-[0.7]">
-        <TodoStatusIcon status="in-progress" />
+        <TodoStatusIcon status={status} />
       </span>
-      <span className="min-w-0 truncate">Verifying {unit.name}</span>
-      <span className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/45">
-        {unit.verifyStartedAt != null ? <LiveElapsed startedAt={unit.verifyStartedAt} /> : null}
+      <span className="min-w-0 truncate">{label}</span>
+      <span className="ml-auto flex-shrink-0 pl-2 font-mono text-[10px] tabular-nums text-muted-foreground/45">
+        {running && unit.verifyStartedAt != null
+          ? <LiveElapsed startedAt={unit.verifyStartedAt} />
+          : duration != null ? formatDuration(duration) : null}
       </span>
     </li>
   );
@@ -498,6 +516,8 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
   // Hover marquee on job rows (ui13 job 3): mouse enter/leave is effectively
   // fine-pointer only — touch taps act before hover matters.
   const [hoveredJob, setHoveredJob] = useState<string | null>(null);
+  const [hoveredTask, setHoveredTask] = useState<string | null>(null);
+  const [tappedTask, setTappedTask] = useState<string | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
 
   // Populate animation: units past the previously rendered count are new (a
@@ -550,7 +570,7 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
               || unit.engine != null
               || unit.commitHash != null
               || unit.status === 'cancelled'
-              || unit.verify === 'running';
+              || unit.verify != null;
             const drawerOpen = hasDrawer
               && (drawerOverrides[unit.key] ?? unit.key === defaultOpenKey);
             // Jobs are the navigation (ui13 job 2): a unit with a session
@@ -797,21 +817,31 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                     <ul className="pb-0.5 pl-5">
                       {unit.tasks.map((task, taskIndex) => {
                         const status = taskStatus(unit, taskIndex);
+                        const taskKey = `${unit.key}-${taskIndex}`;
+                        const reveal = hoveredTask === taskKey || tappedTask === taskKey;
                         // Per-task duration (ui13 job 14): completed tasks
                         // only, and only where the timing honestly exists.
                         const duration = status === 'completed' ? taskDurationMs(unit, taskIndex) : null;
-                        const liveStartedAt = status === 'in-progress' ? taskStartedAt(unit, taskIndex) : null;
                         return (
                           <li
-                            key={`${unit.key}-${taskIndex}`}
+                            key={taskKey}
                             data-slot="jobs-sidebar-task"
                             data-status={status}
+                            data-reveal={reveal ? 'true' : undefined}
+                            onMouseEnter={() => setHoveredTask(taskKey)}
+                            onMouseLeave={() => setHoveredTask((current) => (current === taskKey ? null : current))}
+                            onPointerUp={(event) => {
+                              if (event.pointerType !== 'mouse') {
+                                setTappedTask((current) => (current === taskKey ? null : taskKey));
+                              }
+                            }}
                             className={cn(
                               'group/task flex min-h-5 items-center gap-1.5 text-[11px] leading-4',
                               status === 'completed' && 'text-muted-foreground/45',
                               status === 'in-progress' && 'text-foreground',
                               status === 'pending' && 'text-muted-foreground/50',
                               status === 'cancelled' && 'text-rose-600 dark:text-rose-400',
+                              reveal && status !== 'cancelled' && 'text-foreground',
                               // The working task row breathes (ui12 job 8).
                               status === 'in-progress' && !reduce && 'animate-row-breathe',
                             )}
@@ -819,23 +849,23 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                             <span className="flex-shrink-0 scale-[0.7]">
                               <TodoStatusIcon status={status} />
                             </span>
-                            {/* Strike the task text only — the trailing
-                                duration meta stays unstruck. */}
-                            <span className={cn('min-w-0 truncate', status === 'completed' && 'line-through')}>
+                            {/* Hover/tap reveals the fixed task time, restores
+                                the text, and scans an overflowing label once
+                                through and back on the shared ramped marquee. */}
+                            <MarqueeLabel
+                              active={reveal}
+                              mode="once"
+                              className={cn(status === 'completed' && !reveal && 'line-through')}
+                            >
                               {task}
-                            </span>
-                            {liveStartedAt != null ? (
+                            </MarqueeLabel>
+                            {duration != null ? (
                               <span
                                 data-slot="jobs-sidebar-task-duration"
-                                data-live="true"
-                                className="ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-status-working"
-                              >
-                                <LiveElapsed startedAt={liveStartedAt} />
-                              </span>
-                            ) : duration != null ? (
-                              <span
-                                data-slot="jobs-sidebar-task-duration"
-                                className="touch:opacity-100 ml-auto flex-shrink-0 pl-2 text-[10px] tabular-nums text-muted-foreground/45 opacity-0 transition-opacity group-hover/task:opacity-100"
+                                className={cn(
+                                  'ml-auto flex-shrink-0 pl-2 font-mono text-[10px] tabular-nums text-muted-foreground/45 transition-opacity',
+                                  reveal ? 'opacity-100' : 'opacity-0',
+                                )}
                               >
                                 {formatDuration(duration)}
                               </span>
@@ -843,11 +873,12 @@ export default function JobsSidebar({ groups, loading = false, activeSessionId, 
                           </li>
                         );
                       })}
-                      <EngineRow unit={unit} />
-                      <JobTokenRow tokenCount={unit.tokenCount} />
-                      <JobFooter unit={unit} />
                       <VerifyRow unit={unit} onOpenSession={onOpenSession} />
                       <FailureReason unit={unit} />
+                      <EngineRow unit={unit} />
+                      <JobTokenRow tokenCount={unit.tokenCount} />
+                      <JobCommitRow unit={unit} />
+                      <JobTotalRow unit={unit} />
                     </ul>
                   </AgentDisclosure>
                 )}

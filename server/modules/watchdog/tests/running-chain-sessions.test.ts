@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import { appConfigDb, closeConnection, initializeDatabase, projectsDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
 import { watchdogService } from '@/modules/watchdog/index.js';
+import { parseJobMeta } from '@/modules/watchdog/watchdog.service.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { RealtimeClientConnection } from '@/shared/types.js';
 
@@ -27,6 +28,23 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
     await rm(tempDirectory, { recursive: true, force: true });
   }
 }
+
+async function waitFor(assertion: () => boolean, timeoutMs = 4_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (assertion()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.fail(`condition did not become true within ${timeoutMs}ms`);
+}
+
+test('persisted job metadata hydrates its build engine and model', () => {
+  assert.deepEqual(parseJobMeta(JSON.stringify({
+    11: { engine: 'codex', model: 'gpt-5.6-sol' },
+  })), {
+    11: { engine: 'codex', model: 'gpt-5.6-sol' },
+  });
+});
 
 test('a running chain unit and its verify session feed the running-sessions poll; a finished unit does not', async () => {
   await withIsolatedDatabase(() => {
@@ -83,6 +101,69 @@ test('a running chain unit and its verify session feed the running-sessions poll
       connectedClients.delete(notificationClient);
     }
   });
+});
+
+test('an anchor-less planner manifest streams prompt-derived punch-list check-offs and task times', async () => {
+  const projectPath = await mkdtemp(path.join(tmpdir(), 'prompt-punchlist-'));
+  const slug = 'prompt-punchlist-stub';
+  const promptDir = path.join(projectPath, '.dispatch', slug);
+  const punchlistPath = path.join(projectPath, 'PUNCHLIST_fixture.md');
+  await mkdir(promptDir, { recursive: true });
+  await writeFile(
+    path.join(promptDir, '01-live-jobs.md'),
+    'Execute Job 23 of PUNCHLIST_fixture.md in this repo.\n',
+  );
+  await writeFile(punchlistPath, '## Job 23 — Live jobs\n\n- [ ] First task\n- [ ] Second task\n- [ ] Design note\n');
+
+  try {
+    await withIsolatedDatabase(async () => {
+      const messages: string[] = [];
+      const notificationClient = {
+        readyState: WS_OPEN_STATE,
+        send: (message: string) => { messages.push(message); },
+      } as unknown as RealtimeClientConnection;
+      connectedClients.add(notificationClient);
+      appConfigDb.set('watchdog_punchlist_watching', '1');
+      appConfigDb.set('watchdog_terminal_wakes', '0');
+      projectsDb.createProjectPath(projectPath);
+      watchdogService.registerChain({
+        slug,
+        projectPath,
+        phases: 1,
+        manifest: [{ name: 'Live jobs', tasks: ['First task', 'Second task'], kind: 'phase' }],
+      });
+      watchdogService.chainEvent(slug, 'phase-start', { phase: 1 });
+      messages.length = 0;
+
+      try {
+        await writeFile(punchlistPath, '## Job 23 — Live jobs\n\n- [x] First task\n- [ ] Second task\n- [ ] Design note\n');
+        await waitFor(() => messages.some((message) => {
+          const event = JSON.parse(message) as { kind?: string; chain?: { manifest?: Array<{ done?: number }> } };
+          return event.kind === 'chain_progress' && event.chain?.manifest?.[0]?.done === 1;
+        }));
+        let snapshot = watchdogService.listWorkerRuns(projectPath).chains[slug];
+        assert.equal(snapshot.manifest?.[0]?.done, 1);
+        assert.equal(snapshot.manifest?.[0]?.taskTimes?.length, 1);
+        assert.equal(typeof snapshot.manifest?.[0]?.taskTimes?.[0], 'number');
+
+        messages.length = 0;
+        await writeFile(punchlistPath, '## Job 23 — Live jobs\n\n- [x] First task\n- [x] Second task\n- [x] Design note\n');
+        await waitFor(() => messages.some((message) => {
+          const event = JSON.parse(message) as { kind?: string; chain?: { manifest?: Array<{ done?: number }> } };
+          return event.kind === 'chain_progress' && event.chain?.manifest?.[0]?.done === 2;
+        }));
+        snapshot = watchdogService.listWorkerRuns(projectPath).chains[slug];
+        assert.equal(snapshot.manifest?.[0]?.done, 2);
+        assert.equal(snapshot.manifest?.[0]?.taskTimes?.length, 2);
+        assert.equal(typeof snapshot.manifest?.[0]?.taskTimes?.[1], 'number');
+      } finally {
+        watchdogService.chainEvent(slug, 'stopped', { phase: 1 });
+        connectedClients.delete(notificationClient);
+      }
+    });
+  } finally {
+    await rm(projectPath, { recursive: true, force: true });
+  }
 });
 
 test('an announced title replaces a prompt-shaped name discovery wrote first', async () => {

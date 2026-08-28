@@ -6,6 +6,9 @@ import {
   preserveWorkerSessionSelection,
   selectedRunKeepsAutoFollow,
   sessionUpsertNeedsRunRefresh,
+  shouldFollowWorkerRun,
+  workerSessionPinUntil,
+  WORKER_SESSION_PIN_MS,
 } from './workerRunFollow';
 
 test('a pipelined verify run never replaces the build follow target', () => {
@@ -16,6 +19,23 @@ test('a pipelined verify run never replaces the build follow target', () => {
   assert.equal(target, build);
   assert.equal(selectedRunKeepsAutoFollow(build, target), true);
   assert.equal(selectedRunKeepsAutoFollow(verify, target), false);
+});
+
+test('a new build follows immediately except during the one-minute intentional pin', () => {
+  const now = 1_000;
+  const oldBuild = { sessionId: 'build-1', startedAt: now };
+  const newBuild = { sessionId: 'build-2', startedAt: new Date(now + 100).toISOString() };
+  const verify = { sessionId: 'verify-1', chainStage: 'verify' as const, startedAt: now + 200 };
+  // Recent transcript activity can put an older run first in the API array;
+  // the honest start time still decides which build owns the pane.
+  const target = findWorkerFollowTarget([oldBuild, verify, newBuild]);
+  const pinnedUntil = workerSessionPinUntil(oldBuild, target, now);
+
+  assert.equal(target, newBuild, 'the verifier is invisible to automatic follow');
+  assert.equal(pinnedUntil, now + WORKER_SESSION_PIN_MS);
+  assert.equal(shouldFollowWorkerRun(target, oldBuild.sessionId, pinnedUntil, pinnedUntil - 1), false);
+  assert.equal(shouldFollowWorkerRun(target, oldBuild.sessionId, pinnedUntil, pinnedUntil), true);
+  assert.equal(workerSessionPinUntil(newBuild, target, now), 0, 'selecting the live build clears the pin');
 });
 
 test('selecting the already rendered session preserves object identity', () => {

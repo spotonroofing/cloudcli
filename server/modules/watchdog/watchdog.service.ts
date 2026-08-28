@@ -192,6 +192,15 @@ type ChainSnapshot = {
   lastEventAt: number;
 };
 
+type PunchlistSection = {
+  /** Absolute path to the markdown punch list that owns this unit. */
+  file: string;
+  /** Planner-supplied heading substring, when the manifest carries one. */
+  anchor?: string;
+  /** Prompt-derived Job/Phase number, used when the manifest has no anchor. */
+  unitNumber?: number;
+};
+
 type WakeItem = {
   prompt: string;
   /** Always boots a brand-new planner session instead of resuming. */
@@ -239,8 +248,13 @@ class WatchdogService {
   private resourceAlertAt = new Map<string, number>();
   private sweeper: ReturnType<typeof setInterval> | null = null;
   private selfTestTimer: ReturnType<typeof setTimeout> | null = null;
-  /** One directory watcher per running chain with a punch list (ui14 job 8). */
-  private punchlistWatchers = new Map<string, { watcher: fs.FSWatcher; timer: ReturnType<typeof setTimeout> | null; mtimeMs: number }>();
+  /** One directory watcher per running chain's active punch list (ui14 job 8). */
+  private punchlistWatchers = new Map<string, {
+    watcher: fs.FSWatcher;
+    timer: ReturnType<typeof setTimeout> | null;
+    mtimeMs: number;
+    file: string;
+  }>();
   /** Twin grouping (codex job 5): prompt-file identities and the last result per project. */
   private twinIdentities = new UnitIdentityCache();
   private twinResults = new Map<string, { signature: string; hidden: Map<string, Map<number, string>>; summary: string }>();
@@ -651,7 +665,10 @@ class WatchdogService {
    */
   private syncPunchlistWatcher(chain: ChainRecord): void {
     const active = this.punchlistWatchers.get(chain.slug);
-    if (chain.status !== 'running' || !chain.punchlist
+    const file = chain.currentPhase == null
+      ? null
+      : this.punchlistSections(chain)[chain.currentPhase - 1]?.file ?? null;
+    if (chain.status !== 'running' || !file
       || !this.policy('punchlistWatching', `punch list watch for chain ${chain.slug}`)) {
       if (active) {
         active.watcher.close();
@@ -662,10 +679,16 @@ class WatchdogService {
       }
       return;
     }
-    if (active) {
+    if (active?.file === file) {
       return;
     }
-    const file = chain.punchlist;
+    if (active) {
+      active.watcher.close();
+      if (active.timer) {
+        clearTimeout(active.timer);
+      }
+      this.punchlistWatchers.delete(chain.slug);
+    }
     const mtimeOf = (): number => {
       try {
         return fs.statSync(file).mtimeMs;
@@ -701,10 +724,38 @@ class WatchdogService {
       watcher.on('error', (error) => {
         log(`chain ${chain.slug}: punch list watch error: ${error.message}`);
       });
-      this.punchlistWatchers.set(chain.slug, { watcher, timer: null, mtimeMs: mtimeOf() });
+      this.punchlistWatchers.set(chain.slug, { watcher, timer: null, mtimeMs: mtimeOf(), file });
     } catch (error) {
       log(`chain ${chain.slug}: cannot watch punch list ${file}: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * Resolves every manifest entry to the punch-list section that owns its
+   * tasks. Explicit manifest metadata wins. Planner manifests historically
+   * omit both fields, so the fallback reads the already-cached unit identity
+   * parsed from `Execute Job N of PUNCHLIST_x.md` in that unit's prompt.
+   */
+  private punchlistSections(chain: ChainRecord): Array<PunchlistSection | null> {
+    if (!chain.manifest) {
+      return [];
+    }
+    const identities = this.twinIdentities.identities({
+      slug: chain.slug,
+      projectPath: chain.projectPath,
+      units: chain.manifest.length,
+    });
+    return chain.manifest.map((entry, index) => {
+      const promptReference = promptPunchlistReference(identities[index]?.key ?? null, chain.projectPath);
+      const file = chain.punchlist ?? promptReference?.file ?? null;
+      if (!file) {
+        return null;
+      }
+      if (entry.anchor) {
+        return { file, anchor: entry.anchor };
+      }
+      return promptReference ? { file, unitNumber: promptReference.unitNumber } : null;
+    });
   }
 
   /**
@@ -781,7 +832,7 @@ class WatchdogService {
     // Per-unit done counts come from the punch list file, re-read here on
     // every snapshot — so each chain event's broadcast and each worker-runs
     // fetch (the 20s poll catches mid-phase commits) carries fresh counts.
-    const doneCounts = punchlistDoneCounts(chain.punchlist, chain.manifest);
+    const doneCounts = punchlistDoneCounts(chain.manifest, this.punchlistSections(chain));
     this.observeTaskCheckoffs(chain, doneCounts);
     const hidden = this.hiddenTwins(chain.projectPath).get(chain.slug);
     return {
@@ -938,6 +989,10 @@ class WatchdogService {
     } else {
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
+      // A newly started unit may be the first moment an appended prompt is
+      // available to derive its punch-list path. Re-anchor the directory
+      // watcher on every live boundary so that unit's check-offs stream.
+      this.syncPunchlistWatcher(chain);
     }
     return true;
   }
@@ -1999,6 +2054,12 @@ export function parseJobMeta(value: unknown): Record<number, ChainJobMeta> {
     if (typeof entry.verifySessionId === 'string' && entry.verifySessionId.trim()) {
       meta.verifySessionId = entry.verifySessionId.trim();
     }
+    if (typeof entry.engine === 'string' && entry.engine.trim()) {
+      meta.engine = entry.engine.trim();
+    }
+    if (typeof entry.model === 'string' && entry.model.trim()) {
+      meta.model = entry.model.trim();
+    }
     if (Object.keys(meta).length) {
       jobs[index] = meta;
     }
@@ -2007,35 +2068,68 @@ export function parseJobMeta(value: unknown): Record<number, ChainJobMeta> {
 }
 
 /**
- * Per-unit done counts from the run's punch list file (ui11 phase 6): for each
- * manifest entry with a heading anchor, count the checked boxes (`- [x]`) in
- * the punch list section whose markdown heading contains the anchor. Returns
- * null (whole array or per entry) when the file, entry anchor, or section is
- * missing — the navigator shows no counter rather than a made-up one.
+ * Prompt-derived punch-list location from the unit identity cache's stable
+ * `PUNCHLIST_file.md#N` key. The filename pattern excludes path separators,
+ * so resolving it under the registered project cannot escape that project.
+ */
+function promptPunchlistReference(
+  identityKey: string | null,
+  projectPath: string,
+): { file: string; unitNumber: number } | null {
+  const match = /^(PUNCHLIST_[\w.-]+\.md)#(\d+)$/.exec(identityKey ?? '');
+  if (!match) {
+    return null;
+  }
+  return { file: path.join(projectPath, match[1]), unitNumber: Number(match[2]) };
+}
+
+/**
+ * Per-unit done counts from resolved punch-list sections (ui11 phase 6,
+ * ui15 job 23): count checked boxes in either the manifest's explicit anchor
+ * or the prompt-derived `Job N` / `Phase N` section. Returns null per entry
+ * where the source or section is unavailable rather than inventing progress.
  */
 function punchlistDoneCounts(
-  punchlist: string | null,
   manifest: ChainManifestEntry[] | null,
+  sections: Array<PunchlistSection | null>,
 ): (number | null)[] | null {
-  if (!punchlist || !manifest) {
+  if (!manifest) {
     return null;
   }
-  let lines: string[];
-  try {
-    lines = fs.readFileSync(punchlist, 'utf8').split('\n');
-  } catch {
-    return null;
-  }
-  return manifest.map((entry) => {
-    if (!entry.anchor) {
+  const files = new Map<string, string[] | null>();
+  const readLines = (file: string): string[] | null => {
+    if (files.has(file)) {
+      return files.get(file) ?? null;
+    }
+    try {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      files.set(file, lines);
+      return lines;
+    } catch {
+      files.set(file, null);
       return null;
     }
-    const anchor = entry.anchor.toLowerCase();
+  };
+  return manifest.map((entry, index) => {
+    const section = sections[index];
+    if (!section) {
+      return null;
+    }
+    const lines = readLines(section.file);
+    if (!lines) {
+      return null;
+    }
     let start = -1;
     let level = 0;
     for (let i = 0; i < lines.length; i++) {
       const heading = /^(#{1,6})\s+(.*)$/.exec(lines[i]);
-      if (heading && heading[2].toLowerCase().includes(anchor)) {
+      const explicitMatch = section.anchor
+        ? heading?.[2].toLowerCase().includes(section.anchor.toLowerCase())
+        : false;
+      const derivedMatch = section.unitNumber != null
+        ? new RegExp(`^(?:Job|Phase)\\s+${section.unitNumber}(?:\\D|$)`, 'i').test(heading?.[2] ?? '')
+        : false;
+      if (heading && (explicitMatch || derivedMatch)) {
         start = i + 1;
         level = heading[1].length;
         break;
@@ -2054,7 +2148,9 @@ function punchlistDoneCounts(
         done += 1;
       }
     }
-    return done;
+    // A planner may group several checklist boxes into one displayed task.
+    // The UI's prefix count can never advance past the manifest task rows.
+    return Math.min(done, entry.tasks.length);
   });
 }
 

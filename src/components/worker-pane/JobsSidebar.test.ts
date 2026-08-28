@@ -117,7 +117,7 @@ test('a provider token total renders on both the job row and its drawer', () => 
   assert.equal((markup.match(/123,456/g) ?? []).length, 2);
 });
 
-test('completed tasks reveal exact durations on hover and the running task ticks live', () => {
+test('completed task durations are hover-only and long labels use the once-through marquee', () => {
   const startedAt = Date.now() - 180_000;
   const chain: ChainSnapshot = {
     slug: 'timing-stub',
@@ -139,8 +139,9 @@ test('completed tasks reveal exact durations on hover and the running task ticks
   };
 
   const markup = renderJobs([{ chain, run: null, sessions: {}, startedAt }]);
-  assert.match(markup, /group-hover\/task:opacity-100[^>]*>1m 50s</);
-  assert.match(markup, /data-slot="jobs-sidebar-task-duration" data-live="true"/);
+  assert.match(markup, /data-marquee-mode="once"[^>]*line-through/);
+  assert.match(markup, /data-slot="jobs-sidebar-task-duration" class="[^"]*font-mono[^"]*opacity-0[^>]*>1m 50s</);
+  assert.doesNotMatch(markup, /data-slot="jobs-sidebar-task-duration" data-live="true"/);
   assert.match(markup, /<ul class="pb-0\.5 pl-5">/);
   assert.equal(JOBS_COLUMN_BASIS, 'min(16.25rem, calc(33.333cqw + 1.25rem))');
 });
@@ -211,7 +212,7 @@ test('completed and failed jobs keep segmented rings with centered terminal mark
   assert.match(failedMarkup, /M8\.5 8\.5 15\.5 15\.5M15\.5 8\.5 8\.5 15\.5/);
 });
 
-test('verify renders as a named task only while genuinely running', () => {
+test('verify renders live and then settles above engine, commit, and total metadata', () => {
   const chain = (verify: 'running' | 'passed'): ChainSnapshot => ({
     slug: `verify-${verify}`,
     projectPath: '/workspace/verify-stub',
@@ -221,12 +222,19 @@ test('verify renders as a named task only while genuinely running', () => {
     phaseActive: false,
     manifest: [{
       name: 'Jobs view polish',
-      tasks: [],
+      tasks: ['Finish the build'],
       kind: 'phase',
+      done: 1,
       commitHash: 'abc1234',
+      commitSubject: 'feat(jobs): complete the drawer',
+      startedAt: Date.now() - 20_000,
+      endedAt: Date.now() - 10_000,
+      taskTimes: [Date.now() - 12_000],
       verify,
       verifyStartedAt: Date.now() - 10_000,
       verifyEndedAt: verify === 'passed' ? Date.now() : undefined,
+      engine: 'codex',
+      model: 'gpt-5.6-sol',
     }],
     startedAt: Date.now() - 20_000,
     lastEventAt: Date.now(),
@@ -239,8 +247,17 @@ test('verify renders as a named task only while genuinely running', () => {
 
   const passed = chain('passed');
   const passedMarkup = renderJobs([{ chain: passed, run: null, sessions: {}, startedAt: passed.startedAt }]);
-  assert.doesNotMatch(passedMarkup, /data-slot="jobs-sidebar-verify"/);
-  assert.doesNotMatch(passedMarkup, />Verified</);
+  assert.match(passedMarkup, /data-slot="jobs-sidebar-verify" data-status="completed"/);
+  assert.match(passedMarkup, />Verified</);
+  const order = [
+    'data-slot="jobs-sidebar-task"',
+    'data-slot="jobs-sidebar-verify"',
+    'data-slot="jobs-sidebar-job-engine"',
+    'data-slot="jobs-sidebar-job-commit"',
+    'data-slot="jobs-sidebar-job-total"',
+  ].map((needle) => passedMarkup.indexOf(needle));
+  assert.ok(order.every((index) => index >= 0));
+  assert.deepEqual(order, [...order].sort((a, b) => a - b));
 });
 
 test('older months and years render clean grouping rows with completed-job counts', () => {

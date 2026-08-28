@@ -23,8 +23,9 @@ import JobsSidebar, { JOBS_COLUMN_BASIS, type ChainSnapshot, type JobGroup } fro
 import {
   findWorkerFollowTarget,
   preserveWorkerSessionSelection,
-  selectedRunKeepsAutoFollow,
   sessionUpsertNeedsRunRefresh,
+  shouldFollowWorkerRun,
+  workerSessionPinUntil,
 } from './workerRunFollow';
 
 const JOBS_VIEW_PREFERENCE_KEY = 'worker-jobs-view-open-v1';
@@ -199,14 +200,10 @@ export default function WorkerPane({
   const [runsLoaded, setRunsLoaded] = useState(false);
   const [chains, setChains] = useState<Record<string, ChainSnapshot>>({});
   const [newSessionTrigger, setNewSessionTrigger] = useState(0);
-  // Auto-follow pauses while the user is composing a brand-new pane session or
-  // has pinned an older run in the switcher, so a dispatched run landing
-  // mid-thought cannot steal the surface.
-  const followLatestRef = useRef(true);
-  // Typing into an existing worker chat continues that chat: while the
-  // composer is focused, a dispatched run landing must not swap the session
-  // out from under the message being written.
-  const [composerFocused, setComposerFocused] = useState(false);
+  // An explicit selection pins that session for one minute. After that short
+  // grace period, every newly announced build takes the pane again; verifier
+  // sessions remain navigation-only and never become automatic targets.
+  const [manualPinUntil, setManualPinUntil] = useState(0);
   // Fail-safes for the pane header: the socket dropping, or the rendered
   // transcript diverging from the run the header claims.
   const [renderedSessionId, setRenderedSessionId] = useState<string | null>(null);
@@ -263,7 +260,7 @@ export default function WorkerPane({
     setRuns([]);
     setRunsLoaded(false);
     setChains({});
-    followLatestRef.current = true;
+    setManualPinUntil(0);
     void refreshRuns();
   }, [refreshRuns]);
 
@@ -317,15 +314,18 @@ export default function WorkerPane({
     };
   }, [subscribe, refreshRuns, projectPath, selectedProject.projectId]);
 
-  // Auto-follow: the newest non-verifier run is selected until the user pins
-  // another one. Held off while the composer is focused; it catches up on blur.
   useEffect(() => {
-    if (
-      !followTarget
-      || !followLatestRef.current
-      || composerFocused
-      || paneSession?.id === followTarget.sessionId
-    ) {
+    const remaining = manualPinUntil - Date.now();
+    if (remaining <= 0) return;
+    const timer = setTimeout(() => setManualPinUntil(0), remaining);
+    return () => clearTimeout(timer);
+  }, [manualPinUntil]);
+
+  // Auto-follow: every new build session takes the pane unless the user made
+  // an explicit selection in the last minute. Verifier sessions are removed
+  // by findWorkerFollowTarget before this decision is made.
+  useEffect(() => {
+    if (!followTarget || !shouldFollowWorkerRun(followTarget, paneSession?.id ?? null, manualPinUntil)) {
       return;
     }
     setPaneSession((previous) => preserveWorkerSessionSelection(previous, {
@@ -335,20 +335,19 @@ export default function WorkerPane({
       origin: followTarget.origin ?? null,
       booted: Boolean(followTarget.booted),
     }));
-  }, [followTarget, paneSession?.id, composerFocused]);
+  }, [followTarget, paneSession?.id, manualPinUntil]);
 
   const handleComposerFocusChange = useCallback(
     (focused: boolean) => {
-      setComposerFocused(focused);
       onInputFocusChange?.(focused);
     },
     [onInputFocusChange],
   );
 
   const handleSelectRun = (run: WorkerRun) => {
-    // Picking the current build/direct target resumes auto-follow; an older
-    // run or a verifier is an intentional pin.
-    followLatestRef.current = selectedRunKeepsAutoFollow(run, followTarget);
+    // Picking the current build/direct target resumes immediate follow; an
+    // older run or verifier is an intentional one-minute pin.
+    setManualPinUntil(workerSessionPinUntil(run, followTarget));
     setPaneSession((previous) =>
       preserveWorkerSessionSelection(previous, {
         id: run.sessionId,
@@ -361,7 +360,7 @@ export default function WorkerPane({
   };
 
   const handleNewWorkerSession = () => {
-    followLatestRef.current = false;
+    setManualPinUntil(workerSessionPinUntil(null, followTarget));
     setPaneSession(null);
     setJobsViewOpen(false);
     setNewSessionTrigger((previous) => previous + 1);
@@ -526,9 +525,7 @@ export default function WorkerPane({
             onNavigateToSession={(targetSessionId: string) => {
               // The pane never changes the app URL; it swaps its own session.
               const targetRun = runs.find((run) => run.sessionId === targetSessionId) ?? null;
-              followLatestRef.current = Boolean(
-                targetRun && selectedRunKeepsAutoFollow(targetRun, followTarget),
-              );
+              setManualPinUntil(workerSessionPinUntil(targetRun, followTarget));
               setPaneSession((previous) =>
                 preserveWorkerSessionSelection(previous, {
                   id: targetSessionId,
@@ -538,7 +535,7 @@ export default function WorkerPane({
               );
             }}
             onSessionEstablished={(targetSessionId: string, context) => {
-              followLatestRef.current = true;
+              setManualPinUntil(0);
               setPaneSession((previous) =>
                 preserveWorkerSessionSelection(previous, {
                   id: targetSessionId,
