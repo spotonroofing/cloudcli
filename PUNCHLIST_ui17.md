@@ -126,3 +126,13 @@ Goal: the clear control (the one that wipes the text and the attachments; it sit
 - [ ] Both panes, desktop and phone; `design/composer.md` documents the two-tap rule.
 
 Done check: on dev, one click leaves the draft and attachments intact and shows the armed state; a second click within 2 seconds clears them and undo restores; waiting 3 seconds between clicks leaves the draft intact; tests pass; 390px holds. Commit.
+
+## Job 10 — Download button moves into the top bar (2026-08-28, Willem). Verify: no
+
+Goal: the floating download-chat button that hovers over the transcript (visible at the right edge on desktop and phone) goes away; the same action lives in the pane's top bar instead, as a bare icon. Files: the floating download control in the chat view (`src/components/chat/view/` and its subcomponents), the planner and worker pane top bars, `design/transcript-rows.md` or the area file that documents the pane top bar.
+
+- [ ] The floating button is removed entirely (no overlay element left in the transcript on any viewport).
+- [ ] The top bar of both the planner pane and the worker pane gains the download action as an icon-only button: the same icon, no background, no outline, no border; hover and press states follow the other top-bar icon buttons (window selector, shell), same size and spacing; same functionality and file output as before.
+- [ ] Desktop and phone; the area file documents the top bar's control set.
+
+Done check: on dev, no download control exists inside the transcript area on either pane; each pane's top bar has the download icon button with transparent background and no border in computed style; clicking it downloads the same file as before; 390px holds. Commit.
