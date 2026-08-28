@@ -171,7 +171,9 @@ function chainUnits(chain: ChainSnapshot, repairTruth: RepairTruth): Unit[] {
     if ((entry.hidden && !verifyFixedIn) || repairTruth.repairWinners.has(key)) {
       return [];
     }
-    const status: TodoListItemStatus = verifyFixedIn ? 'completed' : baseUnitStatus(chain, entry, index);
+    // A later repair does not rewrite the original verifier result. The
+    // fixed-in note explains the repair while the historical row stays red.
+    const status: TodoListItemStatus = baseUnitStatus(chain, entry, index);
     const paused = chain.status === 'paused' && index === current;
     return [{
       key,
@@ -188,7 +190,7 @@ function chainUnits(chain: ChainSnapshot, repairTruth: RepairTruth): Unit[] {
       commitHash: entry.commitHash,
       commitSubject: entry.commitSubject,
       taskTimes: entry.taskTimes,
-      failureReason: verifyFixedIn ? undefined : entry.failureReason,
+      failureReason: entry.failureReason,
       verify: verifyFixedIn ? undefined : entry.verify,
       verifyStartedAt: entry.verifyStartedAt,
       verifyEndedAt: entry.verifyEndedAt,
@@ -407,6 +409,9 @@ function VerifyRow({ unit, onOpenSession }: { unit: Unit; onOpenSession: (sessio
 /** Failure detail at the foot of a failed/stopped job drawer, kept to one line. */
 function FailureReason({ unit }: { unit: Unit }) {
   if (unit.status !== 'cancelled') return null;
+  // A repaired verifier failure without a stored reason is already explained
+  // by its fixed-in note; do not mislabel it as a stopped build.
+  if (unit.verifyFixedIn && !unit.failureReason) return null;
   const reason = (unit.failureReason ?? 'Job stopped before completion.').replace(/\s+/g, ' ').trim();
   return (
     <li
@@ -753,8 +758,6 @@ function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }
                           // glowing. A manifest-less job keeps a plain circle
                           // (ramped spinner while working).
                           segments={unit.tasks.length > 0
-                            && (unit.status !== 'cancelled'
-                              || (unit.done != null && unit.done < unit.tasks.length))
                             ? {
                                 done: unit.status === 'completed' || unit.verify === 'running'
                                   ? unit.tasks.length

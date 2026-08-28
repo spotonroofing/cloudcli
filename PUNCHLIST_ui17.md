@@ -37,9 +37,9 @@ Done check: the committed measurement script runs against dev at 4x CPU throttle
 
 Goal: Willem wants to see the failed mark on the existing failed rows (Streaming off and tokens; Memory and status truth; Context diet) to judge it, and ui16 job 2 instead made those rows read as done. Files: `src/components/worker-pane/JobsSidebar.tsx` ring and mark pieces, `design/worker-pane-and-jobs.md`.
 
-- [ ] A job whose verify failed keeps its failed state in the column even when a later unit fixed it (drop the "read as done" from ui16 job 2; the "verify fixed in <unit>" line in its drawer stays and is the place that tells the story).
-- [ ] The failed mark is the same segmented ring as every other row, all segments red, with an X centered inside sized and stroked exactly like the done check (same box, same stroke width, same optical weight); no small red circle icon anywhere.
-- [ ] Applies to every historical row on live and dev, not only future jobs; the design area file documents the mark.
+- [x] A job whose verify failed keeps its failed state in the column even when a later unit fixed it (drop the "read as done" from ui16 job 2; the "verify fixed in <unit>" line in its drawer stays and is the place that tells the story).
+- [x] The failed mark is the same segmented ring as every other row, all segments red, with an X centered inside sized and stroked exactly like the done check (same box, same stroke width, same optical weight); no small red circle icon anywhere.
+- [x] Applies to every historical row on live and dev, not only future jobs; the design area file documents the mark.
 
 Done check: on dev with the stub chain fixture that has one job in each status, the failed row's ring is red on every segment with a centered X whose bounding box matches the check's on a done row within 1px; the three historical failed rows on live's data (or a copy on dev) render it; tests pass. Commit.
 

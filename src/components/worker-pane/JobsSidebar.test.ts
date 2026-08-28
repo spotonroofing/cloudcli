@@ -216,7 +216,7 @@ test('completed and failed jobs keep segmented rings with centered terminal mark
   assert.match(failedMarkup, /M9 9 15\.2 15\.2M15\.2 9 9 15\.2/);
 });
 
-test('a committed verify failure repaired by its superseding unit reads as done once', () => {
+test('a committed verify failure repaired by its superseding unit stays failed once', () => {
   const failed: ChainSnapshot = {
     slug: 'original',
     projectPath: '/workspace/repair-stub',
@@ -255,9 +255,11 @@ test('a committed verify failure repaired by its superseding unit reads as done 
     { chain: repair, run: null, sessions: { 1: 'repair-session' }, startedAt: repair.startedAt },
   ]);
   assert.equal((markup.match(/data-slot="jobs-sidebar-row"/g) ?? []).length, 1);
-  assert.match(markup, /data-chain="original"[^>]*data-status="completed"/);
+  assert.match(markup, /data-chain="original"[^>]*data-status="cancelled"/);
+  assert.equal((markup.match(/data-slot="job-ring-segment"[^>]*data-failed="true"/g) ?? []).length, 1);
+  assert.match(markup, /data-terminal-mark="x"/);
   assert.match(markup, /data-slot="jobs-sidebar-verify-fixed"[^>]*>Verify fixed in Context diet repair<\/li>/);
-  assert.doesNotMatch(markup, /data-slot="jobs-sidebar-failure-reason"/);
+  assert.match(markup, /data-slot="jobs-sidebar-failure-reason"[^>]*>Verifier found a regression\.<\/li>/);
 });
 
 test('verify renders live and then settles above engine, commit, and total metadata', () => {
