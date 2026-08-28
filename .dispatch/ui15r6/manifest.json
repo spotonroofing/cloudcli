@@ -1,0 +1,85 @@
+[
+ {
+  "name": "JobsSidebar tests pass",
+  "tasks": [
+   "React import under the test transform",
+   "Full test suite green"
+  ]
+ },
+ {
+  "name": "Composer row order",
+  "tasks": [
+   "Context window control joins the row"
+  ]
+ },
+ {
+  "name": "Live loading truth",
+  "tasks": [
+   "Claude context figure updates live",
+   "Messages load in without refresh",
+   "Skeleton or blur for everything loading",
+   "Codex rows append, no full reload"
+  ]
+ },
+ {
+  "name": "Indicator row unity",
+  "tasks": [
+   "One anatomy for every indicator row"
+  ]
+ },
+ {
+  "name": "Column view behaves",
+  "tasks": [
+   "Jobs column per project, persisted",
+   "Panes squish evenly, no random widths",
+   "Three-project view renders right"
+  ]
+ },
+ {
+  "name": "Command Center naming",
+  "tasks": [
+   "Every mention becomes Command Center",
+   "Identifiers become command-center",
+   "Runtime anchors centralized for job 19"
+  ]
+ },
+ {
+  "name": "Fast mode toggle",
+  "tasks": [
+   "Find the real Codex fast-mode switch",
+   "Toggle row under Effort with cost line",
+   "Persists per session, never for chains"
+  ]
+ },
+ {
+  "name": "Wakes follow the planner",
+  "tasks": [
+   "Chain records its dispatching planner",
+   "Wakes follow the handoff lineage",
+   "Project wake target, no side chats",
+   "Row mark and manual move"
+  ]
+ },
+ {
+  "name": "Jobs view polish",
+  "tasks": [
+   "Less indent, wider sidebar, tooltip",
+   "Ring check and red X for done and failed",
+   "Per-task durations and live counters",
+   "Verify row as a task, only when live",
+   "Mono text, red failures with reason",
+   "Month and year grouping",
+   "One-off runs labeled by kind"
+  ]
+ },
+ {
+  "name": "Thinking grid",
+  "tasks": [
+   "Row alignment checked",
+   "Stray patterns checked",
+   "Ten word and pattern pairs",
+   "Cross-fade between pairs",
+   "Catalog in DESIGN"
+  ]
+ }
+]

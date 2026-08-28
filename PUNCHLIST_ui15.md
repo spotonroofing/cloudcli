@@ -170,6 +170,8 @@ Goal: make completed text arrive cleanly, remove a real duplicate transcript ent
 - [x] No streaming cursor on planner replies once streaming is off; nothing blinks after a block lands.
 - [x] Chopped and repeated text inside replies: reproduce on the planner session named above, confirm it shares the double-post root, fix at that source, and cover both symptoms with the same regression check.
 
+- [ ] (ui15r5 verify finding, 2026-08-27) `npm test` ends with 3 JobsSidebar render tests failing, including the new token row and drawer test, with `ReferenceError: React is not defined`: `src/components/worker-pane/JobsSidebar.tsx` uses JSX without importing React under the test transform. Fix it the way the rest of the components in that folder do (match the existing import convention, no test-config change). Done check for this item: `npm test` is fully green, no test skipped.
+
 Done check: on dev: assistant blocks arrive whole with the existing arrival fade and no word-stream spans; the named planner message renders exactly once after reload and its underlying record path is verified; a Claude-backed job and a Codex-backed job each show a correct mono token total on both the row and drawer, checked against their source transcript or rollout. Phone holds. Fresh-context subagent verification. Commit.
 
 ## Job 12 — Composer bottom row order (2026-08-27). Verify: yes
