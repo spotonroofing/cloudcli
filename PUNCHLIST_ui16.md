@@ -34,9 +34,9 @@ Done check: on dev with agent-browser: selecting two different chats in turn sho
 
 Goal: ui15 job 12 was compiled backwards and moved the context window control into the box; Willem wants the opposite. The prompt bar is the box where his text lives; the controls sit in a row below it, outside the box. Files: `src/components/chat/view/subcomponents/ChatComposer.tsx` and its controls row pieces, `TokenUsageSummary` trigger, `design/composer.md`.
 
-- [ ] Below the prompt bar, outside its border, one full-width row: bottom-left the character counter (the count of characters typed), aligned with the box's left edge; bottom-right, reading right to left: the usage indicator (the context window control), the model switcher, the prompt history button, the handoff button. Same heights and icon language as today.
-- [ ] Inside the box only what the text needs: the plus (attachments) on the left, the send/stop button on the right, the voice button where it is today; clear/undo stays with the plus. Nothing else inside the box.
-- [ ] Both panes, phone holds (the row wraps or compacts at 390px without hiding any control); `design/composer.md` rewritten to match, replacing the ui15 job 12 note.
+- [x] Below the prompt bar, outside its border, one full-width row: bottom-left the character counter (the count of characters typed), aligned with the box's left edge; bottom-right, reading right to left: the usage indicator (the context window control), the model switcher, the prompt history button, the handoff button. Same heights and icon language as today.
+- [x] Inside the box only what the text needs: the plus (attachments) on the left, the send/stop button on the right, the voice button where it is today; clear/undo stays with the plus. Nothing else inside the box.
+- [x] Both panes, phone holds (the row wraps or compacts at 390px without hiding any control); `design/composer.md` rewritten to match, replacing the ui15 job 12 note.
 
 Done check: on dev: the DOM order of the row below the composer enclosure is counter, then (right group left to right) handoff, history, switcher, usage; the enclosure contains plus, clear/undo, voice, textarea, send and nothing else; 390px shows every control. Commit.
 

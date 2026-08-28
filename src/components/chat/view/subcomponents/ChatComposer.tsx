@@ -468,10 +468,10 @@ export default function ChatComposer({
             />
           </PromptInputBody>
 
-          {/* Bottom controls row (ui15 job 12): composer utilities stay left;
-              handoff, history, model, context, and send form one ordered
-              group on the right. */}
-          <div data-slot="composer-controls-row" className="flex items-center gap-1 px-2 pb-1.5 pt-0.5">
+          {/* The enclosure holds only prompt-making controls: plus and its
+              clear/undo companion, voice, then send on the right (ui16 job
+              1). Session utilities live in the separate row below. */}
+          <div data-slot="composer-input-controls" className="flex items-center gap-1 px-2 pb-1.5 pt-0.5">
             <ComposerPlusMenu
               onUpload={openAttachmentPicker}
               onSlashCommands={onToggleCommandMenu}
@@ -491,26 +491,17 @@ export default function ChatComposer({
                     <span className="undo-deplete block h-full w-full rounded-sm bg-muted-foreground/60" />
                   </span>
                 </button>
-              ) : (
+              ) : canClear ? (
                 <button
                   type="button"
-                  data-slot="char-counter"
-                  onClick={canClear ? onClearComposer : undefined}
-                  disabled={!canClear}
+                  data-slot="composer-clear"
+                  onClick={onClearComposer}
                   aria-label={t('input.clear', { defaultValue: 'Clear message' })}
-                  className="group/counter touch-hit relative grid h-7 min-w-5 place-items-center px-0.5 font-mono text-[10px] font-medium tabular-nums text-muted-foreground disabled:cursor-default"
+                  className="touch-hit relative grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
-                  <span className={`col-start-1 row-start-1 counter-swap ${canClear ? 'group-hover/counter:opacity-0 group-focus-visible/counter:opacity-0' : ''}`}>
-                    {input.length.toLocaleString('en-US')}
-                  </span>
-                  {canClear && (
-                    <XIcon
-                      aria-hidden
-                      className="counter-swap col-start-1 row-start-1 h-3.5 w-3.5 opacity-0 group-hover/counter:opacity-100 group-focus-visible/counter:opacity-100"
-                    />
-                  )}
+                  <XIcon aria-hidden className="h-3.5 w-3.5" />
                 </button>
-              )}
+              ) : null}
 
               {onVoiceTranscript && voiceAvailable && (
                 <VoiceInputButton state={voiceState} onToggle={voiceToggle} errorMsg={voiceError} className="h-7 w-7" />
@@ -519,82 +510,101 @@ export default function ChatComposer({
 
             <div className="min-w-0 flex-1" />
 
-            <div data-slot="composer-controls-right" className="flex min-w-0 shrink-0 items-center gap-1">
-              {handoffAvailable && (
-                <PromptInputButton
-                  onClick={onHandoff}
-                  aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
-                  tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
-                  className="h-7 w-7"
-                  data-slot="composer-handoff"
-                >
-                  <FileTextIcon />
-                </PromptInputButton>
-              )}
-
-              <PromptInputButton
-                onClick={() => setHistoryOpen((previous) => !previous)}
-                aria-label={t('input.history.title', { defaultValue: 'Prompt history' })}
-                aria-pressed={historyOpen}
-                tooltip={{ content: t('input.history.title', { defaultValue: 'Prompt history' }) }}
-                className={`h-7 w-7 ${historyOpen ? 'bg-accent/60 text-foreground' : ''}`}
-                data-slot="composer-history-toggle"
-              >
-                <History />
-              </PromptInputButton>
-
-              <ComposerModelMenu
-                effort={effort}
-                fastMode={fastMode}
-                effortOptions={availableEffortOptions}
-                onSelectEffort={onSelectEffort}
-                onSelectFastMode={onSelectFastMode}
-                model={model}
-                provider={provider}
-                modelGroups={modelGroups}
-                onSelectModel={onSelectModel}
-                modelsLoading={modelsLoading}
-              />
-
-              <TokenUsageSummary usage={tokenBudget} />
-
-              <PromptInputSubmit
-                className="h-7 w-7"
-                onClick={
-                  canQueueDraft
-                    ? (e: MouseEvent<HTMLButtonElement>) => {
-                        e.preventDefault();
-                        onSubmit(e);
-                      }
-                    : isLoading
-                      ? onAbortSession
-                      : isRecording
-                        ? (e: MouseEvent<HTMLButtonElement>) => {
-                            e.preventDefault();
-                            voiceStop({ send: true });
-                          }
-                        : undefined
-                }
-                disabled={
-                  isLoading
-                    ? false
+            <PromptInputSubmit
+              className="h-7 w-7"
+              onClick={
+                canQueueDraft
+                  ? (e: MouseEvent<HTMLButtonElement>) => {
+                      e.preventDefault();
+                      onSubmit(e);
+                    }
+                  : isLoading
+                    ? onAbortSession
                     : isRecording
-                      ? false
-                      : isTranscribing
-                        ? true
-                        : !input.trim() && !hasAttachments
-                }
-                aria-label={submitAriaLabel}
-              >
-                {isTranscribing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : canQueueDraft ? (
-                  <ArrowUpIcon className="h-4 w-4" />
-                ) : undefined}
-              </PromptInputSubmit>
-            </div>
+                      ? (e: MouseEvent<HTMLButtonElement>) => {
+                          e.preventDefault();
+                          voiceStop({ send: true });
+                        }
+                      : undefined
+              }
+              disabled={
+                isLoading
+                  ? false
+                  : isRecording
+                    ? false
+                    : isTranscribing
+                      ? true
+                      : !input.trim() && !hasAttachments
+              }
+              aria-label={submitAriaLabel}
+            >
+              {isTranscribing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : canQueueDraft ? (
+                <ArrowUpIcon className="h-4 w-4" />
+              ) : undefined}
+            </PromptInputSubmit>
           </div>
-      </PromptInput>
+        </PromptInput>
+
+        {/* Full-width row below the enclosure (ui16 job 1): the character
+            count stays flush left; pane/session utilities keep their existing
+            order and height on the right. */}
+        <div
+          data-slot="composer-controls-row"
+          className="mt-1 flex min-w-0 items-center justify-between gap-2"
+        >
+          <span
+            data-slot="char-counter"
+            className="h-7 min-w-5 shrink-0 px-0.5 pt-2 font-mono text-[10px] font-medium tabular-nums text-muted-foreground"
+            aria-label={t('input.characterCount', {
+              defaultValue: '{{count}} characters',
+              count: input.length,
+            })}
+          >
+            {input.length.toLocaleString('en-US')}
+          </span>
+
+          <div data-slot="composer-controls-right" className="flex min-w-0 shrink items-center gap-1">
+            {handoffAvailable && (
+              <PromptInputButton
+                onClick={onHandoff}
+                aria-label={t('input.handoff', { defaultValue: 'Handoff' })}
+                tooltip={{ content: t('input.handoff', { defaultValue: 'Handoff' }) }}
+                className="h-7 w-7 shrink-0"
+                data-slot="composer-handoff"
+              >
+                <FileTextIcon />
+              </PromptInputButton>
+            )}
+
+            <PromptInputButton
+              onClick={() => setHistoryOpen((previous) => !previous)}
+              aria-label={t('input.history.title', { defaultValue: 'Prompt history' })}
+              aria-pressed={historyOpen}
+              tooltip={{ content: t('input.history.title', { defaultValue: 'Prompt history' }) }}
+              className={`h-7 w-7 shrink-0 ${historyOpen ? 'bg-accent/60 text-foreground' : ''}`}
+              data-slot="composer-history-toggle"
+            >
+              <History />
+            </PromptInputButton>
+
+            <ComposerModelMenu
+              effort={effort}
+              fastMode={fastMode}
+              effortOptions={availableEffortOptions}
+              onSelectEffort={onSelectEffort}
+              onSelectFastMode={onSelectFastMode}
+              model={model}
+              provider={provider}
+              modelGroups={modelGroups}
+              onSelectModel={onSelectModel}
+              modelsLoading={modelsLoading}
+            />
+
+            <TokenUsageSummary usage={tokenBudget} />
+          </div>
+        </div>
       </div>}
       </div>
     </div>
