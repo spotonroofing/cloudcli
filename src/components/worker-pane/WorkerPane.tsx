@@ -28,23 +28,42 @@ import {
 
 const JOBS_VIEW_PREFERENCE_KEY = 'worker-jobs-view-open-v1';
 
-const readJobsViewPreference = (projectPath: string): boolean => {
+type JobsViewPreferences = Record<string, boolean>;
+
+const readJobsViewPreferences = (): JobsViewPreferences => {
   try {
-    const stored = JSON.parse(localStorage.getItem(JOBS_VIEW_PREFERENCE_KEY) || '{}') as Record<string, unknown>;
-    return stored[projectPath] === true;
+    const stored = JSON.parse(localStorage.getItem(JOBS_VIEW_PREFERENCE_KEY) || '{}') as unknown;
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(stored).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean'),
+    );
   } catch {
-    return false;
+    return {};
   }
 };
 
-const persistJobsViewPreference = (projectPath: string, open: boolean): void => {
-  let stored: Record<string, boolean> = {};
-  try {
-    stored = JSON.parse(localStorage.getItem(JOBS_VIEW_PREFERENCE_KEY) || '{}') as Record<string, boolean>;
-  } catch {
-    // Replace a corrupt boot cache with the next valid per-project record.
+const readJobsViewPreference = (projectId: string, legacyProjectPath: string): boolean => {
+  const stored = readJobsViewPreferences();
+  if (typeof stored[projectId] === 'boolean') {
+    return stored[projectId];
   }
-  writeSetting(JOBS_VIEW_PREFERENCE_KEY, JSON.stringify({ ...stored, [projectPath]: open }));
+  return legacyProjectPath ? stored[legacyProjectPath] === true : false;
+};
+
+const persistJobsViewPreference = (
+  projectId: string,
+  legacyProjectPath: string,
+  open: boolean,
+): void => {
+  const next = { ...readJobsViewPreferences(), [projectId]: open };
+  // Job 0 persisted path keys. Migrate the touched project to its stable DB
+  // id so moving or renaming the folder cannot transfer the preference.
+  if (legacyProjectPath && legacyProjectPath !== projectId) {
+    delete next[legacyProjectPath];
+  }
+  writeSetting(JOBS_VIEW_PREFERENCE_KEY, JSON.stringify(next));
 };
 
 type WorkerRun = {
@@ -110,6 +129,8 @@ type WorkerPaneProps = {
    * workspace sets this at three or more projects in column layout (ui14 job 1).
    */
   jobsTakeover?: boolean;
+  /** Reports this project's persisted jobs state to its outer pane strip. */
+  onJobsViewOpenChange?: (open: boolean) => void;
   /** Phone only (ui14 job 11): the top bar opens the sidebar and carries the window selector. */
   onMenuClick?: () => void;
   windowSelector?: ReactNode;
@@ -138,6 +159,7 @@ export default function WorkerPane({
   onClose,
   closeLabel,
   jobsTakeover = false,
+  onJobsViewOpenChange,
   onMenuClick,
   windowSelector,
 }: WorkerPaneProps) {
@@ -145,6 +167,7 @@ export default function WorkerPane({
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
   const { isMobile } = useDeviceSettings({ trackPWA: false });
+  const projectId = selectedProject.projectId;
   const projectPath = selectedProject.fullPath || selectedProject.path || '';
 
   // Jobs behind the top bar's job sign (ui14 job 1): a side column beside the
@@ -152,14 +175,16 @@ export default function WorkerPane({
   // three or more projects in column layout, and on phones. The cloud-synced
   // record is keyed by project, so reloads and other devices restore the same
   // view without one project's choice leaking into another.
-  const [jobsViewOpen, setJobsViewOpenState] = useState(() => readJobsViewPreference(projectPath));
+  const [jobsViewOpen, setJobsViewOpenState] = useState(
+    () => readJobsViewPreference(projectId, projectPath),
+  );
   const setJobsViewOpen = useCallback((value: boolean | ((open: boolean) => boolean)) => {
     setJobsViewOpenState((previous) => {
       const next = typeof value === 'function' ? value(previous) : value;
-      if (projectPath) persistJobsViewPreference(projectPath, next);
+      if (projectId) persistJobsViewPreference(projectId, projectPath, next);
       return next;
     });
-  }, [projectPath]);
+  }, [projectId, projectPath]);
   // Mobile chat/shell toggle (ui13 job 9): swaps the pane's transcript for a
   // terminal bound to the pane's own session, mirroring the planner pane.
   const [shellOpen, setShellOpen] = useState(false);
@@ -197,11 +222,15 @@ export default function WorkerPane({
   }, [renderedSessionId, claimedSessionId]);
 
   useEffect(() => {
-    setJobsViewOpenState(readJobsViewPreference(projectPath));
+    setJobsViewOpenState(readJobsViewPreference(projectId, projectPath));
     return onSettingChange([JOBS_VIEW_PREFERENCE_KEY], () => {
-      setJobsViewOpenState(readJobsViewPreference(projectPath));
+      setJobsViewOpenState(readJobsViewPreference(projectId, projectPath));
     });
-  }, [projectPath]);
+  }, [projectId, projectPath]);
+
+  useEffect(() => {
+    onJobsViewOpenChange?.(jobsViewOpen);
+  }, [jobsViewOpen, onJobsViewOpenChange]);
 
   const refreshRuns = useCallback(async () => {
     if (!projectPath) {
@@ -539,8 +568,9 @@ export default function WorkerPane({
             data-layout={jobsFullPane ? 'pane' : 'column'}
             className={cn(
               'min-h-0 min-w-0 overflow-hidden',
-              jobsFullPane ? 'flex-1' : 'w-60 max-w-[50%] flex-shrink-0 border-l border-border/60',
+              jobsFullPane ? 'flex-1' : 'flex-shrink-0 border-l border-border/60',
             )}
+            style={jobsFullPane ? undefined : { width: 'min(15rem, 33.333cqw)' }}
           >
             <JobsSidebar
               groups={jobGroups}

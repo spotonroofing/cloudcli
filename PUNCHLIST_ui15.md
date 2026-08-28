@@ -205,9 +205,9 @@ Done check: on dev with a synthetic transcript carrying every row kind: computed
 
 Goal: the multi-project column view stops surprising. Files: the workspace layout store and pane sizing, the jobs column open state, the column-view wiring, `design/worker-pane-and-jobs.md`. Dependencies: none.
 
-- [ ] The jobs column opens only on the project it was opened for, never on every project at once; its open state is per project and persists.
-- [ ] Opening the jobs column squishes the planner and worker panes evenly so they stay equal width; closing restores; no pane takes a random width when dragging side by side (weights and minimums reconciled per the pane-min-width lesson).
-- [ ] The three-project view renders correctly: every column visible, dividers where expected, jobs takeover at 3+ per the locked jobs-surface decision, verified at 1440px and 1920px.
+- [x] The jobs column opens only on the project it was opened for, never on every project at once; its open state is per project and persists.
+- [x] Opening the jobs column squishes the planner and worker panes evenly so they stay equal width; closing restores; no pane takes a random width when dragging side by side (weights and minimums reconciled per the pane-min-width lesson).
+- [x] The three-project view renders correctly: every column visible, dividers where expected, jobs takeover at 3+ per the locked jobs-surface decision, verified at 1440px and 1920px.
 
 Done check: on dev with three projects open: jobs column toggles on one project only and survives reload; pane widths measured equal after opening the column; three-column layout snapshot matches the documented geometry. Commit.
 

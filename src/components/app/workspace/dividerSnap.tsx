@@ -38,7 +38,10 @@ type ActiveDrag<Id extends string> = {
   pixels: number;
   /** weightA + weightB — the pair's share of the flex row stays constant. */
   total: number;
-  minFraction: number;
+  leadingBasisPixels: number;
+  trailingBasisPixels: number;
+  minLeadingFraction: number;
+  minTrailingFraction: number;
   fraction: number;
 };
 
@@ -51,6 +54,75 @@ type BeginDragConfig<Id extends string> = {
   total: number;
 };
 
+export type DividerMinimums = {
+  leading: number;
+  trailing: number;
+};
+
+/**
+ * Turns the two panes' real CSS minimums into legal visual fractions. Keeping
+ * the two sides separate matters: Planner and Worker do not always have the
+ * same minimum, especially inside a narrow multi-project column.
+ */
+export const dividerMinimumFractions = (
+  leadingPixels: number,
+  trailingPixels: number,
+  pairPixels: number,
+): DividerMinimums => {
+  if (pairPixels <= 0) {
+    return { leading: 0, trailing: 0 };
+  }
+  const leading = Math.max(0, leadingPixels) / pairPixels;
+  const trailing = Math.max(0, trailingPixels) / pairPixels;
+  const total = leading + trailing;
+  if (total <= 1) {
+    return { leading, trailing };
+  }
+  // A strip narrower than the two declared minimums is already overflowing.
+  // Normalizing keeps the divider stable at the only proportional boundary
+  // instead of advertising snap stops that CSS cannot render.
+  return { leading: leading / total, trailing: trailing / total };
+};
+
+export const reachableSnapStops = ({ leading, trailing }: DividerMinimums): number[] =>
+  SNAP_STOPS.filter((stop) => stop >= leading && stop <= 1 - trailing);
+
+export type DividerWeights = {
+  leading: number;
+  trailing: number;
+};
+
+/**
+ * Flex-grow operates only on space left after flex-basis. Convert a requested
+ * visual boundary back to grow weights so a responsive jobs basis stays in
+ * place without making the divider lag behind the pointer.
+ */
+export const flexWeightsForVisualFraction = (
+  fraction: number,
+  totalWeight: number,
+  pairPixels: number,
+  leadingBasisPixels: number,
+  trailingBasisPixels: number,
+): DividerWeights => {
+  const freePixels = pairPixels - leadingBasisPixels - trailingBasisPixels;
+  if (freePixels <= 0) {
+    return { leading: fraction * totalWeight, trailing: (1 - fraction) * totalWeight };
+  }
+  const leadingShare = Math.min(
+    1,
+    Math.max(0, ((fraction * pairPixels) - leadingBasisPixels) / freePixels),
+  );
+  return {
+    leading: leadingShare * totalWeight,
+    trailing: (1 - leadingShare) * totalWeight,
+  };
+};
+
+const flexBasisPixels = (element: HTMLElement): number => {
+  const basis = Number.parseFloat(getComputedStyle(element).flexBasis);
+  return Number.isFinite(basis) ? Math.max(0, basis) : 0;
+};
+
 /**
  * Divider drag with instant tracking and notched release (ui15 job 1).
  * Pointermove writes the pair's flex weights straight to the DOM — no React
@@ -60,12 +132,12 @@ type BeginDragConfig<Id extends string> = {
  */
 export function useSnapDivider<Id extends string>({
   containerRef,
-  minFraction,
+  minFractions,
   onCommit,
 }: {
   containerRef: React.RefObject<HTMLElement | null>;
-  /** Smallest allowed fraction for either pane, given the pair's pixel size. */
-  minFraction: (pixels: number) => number;
+  /** Smallest allowed visual fraction for each pane in the active pair. */
+  minFractions: (pixels: number, idA: Id, idB: Id) => DividerMinimums;
   onCommit: (idA: Id, weightA: number, idB: Id, weightB: number) => void;
 }) {
   const dragRef = useRef<ActiveDrag<Id> | null>(null);
@@ -92,7 +164,16 @@ export function useSnapDivider<Id extends string>({
     timersRef.current = [];
     elA.style.transition = '';
     elB.style.transition = '';
-    const min = Math.min(0.5, minFraction(pixels));
+    const leadingBasisPixels = flexBasisPixels(elA);
+    const trailingBasisPixels = flexBasisPixels(elB);
+    const declaredMinimums = minFractions(pixels, idA, idB);
+    const minimums = dividerMinimumFractions(
+      Math.max(declaredMinimums.leading * pixels, leadingBasisPixels),
+      Math.max(declaredMinimums.trailing * pixels, trailingBasisPixels),
+      pixels,
+    );
+    const minLeadingFraction = Math.min(1, Math.max(0, minimums.leading));
+    const minTrailingFraction = Math.min(1 - minLeadingFraction, Math.max(0, minimums.trailing));
     const origin = horizontal ? rectA.left : rectA.top;
     const containerRect = container.getBoundingClientRect();
     dragRef.current = {
@@ -104,14 +185,17 @@ export function useSnapDivider<Id extends string>({
       origin,
       pixels,
       total,
-      minFraction: min,
+      leadingBasisPixels,
+      trailingBasisPixels,
+      minLeadingFraction,
+      minTrailingFraction,
       fraction: (horizontal ? rectA.width : rectA.height) / pixels,
     };
     setGuides({
       horizontal,
       offset: origin - (horizontal ? containerRect.left : containerRect.top),
       size: pixels,
-      stops: SNAP_STOPS.filter((stop) => stop >= min && stop <= 1 - min),
+      stops: reachableSnapStops({ leading: minLeadingFraction, trailing: minTrailingFraction }),
       fading: false,
     });
     try {
@@ -128,12 +212,19 @@ export function useSnapDivider<Id extends string>({
     }
     const pointer = drag.horizontal ? event.clientX : event.clientY;
     const fraction = Math.min(
-      1 - drag.minFraction,
-      Math.max(drag.minFraction, (pointer - drag.origin) / drag.pixels),
+      1 - drag.minTrailingFraction,
+      Math.max(drag.minLeadingFraction, (pointer - drag.origin) / drag.pixels),
     );
     drag.fraction = fraction;
-    drag.elA.style.flex = `${fraction * drag.total} 1 0px`;
-    drag.elB.style.flex = `${(1 - fraction) * drag.total} 1 0px`;
+    const weights = flexWeightsForVisualFraction(
+      fraction,
+      drag.total,
+      drag.pixels,
+      drag.leadingBasisPixels,
+      drag.trailingBasisPixels,
+    );
+    drag.elA.style.flexGrow = String(weights.leading);
+    drag.elB.style.flexGrow = String(weights.trailing);
   };
 
   const endDrag = () => {
@@ -142,23 +233,37 @@ export function useSnapDivider<Id extends string>({
       return;
     }
     dragRef.current = null;
-    const stops = SNAP_STOPS.filter(
-      (stop) => stop >= drag.minFraction && stop <= 1 - drag.minFraction,
+    const stops = reachableSnapStops({
+      leading: drag.minLeadingFraction,
+      trailing: drag.minTrailingFraction,
+    });
+    const fallback = Math.min(
+      1 - drag.minTrailingFraction,
+      Math.max(drag.minLeadingFraction, drag.fraction),
     );
-    const nearest = stops.reduce(
-      (best, stop) => (Math.abs(stop - drag.fraction) < Math.abs(best - drag.fraction) ? stop : best),
-      0.5,
+    const nearest = stops.length > 0
+      ? stops.reduce(
+        (best, stop) => (Math.abs(stop - drag.fraction) < Math.abs(best - drag.fraction) ? stop : best),
+        stops[0],
+      )
+      : fallback;
+    const weights = flexWeightsForVisualFraction(
+      nearest,
+      drag.total,
+      drag.pixels,
+      drag.leadingBasisPixels,
+      drag.trailingBasisPixels,
     );
     drag.elA.style.transition = `flex-grow ${SETTLE_MS}ms ${EASE_IN_OUT}`;
     drag.elB.style.transition = `flex-grow ${SETTLE_MS}ms ${EASE_IN_OUT}`;
-    drag.elA.style.flex = `${nearest * drag.total} 1 0px`;
-    drag.elB.style.flex = `${(1 - nearest) * drag.total} 1 0px`;
+    drag.elA.style.flexGrow = String(weights.leading);
+    drag.elB.style.flexGrow = String(weights.trailing);
     setGuides((previous) => (previous ? { ...previous, fading: true } : previous));
     timersRef.current.push(
       setTimeout(() => {
         drag.elA.style.transition = '';
         drag.elB.style.transition = '';
-        onCommit(drag.idA, nearest * drag.total, drag.idB, (1 - nearest) * drag.total);
+        onCommit(drag.idA, weights.leading, drag.idB, weights.trailing);
       }, SETTLE_MS),
       setTimeout(() => setGuides(null), Math.max(SETTLE_MS, GUIDE_FADE_MS) + 50),
     );

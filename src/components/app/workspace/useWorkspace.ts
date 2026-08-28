@@ -165,6 +165,10 @@ export function useWorkspace({
 
   const toggleMode = useCallback(() => {
     setMode((previous) => (previous === 'rows' ? 'columns' : 'rows'));
+    // Row heights are not meaningful column widths (or vice versa). Carrying
+    // weights across axes made a deliberate vertical resize look like a
+    // random horizontal split, so every mode switch starts evenly.
+    setWeights({});
   }, []);
 
   const setPairWeights = useCallback((idA: string, weightA: number, idB: string, weightB: number) => {

@@ -83,7 +83,10 @@ export default function WorkspaceView({
 
   const snap = useSnapDivider<string>({
     containerRef,
-    minFraction: (pixels) => MIN_UNIT_PX / pixels,
+    minFractions: (pixels) => ({
+      leading: MIN_UNIT_PX / pixels,
+      trailing: MIN_UNIT_PX / pixels,
+    }),
     onCommit: workspace.setPairWeights,
   });
 

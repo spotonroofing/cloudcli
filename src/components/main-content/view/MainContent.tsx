@@ -1,5 +1,5 @@
 import { Compass, FolderTree, GitBranch, Hammer, MessageSquare, Terminal, X } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
 import WorkerPane from '../../worker-pane/WorkerPane';
@@ -62,7 +62,20 @@ function MainContent({
   // pane strip — planner, worker, files, source control tiled in the grid,
   // each open, railed, or closed per the project's persisted window set.
   const windows = useProjectWindows(selectedProject?.projectId ?? null);
+  const resetPaneWeights = windows.resetWeights;
   const desktopStrip = !isMobile && workerPaneAvailable;
+  const [jobsViewOpen, setJobsViewOpen] = useState(false);
+  const jobsViewOpenRef = useRef<{ projectId: string | null; open: boolean } | null>(null);
+  const selectedProjectId = selectedProject?.projectId ?? null;
+  const handleJobsViewOpenChange = useCallback((open: boolean) => {
+    setJobsViewOpen(open);
+    const previous = jobsViewOpenRef.current;
+    const projectChanged = previous?.projectId !== selectedProjectId;
+    if ((projectChanged && open) || (!projectChanged && previous?.open !== open)) {
+      resetPaneWeights();
+    }
+    jobsViewOpenRef.current = { projectId: selectedProjectId, open };
+  }, [resetPaneWeights, selectedProjectId]);
   // Mobile chat/shell toggle (ui13 job 9): the planner pane's top bar swaps
   // the transcript for a terminal bound to the pane's own session. Not
   // persisted — a fresh open always lands on chat.
@@ -218,7 +231,12 @@ function MainContent({
     }));
 
     const stripPanes: StripPane[] = [];
-    const pushPane = (id: (typeof WINDOW_ORDER)[number], minWidth: number, content: React.ReactNode) => {
+    const pushPane = (
+      id: (typeof WINDOW_ORDER)[number],
+      minWidth: number,
+      content: React.ReactNode,
+      basis?: string,
+    ) => {
       const state = windows.states[id];
       if (state === 'closed') {
         return;
@@ -229,6 +247,7 @@ function MainContent({
         railLabel: WINDOW_LABELS[id],
         weight: windows.weights[id],
         minWidth,
+        basis,
         onExpand: () => windows.setWindowState(id, 'open'),
         content: state === 'open' ? content : null,
       });
@@ -267,6 +286,7 @@ function MainContent({
 
     pushPane('worker', 280, (
       <WorkerPane
+        key={selectedProjectId}
         selectedProject={selectedProject}
         ws={ws}
         sendMessage={sendMessage}
@@ -279,8 +299,9 @@ function MainContent({
         onSessionViewed={onSessionViewed}
         onShowSettings={onShowSettings}
         onClose={() => windows.setWindowState('worker', 'rail')}
+        onJobsViewOpenChange={handleJobsViewOpenChange}
       />
-    ));
+    ), jobsViewOpen ? 'min(15rem, 33.333cqw)' : undefined);
 
     pushPane('files', 220, (
       <WindowPane

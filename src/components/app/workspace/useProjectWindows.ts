@@ -18,6 +18,7 @@ export type ProjectWindows = {
   weights: Record<WindowId, number>;
   setWindowState: (id: WindowId, state: PaneWindowState) => void;
   setPairWeights: (idA: WindowId, weightA: number, idB: WindowId, weightB: number) => void;
+  resetWeights: () => void;
 };
 
 export const WINDOW_ORDER: WindowId[] = ['planner', 'worker', 'files', 'git'];
@@ -132,5 +133,15 @@ export function useProjectWindows(projectId: string | null): ProjectWindows {
     }));
   }, [write]);
 
-  return { states: resolved.states, weights: resolved.weights, setWindowState, setPairWeights };
+  const resetWeights = useCallback(() => {
+    write((entry) => ({ states: entry.states, weights: { ...DEFAULT_WEIGHTS } }));
+  }, [write]);
+
+  return {
+    states: resolved.states,
+    weights: resolved.weights,
+    setWindowState,
+    setPairWeights,
+    resetWeights,
+  };
 }

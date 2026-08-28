@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 import { cn } from '../../../lib/utils';
 
-import { SnapGuides, useSnapDivider } from './dividerSnap';
+import { dividerMinimumFractions, SnapGuides, useSnapDivider } from './dividerSnap';
 import type { WindowId } from './useProjectWindows';
 
 type PaneDividerProps = {
@@ -73,6 +73,8 @@ export type StripPane = {
   railLabel: string;
   weight: number;
   minWidth: number;
+  /** Extra fixed/responsive width carried by this pane before flex-grow. */
+  basis?: string;
   onExpand: () => void;
   content: ReactNode;
 };
@@ -94,7 +96,11 @@ export default function PaneStrip({ panes, onPairWeights }: PaneStripProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const snap = useSnapDivider<WindowId>({
     containerRef,
-    minFraction: () => 0.15,
+    minFractions: (pixels, idA, idB) => {
+      const paneA = panes.find((pane) => pane.id === idA);
+      const paneB = panes.find((pane) => pane.id === idB);
+      return dividerMinimumFractions(paneA?.minWidth ?? 0, paneB?.minWidth ?? 0, pixels);
+    },
     onCommit: onPairWeights,
   });
 
@@ -123,7 +129,12 @@ export default function PaneStrip({ panes, onPairWeights }: PaneStripProps) {
     };
 
   return (
-    <div ref={containerRef} data-slot="pane-strip" className="relative flex h-full min-h-0 min-w-0 flex-1">
+    <div
+      ref={containerRef}
+      data-slot="pane-strip"
+      className="relative flex h-full min-h-0 min-w-0 flex-1"
+      style={{ containerType: 'inline-size' }}
+    >
       {panes.map((pane, index) => {
         // A divider sits between two open panes that touch directly; a rail
         // at the boundary is its own separator.
@@ -162,7 +173,7 @@ export default function PaneStrip({ panes, onPairWeights }: PaneStripProps) {
               <div
                 data-strip-pane={pane.id}
                 className="flex min-h-0 flex-col overflow-hidden"
-                style={{ flex: `${pane.weight} 1 0px`, minWidth: pane.minWidth }}
+                style={{ flex: `${pane.weight} 1 ${pane.basis ?? '0px'}`, minWidth: pane.minWidth }}
               >
                 {pane.content}
               </div>

@@ -1,5 +1,5 @@
 import { Columns2, Compass, Folder, FolderTree, GitBranch, GripVertical, Hammer, Plus, Rows2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
@@ -101,6 +101,29 @@ export default function WorkspaceRow({
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
   const windows = useProjectWindows(project.projectId);
+  const resetPaneWeights = windows.resetWeights;
+  const jobsTakeover = mode === 'columns' && projectCount >= 3;
+  const [jobsViewOpen, setJobsViewOpen] = useState(false);
+  const jobsViewOpenRef = useRef<boolean | null>(null);
+  const handleJobsViewOpenChange = useCallback((open: boolean) => {
+    setJobsViewOpen(open);
+    // Opening or closing jobs is a deliberate geometry boundary. Normalize
+    // this project's panes once at that boundary; do not let old drag weights
+    // make Planner or Worker randomly win the newly available space. A closed
+    // initial state leaves the user's persisted split untouched.
+    if (jobsViewOpenRef.current !== open && (jobsViewOpenRef.current !== null || open)) {
+      resetPaneWeights();
+    }
+    jobsViewOpenRef.current = open;
+  }, [resetPaneWeights]);
+  const jobsColumnOpen = jobsViewOpen && !jobsTakeover;
+  const compactColumn = mode === 'columns' && projectCount >= 2;
+  const primaryPaneMinWidth = compactColumn ? 160 : 200;
+  // Worker keeps one more compact-header control than Planner (the jobs
+  // toggle). At 160px the button can spill under the next project's grip;
+  // 184px contains the full header while three equal columns still fit 1440.
+  const workerPaneMinWidth = compactColumn ? 184 : 280;
+  const auxiliaryPaneMinWidth = compactColumn ? 160 : 220;
 
   // Non-primary rows manage their own planner session, WorkerPane-style: the
   // pane never changes the app URL.
@@ -217,7 +240,12 @@ export default function WorkspaceRow({
   }));
 
   const stripPanes: StripPane[] = [];
-  const pushPane = (id: (typeof WINDOW_ORDER)[number], minWidth: number, content: React.ReactNode) => {
+  const pushPane = (
+    id: (typeof WINDOW_ORDER)[number],
+    minWidth: number,
+    content: React.ReactNode,
+    basis?: string,
+  ) => {
     const state = windows.states[id];
     if (state === 'closed') {
       return;
@@ -228,12 +256,13 @@ export default function WorkspaceRow({
       railLabel: WINDOW_LABELS[id],
       weight: windows.weights[id],
       minWidth,
+      basis,
       onExpand: () => windows.setWindowState(id, 'open'),
       content: state === 'open' ? content : null,
     });
   };
 
-  pushPane('planner', 200, (
+  pushPane('planner', primaryPaneMinWidth, (
     <>
       <div className={PANE_HEADER_CLASS} data-slot="pane-header">
         <button
@@ -357,7 +386,7 @@ export default function WorkspaceRow({
     </>
   ));
 
-  pushPane('worker', 280, (
+  pushPane('worker', workerPaneMinWidth, (
     // The row's close lives at its top-right corner (the worker header's
     // trailing slot), not in the planner header (ui8 phase 5).
     <WorkerPane
@@ -375,11 +404,12 @@ export default function WorkspaceRow({
       closeLabel={`Close ${project.displayName} row`}
       // Jobs column rules (ui14 job 1): one or two projects keep jobs as a
       // side column; three or more in column layout take over the pane.
-      jobsTakeover={mode === 'columns' && projectCount >= 3}
+      jobsTakeover={jobsTakeover}
+      onJobsViewOpenChange={handleJobsViewOpenChange}
     />
-  ));
+  ), jobsColumnOpen ? 'min(15rem, 33.333cqw)' : undefined);
 
-  pushPane('files', 220, (
+  pushPane('files', auxiliaryPaneMinWidth, (
     <WindowPane
       id="files"
       label={WINDOW_LABELS.files}
@@ -390,7 +420,7 @@ export default function WorkspaceRow({
     </WindowPane>
   ));
 
-  pushPane('git', 220, (
+  pushPane('git', auxiliaryPaneMinWidth, (
     <WindowPane
       id="git"
       label={WINDOW_LABELS.git}
