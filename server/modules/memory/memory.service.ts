@@ -18,7 +18,7 @@ const execFileAsync = promisify(execFile);
  * Memory-write visibility (ui12 phase 7; per-session attribution ui13 job 8;
  * Bash and subagent attribution ui14 job 3).
  * Primary detection is per session: the sessions watcher hands each changed
- * Claude transcript here and the new tail is scanned for tool calls that
+ * Claude transcript or Codex rollout here and the new tail is scanned for tool calls that
  * touch memory paths, so a write is attributed to the exact session that made
  * it — worker writes land in the worker transcript, planner writes in the
  * planner chat. Write/Edit/MultiEdit/NotebookEdit calls name their file and
@@ -27,8 +27,8 @@ const execFileAsync = promisify(execFile);
  * (a subagent writing on the session's behalf) cannot name the file reliably,
  * so they leave a claim on the files or a time window they mention and the
  * planner-repo watcher, which sees the real change, attributes it to the
- * claimant. Unclaimed writes (hand edits) wait a grace window, then fall back
- * to the running-run heuristic. Each burst persists as a `memory_updates` row
+ * claimant. Unclaimed writes (hand edits) wait a grace window, then go to the
+ * sole running direct/dispatched worker for that project or stay silent. Each burst persists as a `memory_updates` row
  * with a compact excerpt of the real file change and emits a `memory_update`
  * transcript frame — detection never relies on the model announcing itself.
  */
@@ -129,41 +129,33 @@ function resolveProjectPathForHit(hit: MemoryFileHit): string | null {
 }
 
 /**
- * Picks the session a write burst renders under: the currently-running run on
- * the project (planner lane preferred — the planner is the writer of record),
- * falling back to the project's latest planner session. Global writes without
- * a project attribute to the most recent running planner-lane run anywhere.
+ * Selects the only direct/dispatched worker currently running for a project.
+ * In-server runs come from the run registry; headless workers come from recent
+ * watcher activity. Attribution tests exercise this directly so a planner can
+ * never become the fallback again.
  */
-function pickSessionForHit(hit: MemoryFileHit): string | null {
-  const projectPath = resolveProjectPathForHit(hit);
-  const normalizedProjectPath = projectPath ? normalizeProjectPath(projectPath) : null;
-
-  let best: { sessionId: string; startedAt: number; plannerLane: boolean } | null = null;
+export function pickSoleRunningWorkerSession(projectPath: string | null, now = Date.now()): string | null {
+  if (!projectPath) return null;
+  const normalizedProjectPath = normalizeProjectPath(projectPath);
+  const candidates = new Set<string>();
   for (const run of chatRunRegistry.listRunningRuns()) {
     const row = sessionsDb.getSessionById(run.sessionId);
     if (!row) continue;
-    const plannerLane = row.origin === 'planner' || row.origin === null;
-    if (normalizedProjectPath) {
-      if (!row.project_path || normalizeProjectPath(row.project_path) !== normalizedProjectPath) continue;
-    } else if (!plannerLane) {
+    if (row.origin !== 'direct' && row.origin !== 'dispatch') continue;
+    if (!row.project_path || normalizeProjectPath(row.project_path) !== normalizedProjectPath) continue;
+    candidates.add(run.sessionId);
+  }
+  for (const [sessionId, lastActivityAt] of recentWorkerActivity) {
+    if (now - lastActivityAt >= CLAIM_TTL_MS) {
+      recentWorkerActivity.delete(sessionId);
       continue;
     }
-    if (
-      !best
-      || (plannerLane && !best.plannerLane)
-      || (plannerLane === best.plannerLane && run.startedAt > best.startedAt)
-    ) {
-      best = { sessionId: run.sessionId, startedAt: run.startedAt, plannerLane };
-    }
+    const row = sessionsDb.getSessionById(sessionId);
+    if (!row || (row.origin !== 'direct' && row.origin !== 'dispatch')) continue;
+    if (!row.project_path || normalizeProjectPath(row.project_path) !== normalizedProjectPath) continue;
+    candidates.add(sessionId);
   }
-  if (best) {
-    return best.sessionId;
-  }
-
-  if (normalizedProjectPath) {
-    return sessionsDb.getLatestPlannerSession(normalizedProjectPath)?.session_id ?? null;
-  }
-  return null;
+  return candidates.size === 1 ? [...candidates][0] : null;
 }
 
 type PendingMemoryBurst = {
@@ -174,6 +166,8 @@ type PendingMemoryBurst = {
 };
 
 const pendingBursts = new Map<string, PendingMemoryBurst>();
+const unclaimedHitsInFlight = new Set<string>();
+const recentWorkerActivity = new Map<string, number>();
 let plannerRepoWatcher: FSWatcher | null = null;
 
 /** Scope-qualified identity of one memory file, for claim matching. */
@@ -194,7 +188,7 @@ const recentClaims = new Map<string, { sessionId: string; at: number }>();
 /**
  * Sessions that recently ran something able to write memory without naming
  * the file (a Bash command touching the memory tree, a subagent). A watcher
- * hit with no file claim inside the window goes to the newest such session.
+ * hit with no file claim uses the session only when exactly one scope matches.
  */
 const scopeClaims = new Map<string, { from: number; until: number }>();
 
@@ -203,12 +197,12 @@ function fileClaim(hit: MemoryFileHit): { sessionId: string } | null {
   return claim && Date.now() - claim.at < CLAIM_TTL_MS ? claim : null;
 }
 
-/** Newest open scope window whose session works the hit's project (any session for global memory). */
+/** The sole open scope window whose session works the hit's project (any session for global memory). */
 function scopeClaimant(hit: MemoryFileHit): string | null {
   const now = Date.now();
   const projectPath = resolveProjectPathForHit(hit);
   const normalizedProjectPath = projectPath ? normalizeProjectPath(projectPath) : null;
-  let best: { sessionId: string; from: number } | null = null;
+  const candidates = new Set<string>();
   for (const [sessionId, window] of scopeClaims) {
     if (window.until < now) {
       scopeClaims.delete(sessionId);
@@ -219,9 +213,9 @@ function scopeClaimant(hit: MemoryFileHit): string | null {
       const row = sessionsDb.getSessionById(sessionId);
       if (row?.project_path && normalizeProjectPath(row.project_path) !== normalizedProjectPath) continue;
     }
-    if (!best || window.from > best.from) best = { sessionId, from: window.from };
+    candidates.add(sessionId);
   }
-  return best?.sessionId ?? null;
+  return candidates.size === 1 ? [...candidates][0] : null;
 }
 
 /** Last-known content per memory file, the "before" side of row excerpts. */
@@ -355,16 +349,31 @@ async function attributeClaimedHit(hit: MemoryFileHit): Promise<boolean> {
 /**
  * Fallback-watcher entry (planner repo chokidar, forwarded auto-memory
  * events). A claimed hit attributes at once; an unclaimed one waits out the
- * grace window for a trailing claim before the running-run heuristic
- * attributes it.
+ * grace window for a trailing claim before the sole-running-worker heuristic
+ * attributes it. With no unique worker, it records no row and advances the
+ * snapshot so one unclaimed change logs only once.
  */
 function queueMemoryHit(hit: MemoryFileHit): void {
+  const hitKey = keyForHit(hit);
+  if (unclaimedHitsInFlight.has(hitKey)) return;
+  unclaimedHitsInFlight.add(hitKey);
   void (async () => {
-    if (await attributeClaimedHit(hit)) return;
-    await new Promise((resolve) => setTimeout(resolve, FALLBACK_GRACE_MS));
-    if (await attributeClaimedHit(hit)) return;
-    const sessionId = pickSessionForHit(hit);
-    if (sessionId) enqueueBurst(sessionId, hit);
+    try {
+      if (await attributeClaimedHit(hit)) return;
+      await new Promise((resolve) => setTimeout(resolve, FALLBACK_GRACE_MS));
+      if (await attributeClaimedHit(hit)) return;
+      const projectPath = resolveProjectPathForHit(hit);
+      const sessionId = pickSoleRunningWorkerSession(projectPath);
+      if (sessionId) {
+        enqueueBurst(sessionId, hit);
+        return;
+      }
+      const current = await readSnapshotSource(hit.absPath);
+      if (current !== null) fileSnapshots.set(hit.absPath, current);
+      console.warn(`[Memory] Unattributed memory write omitted: ${hit.label}`);
+    } finally {
+      unclaimedHitsInFlight.delete(hitKey);
+    }
   })();
 }
 
@@ -420,6 +429,8 @@ const PENDING_TOOL_TTL_MS = 10 * 60_000;
 /** Cap on how much of a never-seen transcript the first scan reads. */
 const MAX_FIRST_SCAN_BYTES = 262_144;
 
+type MemoryTranscriptProvider = 'claude' | 'codex';
+
 /** Memory file paths spelled out in a shell command. */
 function memoryPathsInCommand(command: string, claudeProjectsRoot: string): MemoryFileHit[] {
   const hits: MemoryFileHit[] = [];
@@ -450,8 +461,54 @@ function openScope(sessionId: string, from: number, until: number): void {
 }
 
 /**
+ * Claims memory paths named by a Codex rollout command. Classic Codex writes
+ * `function_call/shell_command`; current app sessions write a
+ * `custom_tool_call/exec` whose JavaScript input contains nested `cmd` calls.
+ * The planner-memory watcher remains the proof that the command changed a
+ * file, so a failed or read-only command cannot create a row by itself.
+ */
+function claimCodexCommand(
+  entry: Record<string, unknown>,
+  codexSessionsRoot: string,
+  sessionId: string,
+  cutoff: number | null,
+): void {
+  if (entry.type !== 'response_item') return;
+  const timestamp = typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : NaN;
+  if (cutoff !== null && (!Number.isFinite(timestamp) || timestamp < cutoff)) return;
+
+  const payload = entry.payload as Record<string, unknown> | undefined;
+  if (!payload) return;
+  let source = '';
+  let cwd: string | null = null;
+  if (payload.type === 'function_call' && (payload.name === 'shell_command' || payload.name === 'exec_command')) {
+    try {
+      const args = JSON.parse(String(payload.arguments || '{}')) as Record<string, unknown>;
+      source = typeof args.command === 'string' ? args.command : typeof args.cmd === 'string' ? args.cmd : '';
+      cwd = typeof args.workdir === 'string' ? args.workdir : null;
+    } catch {
+      source = String(payload.arguments || '');
+    }
+  } else if (payload.type === 'custom_tool_call' && payload.name === 'exec') {
+    source = typeof payload.input === 'string' ? payload.input : '';
+  } else if (payload.type === 'command') {
+    source = typeof payload.command === 'string' ? payload.command : '';
+    cwd = typeof payload.cwd === 'string' ? payload.cwd : null;
+  }
+  if (!source) return;
+  cwd ??= sessionsDb.getSessionById(sessionId)?.project_path ?? null;
+  if (!commandTouchesMemory(source, cwd, codexSessionsRoot)) return;
+
+  const at = Number.isFinite(timestamp) ? Math.min(timestamp, Date.now()) : Date.now();
+  for (const hit of memoryPathsInCommand(source, codexSessionsRoot)) {
+    recentClaims.set(keyForHit(hit), { sessionId, at });
+  }
+  openScope(sessionId, at, at + CLAIM_TTL_MS);
+}
+
+/**
  * Per-session detection (ui13 job 8; Bash/subagent claims ui14 job 3): scans
- * the new tail of a changed Claude transcript for tool calls that touch
+ * the new tail of a changed Claude transcript or Codex rollout for calls that touch
  * memory paths and attributes each confirmed write to this exact session —
  * the transcript is the honest record of who wrote. Called by the sessions
  * watcher after indexing, so `sessionId` is the canonical app session id.
@@ -459,18 +516,24 @@ function openScope(sessionId: string, from: number, until: number): void {
  * offset and double-report a line.
  */
 export function handleSessionTranscriptEvent(
-  claudeProjectsRoot: string,
+  provider: MemoryTranscriptProvider,
+  providerRoot: string,
   filePath: string,
   sessionId: string,
 ): Promise<void> {
+  const session = sessionsDb.getSessionById(sessionId);
+  if (session?.origin === 'direct' || session?.origin === 'dispatch') {
+    recentWorkerActivity.set(sessionId, Date.now());
+  }
   const chained = (scanChains.get(filePath) ?? Promise.resolve())
-    .then(() => scanTranscriptTail(claudeProjectsRoot, filePath, sessionId));
+    .then(() => scanTranscriptTail(provider, providerRoot, filePath, sessionId));
   scanChains.set(filePath, chained);
   return chained;
 }
 
 async function scanTranscriptTail(
-  claudeProjectsRoot: string,
+  provider: MemoryTranscriptProvider,
+  providerRoot: string,
   filePath: string,
   sessionId: string,
 ): Promise<void> {
@@ -513,6 +576,10 @@ async function scanTranscriptTail(
       } catch {
         continue;
       }
+      if (provider === 'codex') {
+        claimCodexCommand(entry, providerRoot, sessionId, cutoff);
+        continue;
+      }
       const content = (entry.message as Record<string, unknown> | undefined)?.content;
       if (!Array.isArray(content)) continue;
 
@@ -538,15 +605,15 @@ async function scanTranscriptTail(
             const absolute = path.isAbsolute(rawPath) ? rawPath : cwd ? path.resolve(cwd, rawPath) : null;
             if (!absolute) continue;
             const normalized = path.normalize(absolute);
-            const hit = classifyPlannerRepoFile(normalized) ?? classifyAutoMemoryFile(claudeProjectsRoot, normalized);
+            const hit = classifyPlannerRepoFile(normalized) ?? classifyAutoMemoryFile(providerRoot, normalized);
             if (hit) pendingTools.set(item.id, { kind: 'write', sessionId, hit, at: now });
           } else if (toolName === 'Bash') {
             const command = typeof input?.command === 'string' ? input.command : '';
-            if (!commandTouchesMemory(command, cwd, claudeProjectsRoot)) continue;
+            if (!commandTouchesMemory(command, cwd, providerRoot)) continue;
             pendingTools.set(item.id, {
               kind: 'bash',
               sessionId,
-              hits: memoryPathsInCommand(command, claudeProjectsRoot),
+              hits: memoryPathsInCommand(command, providerRoot),
               at: now,
             });
           } else if (SUBAGENT_TOOLS.has(toolName)) {

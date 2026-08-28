@@ -356,10 +356,13 @@ async function onUpdate(
       });
     }
 
-    // Per-session memory-write detection (ui13 job 8): the changed transcript
-    // tail names the file-tool calls this exact session made.
-    if (provider === 'claude' && result.sessionId) {
-      void handleSessionTranscriptEvent(PROVIDER_WATCH_PATHS[0].rootPath, filePath, result.sessionId);
+    // Per-session memory-write detection (ui16 job 3): changed Claude JSONL
+    // and Codex rollout tails name the tool or shell calls this session made.
+    if ((provider === 'claude' || provider === 'codex') && result.sessionId) {
+      const providerRoot = PROVIDER_WATCH_PATHS.find((entry) => entry.provider === provider)?.rootPath;
+      if (providerRoot) {
+        void handleSessionTranscriptEvent(provider, providerRoot, filePath, result.sessionId);
+      }
     }
 
     queuePendingWatcherUpdate(eventType, provider, result.sessionId);
