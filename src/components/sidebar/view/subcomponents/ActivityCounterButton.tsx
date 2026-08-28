@@ -3,31 +3,33 @@ import { Compass, Hammer } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import { NumberTicker } from '../../../../shared/view/beui';
 
-import ResponseSignal, { type ActivityKinds } from './ResponseSignal';
-
-/** One full-width footer button; its interior becomes a two-kind split. */
+/** Compact monochrome activity stack at the taskbar's right edge. */
 export default function ActivityCounterButton({
   plannerCount,
   workerCount,
   plannerLabel,
   workerLabel,
-  responseKinds,
   onOpen,
+  selected = false,
+  dimmed = false,
 }: {
   plannerCount: number;
   workerCount: number;
   plannerLabel: string;
   workerLabel: string;
-  responseKinds: ActivityKinds;
   onOpen: () => void;
+  selected?: boolean;
+  dimmed?: boolean;
 }) {
   const plannerActive = plannerCount > 0;
   const workerActive = workerCount > 0;
   const both = plannerActive && workerActive;
-  const visibleResponses = {
-    planner: plannerActive && responseKinds.planner,
-    worker: workerActive && responseKinds.worker,
-  };
+  if (!plannerActive && !workerActive) return null;
+
+  const ariaLabel = [
+    workerActive ? `${workerLabel}: ${workerCount}` : null,
+    plannerActive ? `${plannerLabel}: ${plannerCount}` : null,
+  ].filter(Boolean).join(', ');
 
   return (
     <button
@@ -36,25 +38,32 @@ export default function ActivityCounterButton({
       data-kinds={both ? 'planner worker' : plannerActive ? 'planner' : 'worker'}
       data-planner-count={plannerCount}
       data-worker-count={workerCount}
+      data-layout={both ? 'stacked' : 'single'}
       onClick={onOpen}
-      className="flex w-full min-w-0 cursor-pointer items-center justify-center rounded-lg py-2 text-[11px] font-medium outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={ariaLabel}
+      title={ariaLabel}
+      aria-expanded={selected}
+      className={cn(
+        'touch-hit ml-auto flex h-9 min-w-9 cursor-pointer flex-col items-center justify-center rounded-lg px-2 text-[10px] font-medium leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+        selected
+          ? 'bg-accent/60 text-foreground'
+          : dimmed
+            ? 'text-muted-foreground/40 hover:text-foreground'
+            : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+      )}
     >
-      {plannerActive && (
-        <span className={cn('flex min-w-0 items-center justify-center gap-1.5 text-primary', !both && 'animate-counter-breathe')}>
-          <Compass className="h-3.5 w-3.5 flex-shrink-0" />
-          <span className="truncate">{plannerLabel}</span>
-          <NumberTicker value={plannerCount} className="tabular-nums" />
-        </span>
-      )}
-      {both && <span className="mx-3 h-4 w-px flex-shrink-0 bg-border/70" aria-hidden />}
       {workerActive && (
-        <span className={cn('flex min-w-0 items-center justify-center gap-1.5 text-emerald-700 dark:text-emerald-300', !both && 'animate-counter-breathe')}>
-          <Hammer className="h-3.5 w-3.5 flex-shrink-0" />
-          <span className="truncate">{workerLabel}</span>
-          <NumberTicker value={workerCount} className="tabular-nums" />
+        <span className="flex h-3.5 items-center justify-center gap-1" data-kind="worker">
+          <Hammer className="h-3 w-3 flex-shrink-0" aria-hidden />
+          <NumberTicker value={workerCount} className="min-w-2 tabular-nums" />
         </span>
       )}
-      <ResponseSignal kinds={visibleResponses} className="ml-2" />
+      {plannerActive && (
+        <span className="flex h-3.5 items-center justify-center gap-1" data-kind="planner">
+          <Compass className="h-3 w-3 flex-shrink-0" aria-hidden />
+          <NumberTicker value={plannerCount} className="min-w-2 tabular-nums" />
+        </span>
+      )}
     </button>
   );
 }

@@ -57,10 +57,10 @@ Done check: the committed script runs the memory scenario against dev and prints
 
 Goal: the sidebar footer's activity drawer (the one that expands to show "Worker 1" and the planner) reads green and shows a stray double dash; Willem wants it monochrome and folded into the bottom bar. Files: the sidebar footer and its activity drawer component, the bottom bar holding settings, account switcher and memory, `design/sidebar.md`.
 
-- [ ] The activity readout moves to the right side of the bottom bar beside settings, the account switcher and memory, as small icons in the app's monochrome (no green text or fills anywhere in it): the hammer icon with the worker count to its right, and the planner icon with the planner count to its right, stacked one above the other; when only one of the two is active the single line sits vertically centered; when both are active the stack sits centered; when none is active nothing renders there.
-- [ ] The expanded drawer that lists the running planner and worker sessions keeps working from the new spot (click the stack to open it) and is monochrome too, same row anatomy as the rest of the sidebar.
-- [ ] The stray double dash after "Worker 1" in the current drawer: find what value the dash stands for (a time, a model, a context figure that is not loaded yet) and either show the real value once it exists or render nothing, never a placeholder dash.
-- [ ] Phone holds; `design/sidebar.md` documents the footer anatomy.
+- [x] The activity readout moves to the right side of the bottom bar beside settings, the account switcher and memory, as small icons in the app's monochrome (no green text or fills anywhere in it): the hammer icon with the worker count to its right, and the planner icon with the planner count to its right, stacked one above the other; when only one of the two is active the single line sits vertically centered; when both are active the stack sits centered; when none is active nothing renders there.
+- [x] The expanded drawer that lists the running planner and worker sessions keeps working from the new spot (click the stack to open it) and is monochrome too, same row anatomy as the rest of the sidebar.
+- [x] The stray double dash after "Worker 1" in the current drawer: find what value the dash stands for (a time, a model, a context figure that is not loaded yet) and either show the real value once it exists or render nothing, never a placeholder dash.
+- [x] Phone holds; `design/sidebar.md` documents the footer anatomy.
 
 Done check: on dev with the stub fixture that has a planner and a worker running, the bottom bar's right group renders the two-line stack centered, one line when only one is active, nothing when idle; no element in the footer uses a green color token; no "--" text anywhere in the footer; clicking the stack opens the drawer; 390px holds. Commit.
 

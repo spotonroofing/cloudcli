@@ -11,6 +11,7 @@ import type { LLMProvider } from '../../../types/app';
 import type { ActiveSessionRow, RunningRunInfo, SidebarProps } from '../types/types';
 import { titleFromPrompt } from '../../../../shared/sessionTitle.js';
 import { workerRunLabel } from '../../../utils/workerRunLabel';
+import { meaningfulActivityDetail } from '../utils/activitySessionLabel';
 
 import SidebarCollapsed from './subcomponents/SidebarCollapsed';
 import SidebarContent from './subcomponents/SidebarContent';
@@ -177,7 +178,6 @@ function Sidebar({
     runningByProject,
     unlistedRunningByProject,
     responseKindsByProject,
-    footerResponseKinds,
     activeSessionRows,
   } = useMemo(() => {
     type SessionInfo = {
@@ -256,8 +256,9 @@ function Sidebar({
       let label: string;
       if (kind === 'worker') {
         if (run?.chainSlug) {
+          const phaseName = meaningfulActivityDetail(run.chainPhaseName);
           label = run.chainPhase
-            ? `${run.chainSlug} Job ${run.chainPhase}${run.chainPhaseName ? ` - ${run.chainPhaseName}` : ''}`
+            ? `${run.chainSlug} Job ${run.chainPhase}${phaseName ? ` - ${phaseName}` : ''}`
             : run.chainSlug;
         } else {
           label = run
@@ -288,9 +289,7 @@ function Sidebar({
     }
 
     const byProjectResponses = new Map<string, ActivityKinds>();
-    const footerResponses: ActivityKinds = { planner: false, worker: false };
     for (const response of responseIndicators.values()) {
-      footerResponses[response.kind] = true;
       if (!response.projectId) continue;
       const kinds = byProjectResponses.get(response.projectId) ?? { planner: false, worker: false };
       byProjectResponses.set(response.projectId, { ...kinds, [response.kind]: true });
@@ -302,7 +301,6 @@ function Sidebar({
       runningByProject: byProject,
       unlistedRunningByProject: unlistedByProject,
       responseKindsByProject: byProjectResponses,
-      footerResponseKinds: footerResponses,
       activeSessionRows: rows,
     };
   }, [projects, runningRuns, activeSessions, attentionSessionIds, responseIndicators, t]);
@@ -425,7 +423,6 @@ function Sidebar({
             runningSessionsCount={runningSessionsCount}
             plannerRunningCount={plannerRunningCount}
             workerRunningCount={workerRunningCount}
-            responseKinds={footerResponseKinds}
             responseIndicators={responseIndicators}
             onSessionViewed={onSessionViewed}
             activeSessionRows={activeSessionRows}

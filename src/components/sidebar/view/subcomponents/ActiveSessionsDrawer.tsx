@@ -19,8 +19,8 @@ type ActiveSessionsDrawerProps = {
 };
 
 const STATE_DOT: Record<ActiveSessionRow['state'], string> = {
-  working: 'animate-pulse bg-emerald-500',
-  attention: 'bg-amber-500',
+  working: 'animate-pulse bg-foreground/70',
+  attention: 'bg-muted-foreground',
   idle: 'bg-muted-foreground/40',
 };
 
@@ -107,7 +107,7 @@ export default function ActiveSessionsDrawer({
           </p>
         </div>
       ) : (
-        <div className="max-h-[60dvh] space-y-4 overflow-y-auto px-4 py-3">
+        <div className="max-h-[60dvh] space-y-4 overflow-y-auto px-2 py-3">
           {sections.map(({ kind, groups }) => {
             const Icon = kind === 'planner' ? Compass : Hammer;
             return (
@@ -122,20 +122,20 @@ export default function ActiveSessionsDrawer({
                       <p className="mb-1.5 truncate px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
                         {projectName || t('running.noProject', 'No project')}
                       </p>
-                      <ul className="space-y-2">
+                      <ul className="space-y-1">
                         {groupRows.map((row) => (
                           <li key={row.sessionId}>
                             <button
                               type="button"
-                              className="flex min-h-9 w-full items-center gap-2 rounded-lg border border-border/60 px-3 py-2.5 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               onClick={() => onSelect(row)}
                               data-slot="active-session-row"
                               data-session-id={row.sessionId}
                               data-state={row.state}
                             >
                               <span className={cn('h-1.5 w-1.5 flex-shrink-0 rounded-full', STATE_DOT[row.state])} aria-hidden />
-                              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">{row.label}</span>
-                              <span className="flex-shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{stateLabel(row.state)}</span>
+                              <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{row.label}</span>
+                              <span className="flex-shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">{stateLabel(row.state)}</span>
                             </button>
                           </li>
                         ))}

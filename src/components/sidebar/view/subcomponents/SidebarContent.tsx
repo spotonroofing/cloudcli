@@ -12,7 +12,6 @@ import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
 import { formatCompactAge, getAllSessions } from '../../utils/utils';
 import Settings from '../../../settings/view/Settings';
 
-import type { ActivityKinds } from './ResponseSignal';
 import MemorySurface from './MemorySurface';
 import SidebarFooter from './SidebarFooter';
 import SidebarHeader from './SidebarHeader';
@@ -98,7 +97,6 @@ type SidebarContentProps = {
   runningSessionsCount: number;
   plannerRunningCount: number;
   workerRunningCount: number;
-  responseKinds: ActivityKinds;
   responseIndicators: ReadonlyMap<string, ResponseIndicatorInfo>;
   onSessionViewed: (sessionId: string) => void;
   activeSessionRows: ActiveSessionRow[];
@@ -161,7 +159,6 @@ export default function SidebarContent({
   runningSessionsCount,
   plannerRunningCount,
   workerRunningCount,
-  responseKinds,
   responseIndicators,
   onSessionViewed,
   activeSessionRows,
@@ -764,8 +761,7 @@ export default function SidebarContent({
           onToggleMemory={toggleMemory}
           onDrawerOpened={closeSurfaces}
           plannerRunningCount={plannerRunningCount}
-        workerRunningCount={workerRunningCount}
-        responseKinds={responseKinds}
+          workerRunningCount={workerRunningCount}
           activeSessionRows={activeSessionRows}
           onOpenActiveSession={onOpenActiveSession}
           isMobile={isMobile}

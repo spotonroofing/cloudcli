@@ -10,7 +10,6 @@ import type { ActiveSessionRow } from '../../types/types';
 import AccountsPanel from './AccountsPanel';
 import ActiveSessionsDrawer from './ActiveSessionsDrawer';
 import ActivityCounterButton from './ActivityCounterButton';
-import type { ActivityKinds } from './ResponseSignal';
 
 type SidebarFooterProps = {
   restartRequired: boolean;
@@ -28,8 +27,6 @@ type SidebarFooterProps = {
   plannerRunningCount: number;
   /** Live worker-origin runs (direct, dispatch, external). */
   workerRunningCount: number;
-  /** Unseen completed responses, using the same planner/worker identity. */
-  responseKinds: ActivityKinds;
   /** Labeled active-session rows the counter drawers list (ui11 phase 12). */
   activeSessionRows: ActiveSessionRow[];
   /** Opens a drawer row's session in the pane. */
@@ -91,7 +88,6 @@ export default function SidebarFooter({
   onDrawerOpened,
   plannerRunningCount,
   workerRunningCount,
-  responseKinds,
   activeSessionRows,
   onOpenActiveSession,
   isMobile,
@@ -184,30 +180,6 @@ export default function SidebarFooter({
         </>
       )}
 
-      {/* Live-run counter bar (ui8 phase 3): one full-width two-column
-          rectangle on the app radius — planner left, worker right — pinned to
-          the sidebar bottom. Hidden entirely while nothing runs. */}
-      {showCounterBar && (
-        <>
-          <div className="nav-divider" />
-          <div className="px-2 py-1.5">
-            <div
-              data-slot="activity-counter-bar"
-              className="rounded-lg border border-border/60 bg-muted/30"
-            >
-              <ActivityCounterButton
-                plannerCount={plannerRunningCount}
-                workerCount={workerRunningCount}
-                plannerLabel={t('running.plannerCounter', 'Planner')}
-                workerLabel={t('running.workerCounter', 'Worker')}
-                responseKinds={responseKinds}
-                onOpen={() => toggleDrawer('activity')}
-              />
-            </div>
-          </div>
-        </>
-      )}
-
       {/* The divider above the drawer region fades out while a desktop drawer
           is open (ui14 job 4): the open drawer's own top padding separates it
           from the list, no bar. */}
@@ -246,8 +218,7 @@ export default function SidebarFooter({
         t={t}
       />
 
-      {/* The footer taskbar (ui13 job 4): one left-aligned row of icon-only
-          controls — Settings, account, Memory. */}
+      {/* One footer taskbar: surfaces at left, live activity at right. */}
       <div className="flex items-center gap-1 px-2 py-1.5" data-slot="sidebar-taskbar">
         <TaskbarButton
           icon={Settings}
@@ -276,6 +247,17 @@ export default function SidebarFooter({
           expanded={memoryOpen}
           dataSlot="memory-viewer-trigger"
         />
+        {showCounterBar && (
+          <ActivityCounterButton
+            plannerCount={plannerRunningCount}
+            workerCount={workerRunningCount}
+            plannerLabel={t('running.plannerCounter', 'Planner')}
+            workerLabel={t('running.workerCounter', 'Worker')}
+            onOpen={() => toggleDrawer('activity')}
+            selected={openDrawer === 'activity'}
+            dimmed={anyOpen && openDrawer !== 'activity'}
+          />
+        )}
       </div>
     </div>
   );
