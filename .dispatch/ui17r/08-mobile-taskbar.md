@@ -1,7 +1,7 @@
 <!-- browser -->
 <!-- verify: no -->
-<!-- engine: codex -->
-<!-- model: gpt-5.6-sol -->
+<!-- engine: claude -->
+<!-- model: claude-opus-5 -->
 <!-- effort: xhigh -->
 <!-- name: Mobile taskbar -->
 <!-- tasks: Bottom taskbar, equal segments | Hides on composer focus | Worker header and full-screen jobs | Bottom row fits at 390px | Mobile design notes -->
@@ -20,3 +20,5 @@ Record lessons in /Users/spoton-worker/Projects/spoton-worker/planner/command-ce
 Your final message is the reader's first look at any of this work; write it as a re-grounding, not a continuation of your working thread. Open with the outcome: one plain sentence on what happened. Then the supporting detail, then anything you need from them, explained as if new. Complete sentences, no arrow chains, no labels you made up while working; when you mention files, commits, or flags, give each its own plain-language clause.
 
 When the done check passes, ensure .gitignore excludes .env, then commit and push. You have ample context; do not stop, summarize, or suggest a new session on account of context limits. After the final commit and push, append a short section for this job (what you did, any deviation from the plan, what you skipped, anything blocking) to /Users/spoton-worker/Projects/spoton-worker/planner/command-center/sessions/20260828-ui17r-summary.md, then commit and push that file in the spoton-worker repo.
+
+Delegate to a subagent only for large tracks of work that are genuinely independent and parallelizable. Do not delegate work you can finish yourself in a handful of tool calls. If one subagent can do it, use one rather than several, and keep spawn counts low. Deliver what was asked, at the scope intended. Make routine judgment calls yourself, and check in only when different readings of the request would lead to materially different work. If the request seems mistaken or a better approach exists, say so in a sentence and continue with the task as asked rather than quietly narrowing, widening, or transforming it. Match the length of what you write to what the task needs; keep the final message brief.

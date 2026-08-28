@@ -1,11 +1,11 @@
 <!-- browser -->
-<!-- verify: no -->
 <!-- engine: claude -->
 <!-- model: claude-opus-5 -->
-<!-- effort: low -->
-<!-- name: Fast mode bolt -->
-<!-- tasks: Bolt icon replaces the fast tag | Menu row unchanged -->
-Execute Job 12 of PUNCHLIST_ui17.md in this repo (fast mode shows as a bolt, not a word). The goal and items are that job's section and checkboxes in PUNCHLIST_ui17.md; read only that job's section plus the whole-file rules block at the top (including the run rules), the recent git log, and the files the job names; trust repo state over this prompt when they disagree, and check each item off in the file the moment it is verified. Done when the job's done check passes against the dev instance.
+<!-- effort: high -->
+<!-- name: Handoff spawns at once -->
+<!-- tasks: New row and loading pane instantly | Button always follows through | Failures stay visible | Phone parity -->
+Execute Job 17 of PUNCHLIST_ui17.md in this repo (the Handoff button spawns the successor at once). The goal and items are that job's section and checkboxes in PUNCHLIST_ui17.md; read only that job's section plus the whole-file rules block at the top (including the run rules), the recent git log, and the files the job names; trust repo state over this prompt when they disagree, and check each item off in the file the moment it is verified. Done when the job's done check passes against the dev instance.
+
 
 Before running a command that changes state (restarts, deletes, config edits), check that the evidence supports that specific action; a signal that matches a known failure can have a different cause. Rebuild and restart dev only when the done check needs the running instance to show the change, and never twice when once serves.
 
