@@ -35,6 +35,18 @@ type WatchdogSettings = {
   plannerRotationThreshold: number;
 };
 
+type UsageThresholdKey =
+  | 'accountWarning'
+  | 'accountUrgent'
+  | 'fleetWarning'
+  | 'fleetUrgent'
+  | 'fleetSevenDay';
+
+type UsageAlertSettings = {
+  thresholds: Record<UsageThresholdKey, number>;
+  defaults: Record<UsageThresholdKey, number>;
+};
+
 type ModelRole = 'planner' | 'worker';
 type ModelSelection = { provider: LLMProvider; model: string; effort: string };
 type ModelDefaults = { roles: Record<ModelRole, ModelSelection> };
@@ -61,6 +73,14 @@ const behaviors: Array<{
   { key: 'resourceAlerts', label: 'Resource alerts', description: 'Checks disk and memory pressure and reports threshold crossings.', section: 'Machine' },
   { key: 'weeklySelfTest', label: 'Weekly push self-test', description: 'Sends the Monday notification delivery self-test.', section: 'Machine' },
   { key: 'weeklyMaintenance', label: 'Weekly maintenance run', description: 'Spawns the Monday CloudCLI maintenance session.', section: 'Machine' },
+];
+
+const usageThresholdRows: Array<{ key: UsageThresholdKey; label: string; description: string }> = [
+  { key: 'accountWarning', label: 'Account warning', description: 'First per-account Claude 5h and ChatGPT window alert.' },
+  { key: 'accountUrgent', label: 'Account urgent', description: 'Urgent per-account alert; exhaustion always alerts at 100%.' },
+  { key: 'fleetWarning', label: 'Fleet warning', description: 'First fleet 5h and Fable aggregate alert.' },
+  { key: 'fleetUrgent', label: 'Fleet urgent', description: 'Urgent fleet 5h and Fable aggregate alert.' },
+  { key: 'fleetSevenDay', label: 'Fleet 7-day', description: 'Claude fleet 7-day aggregate alert.' },
 ];
 
 /** Providers whose catalogs the Models section offers, in menu order. */
@@ -91,8 +111,10 @@ const projectPath = (project: SettingsProject): string => project.fullPath || pr
 /** System tab: Willem-owned automation, planner MCP, and model defaults. */
 export default function SystemSettingsTab({ projects = [] }: { projects?: SettingsProject[] }) {
   const [state, setState] = useState<WatchdogSettings | null>(null);
-  const [saving, setSaving] = useState<Behavior | 'threshold' | ModelRole | `mcp:${string}` | null>(null);
+  const [saving, setSaving] = useState<Behavior | 'threshold' | `usage:${UsageThresholdKey}` | ModelRole | `mcp:${string}` | null>(null);
   const [thresholdDraft, setThresholdDraft] = useState('');
+  const [usageAlerts, setUsageAlerts] = useState<UsageAlertSettings | null>(null);
+  const [usageDrafts, setUsageDrafts] = useState<Partial<Record<UsageThresholdKey, string>>>({});
   const [models, setModels] = useState<ModelDefaults | null>(null);
   const [catalogs, setCatalogs] = useState<Partial<Record<LLMProvider, ProviderModelsDefinition>>>({});
   const [selectedMcpProject, setSelectedMcpProject] = useState(() => projectPath(projects[0] ?? {}));
@@ -111,6 +133,15 @@ export default function SystemSettingsTab({ projects = [] }: { projects?: Settin
       .then((response) => response.json())
       .then((body: ModelDefaults) => {
         if (!cancelled) setModels(body);
+      });
+    void authenticatedFetch('/api/settings/usage-alerts')
+      .then((response) => response.json())
+      .then((body: UsageAlertSettings) => {
+        if (cancelled) return;
+        setUsageAlerts(body);
+        setUsageDrafts(Object.fromEntries(
+          (Object.keys(body.thresholds) as UsageThresholdKey[]).map((key) => [key, String(body.thresholds[key])]),
+        ));
       });
     for (const provider of MODEL_PROVIDERS) {
       void authenticatedFetch(`/api/providers/${provider}/models`)
@@ -181,6 +212,39 @@ export default function SystemSettingsTab({ projects = [] }: { projects?: Settin
     void putWatchdog('threshold', { plannerRotationThreshold: next }, { ...state, plannerRotationThreshold: next });
   };
 
+  const commitUsageThreshold = async (key: UsageThresholdKey) => {
+    if (!usageAlerts) return;
+    const next = Math.round(Number(usageDrafts[key]));
+    if (!Number.isFinite(next) || next < 1 || next > 99 || next === usageAlerts.thresholds[key]) {
+      setUsageDrafts((previous) => ({ ...previous, [key]: String(usageAlerts.thresholds[key]) }));
+      return;
+    }
+    const previous = usageAlerts;
+    const optimistic = { ...usageAlerts, thresholds: { ...usageAlerts.thresholds, [key]: next } };
+    setUsageAlerts(optimistic);
+    setSaving(`usage:${key}`);
+    try {
+      const response = await authenticatedFetch('/api/settings/usage-alerts', {
+        method: 'PUT',
+        body: JSON.stringify({ thresholds: { [key]: next } }),
+      });
+      if (!response.ok) throw new Error('save failed');
+      const saved = await response.json() as UsageAlertSettings;
+      setUsageAlerts(saved);
+      setUsageDrafts(Object.fromEntries(
+        (Object.keys(saved.thresholds) as UsageThresholdKey[]).map((thresholdKey) => [
+          thresholdKey,
+          String(saved.thresholds[thresholdKey]),
+        ]),
+      ));
+    } catch {
+      setUsageAlerts(previous);
+      setUsageDrafts((current) => ({ ...current, [key]: String(previous.thresholds[key]) }));
+    } finally {
+      setSaving(null);
+    }
+  };
+
   const saveModel = async (role: ModelRole, selection: ModelSelection) => {
     if (!models) return;
     const previous = models;
@@ -227,7 +291,7 @@ export default function SystemSettingsTab({ projects = [] }: { projects?: Settin
     return option?.effort?.values.map((value) => value.value) ?? [];
   };
 
-  if (!state || !models) {
+  if (!state || !models || !usageAlerts) {
     return (
       <div className="space-y-5" aria-busy="true">
         {[0, 1, 2, 3].map((section) => (
@@ -287,6 +351,33 @@ export default function SystemSettingsTab({ projects = [] }: { projects?: Settin
           </SettingsCard>
         </SettingsSection>
       ))}
+      <SettingsSection title="Usage alerts">
+        <SettingsCard divided>
+          {usageThresholdRows.map((row) => (
+            <SettingsRow
+              key={row.key}
+              label={row.label}
+              description={`${row.description} Default ${usageAlerts.defaults[row.key]}%.`}
+            >
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={99}
+                aria-label={row.label}
+                className="h-7 w-16 px-2 text-xs md:text-xs"
+                value={usageDrafts[row.key] ?? String(usageAlerts.thresholds[row.key])}
+                disabled={saving === `usage:${row.key}`}
+                onChange={(event) => setUsageDrafts((previous) => ({ ...previous, [row.key]: event.target.value }))}
+                onBlur={() => { void commitUsageThreshold(row.key); }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur();
+                }}
+              />
+            </SettingsRow>
+          ))}
+        </SettingsCard>
+      </SettingsSection>
       {projects.length > 0 && (
         <SettingsSection title="Planner MCP">
           <SettingsCard divided>

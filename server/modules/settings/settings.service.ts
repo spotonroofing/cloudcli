@@ -67,6 +67,23 @@ const LEGACY_ROTATION_KEY = 'planner_rotation_enabled';
 const ROTATION_THRESHOLD_KEY = 'planner_rotation_threshold';
 const ROTATION_THRESHOLD_DEFAULT = 60;
 
+type UsageAlertThresholds = {
+  accountWarning: number;
+  accountUrgent: number;
+  fleetWarning: number;
+  fleetUrgent: number;
+  fleetSevenDay: number;
+};
+
+const USAGE_ALERT_THRESHOLDS_KEY = 'usage_alert_thresholds';
+const USAGE_ALERT_THRESHOLDS_DEFAULTS: UsageAlertThresholds = {
+  accountWarning: 75,
+  accountUrgent: 90,
+  fleetWarning: 75,
+  fleetUrgent: 90,
+  fleetSevenDay: 90,
+};
+
 export type ModelRole = 'planner' | 'worker';
 export type ModelSelection = { provider: string; model: string; effort: string };
 
@@ -148,6 +165,26 @@ export function createSettingsService(dependencies: SettingsDependencies) {
     }
   };
 
+  const readUsageAlertThresholds = (): UsageAlertThresholds => {
+    const stored = dependencies.appConfig.get(USAGE_ALERT_THRESHOLDS_KEY);
+    if (stored === null) {
+      return { ...USAGE_ALERT_THRESHOLDS_DEFAULTS };
+    }
+    try {
+      const parsed = JSON.parse(stored) as Partial<UsageAlertThresholds>;
+      return Object.fromEntries(
+        (Object.keys(USAGE_ALERT_THRESHOLDS_DEFAULTS) as Array<keyof UsageAlertThresholds>).map((key) => [
+          key,
+          typeof parsed[key] === 'number' && Number.isFinite(parsed[key])
+            ? Math.round(parsed[key])
+            : USAGE_ALERT_THRESHOLDS_DEFAULTS[key],
+        ]),
+      ) as UsageAlertThresholds;
+    } catch {
+      return { ...USAGE_ALERT_THRESHOLDS_DEFAULTS };
+    }
+  };
+
   return {
     /** Watchdog module reads the stored automation policy before acting. */
     isWatchdogBehaviorEnabled(behavior: WatchdogBehavior): boolean {
@@ -184,6 +221,19 @@ export function createSettingsService(dependencies: SettingsDependencies) {
         dependencies.appConfig.set(ROTATION_THRESHOLD_KEY, String(plannerRotationThreshold));
       }
       return this.getWatchdogSettings();
+    },
+    /** Accounts monitor and System tab share these persisted usage-alert crossings. */
+    getUsageAlertSettings() {
+      return {
+        thresholds: readUsageAlertThresholds(),
+        defaults: USAGE_ALERT_THRESHOLDS_DEFAULTS,
+      };
+    },
+    /** System tab persists a validated partial threshold edit. */
+    updateUsageAlertSettings(thresholds: Partial<UsageAlertThresholds>) {
+      const next = { ...readUsageAlertThresholds(), ...thresholds };
+      dependencies.appConfig.set(USAGE_ALERT_THRESHOLDS_KEY, JSON.stringify(next));
+      return this.getUsageAlertSettings();
     },
     /** Models section: the model and effort a new session of each role starts with. */
     getModelDefaults() {

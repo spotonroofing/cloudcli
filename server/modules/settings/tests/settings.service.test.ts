@@ -81,6 +81,34 @@ test('legacy planner_rotation_enabled folds into watchdog_planner_rotation once'
   assert.equal(both.map.has('planner_rotation_enabled'), false);
 });
 
+test('usage alert thresholds keep the documented defaults and persist edits', () => {
+  const appConfig = storedConfig();
+  const service = createSettingsService(dependencies({ appConfig }));
+
+  assert.deepEqual(service.getUsageAlertSettings(), {
+    thresholds: {
+      accountWarning: 75,
+      accountUrgent: 90,
+      fleetWarning: 75,
+      fleetUrgent: 90,
+      fleetSevenDay: 90,
+    },
+    defaults: {
+      accountWarning: 75,
+      accountUrgent: 90,
+      fleetWarning: 75,
+      fleetUrgent: 90,
+      fleetSevenDay: 90,
+    },
+  });
+
+  const edited = service.updateUsageAlertSettings({ accountWarning: 72, fleetSevenDay: 88 });
+  assert.equal(edited.thresholds.accountWarning, 72);
+  assert.equal(edited.thresholds.accountUrgent, 90);
+  assert.equal(edited.thresholds.fleetSevenDay, 88);
+  assert.equal(appConfig.map.get('usage_alert_thresholds'), JSON.stringify(edited.thresholds));
+});
+
 test('model defaults seed per role and round-trip through the store', () => {
   const appConfig = storedConfig();
   const service = createSettingsService(dependencies({ appConfig }));

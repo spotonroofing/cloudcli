@@ -21,6 +21,9 @@ import { AppError } from '@/shared/utils.js';
 
 const CSWAP_BIN = process.env.CSWAP_PATH || path.join(os.homedir(), '.local', 'bin', 'cswap');
 const CSWAP_TIMEOUT_MS = 120_000;
+const parkDirectory = (): string => (
+  process.env.CSWAP_PARK_DIR || path.join(os.homedir(), 'forge-logs', 'cswap-parked')
+);
 
 /** Default Keychain item cswap and the claude CLI share for the active login. */
 const DEFAULT_KEYCHAIN_SERVICE = 'Claude Code-credentials';
@@ -103,13 +106,59 @@ export const assertAccountTarget = (value: unknown): string => {
   return target;
 };
 
-/** cswap's list plus the ChatGPT login (codex job 3) under `chatgpt`. */
+const currentBillingMonth = (now = new Date()): string => (
+  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+);
+
+const parkedUntilForMonth = (month: string): string | null => {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return null;
+  return new Date(Date.UTC(year, monthIndex + 1, 1)).toISOString().slice(0, 10);
+};
+
+const readParkedAccounts = async (): Promise<Map<number, string>> => {
+  const parked = new Map<number, string>();
+  let entries;
+  try {
+    entries = await fsPromises.readdir(parkDirectory(), { withFileTypes: true });
+  } catch {
+    return parked;
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !/^\d+$/.test(entry.name)) continue;
+    try {
+      const month = (await fsPromises.readFile(path.join(parkDirectory(), entry.name), 'utf8')).trim().split(/\s+/, 1)[0];
+      if (month !== currentBillingMonth()) continue;
+      const until = parkedUntilForMonth(month);
+      if (until) parked.set(Number(entry.name), until);
+    } catch {
+      // A runner may replace a marker between readdir and read.
+    }
+  }
+  return parked;
+};
+
+/** Accounts routes and usage monitor read cswap plus runner markers and the ChatGPT login. */
 export const listAccounts = async (): Promise<unknown> => {
-  const [list, chatgpt] = await Promise.all([
+  const [list, chatgpt, parked] = await Promise.all([
     runCswap(['list', '--json']).then((result) => parseJson(result.stdout)),
     getChatgptAccount(),
+    readParkedAccounts(),
   ]);
-  return { ...(list as Record<string, unknown>), chatgpt };
+  const payload = list as Record<string, unknown>;
+  const accounts = Array.isArray(payload.accounts)
+    ? payload.accounts.map((value) => {
+      const account = value as Record<string, unknown>;
+      const number = typeof account.number === 'number' ? account.number : null;
+      return number !== null && parked.has(number)
+        ? { ...account, parkedUntil: parked.get(number) }
+        : account;
+    })
+    : [];
+  return { ...payload, accounts, chatgpt };
 };
 
 export const getAccountStatus = async (): Promise<unknown> =>
@@ -131,6 +180,23 @@ export const enableAccount = async (target: string): Promise<void> => {
 
 export const swapAccounts = async (a: string, b: string): Promise<void> => {
   await runCswap(['swap', a, b]);
+};
+
+/** Accounts route removes only the runner's marker; cswap enabled flags remain Willem-owned. */
+export const unparkAccount = async (target: string): Promise<boolean> => {
+  if (!/^\d+$/.test(target)) {
+    throw new AppError('target must be a slot number.', {
+      code: 'INVALID_PARKED_ACCOUNT_TARGET',
+      statusCode: 400,
+    });
+  }
+  try {
+    await fsPromises.unlink(path.join(parkDirectory(), target));
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
 };
 
 const runSecurity = (args: string[], input?: string): Promise<string> =>

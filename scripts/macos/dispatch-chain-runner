@@ -124,7 +124,7 @@ CODEX_LIMIT_STOP_SECS=$((12 * 3600))
 # percentages, so a capped account looks fresh and recovery would bounce
 # straight back to it. Spend-cap exits park the account (ui14 job 8).
 SPEND_PATTERN='spend limit'
-PARK_DIR="$HOME/forge-logs/cswap-parked"
+PARK_DIR="${CSWAP_PARK_DIR:-$HOME/forge-logs/cswap-parked}"
 # Long-park escalation: after this many wait cycles with no account headroom,
 # one decision-needed fleet notification says the chain is parked.
 PARK_ESCALATE_CYCLES="${DISPATCH_PARK_ESCALATE_CYCLES:-3}"
@@ -260,14 +260,27 @@ mirror_keychain() {
 pick_recovery() {
   local listing
   listing=$(env -u CLAUDE_CONFIG_DIR "$CSWAP_BIN" list --json 2>/dev/null)
-  FORCE_WAIT="${1:-}" CSWAP_LISTING="$listing" python3 - <<'PYEOF'
-import datetime, json, os, sys
+  FORCE_WAIT="${1:-}" CSWAP_LISTING="$listing" PARK_DIR="$PARK_DIR" python3 - <<'PYEOF'
+import datetime, json, os, pathlib, sys
 try:
     data = json.loads(os.environ.get('CSWAP_LISTING') or '')
 except Exception:
     print("wait 1800 unknown-cswap-list-unreadable")
     sys.exit(0)
-accounts = [a for a in data.get('accounts', []) if not a.get('disabled')]
+month = datetime.datetime.now().strftime('%Y-%m')
+parked = set()
+park_dir = pathlib.Path(os.environ['PARK_DIR'])
+if park_dir.is_dir():
+    for marker in park_dir.iterdir():
+        try:
+            if marker.is_file() and marker.name.isdigit() and marker.read_text().split()[0] == month:
+                parked.add(int(marker.name))
+        except (OSError, IndexError):
+            pass
+accounts = [
+    a for a in data.get('accounts', [])
+    if not a.get('disabled') and a.get('number') not in parked
+]
 current = data.get('activeAccountNumber')
 ordered = sorted(accounts, key=lambda a: (a.get('number') != current, a.get('number') or 0))
 five = lambda a: ((a.get('usage') or {}).get('fiveHour') or {})
@@ -302,10 +315,10 @@ else:
 PYEOF
 }
 
-# Spend-cap parking: `cswap disable` holds the capped account out of every
-# automatic pick (pick_recovery skips disabled slots) while keeping its login.
-# A marker under PARK_DIR records the billing month, so the next runner start
-# re-enables accounts parked in an earlier month.
+# Spend-cap parking is runner-owned: a marker holds the capped account out of
+# this runner's automatic picks without changing cswap's Willem-owned enabled
+# flag. The marker records the billing month and email in the established
+# `YYYY-MM email` format.
 park_spend_capped() {
   local listing current email
   listing=$(env -u CLAUDE_CONFIG_DIR "$CSWAP_BIN" list --json 2>/dev/null)
@@ -315,26 +328,21 @@ print("" if n is None else n)' 2>/dev/null)
   [[ -n "$current" ]] || { journal "$1" "park" "spend limit hit but cswap cannot name the active account; not parked"; return 1; }
   email=$(CSWAP_LISTING="$listing" python3 -c 'import json,os
 d=json.loads(os.environ["CSWAP_LISTING"]); print(next((a.get("email","") for a in d.get("accounts",[]) if a.get("number")==d.get("activeAccountNumber")),""))' 2>/dev/null)
-  if env -u CLAUDE_CONFIG_DIR "$CSWAP_BIN" disable "$current" >/dev/null 2>&1; then
-    mkdir -p "$PARK_DIR"
-    print -r -- "$(date +%Y-%m) $email" > "$PARK_DIR/$current"
-    journal "$1" "park" "monthly spend limit on account $current ($email); parked via cswap disable until $(date +%Y-%m) ends"
-  else
-    journal "$1" "park" "cswap disable $current failed; recovery may bounce back to the capped account"
-    return 1
-  fi
+  mkdir -p "$PARK_DIR" || { journal "$1" "park" "could not create $PARK_DIR; capped account remains in runner rotation"; return 1; }
+  print -r -- "$(date +%Y-%m) $email" > "$PARK_DIR/$current" \
+    || { journal "$1" "park" "could not write marker for account $current; capped account remains in runner rotation"; return 1; }
+  journal "$1" "park" "monthly spend limit on account $current ($email); runner marker skips it until $(date +%Y-%m) ends; cswap enabled flag unchanged"
 }
 
-# Accounts parked in an earlier billing month return to rotation at runner start.
+# Markers from an earlier billing month expire at runner start. Nothing calls
+# cswap enable: only Willem changes account enabled flags.
 unpark_stale() {
   local marker month
   for marker in "$PARK_DIR"/*(N.); do
     month=$(cut -d' ' -f1 "$marker")
     [[ "$month" != "$(date +%Y-%m)" ]] || continue
-    if env -u CLAUDE_CONFIG_DIR "$CSWAP_BIN" enable "${marker:t}" >/dev/null 2>&1; then
-      rm -f "$marker"
-      journal run "unpark" "account ${marker:t} parked in $month re-enabled for the new cycle"
-    fi
+    rm -f "$marker"
+    [[ -e "$marker" ]] || journal run "unpark" "account ${marker:t} marker from $month expired; runner rotation restored without changing cswap"
   done
 }
 

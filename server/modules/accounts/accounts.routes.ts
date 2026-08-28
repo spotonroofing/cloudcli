@@ -11,7 +11,9 @@ import {
   listAccounts,
   swapAccounts,
   switchAccount,
+  unparkAccount,
 } from './accounts.service.js';
+import { accountUsageMonitor } from './accounts.module.js';
 
 /**
  * Claude account switcher endpoints (ui8 phase 6), wrapping cswap. Mounted
@@ -40,6 +42,7 @@ export function createAccountsRouter(): express.Router {
     asyncHandler(async (req: Request, res: Response) => {
       const target = assertAccountTarget((req.body ?? {}).target);
       const { result, mirrored } = await switchAccount(target);
+      await accountUsageMonitor.refresh('switch');
       res.json(createApiSuccessResponse({ result, mirrored }));
     }),
   );
@@ -59,6 +62,16 @@ export function createAccountsRouter(): express.Router {
       const target = assertAccountTarget((req.body ?? {}).target);
       await enableAccount(target);
       res.json(createApiSuccessResponse({ target }));
+    }),
+  );
+
+  router.post(
+    '/unpark',
+    asyncHandler(async (req: Request, res: Response) => {
+      const target = assertAccountTarget((req.body ?? {}).target);
+      const removed = await unparkAccount(target);
+      await accountUsageMonitor.refresh('unpark');
+      res.json(createApiSuccessResponse({ target, removed }));
     }),
   );
 

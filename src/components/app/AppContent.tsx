@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { BellRing } from 'lucide-react';
 
 import Sidebar from '../sidebar/view/Sidebar';
 import type { RunningRunInfo } from '../sidebar/types/types';
@@ -44,6 +45,8 @@ type RunningSessionsApiPayload = {
   };
 };
 
+type UsageAlertToast = { key: string; title: string; body: string };
+
 const parseStartedAt = (value: unknown): number | undefined => {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
     return value;
@@ -87,6 +90,8 @@ function AppContentInner() {
   } = useSessionProtection();
 
   const [runningRuns, setRunningRuns] = useState<RunningRunInfo[]>([]);
+  const [usageAlertToasts, setUsageAlertToasts] = useState<UsageAlertToast[]>([]);
+  const usageAlertTimersRef = useRef(new Map<string, number>());
 
   const {
     projects,
@@ -159,9 +164,31 @@ function AppContentInner() {
   // notification sound when a fleet notification lands. Background pushes keep
   // the system default sound; this is deliberately a foreground-only behavior.
   useEffect(() => {
-    const unsubscribe = subscribe?.((event: { kind?: string } | null) => {
+    const usageAlertTimers = usageAlertTimersRef.current;
+    const unsubscribe = subscribe?.((event: {
+      kind?: string;
+      notificationKind?: string;
+      alertKey?: string;
+      title?: string;
+      body?: string;
+    } | null) => {
       if (event?.kind !== 'fleet_notification') {
         return;
+      }
+      if (event.notificationKind === 'usage-alert' && event.title) {
+        const key = event.alertKey || `${event.title}:${event.body || ''}`;
+        if (!usageAlertTimers.has(key)) {
+          setUsageAlertToasts((previous) => [...previous, {
+            key,
+            title: event.title as string,
+            body: event.body || '',
+          }]);
+          const timer = window.setTimeout(() => {
+            usageAlertTimers.delete(key);
+            setUsageAlertToasts((previous) => previous.filter((toast) => toast.key !== key));
+          }, 6000);
+          usageAlertTimers.set(key, timer);
+        }
       }
       if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
         return;
@@ -183,6 +210,8 @@ function AppContentInner() {
     });
     return () => {
       unsubscribe?.();
+      usageAlertTimers.forEach((timer) => window.clearTimeout(timer));
+      usageAlertTimers.clear();
     };
   }, [subscribe]);
 
@@ -432,6 +461,29 @@ function AppContentInner() {
         // Desktop is chat-only (phase 2 chrome strip): no tab navigation from the palette.
         onShowTab={isMobile ? setActiveTab : undefined}
       />
+      {usageAlertToasts.length > 0 && (
+        <div
+          className="pointer-events-none fixed bottom-4 right-4 z-[9999] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2"
+          aria-live="polite"
+          aria-label="Usage alerts"
+          data-slot="usage-alert-toasts"
+        >
+          {usageAlertToasts.map((toast) => (
+            <div
+              key={toast.key}
+              className="popout-enter popout-enter-up flex items-start gap-2.5 rounded-lg border border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-lg motion-reduce:animate-none"
+              data-slot="usage-alert-toast"
+              data-alert-key={toast.key}
+            >
+              <BellRing className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium leading-5">{toast.title}</p>
+                {toast.body && <p className="mt-0.5 text-xs leading-4 text-muted-foreground">{toast.body}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

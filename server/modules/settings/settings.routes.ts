@@ -63,6 +63,37 @@ export function createSettingsRouter(
     };
   }));
 
+  router.get('/usage-alerts', respond(() => ({ success: true, ...service.getUsageAlertSettings() })));
+  router.put('/usage-alerts', respond((req) => {
+    const body = (req.body ?? {}) as { thresholds?: unknown };
+    if (!body.thresholds || typeof body.thresholds !== 'object' || Array.isArray(body.thresholds)) {
+      throw new AppError('thresholds must be an object.', {
+        code: 'USAGE_ALERT_THRESHOLDS_REQUIRED',
+        statusCode: 400,
+      });
+    }
+    const current = service.getUsageAlertSettings().thresholds;
+    const thresholds: Partial<typeof current> = {};
+    for (const [key, value] of Object.entries(body.thresholds as Record<string, unknown>)) {
+      const number = Number(value);
+      if (!(key in current) || !Number.isFinite(number) || number < 1 || number > 99) {
+        throw new AppError(`Invalid usage-alert threshold "${key}".`, {
+          code: 'USAGE_ALERT_THRESHOLD_INVALID',
+          statusCode: 400,
+        });
+      }
+      thresholds[key as keyof typeof current] = Math.round(number);
+    }
+    const next = { ...current, ...thresholds };
+    if (next.accountWarning >= next.accountUrgent || next.fleetWarning >= next.fleetUrgent) {
+      throw new AppError('Warning thresholds must stay below urgent thresholds.', {
+        code: 'USAGE_ALERT_THRESHOLD_ORDER_INVALID',
+        statusCode: 400,
+      });
+    }
+    return { success: true, ...service.updateUsageAlertSettings(thresholds) };
+  }));
+
   // Models section: per-role model and effort defaults. The dispatch CLI and
   // the spawn paths read the same store this GET serves.
   router.get('/models', respond(() => ({ success: true, ...service.getModelDefaults() })));

@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { projectsDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
+import { accountUsageMonitor } from '@/modules/accounts/index.js';
 import { PLANNER_MEMORY_ROOT } from '@/modules/memory/index.js';
 import { providerRuntimeService, providerTokenUsageService, sessionsService } from '@/modules/providers/index.js';
 import { sendFleetNotification } from '@/modules/notifications/index.js';
@@ -866,6 +867,9 @@ class WatchdogService {
     // is switching accounts or waiting out the reset, then retrying the
     // phase; the chain stays running and the notice says so explicitly.
     if (event === 'limit') {
+      void accountUsageMonitor.refresh('limit').catch((error) => {
+        log(`account usage refresh after chain limit failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
       // A Codex usage-limit wait (codex job 2) is announced through a

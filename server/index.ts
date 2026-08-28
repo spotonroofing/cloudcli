@@ -45,7 +45,11 @@ import { createDraftsRouter } from './modules/drafts/index.js';
 import { createMemoryRouter, initializeMemoryWatcher } from './modules/memory/index.js';
 import { createQueuedMessagesRouter } from './modules/queued-messages/index.js';
 import { createPromptHistoryRouter } from './modules/prompt-history/index.js';
-import { createAccountsRouter } from './modules/accounts/index.js';
+import {
+    accountUsageMonitor,
+    createAccountsRouter,
+    setAccountUsageClientVisible,
+} from './modules/accounts/index.js';
 
 const __dirname = getModuleDirectory(import.meta.url);
 // The server source runs from /server, while the compiled output runs from /dist-server/server.
@@ -117,6 +121,13 @@ const wss = createWebSocketServer(server, {
                 return false;
             }
             return await watchdogService.requestChainPause(session.chain_slug, session.project_path) === 'paused';
+        },
+        setAccountUsageVisible: (client, visible) => {
+            setAccountUsageClientVisible(client, visible);
+        },
+        accountLimitRecovery: {
+            refresh: (reason) => accountUsageMonitor.refresh(reason),
+            subscribe: (listener) => accountUsageMonitor.subscribeRecovery(listener),
         },
     },
     shell: {
@@ -405,10 +416,12 @@ async function startServer() {
             // Watchdog + scheduler (spec B3): zero-token monitoring of
             // dispatched runs, resource thresholds, weekly push self-test.
             watchdogService.start();
+            accountUsageMonitor.start();
         });
 
         await closeSessionsWatcher();
         const shutdownRuntimeServices = async () => {
+            accountUsageMonitor.stop();
             try {
                 await removeLocalServerMarker();
             } catch (err) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Ban, ChevronDown, ChevronUp, Loader2, LogIn, Plus, Power, Terminal } from 'lucide-react';
+import { Ban, ChevronDown, ChevronUp, Loader2, LogIn, Plus, Power, Terminal, Undo2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import ProviderLoginModal from '../../../provider-auth/view/ProviderLoginModal';
@@ -51,6 +51,8 @@ export type CswapAccount = {
   usageStatus?: string;
   usage?: CswapUsage | null;
   lastGoodUsage?: CswapUsage | null;
+  usageFetchedAt?: string;
+  parkedUntil?: string;
 };
 
 export type ChatgptAccount = {
@@ -184,7 +186,7 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
   const [chatgpt, setChatgpt] = useState<ChatgptAccount | null>(null);
   /** Ticks while open so the ChatGPT "updated ago" hint stays honest. */
   const [now, setNow] = useState(() => Date.now());
-  const { subscribe } = useWebSocket();
+  const { isConnected, sendMessage, subscribe } = useWebSocket();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** `<action>:<slot>` while a row action runs; disables every action. */
@@ -223,17 +225,33 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
     }
   }, [open, refresh]);
 
+  // The cache-backed short cadence runs only while this usage surface is
+  // visible. Reconnects re-subscribe; closing removes the server-side watcher.
+  useEffect(() => {
+    if (!open || !isConnected) return;
+    sendMessage({ type: 'accounts.subscribe' });
+    return () => sendMessage({ type: 'accounts.unsubscribe' });
+  }, [isConnected, open, sendMessage]);
+
   // The ChatGPT meters update live: the server pushes `chatgpt_usage` when a
   // Codex rollout carries a newer reading. Only an open drawer listens.
   useEffect(() => {
     if (!open) return;
     return subscribe((event) => {
-      if (event.kind === 'chatgpt_usage' && event.chatgpt && typeof event.chatgpt === 'object') {
+      if (event.kind === 'accounts_usage' && event.data && typeof event.data === 'object') {
+        const payload = event.data as Partial<AccountList>;
+        if (Array.isArray(payload.accounts)) {
+          setAccounts(payload.accounts);
+          onActiveChange(payload.accounts.find((account) => account.active)?.email ?? null);
+        }
+        if (payload.chatgpt && typeof payload.chatgpt === 'object') setChatgpt(payload.chatgpt);
+        setNow(Date.now());
+      } else if (event.kind === 'chatgpt_usage' && event.chatgpt && typeof event.chatgpt === 'object') {
         setChatgpt(event.chatgpt as ChatgptAccount);
         setNow(Date.now());
       }
     });
-  }, [open, subscribe]);
+  }, [onActiveChange, open, subscribe]);
 
   useEffect(() => {
     if (!open) return;
@@ -306,6 +324,11 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
       });
     });
 
+  const unpark = (account: CswapAccount) =>
+    runAction(`unpark:${account.number}`, async () => {
+      await postAccountAction('/api/accounts/unpark', { target: String(account.number) });
+    });
+
   const sorted = (accounts ?? []).slice().sort((a, b) => a.number - b.number);
 
   return (
@@ -339,6 +362,7 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
               data-account-number={account.number}
               data-active={account.active || undefined}
               data-disabled={account.disabled || undefined}
+              data-parked={account.parkedUntil || undefined}
             >
               <div className="flex h-7 items-center gap-2">
                 <span className="w-4 flex-shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
@@ -369,7 +393,19 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
                     <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                   ) : (
                     <>
-                      {!account.active && !account.disabled && (
+                      {account.parkedUntil && (
+                        <button
+                          className={ROW_ACTION_CLASS}
+                          onClick={() => void unpark(account)}
+                          disabled={busy !== null}
+                          title={t('accounts.unpark', 'Unpark')}
+                          aria-label={`${t('accounts.unpark', 'Unpark')}: ${account.email}`}
+                          data-slot="account-unpark"
+                        >
+                          <Undo2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {!account.active && !account.disabled && !account.parkedUntil && (
                         <button
                           className={ROW_ACTION_CLASS}
                           onClick={() => void switchTo(account)}
@@ -381,7 +417,7 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
                           <LogIn className="h-3.5 w-3.5" />
                         </button>
                       )}
-                      {!account.active && (
+                      {!account.active && !account.parkedUntil && (
                         <button
                           className={ROW_ACTION_CLASS}
                           onClick={() => void toggleDisabled(account)}
@@ -437,6 +473,16 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
                     window={entry}
                   />
                 ))}
+                <p
+                  className={cn('text-[10px] text-muted-foreground', account.parkedUntil && 'text-amber-600 dark:text-amber-400')}
+                  data-slot={account.parkedUntil ? 'account-parked-meta' : 'account-usage-meta'}
+                >
+                  {account.parkedUntil
+                    ? t('accounts.parkedUntil', 'parked until {{date}}', { date: account.parkedUntil })
+                    : account.usageFetchedAt
+                      ? t('accounts.updatedAgo', 'updated {{age}} ago', { age: formatAge(account.usageFetchedAt, now) })
+                      : t('accounts.noUsage', 'no usage recorded yet')}
+                </p>
               </div>
             </li>
           );

@@ -22,6 +22,7 @@ import type {
 import {
   NEW_SESSION_PLACEHOLDER_TITLE,
   buildSessionTitleFromMessage,
+  createNormalizedMessage,
   parseIncomingJsonObject,
 } from '@/shared/utils.js';
 import { commandDisplayText, parseCommandMessage } from '@/shared/command-message.js';
@@ -107,7 +108,132 @@ type ChatWebSocketDependencies = {
   resolvePlannerMcpServers?: (projectPath: string) => string[];
   /** Pauses an out-of-process dispatch chain that owns this worker session. */
   pauseDispatchSession?: (sessionId: string) => Promise<boolean>;
+  /** Accounts module short-polls cached usage only while this socket shows that surface. */
+  setAccountUsageVisible?: (client: WebSocket, visible: boolean) => void;
+  /** Accounts module supplies all-dry recovery and a signal when headroom returns. */
+  accountLimitRecovery?: {
+    refresh(reason: string): Promise<{ hasHeadroom: boolean; earliestResetAt: string | null }>;
+    subscribe(listener: (status: { hasHeadroom: boolean; earliestResetAt: string | null }) => void): () => void;
+  };
 };
+
+type PendingLimitRetry = {
+  sessionId: string;
+  userId: string | number | null;
+  data: AnyRecord;
+  ws: WebSocket;
+  dependencies: ChatWebSocketDependencies;
+  retryAt: number;
+  notice: string;
+  timer: ReturnType<typeof setTimeout> | null;
+};
+
+const pendingLimitRetries = new Map<string, PendingLimitRetry>();
+let stopRecoverySubscription: (() => void) | null = null;
+const MAX_TIMER_DELAY_MS = 2_147_000_000;
+
+/** Interactive-limit tests and the chat send path share the runner's conservative failure classifier. */
+export function isSessionLimitFailure(contents: unknown[]): boolean {
+  const pattern = /hit your (?:session|usage|spend)?\s*limit|session limit|usage[_ -]?limit|spend limit|out of usage credits|rate[_ -]?limit/i;
+  return contents.some((content) => typeof content === 'string' && pattern.test(content));
+}
+
+const retryTime = (resetAt: string | null): number => {
+  const parsed = resetAt ? Date.parse(resetAt) : Number.NaN;
+  return Number.isFinite(parsed) ? Math.max(Date.now() + 1000, parsed) : Date.now() + 30 * 60_000;
+};
+
+const formatRetryTime = (timestamp: number): string => new Date(timestamp).toLocaleTimeString('en-US', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+async function retryPendingLimitTurn(pending: PendingLimitRetry): Promise<void> {
+  if (pendingLimitRetries.get(pending.sessionId) !== pending) return;
+  if (chatRunRegistry.isProcessing(pending.sessionId)) {
+    pending.timer = setTimeout(() => { void retryPendingLimitTurn(pending); }, 5000);
+    pending.timer.unref?.();
+    return;
+  }
+  if (pending.timer) clearTimeout(pending.timer);
+  pendingLimitRetries.delete(pending.sessionId);
+  await handleChatSend(pending.ws, pending.userId, pending.data, pending.dependencies);
+}
+
+function armPendingLimitTimer(pending: PendingLimitRetry): void {
+  const remaining = pending.retryAt - Date.now();
+  if (remaining <= 0) {
+    void retryPendingLimitTurn(pending);
+    return;
+  }
+  pending.timer = setTimeout(() => {
+    if (pending.retryAt - Date.now() > 0) armPendingLimitTimer(pending);
+    else void retryPendingLimitTurn(pending);
+  }, Math.min(remaining, MAX_TIMER_DELAY_MS));
+  pending.timer.unref?.();
+}
+
+function scheduleLimitRetry(
+  run: NonNullable<ReturnType<typeof chatRunRegistry.getRun>>,
+  ws: WebSocket,
+  userId: string | number | null,
+  data: AnyRecord,
+  dependencies: ChatWebSocketDependencies,
+  earliestResetAt: string | null,
+): void {
+  if (pendingLimitRetries.has(run.appSessionId)) return;
+  const retryAt = retryTime(earliestResetAt);
+  const notice = `waiting for a session window, resumes ~${formatRetryTime(retryAt)}`;
+  const pending: PendingLimitRetry = {
+    sessionId: run.appSessionId,
+    userId,
+    data: { ...data, options: recordOptions(data.options) },
+    ws,
+    dependencies,
+    retryAt,
+    notice,
+    timer: null,
+  };
+  pendingLimitRetries.set(run.appSessionId, pending);
+  armPendingLimitTimer(pending);
+
+  // The status keeps the client-side processing map occupied, so its queued
+  // stack cannot auto-pop while this failed turn is waiting. The machine row
+  // is the quiet transcript explanation requested by the usage-alert design.
+  run.writer.send(createNormalizedMessage({
+    id: `limit_wait_status_${run.appSessionId}_${retryAt}`,
+    kind: 'status',
+    text: 'waiting_for_session_window',
+    canInterrupt: false,
+    provider: run.provider,
+    sessionId: run.appSessionId,
+  }));
+  run.writer.send(createNormalizedMessage({
+    id: `limit_wait_${run.appSessionId}_${retryAt}`,
+    kind: 'text',
+    role: 'user',
+    messageOrigin: 'watchdog',
+    content: notice,
+    provider: run.provider,
+    sessionId: run.appSessionId,
+  }));
+
+  if (!stopRecoverySubscription && dependencies.accountLimitRecovery) {
+    stopRecoverySubscription = dependencies.accountLimitRecovery.subscribe((status) => {
+      if (!status.hasHeadroom) return;
+      for (const queued of pendingLimitRetries.values()) {
+        void retryPendingLimitTurn(queued);
+      }
+    });
+  }
+}
+
+function recordOptions(value: unknown): AnyRecord {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? { ...(value as AnyRecord) }
+    : {};
+}
 
 /**
  * Extracts the authenticated request user id in the formats currently produced
@@ -354,6 +480,25 @@ async function handleChatSend(
       sessionsDb.setSessionBootState(sessionId, failed ? 'failed' : 'ready');
     }
 
+    const limitErrors = run.events
+      .filter((event) => event.kind === 'error')
+      .map((event) => event.content);
+    if (
+      provider === 'claude'
+      && !run.aborted
+      && isSessionLimitFailure(limitErrors)
+      && dependencies.accountLimitRecovery
+    ) {
+      try {
+        const recovery = await dependencies.accountLimitRecovery.refresh('interactive-limit');
+        if (!recovery.hasHeadroom) {
+          scheduleLimitRetry(run, ws, userId, data, dependencies, recovery.earliestResetAt);
+        }
+      } catch (error) {
+        console.error('[Chat] Could not read account headroom after a session limit:', error);
+      }
+    }
+
     // Handoff auto-flow (ui11 phase 3): a planner session's /handoff turn
     // ending cleanly rolls into a fresh planner boot for the same project.
     // Aborted or errored handoffs stay visible instead of silently rolling.
@@ -439,7 +584,9 @@ function handleChatSubscribe(
       : 0;
 
     const run = chatRunRegistry.getRun(sessionId);
-    const isProcessing = chatRunRegistry.isProcessing(sessionId);
+    const waiting = pendingLimitRetries.get(sessionId);
+    const runIsProcessing = chatRunRegistry.isProcessing(sessionId);
+    const isProcessing = runIsProcessing || Boolean(waiting);
 
     // Live run events are broadcast to every connected chat client, so a
     // fresh socket (page refresh, second device) starts receiving the
@@ -459,11 +606,31 @@ function handleChatSubscribe(
       timestamp: new Date().toISOString(),
     });
 
+    if (waiting) {
+      sendJson(ws, createNormalizedMessage({
+        id: `limit_wait_status_${sessionId}_${waiting.retryAt}`,
+        kind: 'status',
+        text: 'waiting_for_session_window',
+        canInterrupt: false,
+        provider: 'claude',
+        sessionId,
+      }));
+      sendJson(ws, createNormalizedMessage({
+        id: `limit_wait_${sessionId}_${waiting.retryAt}`,
+        kind: 'text',
+        role: 'user',
+        messageOrigin: 'watchdog',
+        content: waiting.notice,
+        provider: 'claude',
+        sessionId,
+      }));
+    }
+
     // Replay only for RUNNING runs, strictly after the ack. Completed runs
     // are fully persisted to the provider transcript and served over REST —
     // replaying them (e.g. after a page reload where the client's lastSeq is
     // 0) would duplicate messages the history fetch already returned.
-    if (isProcessing) {
+    if (runIsProcessing) {
       for (const event of chatRunRegistry.replayEvents(sessionId, lastSeq)) {
         sendJson(ws, event);
       }
@@ -497,6 +664,7 @@ function handlePermissionResponse(data: AnyRecord, dependencies: ChatWebSocketDe
  * - `chat.abort`               { sessionId }
  * - `chat.subscribe`           { sessions: [{ sessionId, lastSeq? }] }
  * - `chat.permission-response` { requestId, allow, updatedInput?, message?, rememberEntry? }
+ * - `accounts.subscribe` / `accounts.unsubscribe` toggle the cache-backed usage cadence
  *
  * Outbound protocol (server to client): every frame is `kind`-based — either
  * a provider `NormalizedMessage` (with `seq`) or a gateway event
@@ -536,6 +704,12 @@ export function handleChatConnection(
         case 'chat.permission-response':
           handlePermissionResponse(data, dependencies);
           return;
+        case 'accounts.subscribe':
+          dependencies.setAccountUsageVisible?.(ws, true);
+          return;
+        case 'accounts.unsubscribe':
+          dependencies.setAccountUsageVisible?.(ws, false);
+          return;
         default:
           sendProtocolError(ws, 'UNKNOWN_MESSAGE_TYPE', `Unknown message type "${messageType}".`);
           return;
@@ -549,6 +723,7 @@ export function handleChatConnection(
 
   ws.on('close', () => {
     console.log('[INFO] Chat client disconnected');
+    dependencies.setAccountUsageVisible?.(ws, false);
     connectedClients.delete(ws);
   });
 }
