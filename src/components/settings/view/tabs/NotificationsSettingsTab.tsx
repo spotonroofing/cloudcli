@@ -1,8 +1,24 @@
+import { useEffect, useState } from 'react';
 import { Loader2, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '../../../../shared/view/ui';
-import { playChatCompletionSound } from '../../../../utils/notificationSound';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../../shared/view/beui/BeuiSelect';
+import { onSettingChange } from '../../../../utils/cloudSettings';
+import {
+  COMPLETION_SOUND_OPTIONS,
+  getCompletionSound,
+  playCompletionSound,
+  playNotificationSound,
+  setCompletionSound,
+} from '../../../../utils/notificationSound';
+import type { CompletionSoundId, CompletionSoundRole } from '../../../../utils/notificationSound';
 import type { NotificationPreferencesState } from '../../types/types';
 import SettingsCard from '../SettingsCard';
 import SettingsRow from '../SettingsRow';
@@ -48,6 +64,10 @@ export default function NotificationsSettingsTab({
   onDisableDesktopNotifications,
 }: NotificationsSettingsTabProps) {
   const { t } = useTranslation('settings');
+  const [completionSounds, setCompletionSounds] = useState<Record<CompletionSoundRole, CompletionSoundId>>(() => ({
+    planner: getCompletionSound('planner'),
+    worker: getCompletionSound('worker'),
+  }));
 
   const pushSupported = pushPermission !== 'unsupported';
   const pushDenied = pushPermission === 'denied';
@@ -58,6 +78,21 @@ export default function NotificationsSettingsTab({
       ...notificationPreferences,
       events: { ...notificationPreferences.events, [key]: value },
     });
+  };
+
+  useEffect(() => onSettingChange(
+    ['plannerCompletionSound', 'workerCompletionSound'],
+    (key) => {
+      const role = key === 'plannerCompletionSound' ? 'planner' : 'worker';
+      setCompletionSounds((previous) => ({ ...previous, [role]: getCompletionSound(role) }));
+    },
+  ), []);
+
+  const selectCompletionSound = (role: CompletionSoundRole, sound: string) => {
+    const option = COMPLETION_SOUND_OPTIONS.find((candidate) => candidate.id === sound);
+    if (!option) return;
+    setCompletionSounds((previous) => ({ ...previous, [role]: option.id }));
+    setCompletionSound(role, option.id);
   };
 
   return (
@@ -114,7 +149,7 @@ export default function NotificationsSettingsTab({
                 size="sm"
                 className="h-7 px-2 text-xs"
                 onClick={() => {
-                  void playChatCompletionSound({ force: true });
+                  void playNotificationSound({ force: true });
                 }}
               >
                 <Play className="h-3.5 w-3.5" />
@@ -132,6 +167,49 @@ export default function NotificationsSettingsTab({
               />
             </div>
           </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="Completion sounds">
+        <SettingsCard divided data-slot="completion-sound-settings">
+          {(['planner', 'worker'] as const).map((role) => (
+            <SettingsRow
+              key={role}
+              label={`${role === 'planner' ? 'Planner' : 'Worker'} complete`}
+              description={`Sound played when a ${role} turn finishes successfully.`}
+            >
+              <div className="flex items-center gap-1.5" data-slot={`${role}-completion-sound`}>
+                <Select
+                  value={completionSounds[role]}
+                  onValueChange={(value) => selectCompletionSound(role, value)}
+                  className="w-32"
+                >
+                  <SelectTrigger className="h-7 px-2 py-0 text-xs" aria-label={`${role} completion sound`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMPLETION_SOUND_OPTIONS.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="touch-hit relative h-7 w-7"
+                  aria-label={`Preview ${role} completion sound`}
+                  onClick={() => {
+                    void playCompletionSound(role, { force: true, sound: completionSounds[role] });
+                  }}
+                >
+                  <Play className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </SettingsRow>
+          ))}
         </SettingsCard>
       </SettingsSection>
 

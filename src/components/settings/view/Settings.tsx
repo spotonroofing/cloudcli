@@ -17,7 +17,7 @@ type DesktopNotificationsState = {
   lastError?: string | null;
 };
 
-function Settings({ isOpen, initialTab = 'appearance', projects = [] }: SettingsProps) {
+function Settings({ isOpen, initialTab = 'system', projects = [] }: SettingsProps) {
   const { t } = useTranslation('settings');
   const desktopNotificationsBridge = useMemo(() => (
     typeof window === 'undefined'

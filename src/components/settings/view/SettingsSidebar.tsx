@@ -19,9 +19,9 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
   const { t } = useTranslation('settings');
 
   const tabs: IconTab<SettingsMainTab>[] = [
+    { id: 'system', label: 'System', icon: Settings2 },
     { id: 'appearance', label: t('mainTabs.appearance'), icon: Palette },
     { id: 'notifications', label: t('mainTabs.notifications'), icon: Bell },
-    { id: 'system', label: 'System', icon: Settings2 },
   ];
 
   return (

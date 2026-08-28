@@ -44,19 +44,28 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  // Check for saved theme preference or default to system preference
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    // Check localStorage first
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) {
-      return savedTheme === 'dark';
+  const [themeMode, setThemeModeState] = useState(() => {
+    const savedMode = localStorage.getItem('theme-mode');
+    if (savedMode === 'system' || savedMode === 'light' || savedMode === 'dark') {
+      return savedMode;
     }
-    
-    // Check system preference
+    const legacyTheme = localStorage.getItem('theme');
+    return legacyTheme === 'light' || legacyTheme === 'dark' ? legacyTheme : 'system';
+  });
+
+  // Resolve the selected mode to the concrete class used by the token system.
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedMode = localStorage.getItem('theme-mode');
+    if (savedMode === 'light' || savedMode === 'dark') {
+      return savedMode === 'dark';
+    }
+    const legacyTheme = localStorage.getItem('theme');
+    if (!savedMode && (legacyTheme === 'light' || legacyTheme === 'dark')) {
+      return legacyTheme === 'dark';
+    }
     if (window.matchMedia) {
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
-    
     return false;
   });
 
@@ -83,6 +92,7 @@ export const ThemeProvider = ({ children }) => {
     const root = document.documentElement;
     root.setAttribute('data-theme', colorTheme);
     writeSetting('color-theme', colorTheme);
+    writeSetting('theme-mode', themeMode);
 
     if (customAccent) {
       applyCustomAccent(root, customAccent, isDarkMode);
@@ -114,12 +124,22 @@ export const ThemeProvider = ({ children }) => {
         themeColorMeta.setAttribute('content', `hsl(${background})`);
       }
     }
-  }, [isDarkMode, colorTheme, customAccent]);
+  }, [isDarkMode, themeMode, colorTheme, customAccent]);
 
   // Another tab or device changed the theme: apply it here live.
-  useEffect(() => onSettingChange(['theme', 'color-theme', 'custom-accent'], (key, value) => {
-    if (key === 'theme') {
-      if (value) setIsDarkMode(value === 'dark');
+  useEffect(() => onSettingChange(['theme', 'theme-mode', 'color-theme', 'custom-accent'], (key, value) => {
+    if (key === 'theme-mode') {
+      if (value === 'system' || value === 'light' || value === 'dark') {
+        setThemeModeState(value);
+        setIsDarkMode(value === 'system'
+          ? window.matchMedia('(prefers-color-scheme: dark)').matches
+          : value === 'dark');
+      }
+    } else if (key === 'theme') {
+      if (!localStorage.getItem('theme-mode') && (value === 'light' || value === 'dark')) {
+        setThemeModeState(value);
+        setIsDarkMode(value === 'dark');
+      }
     } else if (key === 'color-theme') {
       if (isColorTheme(value)) setColorTheme(value);
     } else {
@@ -133,24 +153,36 @@ export const ThemeProvider = ({ children }) => {
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e) => {
-      // Only update if user hasn't manually set a preference
-      const savedTheme = localStorage.getItem('theme');
-      if (!savedTheme) {
+      if (themeMode === 'system') {
         setIsDarkMode(e.matches);
       }
     };
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+  }, [themeMode]);
+
+  const setThemeMode = (mode) => {
+    if (mode !== 'system' && mode !== 'light' && mode !== 'dark') return;
+    setThemeModeState(mode);
+    setIsDarkMode(mode === 'system'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : mode === 'dark');
+  };
 
   const toggleDarkMode = () => {
-    setIsDarkMode(prev => !prev);
+    setIsDarkMode(prev => {
+      const next = !prev;
+      setThemeModeState(next ? 'dark' : 'light');
+      return next;
+    });
   };
 
   const value = {
     isDarkMode,
     toggleDarkMode,
+    themeMode,
+    setThemeMode,
     colorTheme,
     setColorTheme,
     customAccent,

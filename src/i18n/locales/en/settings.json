@@ -112,6 +112,13 @@
       "label": "Dark mode",
       "description": "Toggle between light and dark themes"
     },
+    "themeMode": {
+      "label": "Light and dark mode",
+      "description": "Follow this device or keep one mode",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
     "theme": {
       "label": "Theme",
       "description": "Color theme for the whole app"

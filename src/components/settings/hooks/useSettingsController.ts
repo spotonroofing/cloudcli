@@ -48,10 +48,10 @@ type NotificationPreferencesResponse = {
   preferences?: NotificationPreferencesState;
 };
 
-const KNOWN_MAIN_TABS: SettingsMainTab[] = ['appearance', 'notifications', 'system'];
+const KNOWN_MAIN_TABS: SettingsMainTab[] = ['system', 'appearance', 'notifications'];
 
 const normalizeMainTab = (tab: string): SettingsMainTab => (
-  KNOWN_MAIN_TABS.includes(tab as SettingsMainTab) ? (tab as SettingsMainTab) : 'appearance'
+  KNOWN_MAIN_TABS.includes(tab as SettingsMainTab) ? (tab as SettingsMainTab) : 'system'
 );
 
 const parseJson = <T>(value: string | null, fallback: T): T => {

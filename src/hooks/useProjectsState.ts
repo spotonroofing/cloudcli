@@ -388,7 +388,7 @@ export function useProjectsState({
   const [loadingProgress, setLoadingProgress] = useState<LoadingProgress | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState('appearance');
+  const [settingsInitialTab, setSettingsInitialTab] = useState('system');
   const [externalMessageUpdate, setExternalMessageUpdate] = useState(0);
   /**
    * `newSessionTrigger` is an explicit, monotonic intent signal for user-driven
@@ -579,7 +579,7 @@ export function useProjectsState({
     ));
   }, []);
 
-  const openSettings = useCallback((tab = 'appearance') => {
+  const openSettings = useCallback((tab = 'system') => {
     setSettingsInitialTab(tab);
     setShowSettings(true);
     // Settings fills the sidebar (ui13 job 5): on mobile the sidebar overlay

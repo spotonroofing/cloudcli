@@ -440,6 +440,7 @@ function ChatInterface({
     provider,
     selectedSession,
     currentSessionId,
+    sessionOrigin,
     setTokenBudget,
     pendingPermissionRequests,
     setPendingPermissionRequests,

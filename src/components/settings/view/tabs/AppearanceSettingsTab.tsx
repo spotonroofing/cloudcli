@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next';
 
-import { DarkModeToggle } from '../../../../shared/view/ui';
 import {
   Select,
   SelectContent,
@@ -35,7 +34,7 @@ export default function AppearanceSettingsTab({
 }: AppearanceSettingsTabProps) {
   const { t } = useTranslation('settings');
   const { preferences, setPreference } = useUiPreferences();
-  const { colorTheme, setColorTheme, isDarkMode, customAccent, setCustomAccent } = useTheme();
+  const { colorTheme, setColorTheme, isDarkMode, customAccent, setCustomAccent, themeMode, setThemeMode } = useTheme();
 
   // Seed the color input from the accent actually in effect: the custom hex,
   // or the active theme's own accent (last palette dot for the current mode).
@@ -101,10 +100,19 @@ export default function AppearanceSettingsTab({
             </div>
           </SettingsRow>
           <SettingsRow
-            label={t('appearanceSettings.darkMode.label')}
-            description={t('appearanceSettings.darkMode.description')}
+            label={t('appearanceSettings.themeMode.label')}
+            description={t('appearanceSettings.themeMode.description')}
           >
-            <DarkModeToggle ariaLabel={t('appearanceSettings.darkMode.label')} />
+            <Select value={themeMode} onValueChange={setThemeMode} className="w-28">
+              <SelectTrigger className="h-7 px-2 py-0 text-xs" aria-label={t('appearanceSettings.themeMode.label')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="system">{t('appearanceSettings.themeMode.system')}</SelectItem>
+                <SelectItem value="light">{t('appearanceSettings.themeMode.light')}</SelectItem>
+                <SelectItem value="dark">{t('appearanceSettings.themeMode.dark')}</SelectItem>
+              </SelectContent>
+            </Select>
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>

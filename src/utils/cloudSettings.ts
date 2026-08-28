@@ -19,6 +19,7 @@ export const settingsClientId =
 /** Exact localStorage keys that follow the user across devices. */
 export const SYNCED_SETTING_KEYS = [
   'theme',
+  'theme-mode',
   'color-theme',
   'custom-accent',
   'codeEditorWordWrap',
@@ -47,6 +48,8 @@ export const SYNCED_SETTING_KEYS = [
   'file-tree-view-mode',
   'voiceConfig',
   'notificationSoundEnabled',
+  'plannerCompletionSound',
+  'workerCompletionSound',
   'tasks-enabled',
 ];
 

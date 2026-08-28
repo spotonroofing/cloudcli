@@ -3,7 +3,11 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 
 import type { ServerEvent } from '../../../contexts/WebSocketContext';
 import { showCompletionTitleIndicator } from '../../../utils/pageTitleNotification';
-import { playChatCompletionSound, playNotificationSound } from '../../../utils/notificationSound';
+import {
+  completionSoundRoleFor,
+  playCompletionSound,
+  playNotificationSound,
+} from '../../../utils/notificationSound';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityPhase } from '../../../hooks/useSessionProtection';
 import type { PendingPermissionRequest } from '../types/types';
 import type { ProjectSession, LLMProvider } from '../../../types/app';
@@ -35,6 +39,7 @@ interface UseChatRealtimeHandlersArgs {
   provider: LLMProvider;
   selectedSession: ProjectSession | null;
   currentSessionId: string | null;
+  sessionOrigin?: 'direct' | 'planner' | null;
   setTokenBudget: Dispatch<SetStateAction<Record<string, unknown> | null>>;
   pendingPermissionRequests: PendingPermissionRequest[];
   setPendingPermissionRequests: Dispatch<SetStateAction<PendingPermissionRequest[]>>;
@@ -75,6 +80,7 @@ export function useChatRealtimeHandlers({
   provider,
   selectedSession,
   currentSessionId,
+  sessionOrigin,
   setTokenBudget,
   pendingPermissionRequests,
   setPendingPermissionRequests,
@@ -332,7 +338,10 @@ export function useChatRealtimeHandlers({
           // Celebrate only successful runs (failed runs end with success: false).
           if (msg.success !== false) {
             showCompletionTitleIndicator();
-            void playChatCompletionSound();
+            if (sid === activeViewSessionId) {
+              const completionRole = completionSoundRoleFor(selectedSession?.origin, sessionOrigin);
+              void playCompletionSound(completionRole);
+            }
           }
 
           // The session id is stable for the whole conversation (allocated
@@ -424,6 +433,7 @@ export function useChatRealtimeHandlers({
     provider,
     selectedSession,
     currentSessionId,
+    sessionOrigin,
     setTokenBudget,
     pendingPermissionRequests,
     setPendingPermissionRequests,
