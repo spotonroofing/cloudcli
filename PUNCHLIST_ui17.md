@@ -42,3 +42,24 @@ Goal: Willem wants to see the failed mark on the existing failed rows (Streaming
 - [ ] Applies to every historical row on live and dev, not only future jobs; the design area file documents the mark.
 
 Done check: on dev with the stub chain fixture that has one job in each status, the failed row's ring is red on every segment with a centered X whose bounding box matches the check's on a done row within 1px; the three historical failed rows on live's data (or a copy on dev) render it; tests pass. Commit.
+
+## Job 2 — Memory footprint of the tab (2026-08-28, Willem: it is memory, not CPU). Verify: yes
+
+Goal: Willem's laptop sits at 64 percent memory idle with a quarter of it in the browser; the Command Center tab has to be a light tenant. Job 0 measured main-thread time; this job measures and cuts what the tab holds in memory. Files: wherever the evidence leads; suspects to measure, not assume: every session's transcript kept in memory after switching away, message arrays that only grow, listeners and intervals that survive unmount, duplicated composers and drafts per pane, image and attachment blobs retained, the jobs history holding every chain's full record, DOM node count on long transcripts, and any store that never evicts.
+
+- [ ] Measure first on dev with a realistic state (cloudcli open, planner pane on a long real transcript, worker pane, jobs column with full history): heap size, DOM node count, detached DOM nodes, listener count and live intervals, taken at load, after 30 chat switches, after 10 minutes idle with a running worker streaming, and after opening and closing the jobs drawers and the memory sheet 20 times. Write the numbers down as the baseline in the summary.
+- [ ] Fix the top holders in order of measured size with a before-and-after number each: evict transcripts of sessions not in view beyond a small recent set (a bounded cache, re-fetch on return), keep only the paged window of a transcript mounted, dispose listeners, intervals and observers on unmount, hold images as URLs not blobs, and let the jobs history render its long tail cheaply. Budgets: heap after the whole scenario within 25 percent of the heap at load; DOM nodes bounded by the visible page of each list; zero detached nodes growing over the scenario; zero intervals left from unmounted components.
+- [ ] Add the memory scenario to the committed measurement script under `scripts/perf/` from Job 0 so both budgets run together, and record the numbers and rules in the performance section of `design/motion.md`.
+
+Done check: the committed script runs the memory scenario against dev and prints each budget with a pass; the summary carries baseline and after numbers side by side; regression tests for the eviction and disposal changes. Commit.
+
+## Job 3 — Sidebar footer: planner and worker activity as small monochrome icons (2026-08-28, Willem). Verify: no
+
+Goal: the sidebar footer's activity drawer (the one that expands to show "Worker 1" and the planner) reads green and shows a stray double dash; Willem wants it monochrome and folded into the bottom bar. Files: the sidebar footer and its activity drawer component, the bottom bar holding settings, account switcher and memory, `design/sidebar.md`.
+
+- [ ] The activity readout moves to the right side of the bottom bar beside settings, the account switcher and memory, as small icons in the app's monochrome (no green text or fills anywhere in it): the hammer icon with the worker count to its right, and the planner icon with the planner count to its right, stacked one above the other; when only one of the two is active the single line sits vertically centered; when both are active the stack sits centered; when none is active nothing renders there.
+- [ ] The expanded drawer that lists the running planner and worker sessions keeps working from the new spot (click the stack to open it) and is monochrome too, same row anatomy as the rest of the sidebar.
+- [ ] The stray double dash after "Worker 1" in the current drawer: find what value the dash stands for (a time, a model, a context figure that is not loaded yet) and either show the real value once it exists or render nothing, never a placeholder dash.
+- [ ] Phone holds; `design/sidebar.md` documents the footer anatomy.
+
+Done check: on dev with the stub fixture that has a planner and a worker running, the bottom bar's right group renders the two-line stack centered, one line when only one is active, nothing when idle; no element in the footer uses a green color token; no "--" text anywhere in the footer; clicking the stack opens the drawer; 390px holds. Commit.
