@@ -74,3 +74,13 @@ Goal: the account switcher drawer got provider headers with logos, but the Claud
 - [ ] Phone holds; `design/sidebar.md` documents the drawer as one anatomy for both providers.
 
 Done check: on dev with agent-browser, both provider headers render the same mark component with no background element behind the glyph; no "Add account" text exists in the drawer; the ChatGPT row is the same component as the Claude rows and starts with a number; 390px holds. Commit.
+
+## Job 5 — Thinking indicator: the counter sits next to the word again (2026-08-28, Willem). Verify: no
+
+Goal: the response-in-progress row (pixel grid, status word, elapsed counter) now puts the counter at the far right edge of the row, apparently matching the tool-call rows' right-aligned duration slot; that is a different element. The thinking indicator returns to its original layout: grid, word, and the counter directly to the right of the word in the same compact group. Only this indicator changes; tool rows, agent rows and every other status row keep their right-aligned duration. Files: `src/components/chat/view/subcomponents/ActivityIndicator.tsx` (and whatever wrapper or shared row class ui15 job 4's "exact durations on status rows" or job 14's "one anatomy for indicator rows" applied to it), `design/transcript-rows.md`; git history around 72e46a1 and ecff4e3 shows where it moved.
+
+- [ ] The elapsed counter renders inline right after the status word (a small gap, same baseline, same mono muted style as before), not pushed to the row's right edge; the row is no longer full-width justify-between for this indicator.
+- [ ] Nothing else moves: tool-call, agent, research, memory and watchdog rows keep their duration in the right-aligned meta slot; regression test asserting the indicator's counter is adjacent to the word (their bounding boxes within 12px) while a tool row's duration is right-aligned.
+- [ ] `design/transcript-rows.md` notes the exception in one line.
+
+Done check: on dev during a running turn, the activity indicator's counter left edge sits within 12px of the word's right edge while a tool row's duration stays at the row's right edge; tests pass; phone holds. Commit.
