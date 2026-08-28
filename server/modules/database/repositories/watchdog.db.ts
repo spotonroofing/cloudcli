@@ -21,6 +21,8 @@ export type WatchdogChainRow = {
   job_meta: string | null;
   /** 1 while a terminal planner wake is queued but not yet delivered (ui14 job 7). */
   wake_pending: number;
+  /** 1 when the next Codex build unit should use the fast service tier. */
+  fast_mode: number;
 };
 
 export type WatchdogDispatchRunRow = {
@@ -45,8 +47,8 @@ export const watchdogDb = {
   upsertChain(row: WatchdogChainRow): void {
     const db = getConnection();
     db.prepare(`
-      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, dispatching_session_id, manifest, phase_active, punchlist, job_meta, wake_pending)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, dispatching_session_id, manifest, phase_active, punchlist, job_meta, wake_pending, fast_mode)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(slug) DO UPDATE SET
         project_path = excluded.project_path,
         phases = excluded.phases,
@@ -60,7 +62,8 @@ export const watchdogDb = {
         phase_active = excluded.phase_active,
         punchlist = excluded.punchlist,
         job_meta = excluded.job_meta,
-        wake_pending = excluded.wake_pending
+        wake_pending = excluded.wake_pending,
+        fast_mode = excluded.fast_mode
     `).run(
       row.slug,
       row.project_path,
@@ -76,6 +79,7 @@ export const watchdogDb = {
       row.punchlist,
       row.job_meta,
       row.wake_pending,
+      row.fast_mode,
     );
   },
 

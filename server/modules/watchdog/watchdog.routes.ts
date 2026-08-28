@@ -1,6 +1,7 @@
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 
+import { authenticateToken } from '@/modules/auth/index.js';
 import { apiKeysDb, sessionsDb } from '@/modules/database/index.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
@@ -20,6 +21,16 @@ const requireApiKey = (req: Request, res: Response, next: NextFunction): void =>
     return;
   }
   res.status(401).json({ error: 'Valid x-api-key required' });
+};
+
+/** Lets the dispatch CLI use its API key while the app uses its normal JWT. */
+const requireApiKeyOrToken = (req: Request, res: Response, next: NextFunction): void => {
+  const apiKey = req.headers['x-api-key'];
+  if (typeof apiKey === 'string' && apiKeysDb.validateApiKey(apiKey)) {
+    next();
+    return;
+  }
+  void authenticateToken(req, res, next);
 };
 
 export function createWatchdogRouter(): express.Router {
@@ -90,6 +101,9 @@ export function createWatchdogRouter(): express.Router {
         commit,
         // A quiet limit event (codex job 2) records the wait without a planner wake.
         quiet: body.quiet === true,
+        // The runner supplies this only on build phase-start. Verify events
+        // never carry it and therefore can never mark a unit fast.
+        fastMode: body.fastMode === true,
       };
       const eventName = event as (typeof CHAIN_EVENT_NAMES)[number];
       let known = watchdogService.chainEvent(slug, eventName, detail);
@@ -117,6 +131,47 @@ export function createWatchdogRouter(): express.Router {
         });
       }
       res.json(createApiSuccessResponse({ slug: req.params.slug, event }));
+    }),
+  );
+
+  router.get(
+    '/chains/:slug/fast',
+    requireApiKeyOrToken,
+    asyncHandler(async (req: Request, res: Response) => {
+      const slug = String(req.params.slug);
+      const projectPath = typeof req.query.projectPath === 'string' ? req.query.projectPath.trim() : undefined;
+      const fastMode = watchdogService.chainFastMode(slug, projectPath);
+      if (fastMode === null) {
+        throw new AppError(`Chain "${slug}" is not registered for this project.`, {
+          code: 'WATCHDOG_CHAIN_UNKNOWN',
+          statusCode: 404,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, fastMode }));
+    }),
+  );
+
+  router.patch(
+    '/chains/:slug/fast',
+    requireApiKeyOrToken,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const slug = String(req.params.slug);
+      const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
+      if (!projectPath || typeof body.fastMode !== 'boolean') {
+        throw new AppError('projectPath and fastMode (boolean) are required.', {
+          code: 'WATCHDOG_CHAIN_FAST_FIELDS_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const fastMode = watchdogService.setChainFastMode(slug, projectPath, body.fastMode);
+      if (fastMode === null) {
+        throw new AppError(`Chain "${slug}" is not registered for this project.`, {
+          code: 'WATCHDOG_CHAIN_UNKNOWN',
+          statusCode: 404,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, fastMode }));
     }),
   );
 

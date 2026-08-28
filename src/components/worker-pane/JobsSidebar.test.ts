@@ -56,6 +56,37 @@ test('the jobs column renders the paused state on the current chain row', () => 
   assert.match(markup, /data-slot="jobs-sidebar-paused-icon" aria-label="Paused"/);
 });
 
+test('the running chain header exposes the bolt toggle and fast units keep their bolt', () => {
+  const chain: ChainSnapshot = {
+    slug: 'fast-stub',
+    projectPath: '/workspace/fast-stub',
+    status: 'running',
+    phases: 2,
+    currentPhase: 2,
+    phaseActive: true,
+    fastMode: true,
+    manifest: [
+      { name: 'Fast build', tasks: [], kind: 'phase', fastMode: true, commitHash: 'abc1234' },
+      { name: 'Current build', tasks: [], kind: 'phase' },
+    ],
+    startedAt: 1,
+    lastEventAt: 2,
+  };
+
+  const markup = renderToStaticMarkup(createElement(JobsSidebar, {
+    groups: [{ chain, run: null, sessions: {}, startedAt: 1 }],
+    activeSessionId: null,
+    onOpenSession: () => undefined,
+    onToggleFastMode: () => undefined,
+    fastModeHintSlug: chain.slug,
+  }));
+
+  assert.match(markup, /data-slot="jobs-chain-header" data-chain="fast-stub"/);
+  assert.match(markup, /data-slot="chain-fast-mode-hint"[^>]*>next job runs fast</);
+  assert.match(markup, /data-slot="chain-fast-mode-toggle" data-chain="fast-stub" data-fast-mode="on"/);
+  assert.match(markup, /data-slot="jobs-sidebar-fast-unit"/);
+});
+
 test('a committed job holds its check behind a centered spinner while verify runs', () => {
   const chain: ChainSnapshot = {
     slug: 'verify-stub',

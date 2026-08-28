@@ -70,6 +70,8 @@ export type ChainJobMeta = {
   /** The build stage's engine and model, from the runner's announce (codex job 2). */
   engine?: string;
   model?: string;
+  /** Whether this build unit launched on Codex's fast service tier. */
+  fastMode?: boolean;
 };
 
 /**
@@ -111,6 +113,8 @@ type ChainRecord = {
    * whose server restarted in between.
    */
   wakePending: boolean;
+  /** Read afresh by the runner before each build unit; false by default. */
+  fastMode: boolean;
 };
 
 type DispatchRunRecord = {
@@ -184,6 +188,8 @@ type ChainSnapshot = {
   phases: number | null;
   currentPhase: number | null;
   phaseActive: boolean;
+  /** Current chain preference; changing it affects the next build unit only. */
+  fastMode: boolean;
   /** Manifest entries with the punch-list `done` count and the unit's commit
    *  and timing metadata (ui13 job 14) folded in per unit; a twin superseded
    *  by another chain's unit (codex job 5) is marked hidden with its winner. */
@@ -333,6 +339,7 @@ class WatchdogService {
           punchlist: row.punchlist,
           jobs: parseJobMeta(row.job_meta),
           wakePending: Boolean(row.wake_pending),
+          fastMode: Boolean(row.fast_mode),
         });
       }
       for (const row of watchdogDb.listDispatchRuns()) {
@@ -385,6 +392,7 @@ class WatchdogService {
         punchlist: chain.punchlist,
         job_meta: Object.keys(chain.jobs).length ? JSON.stringify(chain.jobs) : null,
         wake_pending: chain.wakePending ? 1 : 0,
+        fast_mode: chain.fastMode ? 1 : 0,
       });
     } catch (error) {
       log(`chain persist failed for ${chain.slug}: ${error instanceof Error ? error.message : String(error)}`);
@@ -447,6 +455,7 @@ class WatchdogService {
       punchlist,
       jobs: existing?.jobs ?? {},
       wakePending: false,
+      fastMode: existing?.fastMode ?? false,
     };
     this.chains.set(input.slug, chain);
     if (!existing && dispatchingSessionId) {
@@ -528,6 +537,29 @@ class WatchdogService {
     this.broadcastChainProgress(chain);
     log(`chain ${slug}: job metadata updated for ${Object.keys(jobs).length} job(s)`);
     return true;
+  }
+
+  /** Used by the watchdog fast route so the dispatch runner can read the latest preference per unit. */
+  chainFastMode(slug: string, projectPath?: string): boolean | null {
+    const chain = this.chains.get(slug);
+    if (!chain || (projectPath && normalizeProjectPath(chain.projectPath) !== normalizeProjectPath(projectPath))) {
+      return null;
+    }
+    return chain.fastMode;
+  }
+
+  /** Used by the authenticated app and dispatch CLI to persist and broadcast the chain preference. */
+  setChainFastMode(slug: string, projectPath: string, enabled: boolean): boolean | null {
+    const chain = this.chains.get(slug);
+    if (!chain || normalizeProjectPath(chain.projectPath) !== normalizeProjectPath(projectPath)) {
+      return null;
+    }
+    chain.fastMode = enabled;
+    chain.lastEventAt = Date.now();
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    log(`chain ${slug}: fast mode ${enabled ? 'on' : 'off'}`);
+    return chain.fastMode;
   }
 
   /**
@@ -842,6 +874,7 @@ class WatchdogService {
       phases: chain.phases,
       currentPhase: chain.currentPhase,
       phaseActive: chain.phaseActive,
+      fastMode: chain.fastMode,
       manifest: chain.manifest
         ? chain.manifest.map((entry, i) => ({
             ...entry,
@@ -868,7 +901,13 @@ class WatchdogService {
   chainEvent(
     slug: string,
     event: ChainEventName,
-    detail?: { phase?: number; summaryTail?: string; commit?: { hash: string; subject: string }; quiet?: boolean },
+    detail?: {
+      phase?: number;
+      summaryTail?: string;
+      commit?: { hash: string; subject: string };
+      quiet?: boolean;
+      fastMode?: boolean;
+    },
   ): boolean {
     const chain = this.chains.get(slug);
     if (!chain) {
@@ -934,6 +973,7 @@ class WatchdogService {
       if (event === 'phase-start') {
         meta.startedAt = Date.now();
         meta.taskTimes = [];
+        meta.fastMode = detail.fastMode === true;
       } else if (event === 'phase-end') {
         meta.endedAt = Date.now();
         if (detail.commit) {
@@ -2059,6 +2099,9 @@ export function parseJobMeta(value: unknown): Record<number, ChainJobMeta> {
     }
     if (typeof entry.model === 'string' && entry.model.trim()) {
       meta.model = entry.model.trim();
+    }
+    if (typeof entry.fastMode === 'boolean') {
+      meta.fastMode = entry.fastMode;
     }
     if (Object.keys(meta).length) {
       jobs[index] = meta;

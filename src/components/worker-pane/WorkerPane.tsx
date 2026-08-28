@@ -20,7 +20,12 @@ import { titleFromPrompt } from '../../../shared/sessionTitle.js';
 import { workerRunLabel } from '../../utils/workerRunLabel';
 import { preserveJsonEqual } from '../../utils/preserveEqual';
 
-import JobsSidebar, { JOBS_COLUMN_BASIS, type ChainSnapshot, type JobGroup } from './JobsSidebar';
+import JobsSidebar, {
+  ChainFastModeToggle,
+  JOBS_COLUMN_BASIS,
+  type ChainSnapshot,
+  type JobGroup,
+} from './JobsSidebar';
 import {
   findWorkerFollowTarget,
   preserveWorkerSessionSelection,
@@ -200,6 +205,9 @@ export default function WorkerPane({
   // holds its space with a skeleton meanwhile (ui11 phase 11).
   const [runsLoaded, setRunsLoaded] = useState(false);
   const [chains, setChains] = useState<Record<string, ChainSnapshot>>({});
+  const [fastModePendingSlug, setFastModePendingSlug] = useState<string | null>(null);
+  const [fastModeHintSlug, setFastModeHintSlug] = useState<string | null>(null);
+  const fastModeHintSeenRef = useRef<Set<string>>(new Set());
   const [newSessionTrigger, setNewSessionTrigger] = useState(0);
   // An explicit selection pins that session for one minute. After that short
   // grace period, every newly announced build takes the pane again; verifier
@@ -227,6 +235,12 @@ export default function WorkerPane({
       setJobsViewOpenState(readJobsViewPreference(projectId, projectPath));
     });
   }, [projectId, projectPath]);
+
+  useEffect(() => {
+    if (!fastModeHintSlug) return;
+    const timer = setTimeout(() => setFastModeHintSlug(null), 4_000);
+    return () => clearTimeout(timer);
+  }, [fastModeHintSlug]);
 
   useEffect(() => {
     onJobsViewOpenChange?.(jobsViewOpen);
@@ -372,6 +386,36 @@ export default function WorkerPane({
     setNewSessionTrigger((previous) => previous + 1);
   };
 
+  const handleToggleChainFastMode = useCallback(async (slug: string, enabled: boolean) => {
+    setFastModePendingSlug(slug);
+    try {
+      const response = await authenticatedFetch(`/api/watchdog/chains/${encodeURIComponent(slug)}/fast`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectPath, fastMode: enabled }),
+      });
+      if (!response.ok) {
+        throw new Error(`Fast mode route returned ${response.status}`);
+      }
+      const body = await response.json() as { data?: { fastMode?: boolean } };
+      const fastMode = typeof body.data?.fastMode === 'boolean' ? body.data.fastMode : enabled;
+      setChains((previous) => {
+        const chain = previous[slug];
+        return chain ? { ...previous, [slug]: { ...chain, fastMode } } : previous;
+      });
+      if (fastMode && !fastModeHintSeenRef.current.has(slug)) {
+        fastModeHintSeenRef.current.add(slug);
+        setFastModeHintSlug(slug);
+      } else if (!fastMode) {
+        setFastModeHintSlug((current) => current === slug ? null : current);
+      }
+    } catch (error) {
+      console.error('Unable to change chain fast mode:', error);
+    } finally {
+      setFastModePendingSlug((current) => current === slug ? null : current);
+    }
+  }, [projectPath]);
+
   const selectedRun = runs.find((run) => run.sessionId === paneSession?.id) ?? null;
   // The title after "Worker" (ui14 job 2), in the planner header's style: the
   // run's own session title, else the chain label ("slug Job N - name"); a
@@ -379,6 +423,12 @@ export default function WorkerPane({
   const paneTitle = selectedRun
     ? (titleFromPrompt(selectedRun.title) || runLabel(selectedRun, chains))
     : titleFromPrompt(paneSession?.summary);
+  const followedChain = selectedRun?.chainSlug
+    ? chains[selectedRun.chainSlug] ?? null
+    : null;
+  const followedActiveChain = followedChain?.status === 'running' || followedChain?.status === 'paused'
+    ? followedChain
+    : null;
 
   // Explicit job-row chat controls are the navigation (ui16 job 2), and the list spans every run of the
   // project (ui14 job 1): each chain is a group carrying the sessions its
@@ -448,6 +498,14 @@ export default function WorkerPane({
           </Badge>
         )}
         <span className="min-w-0 flex-1" />
+        {followedActiveChain && (
+          <ChainFastModeToggle
+            chain={followedActiveChain}
+            pending={fastModePendingSlug === followedActiveChain.slug}
+            showHint={fastModeHintSlug === followedActiveChain.slug}
+            onToggle={handleToggleChainFastMode}
+          />
+        )}
         {isMobile && windowSelector}
         {isMobile && (
           <Tooltip content={shellOpen ? 'Show chat' : 'Show shell'} position="bottom">
@@ -588,6 +646,9 @@ export default function WorkerPane({
               loading={!runsLoaded}
               activeSessionId={paneSession?.id ?? null}
               onOpenSession={handleOpenJobSession}
+              onToggleFastMode={handleToggleChainFastMode}
+              fastModePendingSlug={fastModePendingSlug}
+              fastModeHintSlug={fastModeHintSlug}
             />
           </div>
         )}

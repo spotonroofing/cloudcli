@@ -1,4 +1,4 @@
-import { ChevronDown, Clock3, Cpu, GitCommitHorizontal, Hash, MessageSquare, Pause } from 'lucide-react';
+import { Bolt, ChevronDown, Clock3, Cpu, GitCommitHorizontal, Hash, MessageSquare, Pause } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -7,7 +7,7 @@ import { AgentDisclosure } from '../../shared/view/beui/AgentDisclosure';
 import { MarqueeLabel } from '../../shared/view/beui/MarqueeLabel';
 import { TodoStatusIcon, type TodoListItemStatus } from '../../shared/view/beui/TodoList';
 import { EASE_OUT, SPRING_SWAP } from '../../shared/view/beui/ease';
-import { Skeleton, Tooltip } from '../../shared/view/ui';
+import { Button, Skeleton, Tooltip } from '../../shared/view/ui';
 import { useSharedNow } from '../../hooks/useSharedNow';
 
 /** Side-column width: exactly 20px over ui14 below the 260px cap. */
@@ -42,6 +42,8 @@ export type ChainManifestEntry = {
   /** The build stage's engine and model (codex job 2), from the runner's announce. */
   engine?: string;
   model?: string;
+  /** True when this build unit launched with service_tier=fast. */
+  fastMode?: boolean;
   /** A twin of another chain's unit (codex job 5): hidden from the list, row kept. */
   hidden?: boolean;
   supersededBy?: string;
@@ -55,6 +57,8 @@ export type ChainSnapshot = {
   phases: number | null;
   currentPhase: number | null;
   phaseActive: boolean;
+  /** Chain preference read by the runner at the next Codex build boundary. */
+  fastMode?: boolean;
   manifest: ChainManifestEntry[] | null;
   startedAt: number;
   lastEventAt: number;
@@ -92,6 +96,8 @@ type Unit = {
   /** Engine and model the unit ran on (codex job 2). */
   engine?: string;
   model?: string;
+  /** This historical unit launched on the fast Codex service tier. */
+  fastMode?: boolean;
   /** Whole build-session token cost from its provider-native source. */
   tokenCount?: number | null;
   /** A landed verify failure repaired by this named superseding unit. */
@@ -199,6 +205,7 @@ function chainUnits(chain: ChainSnapshot, repairTruth: RepairTruth): Unit[] {
       verifySessionId: entry.verifySessionId,
       engine: entry.engine,
       model: entry.model,
+      fastMode: entry.fastMode,
       verifyFixedIn,
     }];
   });
@@ -520,7 +527,54 @@ type JobsSidebarProps = {
   activeSessionId: string | null;
   /** Navigate the worker pane to a unit's session. */
   onOpenSession: (sessionId: string) => void;
+  /** Flip the running chain's next-unit Codex service tier. */
+  onToggleFastMode?: (slug: string, enabled: boolean) => void;
+  /** Slug whose route write is still in flight. */
+  fastModePendingSlug?: string | null;
+  /** Slug showing the first-arm next-job hint. */
+  fastModeHintSlug?: string | null;
 };
+
+type ChainFastModeToggleProps = {
+  chain: ChainSnapshot;
+  pending?: boolean;
+  showHint?: boolean;
+  onToggle: (slug: string, enabled: boolean) => void;
+};
+
+/** Shared by the jobs chain header and worker pane header to keep one bolt language. */
+export function ChainFastModeToggle({ chain, pending = false, showHint = false, onToggle }: ChainFastModeToggleProps) {
+  const label = chain.fastMode ? 'Turn off fast mode' : 'Run next Codex job fast';
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      {showHint && chain.fastMode && (
+        <span data-slot="chain-fast-mode-hint" className="truncate text-[10px] text-muted-foreground">
+          next job runs fast
+        </span>
+      )}
+      <Tooltip content={label} position="bottom">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          data-slot="chain-fast-mode-toggle"
+          data-chain={chain.slug}
+          data-fast-mode={chain.fastMode ? 'on' : 'off'}
+          aria-label={label}
+          aria-pressed={chain.fastMode}
+          disabled={pending}
+          onClick={() => onToggle(chain.slug, !chain.fastMode)}
+          className={cn(
+            'touch-hit relative h-6 w-6 p-0 hover:text-foreground',
+            chain.fastMode ? 'bg-accent/60 text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          <Bolt className={cn('h-3.5 w-3.5', chain.fastMode && 'fill-current')} />
+        </Button>
+      </Tooltip>
+    </span>
+  );
+}
 
 /**
  * The jobs list (ui12 phase 5 sidebar; a side column or full-pane view since
@@ -532,9 +586,19 @@ type JobsSidebarProps = {
  * the job row's ring advances with its done/total counter, and entries
  * stagger in as a manifest (or an append) lands.
  */
-function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }: JobsSidebarProps) {
+function JobsSidebar({
+  groups,
+  loading = false,
+  activeSessionId,
+  onOpenSession,
+  onToggleFastMode,
+  fastModePendingSlug = null,
+  fastModeHintSlug = null,
+}: JobsSidebarProps) {
   const reduce = useReducedMotion() ?? false;
   const repairTruth = repairedFailureTruth(groups);
+  const runningChain = groups.find((group) =>
+    group.chain?.status === 'running' || group.chain?.status === 'paused')?.chain ?? null;
 
   // Newest group first, each group's newest unit first — the flat list is
   // already top-to-bottom; positions count from the bottom for the stagger.
@@ -626,6 +690,21 @@ function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }
       data-history-total={stacked.length}
       className="flex h-full min-w-0 flex-col bg-muted/20"
     >
+      {runningChain && onToggleFastMode && (
+        <div
+          data-slot="jobs-chain-header"
+          data-chain={runningChain.slug}
+          className="flex min-h-8 items-center gap-2 border-b border-border/50 px-2 text-[11px] text-muted-foreground"
+        >
+          <span className="min-w-0 flex-1 truncate">{runningChain.slug}</span>
+          <ChainFastModeToggle
+            chain={runningChain}
+            pending={fastModePendingSlug === runningChain.slug}
+            showHint={fastModeHintSlug === runningChain.slug}
+            onToggle={onToggleFastMode}
+          />
+        </div>
+      )}
       {loading && groups.length === 0 ? (
         <div
           className="min-h-0 flex-1 space-y-2 overflow-hidden px-2 py-2"
@@ -833,6 +912,13 @@ function JobsSidebar({ groups, loading = false, activeSessionId, onOpenSession }
                       </span>
                     )}
                   </span>
+                  {unit.fastMode && (
+                    <Bolt
+                      aria-label="Ran fast"
+                      data-slot="jobs-sidebar-fast-unit"
+                      className="h-3 w-3 flex-shrink-0 fill-current text-muted-foreground/60"
+                    />
+                  )}
                   {/* Trailing slot: navigable rows swap the chevron for a
                       chat icon on hover (ui13 job 2); rows without a session
                       keep the plain state chevron. */}

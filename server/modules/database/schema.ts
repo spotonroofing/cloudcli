@@ -236,7 +236,10 @@ CREATE TABLE IF NOT EXISTS watchdog_chains (
     phase_active INTEGER NOT NULL DEFAULT 0,
     -- 1 from a terminal event (or liveness stop) until its planner wake is
     -- delivered (ui14 job 7); hydrate re-queues the wake for such chains.
-    wake_pending INTEGER NOT NULL DEFAULT 0
+    wake_pending INTEGER NOT NULL DEFAULT 0,
+    -- Per-chain Codex fast-mode preference (ui17 job 13). The runner reads
+    -- this before every build unit; verifier launches never inherit it.
+    fast_mode INTEGER NOT NULL DEFAULT 0
 );
 `;
 

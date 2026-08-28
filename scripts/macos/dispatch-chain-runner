@@ -198,14 +198,28 @@ api_post() {
   done
 }
 
+# Reads the persisted chain preference immediately before a build launch. A
+# transient watchdog outage safely falls back to the standard tier for that
+# unit and is visible in the chain journal; the next unit reads again.
+read_chain_fast_mode() {
+  local response enabled
+  if ! response=$(curl -sf -K "$HEADER_FILE" -m 30 "$SERVER_URL/api/watchdog/chains/$SLUG/fast" 2>/dev/null); then
+    journal "phase $PHASE_NUM/$TOTAL" "fast-read" "watchdog unavailable; launching this unit on the standard tier"
+    print -r -- 0
+    return 0
+  fi
+  enabled=$(RESPONSE_BODY="$response" python3 -c 'import json, os; print(1 if json.loads(os.environ["RESPONSE_BODY"])["data"]["fastMode"] is True else 0)' 2>/dev/null)
+  print -r -- "${enabled:-0}"
+}
+
 # Every event carries projectPath and phases so a restarted server can
 # re-register the chain it lost with the event itself.
 event_body() {
   # $1 event, $2 phase (or empty), $3 summaryTail json string (or empty),
   # $4 commit short hash (or empty), $5 commit subject (or empty)
-  python3 - "$1" "$2" "$3" "$REPO" "$TOTAL" "${4:-}" "${5:-}" "${DISPATCHING_SESSION_ID:-}" <<'PYEOF'
+  python3 - "$1" "$2" "$3" "$REPO" "$TOTAL" "${4:-}" "${5:-}" "${DISPATCHING_SESSION_ID:-}" "${UNIT_FAST_MODE:-0}" <<'PYEOF'
 import json, sys
-event, phase, tail, repo, total, commit_hash, commit_subject, dispatching_session_id = sys.argv[1:9]
+event, phase, tail, repo, total, commit_hash, commit_subject, dispatching_session_id, fast_mode = sys.argv[1:10]
 body = {'event': event, 'projectPath': repo, 'phases': int(total)}
 if dispatching_session_id:
     body['dispatchingSessionId'] = dispatching_session_id
@@ -215,6 +229,8 @@ if tail:
     body['summaryTail'] = json.loads(tail)
 if commit_hash:
     body['commit'] = {'hash': commit_hash, 'subject': commit_subject}
+if event == 'phase-start':
+    body['fastMode'] = fast_mode == '1'
 print(json.dumps(body))
 PYEOF
 }
@@ -464,14 +480,22 @@ run_claude() {
 # The prompt arrives on stdin; the final message lands in $2.last for the
 # verifier's exact VERIFY line. Subagents stay off by explicit override so a
 # config edit cannot turn them back on for dispatched units (codex job 2).
+# $6 is 1 only for a build whose chain flag was on at this unit boundary.
+# The standard tier is explicit for all other builds and every verify so a
+# host-level fast preference cannot leak into unattended work.
 run_codex() {
+  local service_tier=default
+  [[ "${6:-0}" == "1" ]] && service_tier=fast
   exec python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' \
     "$CODEX_BIN" exec \
+    --strict-config \
     --dangerously-bypass-approvals-and-sandbox \
     --json \
     -C "$REPO" \
     -m "$4" \
     -c model_reasoning_effort="$5" \
+    -c service_tier="$service_tier" \
+    -c features.fast_mode=true \
     -c features.multi_agent=false \
     -c 'mcp_servers={}' \
     -o "$2.last" \
@@ -518,6 +542,28 @@ wait_thread_id() {
     i=$((i + 1))
   done
   print -r -- "$id"
+}
+
+# A strict-config Codex launch reaches thread.started only after accepting the
+# request-scoped service_tier override. This checks that event in the unit's
+# own JSON rollout before a fast build is allowed through the commit gate.
+confirm_fast_rollout() {
+  python3 - "$1" "$2" <<'PYEOF'
+import json, sys
+log, expected = sys.argv[1:3]
+try:
+    with open(log, encoding='utf-8', errors='replace') as handle:
+        for line in handle:
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event.get('type') == 'thread.started' and event.get('thread_id') == expected:
+                raise SystemExit(0)
+except OSError:
+    pass
+raise SystemExit(1)
+PYEOF
 }
 
 # ----- Codex usage-limit wait (codex job 2) --------------------------------
@@ -761,7 +807,9 @@ start_verify() {
   journal "verify $VERIFY_NUM/$TOTAL" "start" "$VERIFY_NAME against $VERIFY_COMMIT ($VERIFY_ENGINE $VERIFY_MODEL)"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-start $VERIFY_NUM '')" 3
   : > "$log"
-  run_engine "$VERIFY_ENGINE" "$prompt" "$log" "$session" "$VERIFY_MODEL" "$VERIFY_EFFORT" &
+  # Verify is a billing and correctness boundary: it is always standard tier,
+  # regardless of the chain preference read by the next build.
+  run_engine "$VERIFY_ENGINE" "$prompt" "$log" "$session" "$VERIFY_MODEL" "$VERIFY_EFFORT" 0 &
   VERIFY_PID=$!
   if [[ "$VERIFY_ENGINE" == "codex" ]]; then
     VERIFY_THREAD=$(wait_thread_id "$log" "$VERIFY_PID")
@@ -975,7 +1023,13 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
       "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) needs the $UNIT_ENGINE CLI, which is not on PATH." | json_string)")" 80
     exit 1
   fi
-  journal "phase $PHASE_NUM/$TOTAL" "start" "$PHASE_NAME ($UNIT_ENGINE $UNIT_MODEL, effort $UNIT_EFFORT)"
+  UNIT_FAST_MODE=0
+  if [[ "$UNIT_ENGINE" == "codex" ]]; then
+    UNIT_FAST_MODE=$(read_chain_fast_mode)
+  fi
+  FAST_JOURNAL=""
+  [[ "$UNIT_FAST_MODE" == "1" ]] && FAST_JOURNAL=", fast"
+  journal "phase $PHASE_NUM/$TOTAL" "start" "$PHASE_NAME ($UNIT_ENGINE $UNIT_MODEL, effort $UNIT_EFFORT$FAST_JOURNAL)"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body phase-start $PHASE_NUM '')" 3
 
   SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
@@ -986,7 +1040,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   # The build stage: a fresh headless session in the repo, run in the
   # background so the previous unit's verify can be settled while it works.
   : > "$JOURNAL_DIR/phase$PHASE_NUM.log"
-  run_engine "$UNIT_ENGINE" "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" "$UNIT_MODEL" "$UNIT_EFFORT" &
+  run_engine "$UNIT_ENGINE" "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" "$UNIT_MODEL" "$UNIT_EFFORT" "$UNIT_FAST_MODE" &
   BUILD_PID=$!
   BUILD_THREAD=""
   if [[ "$UNIT_ENGINE" == "codex" ]]; then
@@ -1000,6 +1054,15 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   watch_build
   RC=$?
   BUILD_PID=""
+
+  if [[ "$UNIT_ENGINE" == "codex" && "$UNIT_FAST_MODE" == "1" && $RC -eq 0 ]]; then
+    if confirm_fast_rollout "$JOURNAL_DIR/phase$PHASE_NUM.log" "$BUILD_THREAD"; then
+      journal "phase $PHASE_NUM/$TOTAL" "fast-confirmed" "rollout $BUILD_THREAD started after accepting service_tier=fast"
+    else
+      journal "phase $PHASE_NUM/$TOTAL" "FAILED" "fast tier was requested but the unit rollout did not confirm a started thread"
+      RC=70
+    fi
+  fi
 
   NEW_COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
 

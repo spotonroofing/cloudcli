@@ -4,6 +4,7 @@
 #   dispatch <project> <slug> [phase-file ...]
 #   dispatch pause <project> <slug>
 #   dispatch resume <project> <slug>
+#   dispatch fast <project> <slug> on|off
 #   dispatch append <project> <slug> <file ...> [--phase]
 #   dispatch amend <project> <slug> <unit> --tasks "a | b | c" [--name N] [--anchor A]
 #
@@ -75,11 +76,49 @@ usage() {
   print -u2 "usage: dispatch <project> <slug> [phase-file ...]"
   print -u2 "       dispatch pause <project> <slug>"
   print -u2 "       dispatch resume <project> <slug>"
+  print -u2 "       dispatch fast <project> <slug> on|off"
   print -u2 "       dispatch append <project> <slug> <file ...> [--phase]"
   print -u2 "       dispatch amend <project> <slug> <unit> --tasks \"a | b | c\" [--name N] [--anchor A]"
   exit 64
 }
 [[ $# -ge 2 ]] || usage
+
+# ----- fast: change the next Codex build unit without restarting the chain -----
+if [[ "$1" == "fast" ]]; then
+  shift
+  [[ $# -eq 3 ]] || usage
+  PROJECT_ARG="$1"; SLUG="$2"; FAST_VALUE="$3"
+  [[ "$FAST_VALUE" == "on" || "$FAST_VALUE" == "off" ]] || usage
+  if [[ "$PROJECT_ARG" == /* ]]; then
+    REPO="$PROJECT_ARG"
+  else
+    REPO="$PROJECTS_ROOT/$PROJECT_ARG"
+  fi
+  [[ -d "$REPO/.git" ]] || { print -u2 "dispatch: $REPO is not a git repo"; exit 66; }
+  REPO="${REPO:A}"
+
+  API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
+  [[ -n "$API_KEY" ]] || { print -u2 "dispatch: no active API key in server config"; exit 78; }
+  HEADER_FILE=$(mktemp)
+  chmod 600 "$HEADER_FILE"
+  print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
+  trap 'rm -f "$HEADER_FILE"' EXIT
+  BODY=$(python3 - "$REPO" "$FAST_VALUE" <<'PYEOF'
+import json, sys
+print(json.dumps({'projectPath': sys.argv[1], 'fastMode': sys.argv[2] == 'on'}))
+PYEOF
+)
+  RESPONSE=$(curl -s -K "$HEADER_FILE" -m 30 -X PATCH "$SERVER_URL/api/watchdog/chains/$SLUG/fast" \
+    -H 'Content-Type: application/json' -d "$BODY" -w '\n%{http_code}' 2>/dev/null)
+  STATUS="${RESPONSE##*$'\n'}"
+  RESPONSE_BODY="${RESPONSE%$'\n'*}"
+  if [[ "$STATUS" != "200" ]]; then
+    print -u2 "dispatch: could not turn fast mode $FAST_VALUE for chain $SLUG (HTTP ${STATUS:-000}: $RESPONSE_BODY)"
+    exit 69
+  fi
+  print -r -- "dispatch: chain $SLUG fast mode $FAST_VALUE; the next Codex job reads the new setting"
+  exit 0
+fi
 
 # ----- pause/resume: control one existing chain record -----
 if [[ "$1" == "pause" || "$1" == "resume" ]]; then
