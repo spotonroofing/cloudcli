@@ -155,9 +155,9 @@ RESUME_STATE="$JOURNAL_DIR/resume.json"
 # Appended prompts extend this file when the runner consumes them.
 save_resume_state() {
   python3 - "$RESUME_STATE.tmp" "$REPO" "$SLUG" "$CHAIN_ENGINE" "$CHAIN_MODEL" "$CHAIN_EFFORT" \
-      "$VERIFY_ENGINE" "$VERIFY_MODEL" "${PHASE_FILES[@]}" <<'PYEOF'
+      "$VERIFY_ENGINE" "$VERIFY_MODEL" "${DISPATCHING_SESSION_ID:-}" "${PHASE_FILES[@]}" <<'PYEOF'
 import json, os, sys
-out, repo, slug, engine, model, effort, verify_engine, verify_model, *files = sys.argv[1:]
+out, repo, slug, engine, model, effort, verify_engine, verify_model, dispatching_session_id, *files = sys.argv[1:]
 with open(out, 'w', encoding='utf-8') as handle:
     json.dump({
         'repo': repo,
@@ -167,6 +167,7 @@ with open(out, 'w', encoding='utf-8') as handle:
         'effort': effort,
         'verifyEngine': verify_engine,
         'verifyModel': verify_model,
+        'dispatchingSessionId': dispatching_session_id,
         'phaseFiles': files,
     }, handle)
     handle.write('\n')
@@ -202,10 +203,12 @@ api_post() {
 event_body() {
   # $1 event, $2 phase (or empty), $3 summaryTail json string (or empty),
   # $4 commit short hash (or empty), $5 commit subject (or empty)
-  python3 - "$1" "$2" "$3" "$REPO" "$TOTAL" "${4:-}" "${5:-}" <<'PYEOF'
+  python3 - "$1" "$2" "$3" "$REPO" "$TOTAL" "${4:-}" "${5:-}" "${DISPATCHING_SESSION_ID:-}" <<'PYEOF'
 import json, sys
-event, phase, tail, repo, total, commit_hash, commit_subject = sys.argv[1:8]
+event, phase, tail, repo, total, commit_hash, commit_subject, dispatching_session_id = sys.argv[1:9]
 body = {'event': event, 'projectPath': repo, 'phases': int(total)}
+if dispatching_session_id:
+    body['dispatchingSessionId'] = dispatching_session_id
 if phase:
     body['phase'] = int(phase)
 if tail:
@@ -916,10 +919,12 @@ MANIFEST_PATH="${DISPATCH_MANIFEST:-}"
 journal run "$([[ $RESUME_FROM -gt 1 ]] && print resume || print start)" "chain $SLUG in $REPO from job $RESUME_FROM ($TOTAL phases; default engine $CHAIN_ENGINE, verify on $VERIFY_ENGINE $VERIFY_MODEL)"
 [[ -x "$CSWAP_BIN" ]] && unpark_stale
 if [[ $RESUME_FROM -eq 1 && -z "${DISPATCH_RESUMING:-}" ]]; then
-  api_post "/api/watchdog/chains" "$(python3 - "$SLUG" "$REPO" "$TOTAL" "$MANIFEST_PATH" <<'PYEOF'
+  api_post "/api/watchdog/chains" "$(python3 - "$SLUG" "$REPO" "$TOTAL" "$MANIFEST_PATH" "${DISPATCHING_SESSION_ID:-}" <<'PYEOF'
 import json, sys
-slug, repo, total, manifest_path = sys.argv[1:5]
+slug, repo, total, manifest_path, dispatching_session_id = sys.argv[1:6]
 body = {'slug': slug, 'projectPath': repo, 'phases': int(total)}
+if dispatching_session_id:
+    body['dispatchingSessionId'] = dispatching_session_id
 if manifest_path:
     try:
         body['manifest'] = json.load(open(manifest_path))

@@ -56,6 +56,8 @@ export interface ProjectSession {
   booted?: boolean;
   /** Persisted boot lifecycle: null | 'pending' | 'ready' | 'failed'. 'failed' reopens as a failed boot, not a plain chat. */
   bootState?: string | null;
+  /** True when this chat is the project's fallback watchdog wake destination. */
+  watchdogWakeTarget?: boolean;
   __provider?: LLMProvider;
   // Tags the session with the owning project's DB `projectId` so UI handlers
   // (session switching, sidebar focus, etc.) can match against selectedProject.

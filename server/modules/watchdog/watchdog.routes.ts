@@ -39,6 +39,9 @@ export function createWatchdogRouter(): express.Router {
         });
       }
       const phases = Number.isFinite(Number(body.phases)) ? Number(body.phases) : null;
+      const dispatchingSessionId = typeof body.dispatchingSessionId === 'string' && body.dispatchingSessionId.trim()
+        ? body.dispatchingSessionId.trim()
+        : null;
       // The manifest is either the bare entries array or, since ui11 phase 6,
       // an object { punchlist, entries } carrying the run's punch list path
       // (repo-relative or absolute) for per-phase done counts.
@@ -51,7 +54,14 @@ export function createWatchdogRouter(): express.Router {
         }
         manifestValue = wrapped.entries;
       }
-      watchdogService.registerChain({ slug, projectPath, phases, manifest: parseManifest(manifestValue), punchlist });
+      watchdogService.registerChain({
+        slug,
+        projectPath,
+        dispatchingSessionId,
+        phases,
+        manifest: parseManifest(manifestValue),
+        punchlist,
+      });
       res.status(201).json(createApiSuccessResponse({ slug }));
     }),
   );
@@ -92,6 +102,9 @@ export function createWatchdogRouter(): express.Router {
           watchdogService.registerChain({
             slug,
             projectPath,
+            dispatchingSessionId: typeof body.dispatchingSessionId === 'string' && body.dispatchingSessionId.trim()
+              ? body.dispatchingSessionId.trim()
+              : null,
             phases: Number.isFinite(Number(body.phases)) ? Number(body.phases) : null,
           });
           known = watchdogService.chainEvent(slug, eventName, detail);

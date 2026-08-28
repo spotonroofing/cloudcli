@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
-import { Check, ChevronRight, X } from 'lucide-react';
+import { BellRing, Check, ChevronRight, X } from 'lucide-react';
 
 import { cn } from '../../../../lib/utils';
 import { MarqueeLabel } from '../../../../shared/view/beui';
 
-import ChatRowMenu, { type ChatRowMenuProps } from './ChatRowMenu';
+import ChatRowMenu, { WATCHDOG_WAKE_TARGET_CHANGED_EVENT, type ChatRowMenuProps } from './ChatRowMenu';
 import ResponseSignal, { type ActivityKinds } from './ResponseSignal';
 
 type ChatRowProps = {
@@ -23,6 +23,8 @@ type ChatRowProps = {
   /** Renders inside the row's relative box (the activity border beam). */
   overlay?: ReactNode;
   responseKinds?: ActivityKinds;
+  /** This chat is the owning project's fallback watchdog wake destination. */
+  isWatchdogWakeTarget?: boolean;
   /** Saves an inline rename; the row owns the editing state. */
   onRename: (name: string) => void | Promise<void>;
   menu: Omit<ChatRowMenuProps, 'onRename'>;
@@ -48,6 +50,7 @@ export default function ChatRow({
   onSelect,
   overlay,
   responseKinds = { planner: false, worker: false },
+  isWatchdogWakeTarget = false,
   onRename,
   menu,
   dataTestId,
@@ -57,6 +60,22 @@ export default function ChatRow({
   // Hover marquee (pre-ui12 scan, restored ui13 job 3): mouse enter/leave is
   // effectively fine-pointer only — touch taps navigate before hover matters.
   const [rowHovered, setRowHovered] = useState(false);
+  const [wakeTarget, setWakeTarget] = useState(isWatchdogWakeTarget);
+
+  useEffect(() => {
+    setWakeTarget(isWatchdogWakeTarget);
+  }, [isWatchdogWakeTarget]);
+
+  useEffect(() => {
+    const handleWakeTargetChanged = (event: Event) => {
+      const targetSessionId = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId;
+      if (targetSessionId) {
+        setWakeTarget(targetSessionId === menu.sessionId);
+      }
+    };
+    window.addEventListener(WATCHDOG_WAKE_TARGET_CHANGED_EVENT, handleWakeTargetChanged);
+    return () => window.removeEventListener(WATCHDOG_WAKE_TARGET_CHANGED_EVENT, handleWakeTargetChanged);
+  }, [menu.sessionId]);
 
   const startRename = () => {
     setEditingName(title);
@@ -158,6 +177,14 @@ export default function ChatRow({
         </span>
       )}
 
+      {wakeTarget && (
+        <BellRing
+          data-slot="watchdog-wake-target-mark"
+          aria-label="Receives watchdog wakes"
+          className="h-3 w-3 flex-shrink-0 text-muted-foreground/55"
+        />
+      )}
+
       <ResponseSignal kinds={responseKinds} />
 
       {/* Trailing control: the arrow is the resting state; on row hover it
@@ -178,7 +205,7 @@ export default function ChatRow({
             'max-md:hidden',
           )}
         />
-        <ChatRowMenu {...menu} onRename={startRename} />
+        <ChatRowMenu {...menu} isWatchdogWakeTarget={wakeTarget} onRename={startRename} />
       </span>
     </a>
   );

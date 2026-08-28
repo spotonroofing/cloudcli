@@ -27,6 +27,8 @@ export type RecentConversationListItem = Pick<
 > & {
   /** Null for standalone (project-less) chats hosted in the scratch repo. */
   projectDisplayName: string | null;
+  /** True when this chat is the owning project's watchdog wake target. */
+  watchdogWakeTarget: boolean;
 };
 
 export type DeleteProjectConfirmation = {

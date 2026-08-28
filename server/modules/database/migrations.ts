@@ -498,6 +498,47 @@ const addWatchdogChainManifestColumns = (db: Database): void => {
 };
 
 /**
+ * Adds ui15 job 18 wake routing: an immutable dispatch anchor on each chain,
+ * plus predecessor and project-target state on planner/chat session rows.
+ */
+const addWatchdogWakeRoutingColumns = (db: Database): void => {
+  const chainsColumnNames = getTableInfo(db, 'watchdog_chains').map((column) => column.name);
+  addColumnToTableIfNotExists(db, 'watchdog_chains', chainsColumnNames, 'dispatching_session_id', 'TEXT');
+
+  const sessionColumnNames = getTableInfo(db, 'sessions').map((column) => column.name);
+  const wakeTargetWasMissing = !sessionColumnNames.includes('watchdog_wake_target');
+  addColumnToTableIfNotExists(db, 'sessions', sessionColumnNames, 'predecessor_session_id', 'TEXT');
+  addColumnToTableIfNotExists(db, 'sessions', sessionColumnNames, 'watchdog_wake_target', 'BOOLEAN NOT NULL DEFAULT 0');
+  if (wakeTargetWasMissing) {
+    const candidates = db
+      .prepare(`
+        SELECT project_path
+        FROM projects
+        WHERE isArchived = 0
+      `)
+      .all() as { project_path: string }[];
+    const selectTarget = db.prepare(`
+      SELECT session_id
+      FROM sessions
+      WHERE COALESCE(assigned_project_path, project_path) = ?
+        AND isArchived = 0
+        AND (origin = 'planner' OR origin IS NULL)
+      ORDER BY CASE WHEN origin = 'planner' THEN 0 ELSE 1 END,
+               datetime(COALESCE(updated_at, created_at)) DESC,
+               session_id DESC
+      LIMIT 1
+    `);
+    const markTarget = db.prepare('UPDATE sessions SET watchdog_wake_target = 1 WHERE session_id = ?');
+    for (const project of candidates) {
+      const target = selectTarget.get(project.project_path) as { session_id: string } | undefined;
+      if (target) {
+        markTarget.run(target.session_id);
+      }
+    }
+  }
+};
+
+/**
  * Adds `booted`: 1 when the session's first message was an auto-sent boot
  * prompt (/planner or /worker New Session), so the client hides exactly those
  * prologues and never a typed first turn. Backfilled from origin on first run:
@@ -677,6 +718,7 @@ export const runMigrations = (db: Database) => {
     addSessionWorkerColumns(db);
     addSessionBootedColumn(db);
     addSessionBootStateColumn(db);
+    addWatchdogWakeRoutingColumns(db);
     retitleCommentShapedSessionNames(db);
     addProjectPlannerMemoryColumn(db);
     addMemoryUpdateDiffsColumn(db);
@@ -687,6 +729,8 @@ export const runMigrations = (db: Database) => {
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_provider_session_id ON sessions(provider_session_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_project_path ON sessions(project_path)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_is_archived ON sessions(isArchived)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_predecessor ON sessions(predecessor_session_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_watchdog_wake_target ON sessions(watchdog_wake_target)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_projects_is_starred ON projects(isStarred)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_projects_is_archived ON projects(isArchived)');
 

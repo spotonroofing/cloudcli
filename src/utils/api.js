@@ -270,6 +270,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ projectPath }),
     }),
+  // Move the owning project's fallback watchdog wake destination to this chat.
+  setWatchdogWakeTarget: (sessionId) =>
+    authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/watchdog-wake-target`, {
+      method: 'PATCH',
+    }),
   // The hidden scratch repo path that hosts standalone chats.
   scratchProject: () =>
     authenticatedFetch('/api/providers/sessions/scratch-project'),

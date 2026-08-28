@@ -26,6 +26,10 @@ type SessionRow = {
   chain_slug: string | null;
   /** 1-based unit index inside the dispatch chain; NULL outside chains. */
   chain_phase: number | null;
+  /** App-facing id of the planner session this handoff/rotation replaced. */
+  predecessor_session_id: string | null;
+  /** 1 when this chat is the project's fallback watchdog wake destination. */
+  watchdog_wake_target: number;
   /** 1 when the session's first message was an auto-sent boot prompt. */
   booted: number;
   /** NULL | 'pending' | 'ready' | 'failed' — persisted boot lifecycle. */
@@ -52,7 +56,7 @@ type RecentSessionsPage = {
 // list/feed reader prefers the app-owned attach-to-project choice without each
 // call site repeating the COALESCE. Writes always name real columns explicitly.
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, chain_phase, booted, boot_state, jsonl_path, custom_name, model, effort, fast_mode, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, chain_phase, predecessor_session_id, watchdog_wake_target, booted, boot_state, jsonl_path, custom_name, model, effort, fast_mode, isArchived, created_at, updated_at';
 
 // WHERE-clause form of the same preference (SQLite cannot reference SELECT
 // aliases in WHERE).
@@ -243,6 +247,22 @@ export const sessionsDb = {
        VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
     ).run(sessionId, provider, customName ?? null, normalizedProjectPath, origin ?? null, baseCommit ?? null);
 
+    // The first interactive chat in a project becomes its initial wake target.
+    // Later side chats cannot steal it because this only fills an empty slot.
+    if (origin == null || origin === 'planner') {
+      db.prepare(
+        `UPDATE sessions
+         SET watchdog_wake_target = 1
+         WHERE session_id = ?
+           AND NOT EXISTS (
+             SELECT 1 FROM sessions target
+             WHERE COALESCE(target.assigned_project_path, target.project_path) = ?
+               AND target.watchdog_wake_target = 1
+               AND target.session_id <> ?
+           )`
+      ).run(sessionId, normalizedProjectPath, sessionId);
+    }
+
     return sessionId;
   },
 
@@ -296,7 +316,8 @@ export const sessionsDb = {
   /**
    * The most recent planner-lane session for a project: prefers sessions
    * explicitly tagged 'planner', falls back to the newest untagged interactive
-   * session. The watchdog wakes this row.
+   * session. Boot prologues and rotation sweeps use this recency helper;
+   * watchdog wake delivery uses resolveWatchdogWakeSession instead.
    */
   getLatestPlannerSession(projectPath: string): SessionRow | null {
     const db = getConnection();
@@ -316,6 +337,121 @@ export const sessionsDb = {
 
     const row = pick(`origin = 'planner'`) ?? pick('origin IS NULL');
     return normalizeSessionRow(row) ?? null;
+  },
+
+  /**
+   * Makes one active project chat the fallback for watchdog wakes that carry
+   * no chain lineage. The clear-and-set transaction preserves one target per
+   * project and deliberately does not touch session activity timestamps.
+   */
+  setWatchdogWakeTarget(sessionId: string): SessionRow | null {
+    const db = getConnection();
+    const row = db
+      .prepare(
+        `SELECT ${SESSION_ROW_COLUMNS}
+         FROM sessions
+         WHERE (session_id = ? OR provider_session_id = ?)
+           AND isArchived = 0
+           AND (origin = 'planner' OR origin IS NULL)
+         LIMIT 1`
+      )
+      .get(sessionId, sessionId) as SessionRow | undefined;
+    const normalizedRow = normalizeSessionRow(row) ?? null;
+    if (!normalizedRow?.project_path) {
+      return null;
+    }
+
+    const moveTarget = db.transaction((targetId: string, projectPath: string) => {
+      db.prepare(
+        `UPDATE sessions
+         SET watchdog_wake_target = 0
+         WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+           AND watchdog_wake_target <> 0`
+      ).run(projectPath);
+      db.prepare('UPDATE sessions SET watchdog_wake_target = 1 WHERE session_id = ?').run(targetId);
+    });
+    moveTarget(normalizedRow.session_id, normalizeProjectPath(normalizedRow.project_path));
+    return sessionsDb.getSessionById(normalizedRow.session_id);
+  },
+
+  /** Records a spawned planner's predecessor without changing chat recency. */
+  setSessionPredecessor(sessionId: string, predecessorSessionId: string): boolean {
+    const db = getConnection();
+    const result = db.prepare(
+      `UPDATE sessions
+       SET predecessor_session_id = ?
+       WHERE session_id = ? OR provider_session_id = ?`
+    ).run(predecessorSessionId, sessionId, sessionId);
+    return result.changes > 0;
+  },
+
+  /**
+   * Resolves a watchdog wake. Chain wakes begin at their immutable dispatch
+   * anchor and walk successor rows; unanchored wakes use the project's manual
+   * target. Failed or archived successors never take delivery.
+   */
+  resolveWatchdogWakeSession(projectPath: string, dispatchingSessionId: string | null = null): SessionRow | null {
+    const db = getConnection();
+    const normalizedProjectPath = normalizeProjectPath(projectPath);
+    const selectTarget = (): SessionRow | null => {
+      const target = db
+        .prepare(
+          `SELECT ${SESSION_ROW_COLUMNS}
+           FROM sessions
+           WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+             AND watchdog_wake_target = 1
+             AND isArchived = 0
+             AND (origin = 'planner' OR origin IS NULL)
+             AND COALESCE(boot_state, 'ready') <> 'failed'
+           ORDER BY session_id DESC
+           LIMIT 1`
+        )
+        .get(normalizedProjectPath) as SessionRow | undefined;
+      return normalizeSessionRow(target) ?? null;
+    };
+
+    if (!dispatchingSessionId) {
+      return selectTarget();
+    }
+
+    let current = db
+      .prepare(
+        `SELECT ${SESSION_ROW_COLUMNS}
+         FROM sessions
+         WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+           AND (session_id = ? OR provider_session_id = ?)
+         LIMIT 1`
+      )
+      .get(normalizedProjectPath, dispatchingSessionId, dispatchingSessionId) as SessionRow | undefined;
+    if (!current) {
+      return selectTarget();
+    }
+
+    const visited = new Set<string>();
+    while (current && !visited.has(current.session_id)) {
+      visited.add(current.session_id);
+      const successor = db
+        .prepare(
+          `SELECT ${SESSION_ROW_COLUMNS}
+           FROM sessions
+           WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+             AND predecessor_session_id = ?
+             AND isArchived = 0
+             AND COALESCE(boot_state, 'ready') <> 'failed'
+           ORDER BY datetime(COALESCE(created_at, updated_at)) DESC, session_id DESC
+           LIMIT 1`
+        )
+        .get(normalizedProjectPath, current.session_id) as SessionRow | undefined;
+      if (!successor) {
+        break;
+      }
+      current = successor;
+    }
+
+    const resolved = normalizeSessionRow(current) ?? null;
+    return resolved && resolved.isArchived === 0 && resolved.boot_state !== 'failed'
+      ? resolved
+      : selectTarget();
   },
 
   /**
@@ -711,7 +847,10 @@ export const sessionsDb = {
       .prepare(
         `SELECT sessions.session_id, sessions.provider, sessions.provider_session_id,
                 COALESCE(sessions.assigned_project_path, sessions.project_path) AS project_path,
-                sessions.assigned_project_path, sessions.jsonl_path, sessions.custom_name,
+                sessions.assigned_project_path, sessions.origin, sessions.base_commit,
+                sessions.chain_slug, sessions.chain_phase, sessions.predecessor_session_id,
+                sessions.watchdog_wake_target, sessions.booted, sessions.boot_state,
+                sessions.jsonl_path, sessions.custom_name,
                 sessions.model, sessions.effort, sessions.fast_mode, sessions.isArchived, sessions.created_at, sessions.updated_at
          FROM sessions
          LEFT JOIN projects ON projects.project_path = COALESCE(sessions.assigned_project_path, sessions.project_path)

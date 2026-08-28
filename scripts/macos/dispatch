@@ -158,6 +158,7 @@ env.update({
     'DISPATCH_VERIFY_MODEL': state['verifyModel'],
     'DISPATCH_RESUME_FROM': phase,
     'DISPATCH_RESUMING': '1',
+    'DISPATCHING_SESSION_ID': state.get('dispatchingSessionId', ''),
 })
 with open(log, 'ab') as out:
     proc = subprocess.Popen(
@@ -300,6 +301,61 @@ else
   REPO="$PROJECTS_ROOT/$PROJECT_ARG"
 fi
 [[ -d "$REPO/.git" ]] || { print -u2 "dispatch: $REPO is not a git repo"; exit 66; }
+REPO="${REPO:A}"
+
+# Capture the planner chat that owns this dispatch before detaching the runner.
+# Provider runtimes expose their native id in one of these variables; resolve
+# it to Command Center's app-facing id. With no usable context, the project's
+# manual wake target wins, then the newest planner chat is the final fallback.
+DISPATCH_CONTEXT_SESSION_ID="${CODEX_THREAD_ID:-${CLAUDE_CODE_SESSION_ID:-}}"
+DISPATCHING_SESSION_ID=$(python3 - "$DB_PATH" "$REPO" "$DISPATCH_CONTEXT_SESSION_ID" <<'PYEOF'
+import sqlite3, sys
+
+db_path, project_path, context_id = sys.argv[1:4]
+try:
+    db = sqlite3.connect(db_path)
+    columns = {row[1] for row in db.execute('PRAGMA table_info(sessions)')}
+    project_expr = 'COALESCE(assigned_project_path, project_path)' if 'assigned_project_path' in columns else 'project_path'
+    if context_id:
+        row = db.execute(
+            f'''SELECT session_id FROM sessions
+                WHERE {project_expr} = ? AND (session_id = ? OR provider_session_id = ?)
+                LIMIT 1''',
+            (project_path, context_id, context_id),
+        ).fetchone()
+        if row:
+            print(row[0])
+            raise SystemExit(0)
+    if 'watchdog_wake_target' in columns:
+        row = db.execute(
+            f'''SELECT session_id FROM sessions
+                WHERE {project_expr} = ? AND watchdog_wake_target = 1 AND isArchived = 0
+                ORDER BY session_id DESC LIMIT 1''',
+            (project_path,),
+        ).fetchone()
+        if row:
+            print(row[0])
+            raise SystemExit(0)
+    row = db.execute(
+        f'''SELECT session_id FROM sessions
+            WHERE {project_expr} = ? AND origin = 'planner' AND isArchived = 0
+            ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC LIMIT 1''',
+        (project_path,),
+    ).fetchone()
+    if not row:
+        row = db.execute(
+            f'''SELECT session_id FROM sessions
+                WHERE {project_expr} = ? AND origin IS NULL AND isArchived = 0
+                ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC LIMIT 1''',
+            (project_path,),
+        ).fetchone()
+    if row:
+        print(row[0])
+except (OSError, sqlite3.Error):
+    pass
+PYEOF
+)
+export DISPATCHING_SESSION_ID
 
 # Phase files: explicit args, else the .dispatch/<slug>/ convention.
 typeset -a PHASE_FILES

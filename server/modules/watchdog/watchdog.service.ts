@@ -87,6 +87,8 @@ function settleRunningVerifies(chain: ChainRecord): void {
 type ChainRecord = {
   slug: string;
   projectPath: string;
+  /** Planner chat that dispatched the chain; never changes after registration. */
+  dispatchingSessionId: string | null;
   phases: number | null;
   currentPhase: number | null;
   status: ChainStatus;
@@ -192,6 +194,8 @@ type WakeItem = {
   freshBoot?: boolean;
   /** Chain whose wakePending flag this wake clears once delivered. */
   chainSlug?: string;
+  /** Explicit planner lineage anchor for handoff/rotation wakes. */
+  targetSessionId?: string;
   /** Consecutive delivery failures; the fallback fires at WAKE_MAX_FAILURES. */
   failures: number;
 };
@@ -299,6 +303,7 @@ class WatchdogService {
         this.chains.set(row.slug, {
           slug: row.slug,
           projectPath: row.project_path,
+          dispatchingSessionId: row.dispatching_session_id,
           phases: row.phases,
           currentPhase: row.current_phase,
           status: row.status as ChainStatus,
@@ -356,6 +361,7 @@ class WatchdogService {
         started_at: chain.startedAt,
         last_event_at: chain.lastEventAt,
         last_summary_tail: chain.lastSummaryTail,
+        dispatching_session_id: chain.dispatchingSessionId,
         manifest: chain.manifest ? JSON.stringify(chain.manifest) : null,
         phase_active: chain.phaseActive ? 1 : 0,
         punchlist: chain.punchlist,
@@ -390,6 +396,7 @@ class WatchdogService {
   registerChain(input: {
     slug: string;
     projectPath: string;
+    dispatchingSessionId?: string | null;
     phases?: number | null;
     manifest?: ChainManifestEntry[] | null;
     punchlist?: string | null;
@@ -397,6 +404,11 @@ class WatchdogService {
     // A re-registration (restart-recovery via an event) without a manifest
     // keeps the one the chain already has; same for the punch list path.
     const existing = this.chains.get(input.slug);
+    const dispatchingSessionId = existing?.dispatchingSessionId
+      ?? input.dispatchingSessionId
+      ?? sessionsDb.resolveWatchdogWakeSession(input.projectPath)?.session_id
+      ?? sessionsDb.getLatestPlannerSession(input.projectPath)?.session_id
+      ?? null;
     const punchlist = input.punchlist
       ? path.isAbsolute(input.punchlist)
         ? input.punchlist
@@ -405,6 +417,7 @@ class WatchdogService {
     const chain: ChainRecord = {
       slug: input.slug,
       projectPath: input.projectPath,
+      dispatchingSessionId,
       phases: input.phases ?? null,
       currentPhase: null,
       status: 'running',
@@ -418,10 +431,17 @@ class WatchdogService {
       wakePending: false,
     };
     this.chains.set(input.slug, chain);
+    if (!existing && dispatchingSessionId) {
+      sessionsDb.setWatchdogWakeTarget(dispatchingSessionId);
+    }
     this.persistChain(chain);
     this.broadcastChainProgress(chain);
     this.syncPunchlistWatcher(chain);
-    log(`chain registered: ${input.slug}`, { projectPath: input.projectPath, phases: input.phases ?? null });
+    log(`chain registered: ${input.slug}`, {
+      projectPath: input.projectPath,
+      phases: input.phases ?? null,
+      dispatchingSessionId,
+    });
   }
 
   /**
@@ -1206,9 +1226,19 @@ class WatchdogService {
 
   // ----- planner wakes (queued, serialized, retried while mid-turn) -----
 
-  queueWake(projectPath: string, prompt: string, options: { freshBoot?: boolean; chainSlug?: string } = {}): void {
+  queueWake(
+    projectPath: string,
+    prompt: string,
+    options: { freshBoot?: boolean; chainSlug?: string; targetSessionId?: string } = {},
+  ): void {
     const queue = this.wakeQueues.get(projectPath) ?? { prompts: [], draining: false };
-    queue.prompts.push({ prompt, freshBoot: options.freshBoot, chainSlug: options.chainSlug, failures: 0 });
+    queue.prompts.push({
+      prompt,
+      freshBoot: options.freshBoot,
+      chainSlug: options.chainSlug,
+      targetSessionId: options.targetSessionId,
+      failures: 0,
+    });
     this.wakeQueues.set(projectPath, queue);
     log(`wake queued for ${projectPath} (${queue.prompts.length} pending)`);
     void this.drainWakes(projectPath);
@@ -1250,7 +1280,10 @@ class WatchdogService {
 
     try {
       while (queue.prompts.length > 0) {
-        const planner = sessionsDb.getLatestPlannerSession(projectPath);
+        const item = queue.prompts[0];
+        const chain = item.chainSlug ? this.chains.get(item.chainSlug) : undefined;
+        const lineageAnchor = chain?.dispatchingSessionId ?? item.targetSessionId ?? null;
+        const planner = sessionsDb.resolveWatchdogWakeSession(projectPath, lineageAnchor);
         if (!planner) {
           log(`no planner session found for ${projectPath}; escalating ${queue.prompts.length} wake(s) to decision-needed`);
           this.wakeUndeliverable(projectPath, queue.prompts.splice(0), 'No planner session exists for this project');
@@ -1270,7 +1303,6 @@ class WatchdogService {
           return;
         }
 
-        const item = queue.prompts[0];
         log(`waking planner ${planner.session_id} for ${projectPath}${item.freshBoot ? ' (fresh boot)' : ''}`);
 
         // Fresh boots run as a registered app session (ui11 phase 3): the row
@@ -1280,9 +1312,28 @@ class WatchdogService {
         // switch. A failed boot persists as boot_state 'failed' (Willem
         // retries from the UI) instead of retrying into more session rows.
         if (item.freshBoot) {
-          await this.bootFreshPlanner(projectPath, planner.session_id, item.prompt);
-          queue.prompts.shift();
-          this.wakeSettled(item);
+          try {
+            if (!await this.bootFreshPlanner(projectPath, planner.session_id, item.prompt)) {
+              throw new Error('fresh planner boot failed');
+            }
+            queue.prompts.shift();
+            this.wakeSettled(item);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            item.failures += 1;
+            if (item.failures >= WAKE_MAX_FAILURES) {
+              log(`wake failed ${item.failures}x for ${projectPath}: ${message}; escalating to decision-needed`);
+              queue.prompts.shift();
+              this.wakeUndeliverable(projectPath, [item], `Delivery failed ${item.failures} times (last error: ${message})`);
+              continue;
+            }
+            log(`wake failed for ${projectPath}: ${message}; retrying in ${WAKE_RETRY_MS / 1000}s`);
+            setTimeout(() => {
+              queue.draining = false;
+              void this.drainWakes(projectPath);
+            }, WAKE_RETRY_MS).unref?.();
+            return;
+          }
           continue;
         }
 
@@ -1301,19 +1352,9 @@ class WatchdogService {
           );
           if (result.errored && resumeId && /no conversation found/i.test(result.errorMessage ?? '')) {
             log(`planner session ${planner.session_id} is dead; booting a fresh planner`);
-            const spawn = settingsService.resolveSpawnSelection('planner', null, projectPath, null);
-            const fresh = await this.runPlannerTurn(
-              spawn.provider as LLMProvider,
-              null,
-              spawn.model || null,
-              spawn.effort,
-              projectPath,
-              item.prompt,
-            );
-            if (fresh.errored) {
-              throw new Error(fresh.errorMessage ?? 'fresh planner boot failed');
+            if (!await this.bootFreshPlanner(projectPath, planner.session_id, item.prompt)) {
+              throw new Error('fresh planner boot failed');
             }
-            this.tagFreshPlanner(fresh.announcedSessionId);
           } else if (result.errored) {
             throw new Error(result.errorMessage ?? 'wake run failed');
           }
@@ -1400,14 +1441,14 @@ class WatchdogService {
    * typed /handoff): boot the next planner for the project through the same
    * fresh-boot wake the rotation uses.
    */
-  plannerHandoffComplete(projectPath: string): void {
+  plannerHandoffComplete(projectPath: string, fromSessionId: string): void {
     if (!this.policy('handoffAutomation', `handoff follow-through for ${projectPath}`)) {
       return;
     }
     this.checkHandoffPushed(projectPath).catch((error) => {
       log(`handoff push check failed for ${projectPath}: ${error instanceof Error ? error.message : String(error)}`);
     });
-    this.queueWake(projectPath, readPlannerBootPrompt(), { freshBoot: true });
+    this.queueWake(projectPath, readPlannerBootPrompt(), { freshBoot: true, targetSessionId: fromSessionId });
   }
 
   /**
@@ -1438,13 +1479,14 @@ class WatchdogService {
    * title), the boot stream broadcasts through the chat run registry, and a
    * `planner_handoff` frame tells clients viewing the outgoing session to
    * switch to the new one and hold a loader until its opening message.
-   * Never throws; a failed boot persists as boot_state 'failed'.
+   * Returns false on failure; the failed row keeps its predecessor but never
+   * becomes the project's wake target.
    */
   private async bootFreshPlanner(
     projectPath: string,
     fromSessionId: string,
     prompt: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     let sessionId: string;
     let spawn: { provider: string; model: string; effort: string; source: string };
     try {
@@ -1455,6 +1497,7 @@ class WatchdogService {
       spawn = settingsService.resolveSpawnSelection('planner', null, projectPath, null);
       const provider = spawn.provider as LLMProvider;
       sessionId = sessionsService.createAppSession(provider, projectPath, prompt, 'planner', true).sessionId;
+      sessionsDb.setSessionPredecessor(sessionId, fromSessionId);
       sessionsDb.markSessionBooted(sessionId);
       if (spawn.model) {
         sessionsDb.setSessionModel(sessionId, spawn.model);
@@ -1464,7 +1507,7 @@ class WatchdogService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log(`fresh planner boot setup failed for ${projectPath}: ${message}`);
-      return;
+      return false;
     }
     const provider = spawn.provider as LLMProvider;
     const run = chatRunRegistry.startRun({
@@ -1475,7 +1518,7 @@ class WatchdogService {
     });
     if (!run) {
       log(`fresh planner session ${sessionId} already has a run in progress`);
-      return;
+      return false;
     }
 
     const handoffEvent = JSON.stringify({
@@ -1516,19 +1559,11 @@ class WatchdogService {
       chatRunRegistry.completeRunIfCurrent(run, { exitCode: 1 });
       const failed = runtimeThrew || run.sawError || run.aborted;
       sessionsDb.setSessionBootState(sessionId, failed ? 'failed' : 'ready');
+      if (!failed) {
+        sessionsDb.setWatchdogWakeTarget(sessionId);
+      }
       log(`fresh planner ${sessionId} booted for ${projectPath}${failed ? ' (FAILED)' : ''}`);
-    }
-  }
-
-  /** A watchdog-booted planner session joins the rotation sweep's target set. */
-  private tagFreshPlanner(providerSessionId: string | null): void {
-    if (!providerSessionId) {
-      return;
-    }
-    try {
-      sessionsDb.setSessionOrigin(providerSessionId, 'planner');
-    } catch {
-      // tagging is best-effort
+      return !failed;
     }
   }
 
@@ -1666,8 +1701,12 @@ class WatchdogService {
           `Watchdog: this planner session's context usage is ${pct.toFixed(0)}% of the model's real window `
           + `(threshold ${threshold}%). Run /handoff now per doctrine: file the handoff, refresh STATE.md, `
           + 'commit and push planner memory. A fresh planner will boot from STATE.md right after.',
+          { targetSessionId: planner.session_id },
         );
-        this.queueWake(planner.project_path, readPlannerBootPrompt(), { freshBoot: true });
+        this.queueWake(planner.project_path, readPlannerBootPrompt(), {
+          freshBoot: true,
+          targetSessionId: planner.session_id,
+        });
       } catch {
         // usage may be unavailable for sessions without transcripts; skip
       }

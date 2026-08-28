@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Archive,
+  BellRing,
   Check,
   ChevronLeft,
   Copy,
@@ -23,6 +24,9 @@ import { copyTextToClipboard } from '../../../../utils/clipboard';
 const MENU_WIDTH = 260;
 
 type CopyState = 'idle' | 'loading' | 'copying' | 'copied' | 'error';
+type WakeTargetState = 'idle' | 'saving' | 'error';
+
+export const WATCHDOG_WAKE_TARGET_CHANGED_EVENT = 'command-center:watchdog-wake-target-changed';
 
 export type ChatRowMenuProps = {
   sessionId: string;
@@ -39,6 +43,8 @@ export type ChatRowMenuProps = {
   onDelete: () => void;
   /** Archive/delete hide while the session is mid-turn. */
   isProcessing?: boolean;
+  /** Whether this row currently receives project-level watchdog wakes. */
+  isWatchdogWakeTarget?: boolean;
   onOpenChange?: (open: boolean) => void;
 };
 
@@ -61,6 +67,7 @@ export default function ChatRowMenu({
   onArchive,
   onDelete,
   isProcessing = false,
+  isWatchdogWakeTarget = false,
   onOpenChange,
 }: ChatRowMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -68,6 +75,7 @@ export default function ChatRowMenu({
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [copyState, setCopyState] = useState<CopyState>('idle');
   const [providerSessionId, setProviderSessionId] = useState<string | null>(null);
+  const [wakeTargetState, setWakeTargetState] = useState<WakeTargetState>('idle');
   const copyRequestRef = useRef(0);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -81,6 +89,7 @@ export default function ChatRowMenu({
       copyRequestRef.current += 1;
       setCopyState('idle');
       setProviderSessionId(null);
+      setWakeTargetState('idle');
     }
     onOpenChange?.(open);
   }, [onOpenChange]);
@@ -149,6 +158,23 @@ export default function ChatRowMenu({
     }
   };
 
+  const receiveWatchdogWakes = async () => {
+    setWakeTargetState('saving');
+    try {
+      const response = await api.setWatchdogWakeTarget(sessionId);
+      if (!response.ok) {
+        throw new Error(`Wake target update failed (${response.status})`);
+      }
+      window.dispatchEvent(new CustomEvent(WATCHDOG_WAKE_TARGET_CHANGED_EVENT, {
+        detail: { sessionId },
+      }));
+      setMenuOpen(false);
+    } catch (error) {
+      console.error('[Sidebar] Failed to move watchdog wake target:', error);
+      setWakeTargetState('error');
+    }
+  };
+
   const toggleMenu = () => {
     if (isOpen) {
       setMenuOpen(false);
@@ -157,7 +183,7 @@ export default function ChatRowMenu({
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       // Downward from the trigger by default; flip up only when out of room.
-      const estimatedHeight = 240;
+      const estimatedHeight = currentProjectId ? 284 : 240;
       setPosition({
         top: rect.bottom + 6 + estimatedHeight <= window.innerHeight - 8
           ? rect.bottom + 6
@@ -228,6 +254,30 @@ export default function ChatRowMenu({
             <FolderInput className="h-4 w-4 flex-shrink-0" />
             <span className="min-w-0 flex-1 truncate font-medium">Move to project</span>
           </button>
+          {currentProjectId && (
+            <button
+              type="button"
+              role="menuitem"
+              data-slot="chat-row-menu-wake-target"
+              aria-current={isWatchdogWakeTarget ? 'true' : undefined}
+              disabled={wakeTargetState === 'saving'}
+              className={cn(itemClass(), wakeTargetState === 'saving' && 'cursor-wait opacity-60')}
+              onClick={() => void receiveWatchdogWakes()}
+            >
+              {wakeTargetState === 'saving' ? (
+                <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" />
+              ) : (
+                <BellRing className="h-4 w-4 flex-shrink-0" />
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">Receive watchdog wakes here</span>
+                {wakeTargetState === 'error' && (
+                  <span className="block text-[10px] text-destructive">Could not move wake target</span>
+                )}
+              </span>
+              {isWatchdogWakeTarget && <Check className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />}
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"

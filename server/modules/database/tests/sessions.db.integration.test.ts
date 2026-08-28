@@ -105,6 +105,61 @@ test('repository reads normalize SQLite UTC timestamps to ISO strings', async ()
   });
 });
 
+test('watchdog wake resolution follows the dispatching planner lineage and ignores side-chat activity', async () => {
+  await withIsolatedDatabase(() => {
+    const projectPath = '/workspace/wake-lineage';
+    projectsDb.createProjectPath(projectPath);
+    sessionsDb.createAppSession('planner-a', 'claude', projectPath, 'Planner A', 'planner');
+    sessionsDb.createAppSession('side-chat-b', 'claude', projectPath, 'Side chat B', null);
+    sessionsDb.createAppSession('direct-worker', 'claude', projectPath, 'Direct worker', 'direct');
+    sessionsDb.setWatchdogWakeTarget('planner-a');
+
+    assert.equal(sessionsDb.setWatchdogWakeTarget('direct-worker'), null);
+    assert.equal(
+      sessionsDb.resolveWatchdogWakeSession(projectPath)?.session_id,
+      'planner-a',
+      'worker rows cannot become the project chat wake target',
+    );
+
+    assert.equal(
+      sessionsDb.resolveWatchdogWakeSession(projectPath, 'planner-a')?.session_id,
+      'planner-a',
+      'a side chat does not steal a chain wake from its dispatching planner',
+    );
+
+    sessionsDb.createAppSession('planner-a2', 'claude', projectPath, 'Planner A2', 'planner');
+    assert.equal(sessionsDb.setSessionPredecessor('planner-a2', 'planner-a'), true);
+    sessionsDb.setWatchdogWakeTarget('planner-a2');
+
+    assert.equal(
+      sessionsDb.resolveWatchdogWakeSession(projectPath, 'planner-a')?.session_id,
+      'planner-a2',
+      'a chain wake follows the handoff successor',
+    );
+
+    sessionsDb.setWatchdogWakeTarget('side-chat-b');
+    assert.equal(
+      sessionsDb.resolveWatchdogWakeSession(projectPath)?.session_id,
+      'side-chat-b',
+      'an unanchored wake uses the manual project target',
+    );
+    assert.equal(
+      sessionsDb.resolveWatchdogWakeSession(projectPath, 'planner-a')?.session_id,
+      'planner-a2',
+      'moving the project target does not redirect an existing chain lineage',
+    );
+
+    sessionsDb.createAppSession('planner-failed', 'claude', projectPath, 'Failed successor', 'planner');
+    sessionsDb.setSessionPredecessor('planner-failed', 'planner-a2');
+    sessionsDb.setSessionBootState('planner-failed', 'failed');
+    assert.equal(
+      sessionsDb.resolveWatchdogWakeSession(projectPath, 'planner-a')?.session_id,
+      'planner-a2',
+      'a failed successor never receives a wake',
+    );
+  });
+});
+
 test('recent sessions are globally ordered, paginated, and limited to visible conversations', async () => {
   await withIsolatedDatabase(() => {
     projectsDb.createProjectPath('/workspace/project-a');

@@ -9,6 +9,8 @@ export type WatchdogChainRow = {
   started_at: number;
   last_event_at: number;
   last_summary_tail: string | null;
+  /** App-facing planner session that originally dispatched the chain. */
+  dispatching_session_id: string | null;
   /** Planner-supplied dispatch manifest as JSON (ui9 B4); NULL when absent. */
   manifest: string | null;
   /** 1 while a phase session is running (between phase-start and phase-end). */
@@ -43,8 +45,8 @@ export const watchdogDb = {
   upsertChain(row: WatchdogChainRow): void {
     const db = getConnection();
     db.prepare(`
-      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, manifest, phase_active, punchlist, job_meta, wake_pending)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, dispatching_session_id, manifest, phase_active, punchlist, job_meta, wake_pending)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(slug) DO UPDATE SET
         project_path = excluded.project_path,
         phases = excluded.phases,
@@ -53,6 +55,7 @@ export const watchdogDb = {
         started_at = excluded.started_at,
         last_event_at = excluded.last_event_at,
         last_summary_tail = excluded.last_summary_tail,
+        dispatching_session_id = COALESCE(watchdog_chains.dispatching_session_id, excluded.dispatching_session_id),
         manifest = excluded.manifest,
         phase_active = excluded.phase_active,
         punchlist = excluded.punchlist,
@@ -67,6 +70,7 @@ export const watchdogDb = {
       row.started_at,
       row.last_event_at,
       row.last_summary_tail,
+      row.dispatching_session_id,
       row.manifest,
       row.phase_active,
       row.punchlist,

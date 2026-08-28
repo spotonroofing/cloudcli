@@ -88,6 +88,7 @@ export default function SidebarSessionItem({
         onSelect={selectSession}
         overlay={beam.mounted ? <BorderBeamOverlay identity="planner" strength={0.3} {...beam.beamProps} /> : null}
         responseKinds={{ planner: responseKind === 'planner', worker: responseKind === 'worker' }}
+        isWatchdogWakeTarget={session.watchdogWakeTarget === true}
         onRename={(name) => onSaveEditingSession(project.projectId, session.id, name, session.__provider)}
         menu={{
           sessionId: session.id,
@@ -100,6 +101,7 @@ export default function SidebarSessionItem({
           onArchive: () => onArchiveSession(session.id),
           onDelete: () => onDeleteSession(project.projectId, session.id, sessionView.sessionName, session.__provider),
           isProcessing,
+          isWatchdogWakeTarget: session.watchdogWakeTarget === true,
         }}
       />
     </div>

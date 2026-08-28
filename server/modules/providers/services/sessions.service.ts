@@ -247,6 +247,7 @@ export const sessionsService = {
           : null,
         sessionTitle: session.custom_name?.trim() || session.session_id,
         lastActivity: session.updated_at ?? session.created_at ?? null,
+        watchdogWakeTarget: Boolean(session.watchdog_wake_target),
       };
     });
 
@@ -281,6 +282,16 @@ export const sessionsService = {
     }
 
     sessionsDb.assignSessionToProject(sessionId, trimmed);
+  },
+
+  /** Moves the owning project's fallback watchdog wake destination. */
+  setWatchdogWakeTarget(sessionId: string): void {
+    if (!sessionsDb.setWatchdogWakeTarget(sessionId)) {
+      throw new AppError('An active project chat is required to receive watchdog wakes.', {
+        code: 'WATCHDOG_WAKE_TARGET_INVALID',
+        statusCode: 400,
+      });
+    }
   },
 
   /**

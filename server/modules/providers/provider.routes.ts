@@ -838,6 +838,17 @@ router.patch(
   }),
 );
 
+// Move this project chat's fallback watchdog wake destination. Chain-owned
+// wakes still resolve from their immutable dispatch lineage.
+router.patch(
+  '/sessions/:sessionId/watchdog-wake-target',
+  asyncHandler(async (req: Request, res: Response) => {
+    const sessionId = parseSessionId(req.params.sessionId);
+    sessionsService.setWatchdogWakeTarget(sessionId);
+    res.json(createApiSuccessResponse({ sessionId, watchdogWakeTarget: true }));
+  }),
+);
+
 router.get(
   '/sessions/archived',
   asyncHandler(async (_req: Request, res: Response) => {

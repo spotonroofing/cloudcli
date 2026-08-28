@@ -162,6 +162,7 @@ export default function SidebarRecentConversations({
                 planner: responseIndicators.get(conversation.sessionId)?.kind === 'planner',
                 worker: responseIndicators.get(conversation.sessionId)?.kind === 'worker',
               }}
+              isWatchdogWakeTarget={conversation.watchdogWakeTarget}
               onSelect={() => {
                 onSessionViewed(conversation.sessionId);
                 onConversationSelect(
@@ -178,6 +179,7 @@ export default function SidebarRecentConversations({
                 projects,
                 currentProjectId: conversation.projectId,
                 currentProjectName: conversation.projectDisplayName,
+                isWatchdogWakeTarget: conversation.watchdogWakeTarget,
                 onMoveToProject: (projectPath) => onMoveConversationToProject(conversation.sessionId, projectPath),
                 onArchive: () => onArchiveConversation(conversation.sessionId),
                 onDelete: () => onDeleteConversation(

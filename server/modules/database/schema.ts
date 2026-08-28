@@ -132,6 +132,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- the switcher and phase navigator can map a session to its manifest
     -- entry; NULL for direct and free-standing runs.
     chain_phase INTEGER,
+    -- Planner handoff/rotation lineage. A successor stores the app-facing id
+    -- of the planner session it replaced, so watchdog wakes can follow the
+    -- dispatching chat instead of whichever chat was touched most recently.
+    predecessor_session_id TEXT,
+    -- One active conversation per project is the fallback destination for
+    -- wakes without chain lineage (maintenance, self-test, manual routing).
+    watchdog_wake_target BOOLEAN NOT NULL DEFAULT 0,
     -- 1 when the first message was an auto-sent boot prompt (/planner or
     -- /worker New Session); the client hides exactly those prologues.
     booted INTEGER DEFAULT 0,
@@ -209,6 +216,10 @@ CREATE TABLE IF NOT EXISTS watchdog_chains (
     started_at INTEGER NOT NULL,
     last_event_at INTEGER NOT NULL,
     last_summary_tail TEXT,
+    -- App-facing planner session that dispatched this chain. Immutable after
+    -- the first registration; terminal wakes resolve forward through session
+    -- predecessor links from this anchor.
+    dispatching_session_id TEXT,
     -- Planner-supplied dispatch manifest (ui9 B4): JSON array of
     -- {name, tasks[], kind: 'phase'|'task', anchor?} in run order; NULL for
     -- chains dispatched without one. Appended units extend the array.

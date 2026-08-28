@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { appConfigDb, closeConnection, initializeDatabase, projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { appConfigDb, closeConnection, initializeDatabase, projectsDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
 import { watchdogService } from '@/modules/watchdog/index.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { RealtimeClientConnection } from '@/shared/types.js';
@@ -95,6 +95,32 @@ test('an announced title replaces a prompt-shaped name discovery wrote first', a
     // No title announced: the existing name is left alone.
     sessionsDb.setSessionOrigin('thread-1', 'dispatch', null, 'demo', null, { provider: 'codex', projectPath }, 2);
     assert.equal(sessionsDb.getSessionById(id)?.custom_name, 'Two');
+  });
+});
+
+test('a chain keeps its first dispatching planner across re-registration', async () => {
+  await withIsolatedDatabase(() => {
+    const projectPath = '/workspace/dispatch-owner';
+    projectsDb.createProjectPath(projectPath);
+    sessionsDb.createAppSession('dispatch-planner-a', 'claude', projectPath, 'Planner A', 'planner');
+    sessionsDb.createAppSession('dispatch-planner-b', 'claude', projectPath, 'Planner B', 'planner');
+
+    watchdogService.registerChain({
+      slug: 'dispatch-owner-stub',
+      projectPath,
+      dispatchingSessionId: 'dispatch-planner-a',
+      phases: 1,
+    });
+    watchdogService.registerChain({
+      slug: 'dispatch-owner-stub',
+      projectPath,
+      dispatchingSessionId: 'dispatch-planner-b',
+      phases: 1,
+    });
+
+    const chain = watchdogDb.listChains().find((row) => row.slug === 'dispatch-owner-stub');
+    assert.equal(chain?.dispatching_session_id, 'dispatch-planner-a');
+    assert.equal(sessionsDb.resolveWatchdogWakeSession(projectPath)?.session_id, 'dispatch-planner-a');
   });
 });
 
