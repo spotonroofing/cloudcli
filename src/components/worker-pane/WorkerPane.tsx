@@ -29,10 +29,12 @@ import JobsSidebar, {
   type PromoteRecord,
 } from './JobsSidebar';
 import {
+  activeWorkerChain,
   findWorkerFollowTarget,
   preserveWorkerSessionSelection,
   sessionUpsertNeedsRunRefresh,
   shouldFollowWorkerRun,
+  workerPaneJobTitle,
   workerSessionPinUntil,
 } from './workerRunFollow';
 
@@ -485,18 +487,19 @@ export default function WorkerPane({
   }, [projectPath]);
 
   const selectedRun = runs.find((run) => run.sessionId === paneSession?.id) ?? null;
-  // The title after "Worker" (ui14 job 2), in the planner header's style: the
-  // run's own session title, else the chain label ("slug Job N - name"); a
-  // fresh, unsent pane session has none yet.
-  const paneTitle = selectedRun
+  const chainList = useMemo(() => Object.values(chains), [chains]);
+  // The title after "Worker" names the work (ui18 job 4): the unit being
+  // worked on while a chain runs, else the last unit that landed, wearing the
+  // jobs list's completed treatment. With no chain to name it falls back to
+  // the ui14 job 2 title — the run's own session title, else its chain label.
+  const jobTitle = workerPaneJobTitle(chainList, selectedRun?.chainSlug ?? null);
+  const sessionTitle = selectedRun
     ? (titleFromPrompt(selectedRun.title) || runLabel(selectedRun, chains))
     : titleFromPrompt(paneSession?.summary);
-  const followedChain = selectedRun?.chainSlug
-    ? chains[selectedRun.chainSlug] ?? null
-    : null;
-  const followedActiveChain = followedChain?.status === 'running' || followedChain?.status === 'paused'
-    ? followedChain
-    : null;
+  const paneTitle = jobTitle?.name ?? sessionTitle;
+  // The one fast-mode control in the pane belongs to the chain the title
+  // names, so the bolt and the job it affects are read together.
+  const headerChain = activeWorkerChain(chainList, selectedRun?.chainSlug ?? null);
 
   // Explicit job-row chat controls are the navigation (ui16 job 2), and the list spans every run of the
   // project (ui14 job 1): each chain is a group carrying the sessions its
@@ -558,7 +561,14 @@ export default function WorkerPane({
         <span className="text-xs font-medium text-foreground">Worker</span>
         {!runsLoaded && <Skeleton className="h-3 w-36 rounded-sm" />}
         {runsLoaded && paneTitle && (
-          <span data-slot="worker-run-name" className="min-w-0 truncate text-[11px] text-muted-foreground">
+          <span
+            data-slot="worker-run-name"
+            data-state={jobTitle?.state}
+            className={cn(
+              'min-w-0 truncate text-[11px]',
+              jobTitle?.state === 'done' ? 'text-muted-foreground/60' : 'text-muted-foreground',
+            )}
+          >
             {paneTitle}
           </span>
         )}
@@ -573,11 +583,11 @@ export default function WorkerPane({
           </Badge>
         )}
         <span className="min-w-0 flex-1" />
-        {followedActiveChain && (
+        {headerChain && (
           <ChainFastModeToggle
-            chain={followedActiveChain}
-            pending={fastModePendingSlug === followedActiveChain.slug}
-            showHint={fastModeHintSlug === followedActiveChain.slug}
+            chain={headerChain}
+            pending={fastModePendingSlug === headerChain.slug}
+            showHint={fastModeHintSlug === headerChain.slug}
             onToggle={handleToggleChainFastMode}
           />
         )}
@@ -705,9 +715,6 @@ export default function WorkerPane({
               loading={!runsLoaded}
               activeSessionId={paneSession?.id ?? null}
               onOpenSession={handleOpenJobSession}
-              onToggleFastMode={handleToggleChainFastMode}
-              fastModePendingSlug={fastModePendingSlug}
-              fastModeHintSlug={fastModeHintSlug}
             />
           </div>
         )}

@@ -2,11 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  activeUnitKey,
+  activeWorkerChain,
+  drawerOpenKeys,
   findWorkerFollowTarget,
   preserveWorkerSessionSelection,
   selectedRunKeepsAutoFollow,
   sessionUpsertNeedsRunRefresh,
   shouldFollowWorkerRun,
+  workerPaneJobTitle,
   workerSessionPinUntil,
   WORKER_SESSION_PIN_MS,
 } from './workerRunFollow';
@@ -53,4 +57,78 @@ test('only an unknown session upsert refreshes the run navigator immediately', (
   assert.equal(sessionUpsertNeedsRunRefresh('build-2', known), false);
   assert.equal(sessionUpsertNeedsRunRefresh('build-3', known), true);
   assert.equal(sessionUpsertNeedsRunRefresh(null, known), true);
+});
+
+test('job drawers follow a unit start, a hand-opened drawer, and the next unit start (ui18 job 4)', () => {
+  const stub = (currentPhase: number, phaseActive: boolean, status = 'running') => ({
+    slug: 'follow-stub',
+    status,
+    currentPhase,
+    phaseActive,
+    startedAt: 1,
+    manifest: [{ name: 'One' }, { name: 'Two' }],
+  });
+  const drawers = ['follow-stub:1', 'follow-stub:2'];
+
+  // Unit 1 starts: its drawer is the open one.
+  let boundary = activeUnitKey([stub(1, true)]);
+  assert.deepEqual(drawerOpenKeys(drawers, {}, boundary), ['follow-stub:1']);
+
+  // Between boundaries Willem opens unit 2's drawer by hand; it is respected.
+  const byHand = { 'follow-stub:2': true };
+  assert.deepEqual(drawerOpenKeys(drawers, byHand, boundary), ['follow-stub:1', 'follow-stub:2']);
+
+  // Unit 1 ends: the column is at a boundary, the sidebar drops the overrides,
+  // and no drawer is forced open.
+  boundary = activeUnitKey([stub(1, false)]);
+  assert.equal(boundary, null);
+  assert.deepEqual(drawerOpenKeys(drawers, {}, boundary), []);
+
+  // Unit 2 starts: the work moved, and so did the open drawer.
+  boundary = activeUnitKey([stub(2, true)]);
+  assert.deepEqual(drawerOpenKeys(drawers, {}, boundary), ['follow-stub:2']);
+
+  // A chain that stopped is not work in progress; nothing is held open for it.
+  assert.equal(activeUnitKey([stub(2, true, 'stopped')]), null);
+});
+
+test('the worker pane title names the running unit, else the last one that landed', () => {
+  const running = {
+    slug: 'ui18',
+    status: 'running',
+    currentPhase: 2,
+    phaseActive: true,
+    startedAt: 20,
+    manifest: [
+      { name: 'Promote waits for the job', commitHash: 'abc1234' },
+      { name: 'Promoted line in jobs' },
+    ],
+  };
+  const finished = {
+    slug: 'ui17',
+    status: 'completed',
+    currentPhase: 2,
+    phaseActive: false,
+    startedAt: 10,
+    manifest: [
+      { name: 'Runner reloads', commitHash: 'aaa1111' },
+      { name: 'Wakes land', commitHash: 'bbb2222' },
+    ],
+  };
+
+  assert.equal(activeWorkerChain([finished, running]), running);
+  assert.deepEqual(workerPaneJobTitle([finished, running], 'ui18'), {
+    name: 'Promoted line in jobs',
+    state: 'running',
+  });
+  // A chain that died without its terminal event stays "running" for ever; the
+  // chain the pane actually follows outranks it.
+  const stale = { ...running, slug: 'stale-stub', currentPhase: 1, startedAt: 99, manifest: [{ name: 'Stale stub' }] };
+  assert.equal(activeWorkerChain([running, stale], 'ui18'), running);
+  assert.equal(workerPaneJobTitle([running, stale], 'ui18')?.name, 'Promoted line in jobs');
+  assert.equal(workerPaneJobTitle([running, stale], null)?.name, 'Stale stub', 'no followed chain, newest wins');
+  // Nothing running: the followed chain's last landed unit, in the done treatment.
+  assert.deepEqual(workerPaneJobTitle([finished], 'ui17'), { name: 'Wakes land', state: 'done' });
+  // A run belonging to no chain keeps the pane's own session title.
+  assert.equal(workerPaneJobTitle([finished], null), null);
 });

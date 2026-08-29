@@ -10,6 +10,8 @@ import { EASE_OUT, SPRING_SWAP } from '../../shared/view/beui/ease';
 import { Button, Skeleton, Tooltip } from '../../shared/view/ui';
 import { useSharedNow } from '../../hooks/useSharedNow';
 
+import { activeUnitKey, drawerOpenKeys } from './workerRunFollow';
+
 /** Side-column width: exactly 20px over ui14 below the 260px cap. */
 export const JOBS_COLUMN_BASIS = 'min(16.25rem, calc(33.333cqw + 1.25rem))';
 /** One replace-in-place history page; the long tail never stays mounted. */
@@ -379,6 +381,8 @@ function LiveElapsed({ startedAt }: { startedAt: number }) {
 /**
  * Commit metadata on a job's drawer: what the job shipped, kept separate
  * from the total-time row so the drawer's reading order stays deterministic.
+ * Since ui18 job 4 this line is also the one place the chain slug appears —
+ * the column has no header to carry it.
  */
 function JobCommitRow({ unit }: { unit: Unit }) {
   if (!unit.commitHash) {
@@ -400,6 +404,14 @@ function JobCommitRow({ unit }: { unit: Unit }) {
           </MarqueeLabel>
         </Tooltip>
       </div>
+      {unit.chainSlug && (
+        <span
+          data-slot="jobs-sidebar-chain-slug"
+          className="flex-shrink-0 pl-1 font-mono text-[10px] text-muted-foreground/50"
+        >
+          {unit.chainSlug}
+        </span>
+      )}
     </li>
   );
 }
@@ -641,6 +653,20 @@ export type JobGroup = {
 /** A unit with its bottom-to-top position in the flat list (1 = oldest). */
 type PositionedUnit = Unit & { position: number; historyStartedAt: number };
 
+/** A row opens a drawer only where the drawer would have something to say. */
+function unitHasDrawer(unit: Unit): boolean {
+  return unit.tasks.length > 0
+    || unit.tokenCount != null
+    || unit.engine != null
+    || unit.commitHash != null
+    || unit.status === 'cancelled'
+    || unit.verify != null
+    || unit.verifyFixedIn != null;
+}
+
+/** Steps between the drawers closing at a unit boundary, the list's own ramp. */
+const DRAWER_FOLLOW_STAGGER_MS = 70;
+
 /**
  * Where each promote sits in the newest-first history: directly above the
  * newest unit that had already landed when it ran, which is the first row
@@ -688,12 +714,6 @@ type JobsSidebarProps = {
   activeSessionId: string | null;
   /** Navigate the worker pane to a unit's session. */
   onOpenSession: (sessionId: string) => void;
-  /** Flip the running chain's next-unit Codex service tier. */
-  onToggleFastMode?: (slug: string, enabled: boolean) => void;
-  /** Slug whose route write is still in flight. */
-  fastModePendingSlug?: string | null;
-  /** Slug showing the first-arm next-job hint. */
-  fastModeHintSlug?: string | null;
 };
 
 type ChainFastModeToggleProps = {
@@ -753,14 +773,9 @@ function JobsSidebar({
   loading = false,
   activeSessionId,
   onOpenSession,
-  onToggleFastMode,
-  fastModePendingSlug = null,
-  fastModeHintSlug = null,
 }: JobsSidebarProps) {
   const reduce = useReducedMotion() ?? false;
   const repairTruth = repairedFailureTruth(groups);
-  const runningChain = groups.find((group) =>
-    group.chain?.status === 'running' || group.chain?.status === 'paused')?.chain ?? null;
 
   // Newest group first, each group's newest unit first — the flat list is
   // already top-to-bottom; positions count from the bottom for the stagger.
@@ -795,13 +810,23 @@ function JobsSidebar({
     unit.position = stacked.length - i;
   });
 
-  // Per-job drawer overrides: unset rows follow the default (only the newest
-  // run's current job open), so advancing to the next job opens its drawer
-  // and lets the finished one fall closed without bookkeeping.
+  // Drawers follow the work (ui18 job 4): the unit being worked on is the open
+  // drawer, and every open or close the reader makes by hand holds until the
+  // next unit boundary, where the overrides are dropped one after another.
+  // The chain of the session the pane is showing speaks first, exactly as it
+  // does for the pane title, so the column and the header follow one chain.
+  const followedSlug = activeSessionId
+    ? groups.find((group) => Object.values(group.sessions).includes(activeSessionId))?.chain?.slug ?? null
+    : null;
+  const activeKey = activeUnitKey(groups.flatMap((group) => group.chain ? [group.chain] : []), followedSlug);
+  // Before this column has seen a boundary it still opens the newest run's
+  // current job, so a history with nothing running is not read fully collapsed.
   const newest = groups[0] ?? null;
-  const defaultOpenKey = newest?.chain
+  const restingKey = newest?.chain
     ? `${newest.chain.slug}:${newest.chain.currentPhase ?? 1}`
     : null;
+  const [followedBoundary, setFollowedBoundary] = useState(false);
+  const openKey = activeKey ?? (followedBoundary ? null : restingKey);
   const [drawerOverrides, setDrawerOverrides] = useState<Record<string, boolean>>({});
   const [tappedTask, setTappedTask] = useState<string | null>(null);
   const [historyPage, setHistoryPage] = useState(0);
@@ -829,6 +854,46 @@ function JobsSidebar({
   useEffect(() => {
     listRef.current?.scrollTo({ top: 0 });
   }, [historyPage]);
+
+  // The open set this render draws, kept for the boundary effect: it closes
+  // exactly what the reader had open, so the cascade is over real drawers.
+  const openKeys = drawerOpenKeys(
+    stacked.filter(unitHasDrawer).map((unit) => unit.key),
+    drawerOverrides,
+    openKey,
+  );
+  const openKeysRef = useRef<string[]>(openKeys);
+  openKeysRef.current = openKeys;
+  const reduceRef = useRef(reduce);
+  reduceRef.current = reduce;
+  const boundarySeenRef = useRef(false);
+
+  // A unit boundary: every drawer the reader left open closes one after
+  // another on the list's own 70ms step, and the starting unit's drawer is
+  // the one the default leaves open. Nothing snaps shut together, and the
+  // reader's own opens and closes hold until the next boundary lands here.
+  useEffect(() => {
+    if (!boundarySeenRef.current) {
+      boundarySeenRef.current = true;
+      return;
+    }
+    setFollowedBoundary(true);
+    const closing = openKeysRef.current.filter((key) => key !== activeKey);
+    if (closing.length === 0) {
+      setDrawerOverrides((previous) => (Object.keys(previous).length ? {} : previous));
+      return;
+    }
+    setDrawerOverrides(Object.fromEntries(closing.map((key) => [key, true])));
+    const step = reduceRef.current ? 0 : DRAWER_FOLLOW_STAGGER_MS;
+    const timers = closing.map((key, order) => setTimeout(() => {
+      setDrawerOverrides((previous) => {
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      });
+    }, (order + 1) * step));
+    return () => timers.forEach(clearTimeout);
+  }, [activeKey]);
 
   // Populate animation: units past the previously rendered count are new (a
   // manifest landing or an append) and stagger in one by one; settled rows
@@ -867,30 +932,9 @@ function JobsSidebar({
       data-history-total={stacked.length}
       className="flex h-full min-w-0 flex-col bg-muted/20"
     >
-      {runningChain && onToggleFastMode && (
-        <div
-          data-slot="jobs-chain-header"
-          data-chain={runningChain.slug}
-          data-verify-failures={runningChain.verifyFailures ?? 0}
-          className="flex min-h-8 items-center gap-2 border-b border-border/50 px-2 text-[11px] text-muted-foreground"
-        >
-          <span className="min-w-0 flex-1 truncate">{runningChain.slug}</span>
-          {(runningChain.verifyFailures ?? 0) > 0 && (
-            <span
-              data-slot="jobs-chain-verify-failures"
-              className="flex-shrink-0 tabular-nums text-rose-600 dark:text-rose-400"
-            >
-              {runningChain.verifyFailures} verify {runningChain.verifyFailures === 1 ? 'failure' : 'failures'}
-            </span>
-          )}
-          <ChainFastModeToggle
-            chain={runningChain}
-            pending={fastModePendingSlug === runningChain.slug}
-            showHint={fastModeHintSlug === runningChain.slug}
-            onToggle={onToggleFastMode}
-          />
-        </div>
-      )}
+      {/* No header bar of any kind (ui18 job 4): no slug, no title, no
+          controls — the list starts at its first row. The chain slug lives on
+          a unit's commit line, the fast-mode bolt in the worker pane header. */}
       {loading && groups.length === 0 ? (
         <div
           className="min-h-0 flex-1 space-y-2 overflow-hidden px-2 py-2"
@@ -912,15 +956,8 @@ function JobsSidebar({
         <AnimatePresence initial={false}>
           {visibleStacked.map((unit, pageIndex) => {
             const unitIndex = pageStart + pageIndex;
-            const hasDrawer = unit.tasks.length > 0
-              || unit.tokenCount != null
-              || unit.engine != null
-              || unit.commitHash != null
-              || unit.status === 'cancelled'
-              || unit.verify != null
-              || unit.verifyFixedIn != null;
-            const drawerOpen = hasDrawer
-              && (drawerOverrides[unit.key] ?? unit.key === defaultOpenKey);
+            const hasDrawer = unitHasDrawer(unit);
+            const drawerOpen = hasDrawer && openKeys.includes(unit.key);
             // Disclosure owns the row and title. Navigation is deliberately
             // isolated to the explicit chat affordance in the trailing slot.
             const navigable = Boolean(unit.sessionId);
