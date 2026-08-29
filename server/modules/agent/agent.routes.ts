@@ -8,6 +8,27 @@ import type { ProviderRunFunction } from '@/shared/types.js';
 import { getClaudeConfigDir, normalizeProjectPath } from '../../shared/utils.js';
 import { watchdogService } from '../watchdog/index.js';
 
+const HEADLESS_CLAUDE_ALLOWED_TOOLS = [
+  'Bash',
+  'WebFetch',
+  'WebSearch',
+  'Agent',
+  'Skill',
+  'ToolSearch',
+  'Monitor',
+  'TaskOutput',
+  'Read',
+  'Edit',
+  'Write',
+  'Glob',
+  'Grep',
+  'NotebookEdit',
+  'TaskCreate',
+  'TaskUpdate',
+  'TaskList',
+  'TaskGet',
+];
+
 type AgentRouterDependencies = {
   fileSystem: typeof import('node:fs/promises');
   crypto: typeof import('node:crypto');
@@ -1056,7 +1077,12 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           model: model,
           effort,
           mcpPolicy,
-          permissionMode: 'bypassPermissions' // Bypass all permissions for API calls
+          permissionMode: 'acceptEdits',
+          toolsSettings: {
+            allowedTools: HEADLESS_CLAUDE_ALLOWED_TOOLS,
+            disallowedTools: [],
+            skipPermissions: false,
+          },
         }, writer);
 
       } else if (provider === 'cursor') {

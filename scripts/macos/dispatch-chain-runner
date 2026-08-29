@@ -64,6 +64,11 @@ CHAIN_EFFORT="${DISPATCH_EFFORT:-high}"
 FALLBACK_MODEL="claude-opus-4-8"
 CLAUDE_DEFAULT_MODEL="claude-fable-5"
 CODEX_DEFAULT_MODEL="gpt-5.6-sol"
+# Headless Claude units are unattended, so every normal work tool is explicit.
+# acceptEdits keeps Claude on its native file tools while the PreToolUse hook
+# still gets the final say over destructive Bash commands.
+CLAUDE_PERMISSION_MODE="acceptEdits"
+CLAUDE_ALLOWED_TOOLS="Bash,WebFetch,WebSearch,Agent,Skill,ToolSearch,Monitor,TaskOutput,Read,Edit,Write,Glob,Grep,NotebookEdit,TaskCreate,TaskUpdate,TaskList,TaskGet"
 
 # The verify stage runs on Luna regardless of the build's engine; the two
 # overrides exist only for stub chains and tests.
@@ -529,7 +534,8 @@ run_claude() {
     exec python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' \
     "$CLAUDE_BIN" -p --strict-mcp-config --mcp-config "$MCP_EMPTY" --model "$4" --effort "$5" "${fallback_args[@]}" \
     --session-id "$3" \
-    --dangerously-skip-permissions \
+    --permission-mode "$CLAUDE_PERMISSION_MODE" \
+    --allowedTools "$CLAUDE_ALLOWED_TOOLS" \
     < "$1" > "$2" 2>&1
 }
 
@@ -875,7 +881,9 @@ start_verify() {
   if [[ "$VERIFY_ENGINE" == "claude" ]]; then
     announce_session "$session" "$VERIFY_COMMIT" "$VERIFY_NUM" verify claude "$VERIFY_MODEL" "Verify: $VERIFY_NAME"
   fi
-  journal "verify $VERIFY_NUM/$TOTAL" "start" "$VERIFY_NAME against $VERIFY_COMMIT ($VERIFY_ENGINE $VERIFY_MODEL)"
+  local permission_detail=""
+  [[ "$VERIFY_ENGINE" == "claude" ]] && permission_detail=", permission $CLAUDE_PERMISSION_MODE"
+  journal "verify $VERIFY_NUM/$TOTAL" "start" "$VERIFY_NAME against $VERIFY_COMMIT ($VERIFY_ENGINE $VERIFY_MODEL$permission_detail)"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-start $VERIFY_NUM '')" 3
   : > "$log"
   # Verify is a billing and correctness boundary: it is always standard tier,
@@ -1076,7 +1084,9 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   fi
   FAST_JOURNAL=""
   [[ "$UNIT_FAST_MODE" == "1" ]] && FAST_JOURNAL=", fast"
-  journal "phase $PHASE_NUM/$TOTAL" "start" "$PHASE_NAME ($UNIT_ENGINE $UNIT_MODEL, effort $UNIT_EFFORT$FAST_JOURNAL)"
+  PERMISSION_JOURNAL=""
+  [[ "$UNIT_ENGINE" == "claude" ]] && PERMISSION_JOURNAL=", permission $CLAUDE_PERMISSION_MODE"
+  journal "phase $PHASE_NUM/$TOTAL" "start" "$PHASE_NAME ($UNIT_ENGINE $UNIT_MODEL, effort $UNIT_EFFORT$FAST_JOURNAL$PERMISSION_JOURNAL)"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body phase-start $PHASE_NUM '')" 3
 
   SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')

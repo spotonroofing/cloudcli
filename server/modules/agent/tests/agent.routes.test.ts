@@ -251,6 +251,31 @@ test('Agent route launches dispatched Claude and Codex sessions without MCP serv
 
   assert.equal(launchOptions.get('claude')?.mcpPolicy, 'none');
   assert.equal(launchOptions.get('codex')?.mcpPolicy, 'none');
+  assert.equal(launchOptions.get('claude')?.permissionMode, 'acceptEdits');
+  assert.deepEqual(launchOptions.get('claude')?.toolsSettings, {
+    allowedTools: [
+      'Bash',
+      'WebFetch',
+      'WebSearch',
+      'Agent',
+      'Skill',
+      'ToolSearch',
+      'Monitor',
+      'TaskOutput',
+      'Read',
+      'Edit',
+      'Write',
+      'Glob',
+      'Grep',
+      'NotebookEdit',
+      'TaskCreate',
+      'TaskUpdate',
+      'TaskList',
+      'TaskGet',
+    ],
+    disallowedTools: [],
+    skipPermissions: false,
+  });
   assert.equal(mcpToolCounts.get('claude'), 0);
   assert.equal(mcpToolCounts.get('codex'), 0);
 });
