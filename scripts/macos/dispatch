@@ -31,8 +31,8 @@
 # checks the commit against the unit's done check and answers `VERIFY: PASS`
 # or `VERIFY: FAIL: <reason>` on its last line). The verify runs while the
 # next unit builds; a phase file carrying `<!-- verify: no -->` skips its
-# verify stage. A failed verify stops the chain, parks the interrupted
-# build's work on a branch, and wakes the planner with the resume point.
+# verify stage. A failed verify records a decision notice and exact repair
+# point while the build in flight and every queued unit continue.
 #
 # `dispatch append` queues additional prompt files onto an active chain; the
 # runner picks them up after the current phase's commit gate. Appended units
@@ -350,58 +350,74 @@ fi
 [[ -d "$REPO/.git" ]] || { print -u2 "dispatch: $REPO is not a git repo"; exit 66; }
 REPO="${REPO:A}"
 
-# Capture the planner chat that owns this dispatch before detaching the runner.
-# Provider runtimes expose their native id in one of these variables; resolve
-# it to Command Center's app-facing id. With no usable context, the project's
-# manual wake target wins, then the newest planner chat is the final fallback.
+# Capture the live planner chat that owns this dispatch before detaching the
+# runner. Provider runtimes expose their native id in one of these variables;
+# resolve it to Command Center's app-facing id. A context row wins, then the
+# project's planner wake target, then its newest open /planner boot. If only a
+# dead planner remains, keep its id long enough to name it in the refusal.
 DISPATCH_CONTEXT_SESSION_ID="${CODEX_THREAD_ID:-${CLAUDE_CODE_SESSION_ID:-}}"
-DISPATCHING_SESSION_ID=$(python3 - "$DB_PATH" "$REPO" "$DISPATCH_CONTEXT_SESSION_ID" <<'PYEOF'
+DISPATCH_SESSION_RESOLUTION=$(python3 - "$DB_PATH" "$REPO" "$DISPATCH_CONTEXT_SESSION_ID" <<'PYEOF'
 import sqlite3, sys
 
 db_path, project_path, context_id = sys.argv[1:4]
 try:
     db = sqlite3.connect(db_path)
+    db.row_factory = sqlite3.Row
     columns = {row[1] for row in db.execute('PRAGMA table_info(sessions)')}
     project_expr = 'COALESCE(assigned_project_path, project_path)' if 'assigned_project_path' in columns else 'project_path'
+    selected = None
     if context_id:
-        row = db.execute(
-            f'''SELECT session_id FROM sessions
+        selected = db.execute(
+            f'''SELECT session_id, origin, booted, boot_state, isArchived FROM sessions
                 WHERE {project_expr} = ? AND (session_id = ? OR provider_session_id = ?)
                 LIMIT 1''',
             (project_path, context_id, context_id),
         ).fetchone()
-        if row:
-            print(row[0])
-            raise SystemExit(0)
-    if 'watchdog_wake_target' in columns:
-        row = db.execute(
-            f'''SELECT session_id FROM sessions
-                WHERE {project_expr} = ? AND watchdog_wake_target = 1 AND isArchived = 0
+    if selected is None and 'watchdog_wake_target' in columns:
+        selected = db.execute(
+            f'''SELECT session_id, origin, booted, boot_state, isArchived FROM sessions
+                WHERE {project_expr} = ? AND watchdog_wake_target = 1
+                  AND origin = 'planner' AND booted = 1
+                  AND isArchived = 0 AND COALESCE(boot_state, 'ready') = 'ready'
                 ORDER BY session_id DESC LIMIT 1''',
             (project_path,),
         ).fetchone()
-        if row:
-            print(row[0])
-            raise SystemExit(0)
-    row = db.execute(
-        f'''SELECT session_id FROM sessions
-            WHERE {project_expr} = ? AND origin = 'planner' AND isArchived = 0
-            ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC LIMIT 1''',
-        (project_path,),
-    ).fetchone()
-    if not row:
-        row = db.execute(
-            f'''SELECT session_id FROM sessions
-                WHERE {project_expr} = ? AND origin IS NULL AND isArchived = 0
+    if selected is None:
+        selected = db.execute(
+            f'''SELECT session_id, origin, booted, boot_state, isArchived FROM sessions
+                WHERE {project_expr} = ? AND origin = 'planner' AND booted = 1
+                  AND isArchived = 0 AND COALESCE(boot_state, 'ready') = 'ready'
                 ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC LIMIT 1''',
             (project_path,),
         ).fetchone()
-    if row:
-        print(row[0])
+    if selected is None:
+        selected = db.execute(
+            f'''SELECT session_id, origin, booted, boot_state, isArchived FROM sessions
+                WHERE {project_expr} = ? AND origin = 'planner'
+                ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC LIMIT 1''',
+            (project_path,),
+        ).fetchone()
+    if selected is not None:
+        is_open = (
+            selected['origin'] == 'planner'
+            and selected['booted'] == 1
+            and selected['isArchived'] == 0
+            and (selected['boot_state'] or 'ready') == 'ready'
+        )
+        print(f"{selected['session_id']}\t{1 if is_open else 0}")
 except (OSError, sqlite3.Error):
     pass
 PYEOF
 )
+IFS=$'\t' read -r DISPATCHING_SESSION_ID DISPATCHING_SESSION_OPEN <<< "$DISPATCH_SESSION_RESOLUTION"
+if [[ -z "$DISPATCHING_SESSION_ID" ]]; then
+  print -u2 "dispatch: resolved dispatching session none; no open /planner session exists for $REPO"
+  exit 69
+fi
+if [[ "$DISPATCHING_SESSION_OPEN" != "1" ]]; then
+  print -u2 "dispatch: resolved dispatching session $DISPATCHING_SESSION_ID is not open right now"
+  exit 69
+fi
 export DISPATCHING_SESSION_ID
 
 # Phase files: explicit args, else the .dispatch/<slug>/ convention.

@@ -93,7 +93,7 @@ function settleRunningVerifies(chain: ChainRecord): void {
 type ChainRecord = {
   slug: string;
   projectPath: string;
-  /** Planner chat that dispatched the chain; never changes after registration. */
+  /** Planner chat that dispatched the chain, or the live fallback adopted after its lineage died. */
   dispatchingSessionId: string | null;
   phases: number | null;
   currentPhase: number | null;
@@ -446,7 +446,7 @@ class WatchdogService {
     punchlist?: string | null;
   }): void {
     // A re-registration (restart-recovery via an event) without a manifest
-    // keeps the one the chain already has; same for the punch list path.
+    // keeps the chain's current wake anchor; same for the punch list path.
     const existing = this.chains.get(input.slug);
     const dispatchingSessionId = existing?.dispatchingSessionId
       ?? input.dispatchingSessionId
@@ -1439,11 +1439,28 @@ class WatchdogService {
         const item = queue.prompts[0];
         const chain = item.chainSlug ? this.chains.get(item.chainSlug) : undefined;
         const lineageAnchor = chain?.dispatchingSessionId ?? item.targetSessionId ?? null;
-        const planner = sessionsDb.resolveWatchdogWakeSession(projectPath, lineageAnchor);
+        const resolution = sessionsDb.resolveWatchdogWakeTarget(projectPath, lineageAnchor);
+        const planner = resolution.session;
         if (!planner) {
           log(`no planner session found for ${projectPath}; escalating ${queue.prompts.length} wake(s) to decision-needed`);
           this.wakeUndeliverable(projectPath, queue.prompts.splice(0), 'No planner session exists for this project');
           break;
+        }
+
+        if (chain && resolution.usedFallback && chain.dispatchingSessionId !== planner.session_id) {
+          const previousSessionId = chain.dispatchingSessionId ?? 'none';
+          chain.dispatchingSessionId = planner.session_id;
+          watchdogDb.updateChainDispatchingSession(chain.slug, planner.session_id);
+          appendChainJournalLine(
+            chain.slug,
+            'watchdog',
+            'wake-reroute',
+            `dispatching session ${previousSessionId} was dead; updated to live planner ${planner.session_id}`,
+          );
+          log(`chain ${chain.slug}: wake target moved to live planner`, {
+            from: previousSessionId,
+            to: planner.session_id,
+          });
         }
 
         // RUN_IN_PROGRESS: hold the wake and retry until the planner is idle.
@@ -2426,6 +2443,21 @@ function listChainRunners(): Promise<Map<string, number> | null> {
 
 function chainJournalDir(slug: string): string {
   return path.join(os.homedir(), 'forge-logs', slug);
+}
+
+function appendChainJournalLine(slug: string, phase: string, event: string, detail: string): void {
+  try {
+    const directory = chainJournalDir(slug);
+    fs.mkdirSync(directory, { recursive: true });
+    const timestamp = new Date().toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    fs.appendFileSync(path.join(directory, 'JOURNAL.md'), `${timestamp} | ${phase} | ${event} | ${detail}\n`);
+  } catch (error) {
+    log(`chain ${slug}: could not journal wake reroute: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function journalLastLine(slug: string): string | null {

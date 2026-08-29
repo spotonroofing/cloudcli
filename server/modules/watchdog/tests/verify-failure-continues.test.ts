@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -22,7 +22,8 @@ import type { RealtimeClientConnection } from '@/shared/types.js';
 
 import { createWatchdogRouter, watchdogService } from '../index.js';
 
-const runnerPath = path.resolve('scripts/macos/dispatch-chain-runner');
+const sourceRunnerPath = path.resolve('scripts/macos/dispatch-chain-runner');
+const sourceRuntimeAnchorsPath = path.resolve('shared/runtime-anchors.js');
 
 async function executable(filePath: string, content: string): Promise<void> {
   await writeFile(filePath, content);
@@ -40,7 +41,7 @@ async function runGit(repo: string, args: string[]): Promise<string> {
   return stdout.trim();
 }
 
-test('a failed verifier is recorded and announced while the next build and chain completion continue', {
+test('a boundary reload runs new code and a later failed verify still notifies while the chain continues', {
   skip: process.platform !== 'darwin',
   timeout: 30_000,
 }, async () => {
@@ -52,6 +53,10 @@ test('a failed verifier is recorded and announced while the next build and chain
   const fakeHome = path.join(directory, 'home');
   const database = path.join(directory, 'auth.db');
   const calls = path.join(directory, 'codex-calls.log');
+  const firstBuildStarted = path.join(directory, 'first-build-started');
+  const releaseFirstBuild = path.join(directory, 'release-first-build');
+  const runnerRoot = path.join(directory, 'runner-root');
+  const runnerPath = path.join(runnerRoot, 'scripts', 'macos', 'dispatch-chain-runner');
   const slug = `verify-failure-stub-${Date.now()}`;
   const messages: string[] = [];
   const notificationClient = {
@@ -64,7 +69,18 @@ test('a failed verifier is recorded and announced while the next build and chain
   closeConnection();
   process.env.DATABASE_PATH = database;
   try {
-    await Promise.all([mkdir(repo), mkdir(bin), mkdir(path.join(fakeHome, 'forge-logs'), { recursive: true })]);
+    await Promise.all([
+      mkdir(repo),
+      mkdir(bin),
+      mkdir(path.join(fakeHome, 'forge-logs'), { recursive: true }),
+      mkdir(path.dirname(runnerPath), { recursive: true }),
+      mkdir(path.join(runnerRoot, 'shared'), { recursive: true }),
+    ]);
+    await Promise.all([
+      copyFile(sourceRunnerPath, runnerPath),
+      copyFile(sourceRuntimeAnchorsPath, path.join(runnerRoot, 'shared', 'runtime-anchors.js')),
+    ]);
+    await chmod(runnerPath, 0o755);
     await initializeDatabase();
     const user = userDb.createUser('verify-failure-test', 'unused');
     apiKeysDb.createApiKey(Number(user.id), 'verify-failure-test');
@@ -104,11 +120,18 @@ unit=unknown
 [[ "$prompt" == *"FIRST_BUILD_STUB"* ]] && unit=one
 [[ "$prompt" == *"SECOND_BUILD_STUB"* ]] && unit=two
 [[ "$prompt" == *"THIRD_BUILD_STUB"* ]] && unit=three
-print -r -- "$stage|$unit" >> "$STUB_CALLS"
 output=""
+model=""
 while [[ $# -gt 0 ]]; do
-  if [[ "$1" == "-o" ]]; then output="$2"; shift 2; else shift; fi
+  if [[ "$1" == "-o" ]]; then
+    output="$2"; shift 2
+  elif [[ "$1" == "-m" ]]; then
+    model="$2"; shift 2
+  else
+    shift
+  fi
 done
+print -r -- "$stage|$unit|$model" >> "$STUB_CALLS"
 thread="stub-$stage-$unit-$$"
 print -r -- "{\\"type\\":\\"thread.started\\",\\"thread_id\\":\\"$thread\\"}"
 if [[ "$stage" == verify ]]; then
@@ -118,6 +141,10 @@ if [[ "$stage" == verify ]]; then
     print -r -- "VERIFY: PASS" > "$output"
   fi
   exit 0
+fi
+if [[ "$unit" == one ]]; then
+  : > "$STUB_FIRST_BUILD_STARTED"
+  while [[ ! -f "$STUB_RELEASE_FIRST_BUILD" ]]; do /bin/sleep 0.05; done
 fi
 /usr/bin/git -C "$STUB_REPO" commit --allow-empty -q -m "stub build $unit"
 print -r -- "done" > "$output"
@@ -141,12 +168,14 @@ print -r -- "done" > "$output"
       DISPATCH_SERVER_URL: serverUrl,
       DISPATCH_DB_PATH: database,
       DISPATCH_ENGINE: 'codex',
-      DISPATCH_MODEL: 'gpt-test-build',
+      DISPATCH_MODEL: '',
       DISPATCH_VERIFY_ENGINE: 'codex',
       DISPATCH_VERIFY_MODEL: 'gpt-test-verify',
       DISPATCH_RESUME_FROM: '1',
       DISPATCH_RESUMING: '',
       STUB_CALLS: calls,
+      STUB_FIRST_BUILD_STARTED: firstBuildStarted,
+      STUB_RELEASE_FIRST_BUILD: releaseFirstBuild,
       STUB_REPO: repo,
     } as NodeJS.ProcessEnv;
 
@@ -159,6 +188,21 @@ print -r -- "done" > "$output"
     let stderr = '';
     runner.stdout?.on('data', (chunk) => { stdout += String(chunk); });
     runner.stderr?.on('data', (chunk) => { stderr += String(chunk); });
+
+    const editDeadline = Date.now() + 5_000;
+    while (Date.now() < editDeadline) {
+      if (await readFile(firstBuildStarted, 'utf8').then(() => true).catch(() => false)) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.equal(await readFile(firstBuildStarted, 'utf8').then(() => true).catch(() => false), true);
+    const originalRunner = await readFile(runnerPath, 'utf8');
+    assert.match(originalRunner, /CODEX_DEFAULT_MODEL="gpt-5\.6-sol"/);
+    await writeFile(
+      runnerPath,
+      originalRunner.replace('CODEX_DEFAULT_MODEL="gpt-5.6-sol"', 'CODEX_DEFAULT_MODEL="gpt-reloaded-stub"'),
+    );
+    await writeFile(releaseFirstBuild, 'continue\n');
+
     const [runnerExit] = await once(runner, 'exit') as [number];
     assert.equal(runnerExit, 0, `runner stderr: ${stderr}\nrunner stdout: ${stdout}`);
     runner = null;
@@ -169,14 +213,14 @@ print -r -- "done" > "$output"
     assert.match(await runGit(repo, ['log', '--format=%s']), new RegExp(`docs\\(dispatch\\): reset job 16 for ${slug}`));
     const callLines = (await readFile(calls, 'utf8')).trim().split('\n');
     assert.deepEqual(callLines.filter((line) => line.startsWith('build|')), [
-      'build|one',
-      'build|two',
-      'build|three',
+      'build|one|gpt-5.6-sol',
+      'build|two|gpt-reloaded-stub',
+      'build|three|gpt-reloaded-stub',
     ]);
     assert.deepEqual(callLines.filter((line) => line.startsWith('verify|')), [
-      'verify|one',
-      'verify|two',
-      'verify|three',
+      'verify|one|gpt-test-verify',
+      'verify|two|gpt-test-verify',
+      'verify|three|gpt-test-verify',
     ]);
 
     const snapshot = watchdogService.listWorkerRuns(repo).chains[slug];
@@ -208,6 +252,7 @@ print -r -- "done" > "$output"
     assert.match(terminalNotification?.body ?? '', /Resume point: append a fix unit for job 2/);
 
     const journal = await readFile(path.join(fakeHome, 'forge-logs', slug, 'JOURNAL.md'), 'utf8');
+    assert.match(journal, /run \| reload \| runner reloaded at [a-f0-9]{64}/);
     assert.match(journal, /verify 2\/3 \| FAILED \| VERIFY: FAIL: second unit missed its budget/);
     assert.match(journal, /run \| end \| all 3 phases committed; completed with 1 verify failure/);
     assert.doesNotMatch(journal, /\| (?:killed|rewind) \|/);

@@ -88,6 +88,18 @@ export const watchdogDb = {
     return db.prepare('SELECT * FROM watchdog_chains').all() as WatchdogChainRow[];
   },
 
+  /**
+   * Re-anchors one persisted chain after the watchdog proves its original
+   * planner lineage is dead. The watchdog service is the sole consumer; the
+   * normal upsert deliberately keeps the first dispatch anchor unchanged.
+   */
+  updateChainDispatchingSession(slug: string, sessionId: string): boolean {
+    const db = getConnection();
+    return db.prepare(
+      'UPDATE watchdog_chains SET dispatching_session_id = ? WHERE slug = ?'
+    ).run(sessionId, slug).changes > 0;
+  },
+
   upsertDispatchRun(row: WatchdogDispatchRunRow): void {
     const db = getConnection();
     db.prepare(`

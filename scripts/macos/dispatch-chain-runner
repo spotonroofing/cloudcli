@@ -39,7 +39,9 @@
 # for the better part of an hour so the chain-end planner wake is never lost.
 set -u
 
-SCRIPT_DIR="${0:A:h}"
+RUNNER_PATH="${0:A}"
+SCRIPT_DIR="${RUNNER_PATH:h}"
+RUNNER_START_HASH=$(/usr/bin/shasum -a 256 "$RUNNER_PATH" | awk '{print $1}')
 NODE=$(command -v node || echo /usr/local/bin/node)
 eval "$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --shell)"
 
@@ -218,10 +220,15 @@ RESUME_STATE="$JOURNAL_DIR/resume.json"
 # Persist the exact prompt list and runner settings for `dispatch resume`.
 # Appended prompts extend this file when the runner consumes them.
 save_resume_state() {
+  local next_phase="${1:-$RESUME_FROM}" phase_count=${#PHASE_FILES[@]}
   python3 - "$RESUME_STATE.tmp" "$REPO" "$SLUG" "$CHAIN_ENGINE" "$CHAIN_MODEL" "$CHAIN_EFFORT" \
-      "$VERIFY_ENGINE" "$VERIFY_MODEL" "${DISPATCHING_SESSION_ID:-}" "${PHASE_FILES[@]}" <<'PYEOF'
+      "$VERIFY_ENGINE" "$VERIFY_MODEL" "${DISPATCHING_SESSION_ID:-}" "$next_phase" "${CHAIN_BASE:-}" \
+      "$phase_count" "${PHASE_FILES[@]}" "${VERIFY_FAILURES[@]}" <<'PYEOF'
 import json, os, sys
-out, repo, slug, engine, model, effort, verify_engine, verify_model, dispatching_session_id, *files = sys.argv[1:]
+out, repo, slug, engine, model, effort, verify_engine, verify_model, dispatching_session_id, next_phase, chain_base, phase_count, *rest = sys.argv[1:]
+phase_count = int(phase_count)
+files = rest[:phase_count]
+verify_failures = rest[phase_count:]
 with open(out, 'w', encoding='utf-8') as handle:
     json.dump({
         'repo': repo,
@@ -233,12 +240,14 @@ with open(out, 'w', encoding='utf-8') as handle:
         'verifyModel': verify_model,
         'dispatchingSessionId': dispatching_session_id,
         'phaseFiles': files,
+        'resumeFrom': int(next_phase),
+        'chainBase': chain_base,
+        'verifyFailures': verify_failures,
     }, handle)
     handle.write('\n')
 os.replace(out, os.path.join(os.path.dirname(out), 'resume.json'))
 PYEOF
 }
-save_resume_state
 
 # POST an event body to a watchdog path, retrying while the server is down
 # (promote restart). $3 is the attempt budget; boundary events use a short
@@ -754,6 +763,28 @@ PHASE_NUM=$((RESUME_FROM - 1))
 PAUSE_REQUEST="$JOURNAL_DIR/pause.requested"
 rm -f "$PAUSE_REQUEST"
 
+# A boundary reload resumes from the state the old inode wrote immediately
+# before exec. The verifier is settled first, so the only cross-inode runtime
+# state is the chain baseline and the accumulated failed-verifier notices.
+if [[ -n "${DISPATCH_RELOADING:-}" ]]; then
+  CHAIN_BASE=$(python3 - "$RESUME_STATE" <<'PYEOF'
+import json, sys
+print(json.load(open(sys.argv[1], encoding='utf-8')).get('chainBase') or 'none')
+PYEOF
+)
+  while IFS= read -r failure; do
+    VERIFY_FAILURES+=("$failure")
+  done < <(python3 - "$RESUME_STATE" <<'PYEOF'
+import json, sys
+for failure in json.load(open(sys.argv[1], encoding='utf-8')).get('verifyFailures', []):
+    print(failure)
+PYEOF
+)
+else
+  CHAIN_BASE=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
+fi
+save_resume_state "$RESUME_FROM"
+
 # Stops one stage and everything it spawned. Build and verify sessions each
 # run in their own process group, so TERM reaches the whole stage before the
 # same bounded KILL fallback the verify rewind uses.
@@ -966,6 +997,7 @@ record_verify_failure() {
   journal "verify $VERIFY_NUM/$TOTAL" "FAILED" "$reason"
   resume="Job $VERIFY_NUM ($VERIFY_NAME) failed verify at commit $VERIFY_COMMIT: ${reason#VERIFY: FAIL: }. Resume point: append a fix unit for job $VERIFY_NUM from $VERIFY_COMMIT; verifier log: $JOURNAL_DIR/verify$VERIFY_NUM.log."
   VERIFY_FAILURES+=("$resume")
+  save_resume_state "$((PHASE_NUM + 1))"
   api_post "/api/watchdog/chains/$SLUG/events" \
     "$(event_body verify-failed $VERIFY_NUM "$(print -rn -- "$resume" | json_string)")" 80
   VERIFY_NUM=0
@@ -1006,8 +1038,6 @@ watch_build() {
   wait $BUILD_PID
 }
 
-CHAIN_BASE=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo none)
-
 # The planner-supplied phase manifest (ui9 B4) rides along in the chain
 # registration; the watchdog stores it and the phase navigator renders it.
 MANIFEST_PATH="${DISPATCH_MANIFEST:-}"
@@ -1046,7 +1076,30 @@ pickup_appends() {
     journal append "queued" "${f:t} picked up as unit ${#PHASE_FILES[@]}"
   done
   TOTAL=${#PHASE_FILES[@]}
-  save_resume_state
+  save_resume_state "$((PHASE_NUM + 1))"
+}
+
+# zsh continues reading the inode it opened at spawn, so an on-disk runner
+# fix cannot affect a live chain without an explicit boundary exec. A reload
+# waits for the just-started verifier, persists its verdict and all prompt
+# state through resume.json, then replaces this process before the next unit.
+reload_runner_if_changed() {
+  [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]] || return 0
+  local disk_hash next_phase
+  disk_hash=$(/usr/bin/shasum -a 256 "$RUNNER_PATH" | awk '{print $1}')
+  [[ "$disk_hash" == "$RUNNER_START_HASH" ]] && return 0
+  reconcile_verify
+  honor_pause_request
+  next_phase=$((PHASE_NUM + 1))
+  disk_hash=$(/usr/bin/shasum -a 256 "$RUNNER_PATH" | awk '{print $1}')
+  save_resume_state "$next_phase"
+  journal run reload "runner reloaded at $disk_hash"
+  rm -f "$HEADER_FILE"
+  exec env \
+    DISPATCH_RESUME_FROM="$next_phase" \
+    DISPATCH_RESUMING=1 \
+    DISPATCH_RELOADING=1 \
+    "$RUNNER_PATH" "$REPO" "$SLUG" "${PHASE_FILES[@]}"
 }
 
 while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
@@ -1182,6 +1235,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
     start_verify
   fi
   pickup_appends
+  reload_runner_if_changed
 done
 
 reconcile_verify

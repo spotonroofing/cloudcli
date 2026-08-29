@@ -388,14 +388,20 @@ export const sessionsDb = {
   },
 
   /**
-   * Resolves a watchdog wake. Chain wakes begin at their immutable dispatch
-   * anchor and walk successor rows; unanchored wakes use the project's manual
-   * target. Failed or archived successors never take delivery.
+   * Resolves a chain wake for the watchdog module and reports whether its
+   * dispatch lineage was exhausted. A successful handoff ends its predecessor
+   * even when the successor was later archived; only a failed handoff leaves
+   * the predecessor open. The dead-lineage fallback is deliberately narrower
+   * than ordinary chat selection: newest ready `origin = planner` row that
+   * actually booted through /planner, never an unbooted side chat.
    */
-  resolveWatchdogWakeSession(projectPath: string, dispatchingSessionId: string | null = null): SessionRow | null {
+  resolveWatchdogWakeTarget(
+    projectPath: string,
+    dispatchingSessionId: string | null = null,
+  ): { session: SessionRow | null; usedFallback: boolean } {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPath(projectPath);
-    const selectTarget = (): SessionRow | null => {
+    const selectManualTarget = (): SessionRow | null => {
       const target = db
         .prepare(
           `SELECT ${SESSION_ROW_COLUMNS}
@@ -412,8 +418,25 @@ export const sessionsDb = {
       return normalizeSessionRow(target) ?? null;
     };
 
+    const selectLivePlannerFallback = (): SessionRow | null => {
+      const target = db
+        .prepare(
+          `SELECT ${SESSION_ROW_COLUMNS}
+           FROM sessions
+           WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+             AND origin = 'planner'
+             AND booted = 1
+             AND isArchived = 0
+             AND COALESCE(boot_state, 'ready') = 'ready'
+           ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
+           LIMIT 1`
+        )
+        .get(normalizedProjectPath) as SessionRow | undefined;
+      return normalizeSessionRow(target) ?? null;
+    };
+
     if (!dispatchingSessionId) {
-      return selectTarget();
+      return { session: selectManualTarget(), usedFallback: false };
     }
 
     let current = db
@@ -426,19 +449,21 @@ export const sessionsDb = {
       )
       .get(normalizedProjectPath, dispatchingSessionId, dispatchingSessionId) as SessionRow | undefined;
     if (!current) {
-      return selectTarget();
+      return { session: selectLivePlannerFallback(), usedFallback: true };
     }
 
     const visited = new Set<string>();
     while (current && !visited.has(current.session_id)) {
       visited.add(current.session_id);
+      // Include archived successors while walking: their existence proves
+      // the predecessor completed a handoff and must not be resumed. A failed
+      // reservation is excluded because its predecessor remained active.
       const successor = db
         .prepare(
           `SELECT ${SESSION_ROW_COLUMNS}
            FROM sessions
            WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
              AND predecessor_session_id = ?
-             AND isArchived = 0
              AND COALESCE(boot_state, 'ready') <> 'failed'
            ORDER BY datetime(COALESCE(created_at, updated_at)) DESC, session_id DESC
            LIMIT 1`
@@ -451,9 +476,18 @@ export const sessionsDb = {
     }
 
     const resolved = normalizeSessionRow(current) ?? null;
-    return resolved && resolved.isArchived === 0 && resolved.boot_state !== 'failed'
-      ? resolved
-      : selectTarget();
+    if (resolved && resolved.isArchived === 0 && resolved.boot_state !== 'failed') {
+      return { session: resolved, usedFallback: false };
+    }
+    return { session: selectLivePlannerFallback(), usedFallback: true };
+  },
+
+  /**
+   * Compatibility view consumed by existing watchdog, handoff, and database
+   * callers that only need the selected session row.
+   */
+  resolveWatchdogWakeSession(projectPath: string, dispatchingSessionId: string | null = null): SessionRow | null {
+    return sessionsDb.resolveWatchdogWakeTarget(projectPath, dispatchingSessionId).session;
   },
 
   /**

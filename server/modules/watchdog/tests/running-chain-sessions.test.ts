@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import { appConfigDb, closeConnection, initializeDatabase, projectsDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
+import { providerRuntimeService } from '@/modules/providers/index.js';
 import { watchdogService } from '@/modules/watchdog/index.js';
 import { parseJobMeta } from '@/modules/watchdog/watchdog.service.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
@@ -241,6 +242,68 @@ test('a chain keeps its first dispatching planner across re-registration', async
     assert.equal(chain?.dispatching_session_id, 'dispatch-planner-a');
     assert.equal(sessionsDb.resolveWatchdogWakeSession(projectPath)?.session_id, 'dispatch-planner-a');
   });
+});
+
+test('a terminal chain wake leaves a dead handoff lineage for the newest live planner and persists the new anchor', async () => {
+  const slug = `wake-reroute-stub-${Date.now()}`;
+  const journalDirectory = path.join(homedir(), 'forge-logs', slug);
+  const originalGetRunner = providerRuntimeService.getRunner;
+  let resumedProviderSessionId: string | null = null;
+
+  try {
+    await withIsolatedDatabase(async () => {
+      const projectPath = '/workspace/wake-reroute';
+      projectsDb.createProjectPath(projectPath);
+      const createBootedPlanner = (sessionId: string, origin: 'planner' | null = 'planner') => {
+        sessionsDb.createSession(
+          sessionId,
+          'claude',
+          projectPath,
+          sessionId,
+          undefined,
+          undefined,
+          path.join(projectPath, `${sessionId}.jsonl`),
+          origin,
+        );
+        if (origin === 'planner') {
+          sessionsDb.markSessionBooted(sessionId);
+          sessionsDb.setSessionBootState(sessionId, 'ready');
+        }
+      };
+
+      createBootedPlanner('planner-anchor-a');
+      createBootedPlanner('planner-successor-b');
+      sessionsDb.setSessionPredecessor('planner-successor-b', 'planner-anchor-a');
+      sessionsDb.updateSessionIsArchived('planner-successor-b', true);
+      createBootedPlanner('planner-live-z');
+      createBootedPlanner('side-chat-zz', null);
+
+      providerRuntimeService.getRunner = () => async (_command, options) => {
+        resumedProviderSessionId = typeof options.sessionId === 'string' ? options.sessionId : null;
+      };
+      appConfigDb.set('watchdog_terminal_wakes', '1');
+      watchdogService.registerChain({
+        slug,
+        projectPath,
+        dispatchingSessionId: 'planner-anchor-a',
+        phases: 1,
+      });
+      watchdogService.chainEvent(slug, 'phase-start', { phase: 1 });
+      watchdogService.chainEvent(slug, 'completed', { phase: 1 });
+
+      await waitFor(() => resumedProviderSessionId === 'planner-live-z');
+      const chain = watchdogDb.listChains().find((row) => row.slug === slug);
+      assert.equal(chain?.dispatching_session_id, 'planner-live-z');
+      assert.notEqual(resumedProviderSessionId, 'side-chat-zz');
+      assert.match(
+        await readFile(path.join(journalDirectory, 'JOURNAL.md'), 'utf8'),
+        /watchdog \| wake-reroute \| dispatching session planner-anchor-a was dead; updated to live planner planner-live-z/,
+      );
+    });
+  } finally {
+    providerRuntimeService.getRunner = originalGetRunner;
+    await rm(journalDirectory, { recursive: true, force: true });
+  }
 });
 
 test('terminal job snapshots retain the runner failure reason', async () => {

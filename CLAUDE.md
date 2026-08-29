@@ -3,6 +3,7 @@
 - Server bind is env-configured: `HOST` sets the bind address (default `127.0.0.1`, localhost only; `HOST=0.0.0.0` serves all interfaces, e.g. for Tailscale) and `SERVER_PORT` sets the port (default `3001`).
 - Two-artifact layout: `npm run build` emits dev-only artifacts (`dist-dev/`, `dist-server-dev/`) that the dev instance serves; live serves `dist/` + `dist-server/`, which only promote.sh's copy step ever writes — never point a build at live's dirs.
 - Headless Claude bypass mode steers file work into Bash, so runners use `acceptEdits` with an explicit unattended-tool allowlist instead.
+- A live zsh chain keeps reading the runner inode it opened at spawn; `dispatch-chain-runner` hashes itself and re-execs from disk at unit boundaries so a landed runner fix reaches the next unit.
 - For UI work, start at `DESIGN.md` and read only the areas your files touch. Reuse the closest existing element, and update the matching area file whenever implementation changes a documented pattern so design guidance and code stay consistent.
 
 ## Showing an image in the chat
