@@ -34,6 +34,8 @@ type SessionRow = {
   booted: number;
   /** NULL | 'pending' | 'ready' | 'failed' — persisted boot lifecycle. */
   boot_state: string | null;
+  /** One plain line saying why a boot failed; NULL unless boot_state is 'failed'. */
+  boot_error: string | null;
   jsonl_path: string | null;
   custom_name: string | null;
   /** Model this session runs with; NULL until the app records one for it. */
@@ -56,7 +58,7 @@ type RecentSessionsPage = {
 // list/feed reader prefers the app-owned attach-to-project choice without each
 // call site repeating the COALESCE. Writes always name real columns explicitly.
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, chain_phase, predecessor_session_id, watchdog_wake_target, booted, boot_state, jsonl_path, custom_name, model, effort, fast_mode, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, COALESCE(assigned_project_path, project_path) AS project_path, assigned_project_path, origin, base_commit, chain_slug, chain_phase, predecessor_session_id, watchdog_wake_target, booted, boot_state, boot_error, jsonl_path, custom_name, model, effort, fast_mode, isArchived, created_at, updated_at';
 
 // WHERE-clause form of the same preference (SQLite cannot reference SELECT
 // aliases in WHERE).
@@ -702,19 +704,24 @@ export const sessionsDb = {
     const db = getConnection();
     db.prepare(
       `UPDATE sessions
-       SET booted = 1, boot_state = 'pending'
+       SET booted = 1, boot_state = 'pending', boot_error = NULL
        WHERE session_id = ?`
     ).run(sessionId);
   },
 
-  /** Records the boot turn's outcome ('ready' or 'failed'). */
-  setSessionBootState(sessionId: string, state: 'ready' | 'failed'): void {
+  /**
+   * Records the boot turn's outcome ('ready' or 'failed'). A failure may carry
+   * one plain line saying what went wrong (ui17 job 17): the handoff placeholder
+   * row shows it instead of the generic "failed to start" text, and it survives a
+   * reload. A 'ready' boot clears any line an earlier attempt left.
+   */
+  setSessionBootState(sessionId: string, state: 'ready' | 'failed', bootError: string | null = null): void {
     const db = getConnection();
     db.prepare(
       `UPDATE sessions
-       SET boot_state = ?
+       SET boot_state = ?, boot_error = ?
        WHERE session_id = ?`
-    ).run(state, sessionId);
+    ).run(state, state === 'failed' ? bootError : null, sessionId);
   },
 
   /**
@@ -849,7 +856,7 @@ export const sessionsDb = {
                 COALESCE(sessions.assigned_project_path, sessions.project_path) AS project_path,
                 sessions.assigned_project_path, sessions.origin, sessions.base_commit,
                 sessions.chain_slug, sessions.chain_phase, sessions.predecessor_session_id,
-                sessions.watchdog_wake_target, sessions.booted, sessions.boot_state,
+                sessions.watchdog_wake_target, sessions.booted, sessions.boot_state, sessions.boot_error,
                 sessions.jsonl_path, sessions.custom_name,
                 sessions.model, sessions.effort, sessions.fast_mode, sessions.isArchived, sessions.created_at, sessions.updated_at
          FROM sessions

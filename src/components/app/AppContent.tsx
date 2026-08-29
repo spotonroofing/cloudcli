@@ -242,6 +242,18 @@ function AppContentInner() {
     };
   }, [subscribe]);
 
+  // Handoff follow-through (ui17 job 17): the successor row is created the
+  // moment /handoff starts, so the sidebar pulls the project list right then
+  // and the new chat is visible while the old session is still writing.
+  useEffect(() => {
+    const unsubscribe = subscribe?.((event: { kind?: string } | null) => {
+      if (event?.kind === 'planner_handoff' || event?.kind === 'planner_handoff_failed') {
+        void refreshProjectsSilently();
+      }
+    });
+    return () => unsubscribe?.();
+  }, [subscribe, refreshProjectsSilently]);
+
   const refreshRunningSessions = useCallback(async () => {
     try {
       const response = await api.runningSessions();

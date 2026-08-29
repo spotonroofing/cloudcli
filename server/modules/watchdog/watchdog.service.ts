@@ -1439,7 +1439,9 @@ class WatchdogService {
         const running = chatRunRegistry
           .listRunningRuns()
           .some((run: { sessionId: string }) => run.sessionId === planner.session_id);
-        if (running || this.isRuntimeBusy(planner.session_id)) {
+        // A row reserved for a handoff (or mid-boot) has no run yet but is not
+        // a chat that can take a wake: hold until its boot settles (ui17 job 17).
+        if (running || this.isRuntimeBusy(planner.session_id) || planner.boot_state === 'pending') {
           log(`planner ${planner.session_id} is mid-turn; retrying wake in ${WAKE_RETRY_MS / 1000}s`);
           setTimeout(() => {
             queue.draining = false;
@@ -1582,33 +1584,103 @@ class WatchdogService {
   }
 
   /**
-   * A planner session's /handoff turn completed cleanly (Handoff button or
-   * typed /handoff): boot the next planner for the project through the same
-   * fresh-boot wake the rotation uses.
+   * A planner session's /handoff turn has just started (Handoff button or
+   * typed /handoff): the successor row is created now, not when the turn ends
+   * (ui17 job 17). Willem's click is the consent, so there is no policy gate —
+   * the row appears in the sidebar and the pane switches to it with the boot
+   * loader while /handoff still runs in the old session. Returns the reserved
+   * session id, or null when the row could not be created (the handoff itself
+   * runs either way).
    */
-  plannerHandoffComplete(projectPath: string, fromSessionId: string): void {
-    if (!this.policy('handoffAutomation', `handoff follow-through for ${projectPath}`)) {
+  plannerHandoffBegin(projectPath: string, fromSessionId: string): string | null {
+    const reserved = this.reserveFreshPlanner(projectPath, fromSessionId, readPlannerBootPrompt());
+    if (!reserved) {
+      return null;
+    }
+    this.announcePlannerHandoff(projectPath, fromSessionId, reserved.sessionId);
+    return reserved.sessionId;
+  }
+
+  /**
+   * A planner session's /handoff turn completed cleanly (Handoff button or
+   * typed /handoff): the push check gates the boot, then the reserved
+   * successor boots with /planner in the row the click already put on screen.
+   * A handoff with no reserved row (an older client, or a reservation that
+   * failed) still boots through the rotation's fresh-boot wake.
+   */
+  async plannerHandoffComplete(
+    projectPath: string,
+    fromSessionId: string,
+    successorSessionId: string | null = null,
+  ): Promise<void> {
+    const pushProblem = await this.checkHandoffPushed(projectPath).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`handoff push check failed for ${projectPath}: ${message}`);
+      return `the push check could not run (${message})`;
+    });
+    if (pushProblem) {
+      this.plannerHandoffFailed(
+        successorSessionId,
+        `The handoff ran but ${pushProblem}, so the new planner was not started.`,
+      );
       return;
     }
-    this.checkHandoffPushed(projectPath).catch((error) => {
-      log(`handoff push check failed for ${projectPath}: ${error instanceof Error ? error.message : String(error)}`);
+    if (!successorSessionId) {
+      this.queueWake(projectPath, readPlannerBootPrompt(), { freshBoot: true, targetSessionId: fromSessionId });
+      return;
+    }
+    const booted = await this.runReservedPlannerBoot(successorSessionId, projectPath, readPlannerBootPrompt());
+    if (!booted) {
+      this.notify(
+        'decision-needed',
+        'Handoff successor did not boot',
+        `The /handoff for ${normalizeProjectPath(projectPath)} landed but its replacement planner failed to boot. `
+        + 'Retry the boot from the placeholder chat.',
+        { projectPath },
+      );
+    }
+  }
+
+  /**
+   * The /handoff turn errored or was aborted (or its push check refused): the
+   * placeholder row stays exactly where it is and says what went wrong in one
+   * line, on screen now and after a reload. The old session is never touched.
+   */
+  plannerHandoffFailed(successorSessionId: string | null, reason: string): void {
+    if (!successorSessionId) {
+      return;
+    }
+    sessionsDb.setSessionBootState(successorSessionId, 'failed', reason);
+    const event = JSON.stringify({
+      kind: 'planner_handoff_failed',
+      toSessionId: successorSessionId,
+      reason,
+      timestamp: new Date().toISOString(),
     });
-    this.queueWake(projectPath, readPlannerBootPrompt(), { freshBoot: true, targetSessionId: fromSessionId });
+    connectedClients.forEach((client) => {
+      if (client.readyState === WS_OPEN_STATE) {
+        client.send(event);
+      }
+    });
+    log(`handoff successor ${successorSessionId} marked failed: ${reason}`);
   }
 
   /**
    * A handoff that ended cleanly but left planner/<project> uncommitted or
    * the memory repo unpushed (audit 2.8) fires decision-needed: the other
-   * machines would otherwise boot from a stale STATE.md with no signal.
+   * machines would otherwise boot from a stale STATE.md with no signal. The
+   * problem line is returned too, because it also gates the successor's boot
+   * (ui17 job 17) — a handoff that did not land must not be replaced by a
+   * planner that would re-ground from the stale file.
    */
-  private async checkHandoffPushed(projectPath: string): Promise<void> {
+  private async checkHandoffPushed(projectPath: string): Promise<string | null> {
     const normalized = normalizeProjectPath(projectPath);
     const project = projectsDb.getProjectPaths().find((row) => normalizeProjectPath(row.project_path) === normalized);
     const memoryFolder = project?.planner_memory_name?.trim() || path.basename(normalized);
     const repoRoot = path.dirname(PLANNER_MEMORY_ROOT);
     const problem = await findUnpushedHandoff(repoRoot, memoryFolder);
     if (!problem) {
-      return;
+      return null;
     }
     this.notify(
       'decision-needed',
@@ -1616,32 +1688,30 @@ class WatchdogService {
       `The /handoff for ${normalized} ended but ${problem}. Push ${repoRoot} by hand so the other machines see this handoff.`,
       { projectPath: normalized },
     );
+    return problem;
   }
 
   /**
-   * Boots a brand-new planner session as a registered app run (ui11 phase 3):
-   * the session row exists before the run (origin planner, booted, placeholder
-   * title), the boot stream broadcasts through the chat run registry, and a
-   * `planner_handoff` frame tells clients viewing the outgoing session to
-   * switch to the new one and hold a loader until its opening message.
-   * Returns false on failure; the failed row keeps its predecessor but never
-   * becomes the project's wake target.
+   * Creates the session row a fresh planner will boot into, without running
+   * anything: origin planner, booted, placeholder title, predecessor set, and
+   * the sticky provider/model/effort recorded so its own successor inherits
+   * them. Split out of the boot (ui17 job 17) because a Handoff click reserves
+   * the row at once and only boots it when the /handoff turn has landed.
+   * Returns null when the row could not be created.
    */
-  private async bootFreshPlanner(
+  private reserveFreshPlanner(
     projectPath: string,
     fromSessionId: string,
     prompt: string,
-  ): Promise<boolean> {
-    let sessionId: string;
-    let spawn: { provider: string; model: string; effort: string; source: string };
+  ): { sessionId: string; provider: LLMProvider; model: string; effort: string } | null {
     try {
       // Sticky provider, model and effort: the previous planner row's trio,
       // else the Models default. Recorded on the new row so its successor
       // inherits it; a Codex row makes the successor a Codex session, whose
       // transcript then renders through the rollout parser.
-      spawn = settingsService.resolveSpawnSelection('planner', null, projectPath, null);
+      const spawn = settingsService.resolveSpawnSelection('planner', null, projectPath, null);
       const provider = spawn.provider as LLMProvider;
-      sessionId = sessionsService.createAppSession(provider, projectPath, prompt, 'planner', true).sessionId;
+      const sessionId = sessionsService.createAppSession(provider, projectPath, prompt, 'planner', true).sessionId;
       sessionsDb.setSessionPredecessor(sessionId, fromSessionId);
       sessionsDb.markSessionBooted(sessionId);
       if (spawn.model) {
@@ -1649,12 +1719,51 @@ class WatchdogService {
       }
       sessionsDb.setSessionEffort(sessionId, spawn.effort);
       log(`fresh planner ${sessionId} spawn options: provider=${provider} model=${spawn.model || '(runtime default)'} effort=${spawn.effort} (${spawn.source})`);
+      return { sessionId, provider, model: spawn.model, effort: spawn.effort };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log(`fresh planner boot setup failed for ${projectPath}: ${message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Tells every client that `toSessionId` is the successor of `fromSessionId`:
+   * the pane viewing the outgoing session switches to the new row and holds a
+   * loader until its opening message lands.
+   */
+  private announcePlannerHandoff(projectPath: string, fromSessionId: string, toSessionId: string): void {
+    const handoffEvent = JSON.stringify({
+      kind: 'planner_handoff',
+      projectPath,
+      fromSessionId,
+      toSessionId,
+      timestamp: new Date().toISOString(),
+    });
+    connectedClients.forEach((client) => {
+      if (client.readyState === WS_OPEN_STATE) {
+        client.send(handoffEvent);
+      }
+    });
+  }
+
+  /**
+   * Runs the boot prompt inside an already-reserved planner row as a
+   * registered app run (ui11 phase 3), so the stream reaches every client that
+   * is already watching the row. Returns false on failure; the failed row
+   * keeps its predecessor but never becomes the project's wake target.
+   */
+  private async runReservedPlannerBoot(
+    sessionId: string,
+    projectPath: string,
+    prompt: string,
+  ): Promise<boolean> {
+    const session = sessionsDb.getSessionById(sessionId);
+    if (!session) {
+      log(`reserved planner session ${sessionId} is gone; nothing to boot`);
       return false;
     }
-    const provider = spawn.provider as LLMProvider;
+    const provider = session.provider as LLMProvider;
     const run = chatRunRegistry.startRun({
       appSessionId: sessionId,
       provider,
@@ -1666,19 +1775,6 @@ class WatchdogService {
       return false;
     }
 
-    const handoffEvent = JSON.stringify({
-      kind: 'planner_handoff',
-      projectPath,
-      fromSessionId,
-      toSessionId: sessionId,
-      timestamp: new Date().toISOString(),
-    });
-    connectedClients.forEach((client) => {
-      if (client.readyState === WS_OPEN_STATE) {
-        client.send(handoffEvent);
-      }
-    });
-
     let runtimeThrew = false;
     try {
       await providerRuntimeService.run(
@@ -1688,8 +1784,8 @@ class WatchdogService {
           sessionId,
           cwd: projectPath,
           projectPath,
-          model: spawn.model || undefined,
-          effort: spawn.effort,
+          model: session.model || undefined,
+          effort: session.effort || undefined,
           permissionMode: 'bypassPermissions',
           bootPrompt: true,
           mcpPolicy: 'none',
@@ -1703,13 +1799,35 @@ class WatchdogService {
     } finally {
       chatRunRegistry.completeRunIfCurrent(run, { exitCode: 1 });
       const failed = runtimeThrew || run.sawError || run.aborted;
-      sessionsDb.setSessionBootState(sessionId, failed ? 'failed' : 'ready');
+      sessionsDb.setSessionBootState(
+        sessionId,
+        failed ? 'failed' : 'ready',
+        failed ? 'The replacement planner failed to start.' : null,
+      );
       if (!failed) {
         sessionsDb.setWatchdogWakeTarget(sessionId);
       }
       log(`fresh planner ${sessionId} booted for ${projectPath}${failed ? ' (FAILED)' : ''}`);
       return !failed;
     }
+  }
+
+  /**
+   * Boots a brand-new planner session in one step: reserve the row, announce
+   * the handoff, run the boot. The rotation sweep and the dead-session
+   * fallback use this; a Handoff click reserves and boots separately.
+   */
+  private async bootFreshPlanner(
+    projectPath: string,
+    fromSessionId: string,
+    prompt: string,
+  ): Promise<boolean> {
+    const reserved = this.reserveFreshPlanner(projectPath, fromSessionId, prompt);
+    if (!reserved) {
+      return false;
+    }
+    this.announcePlannerHandoff(projectPath, fromSessionId, reserved.sessionId);
+    return this.runReservedPlannerBoot(reserved.sessionId, projectPath, prompt);
   }
 
   // ----- periodic sweep: stuck runs + machine resources -----

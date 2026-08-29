@@ -48,12 +48,10 @@ test('watchdog automation defaults protect Willem sessions and stored values win
     resourceAlerts: true,
     weeklySelfTest: true,
     weeklyMaintenance: true,
-    handoffAutomation: false,
     punchlistWatching: true,
     recoveryNotices: true,
   });
   assert.equal(initial.settings.plannerRotation, true);
-  assert.equal(initial.settings.handoffAutomation, false);
   assert.equal(initial.settings.livenessSweep, false);
   assert.equal(initial.settings.terminalWakes, true);
   assert.equal(initial.settings.weeklyMaintenance, true);
@@ -64,6 +62,16 @@ test('watchdog automation defaults protect Willem sessions and stored values win
   assert.equal(updated.plannerRotationThreshold, 70);
   assert.equal(service.plannerRotationThreshold(), 70);
   assert.equal(appConfig.map.get('watchdog_resource_alerts'), '0');
+});
+
+test('the retired handoff follow-through key is deleted and never reappears (ui17 job 17)', () => {
+  const appConfig = storedConfig([['watchdog_handoff_automation', '0']]);
+  const service = createSettingsService(dependencies({ appConfig }));
+  assert.equal(appConfig.map.has('watchdog_handoff_automation'), false);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(service.getWatchdogSettings().settings, 'handoffAutomation'),
+    false,
+  );
 });
 
 test('legacy planner_rotation_enabled folds into watchdog_planner_rotation once', () => {

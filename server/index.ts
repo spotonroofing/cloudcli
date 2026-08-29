@@ -107,11 +107,18 @@ const wss = createWebSocketServer(server, {
     },
     chat: {
         runtime: providerRuntimeService,
-        // Handoff auto-flow (ui11 phase 3): a clean planner /handoff turn
-        // rolls into the watchdog's fresh-boot planner spawn. Injected here
-        // to avoid a websocket -> watchdog -> websocket module cycle.
-        onPlannerHandoffTurnComplete: ({ projectPath, sessionId }) => {
-            watchdogService.plannerHandoffComplete(projectPath, sessionId);
+        // Handoff follow-through (ui11 phase 3, always-on since ui17 job 17):
+        // the successor row is reserved when the /handoff turn starts and boots
+        // when it ends cleanly. Injected here to avoid a websocket -> watchdog
+        // -> websocket module cycle.
+        onPlannerHandoffTurnStart: ({ projectPath, sessionId }) =>
+            watchdogService.plannerHandoffBegin(projectPath, sessionId),
+        onPlannerHandoffTurnComplete: ({ projectPath, sessionId, successorSessionId, failureReason }) => {
+            if (failureReason) {
+                watchdogService.plannerHandoffFailed(successorSessionId, failureReason);
+                return;
+            }
+            void watchdogService.plannerHandoffComplete(projectPath, sessionId, successorSessionId);
         },
         resolveBootSelection: ({ role, provider, projectPath, sessionId }) =>
             settingsService.resolveSpawnSelection(role, provider, projectPath, sessionId),

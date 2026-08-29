@@ -68,6 +68,8 @@ export interface ProjectSession {
   booted?: boolean;
   /** Persisted boot lifecycle: null | 'pending' | 'ready' | 'failed'. 'failed' reopens as a failed boot, not a plain chat. */
   bootState?: string | null;
+  /** One plain line saying why the boot failed; null unless bootState is 'failed'. */
+  bootError?: string | null;
   /** True when this chat is the project's fallback watchdog wake destination. */
   watchdogWakeTarget?: boolean;
   __provider?: LLMProvider;

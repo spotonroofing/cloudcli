@@ -87,12 +87,24 @@ type ChatWebSocketDependencies = {
   /** Central dispatcher for every provider SDK/CLI runtime. */
   runtime: ProviderRuntimeGateway;
   /**
-   * Fired after a planner session's /handoff turn completes cleanly. The
-   * watchdog boots the next planner session for the project through its
-   * rotation fresh-boot path (injected at wiring time to avoid a module
-   * cycle through the websocket barrel).
+   * Fired the moment a planner session's /handoff turn starts. The watchdog
+   * reserves the successor row and announces it, so the new chat appears and
+   * the pane switches to its loader while /handoff is still running (ui17 job
+   * 17). Returns the reserved session id, or null when no row was reserved.
    */
-  onPlannerHandoffTurnComplete?: (input: { sessionId: string; projectPath: string }) => void;
+  onPlannerHandoffTurnStart?: (input: { sessionId: string; projectPath: string }) => string | null;
+  /**
+   * Fired after a planner session's /handoff turn ends. A clean turn boots the
+   * reserved successor (through the watchdog's fresh-boot path); an errored or
+   * aborted one leaves the reserved row in place carrying the reason. Injected
+   * at wiring time to avoid a module cycle through the websocket barrel.
+   */
+  onPlannerHandoffTurnComplete?: (input: {
+    sessionId: string;
+    projectPath: string;
+    successorSessionId: string | null;
+    failureReason: string | null;
+  }) => void;
   /**
    * Model and effort a booted planner or direct worker session starts with
    * (sticky to the project's previous row of that role, else the Models
@@ -350,6 +362,22 @@ async function handleChatSend(
   const parsedCommand = parseCommandMessage(command);
   const commandTitleText = parsedCommand ? commandDisplayText(parsedCommand) : '';
 
+  // Handoff follow-through (ui17 job 17): the Handoff button and a typed
+  // /handoff always spawn the successor, and they spawn it now — the row and
+  // its loading pane are on screen before /handoff has written a word. The
+  // boot into that row waits for this turn to end cleanly.
+  const isPlannerHandoffTurn =
+    parsedCommand?.name === '/handoff'
+    && session.origin === 'planner'
+    && Boolean(session.project_path)
+    && clientOptions.bootPrompt !== true;
+  const handoffSuccessorId = isPlannerHandoffTurn
+    ? dependencies.onPlannerHandoffTurnStart?.({
+      sessionId,
+      projectPath: session.project_path as string,
+    }) ?? null
+    : null;
+
   // Boot sessions carry a placeholder title until the first real user-typed
   // message arrives; auto-sent boot prompts flag themselves and never title.
   if (
@@ -504,20 +532,21 @@ async function handleChatSend(
       }
     }
 
-    // Handoff auto-flow (ui11 phase 3): a planner session's /handoff turn
-    // ending cleanly rolls into a fresh planner boot for the same project.
-    // Aborted or errored handoffs stay visible instead of silently rolling.
-    if (
-      parsedCommand?.name === '/handoff'
-      && session.origin === 'planner'
-      && session.project_path
-      && !runtimeThrew
-      && !run.sawError
-      && !run.aborted
-    ) {
+    // Handoff follow-through (ui11 phase 3, always-on since ui17 job 17): a
+    // clean turn boots the reserved successor; an aborted or errored one keeps
+    // the placeholder row on screen with the reason, never a silent roll back.
+    if (isPlannerHandoffTurn) {
+      const aborted = run.aborted;
+      const failed = runtimeThrew || run.sawError || aborted;
       dependencies.onPlannerHandoffTurnComplete?.({
         sessionId,
-        projectPath: session.project_path,
+        projectPath: session.project_path as string,
+        successorSessionId: handoffSuccessorId,
+        failureReason: failed
+          ? (aborted
+            ? 'The handoff turn was stopped before it finished, so the new planner was not started.'
+            : 'The handoff turn ended with an error, so the new planner was not started.')
+          : null,
       });
     }
   }

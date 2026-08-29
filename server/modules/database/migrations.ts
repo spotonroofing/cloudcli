@@ -499,6 +499,16 @@ const addWatchdogChainManifestColumns = (db: Database): void => {
 };
 
 /**
+ * Adds `boot_error` (ui17 job 17): the one plain line a failed boot shows in
+ * its placeholder row. Existing failed rows have no line and keep the generic
+ * copy.
+ */
+const addSessionBootErrorColumn = (db: Database): void => {
+  const columnNames = getTableInfo(db, 'sessions').map((column) => column.name);
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'boot_error', 'TEXT');
+};
+
+/**
  * Adds ui15 job 18 wake routing: an immutable dispatch anchor on each chain,
  * plus predecessor and project-target state on planner/chat session rows.
  */
@@ -719,6 +729,7 @@ export const runMigrations = (db: Database) => {
     addSessionWorkerColumns(db);
     addSessionBootedColumn(db);
     addSessionBootStateColumn(db);
+    addSessionBootErrorColumn(db);
     addWatchdogWakeRoutingColumns(db);
     retitleCommentShapedSessionNames(db);
     addProjectPlannerMemoryColumn(db);

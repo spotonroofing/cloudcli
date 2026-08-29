@@ -52,7 +52,6 @@ const WATCHDOG_DEFAULTS = {
   resourceAlerts: true,
   weeklySelfTest: true,
   weeklyMaintenance: true,
-  handoffAutomation: false,
   punchlistWatching: true,
   recoveryNotices: true,
 } as const;
@@ -64,6 +63,12 @@ const watchdogSettingKey = (behavior: WatchdogBehavior): string =>
 
 /** Pre-System-tab rotation key (absent meant on); folded into watchdog_planner_rotation once. */
 const LEGACY_ROTATION_KEY = 'planner_rotation_enabled';
+/**
+ * Keys of behaviors that no longer have a switch. Handoff follow-through is
+ * always on since ui17 job 17 (clicking Handoff is the consent), so its stored
+ * value is deleted rather than left behind to confuse a later reader.
+ */
+const RETIRED_BEHAVIOR_KEYS = ['watchdog_handoff_automation'] as const;
 const ROTATION_THRESHOLD_KEY = 'planner_rotation_threshold';
 const ROTATION_THRESHOLD_DEFAULT = 60;
 
@@ -140,6 +145,12 @@ export function createSettingsService(dependencies: SettingsDependencies) {
       dependencies.appConfig.set(watchdogSettingKey('plannerRotation'), legacyRotation === '0' ? '0' : '1');
     }
     dependencies.appConfig.remove(LEGACY_ROTATION_KEY);
+  }
+
+  for (const retiredKey of RETIRED_BEHAVIOR_KEYS) {
+    if (dependencies.appConfig.get(retiredKey) !== null) {
+      dependencies.appConfig.remove(retiredKey);
+    }
   }
 
   const readModelDefault = (role: ModelRole): ModelSelection => {

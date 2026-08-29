@@ -25,7 +25,6 @@ type Behavior =
   | 'resourceAlerts'
   | 'weeklySelfTest'
   | 'weeklyMaintenance'
-  | 'handoffAutomation'
   | 'punchlistWatching'
   | 'recoveryNotices';
 
@@ -65,7 +64,6 @@ const behaviors: Array<{
 }> = [
   { key: 'plannerRotation', label: 'Planner auto-rotation', description: 'Runs a handoff and boots a new planner at the context threshold.', section: 'Sessions' },
   { key: 'terminalWakes', label: 'Terminal planner wakes', description: 'Wakes a planner after a dispatched chain completes, stops, or fails.', section: 'Sessions' },
-  { key: 'handoffAutomation', label: 'Handoff follow-through', description: 'Checks the handoff push and boots the replacement planner.', section: 'Sessions' },
   { key: 'livenessSweep', label: 'Chain liveness sweep', description: 'Stops chains whose runner vanished or stayed silent past the wedge limit.', section: 'Dispatch' },
   { key: 'dispatchRunLiveness', label: 'Run silence checks', description: 'Raises a decision notice when a dispatched session is silent for 30 minutes.', section: 'Dispatch' },
   { key: 'punchlistWatching', label: 'Live punch-list progress', description: 'Watches active punch lists and refreshes checked task counts.', section: 'Dispatch' },

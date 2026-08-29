@@ -366,6 +366,10 @@ function ChatInterface({
     && selectedSession?.bootState === 'failed'
     && !hasReadyAssistantText;
   const bootFailedView = (viewingBootSession && bootState.phase === 'failed') || persistedBootFailedView;
+  // The line a failed handoff left: live from the frame, or persisted on the
+  // row so a reload still says what went wrong rather than the generic copy.
+  const bootFailedReason = (viewingBootSession ? bootState.reason : null)
+    ?? (typeof selectedSession?.bootError === 'string' ? selectedSession.bootError : null);
   const errorMessageCount = useMemo(
     () => chatMessages.filter((message) => message.type === 'error').length,
     [chatMessages],
@@ -423,10 +427,36 @@ function ChatInterface({
       }
       const toSessionId = frame.toSessionId;
       bootedSessionsRef.current.add(toSessionId);
-      setBootState((previous) => ({ phase: 'booting', sessionId: toSessionId, attempt: previous.attempt + 1 }));
+      setBootState((previous) => ({
+        phase: 'booting',
+        sessionId: toSessionId,
+        attempt: previous.attempt + 1,
+        reason: null,
+      }));
       onNavigateToSession?.(toSessionId);
     });
   }, [subscribe, selectedSession?.id, currentSessionId, onNavigateToSession]);
+
+  // The handoff turn errored, was stopped, or did not push (ui17 job 17): the
+  // successor row stays exactly where it is and its pane says what went wrong
+  // in one line, instead of spinning on a boot that will never come.
+  useEffect(() => {
+    if (!subscribe) {
+      return;
+    }
+    return subscribe((event) => {
+      const frame = event as { kind?: string; toSessionId?: string; reason?: string } | null;
+      if (frame?.kind !== 'planner_handoff_failed' || !frame.toSessionId) {
+        return;
+      }
+      const failedSessionId = frame.toSessionId;
+      setBootState((previous) => (
+        previous.sessionId === failedSessionId
+          ? { ...previous, phase: 'failed', reason: frame.reason ?? null }
+          : previous
+      ));
+    });
+  }, [subscribe]);
 
   // On WebSocket reconnect, request a bounded persisted-tail sync (deferred
   // while Chat is hidden), then re-subscribe — the
@@ -717,6 +747,7 @@ function ChatInterface({
           isProcessing={isProcessing}
           isBootingSession={isBootingView}
           bootFailed={bootFailedView}
+          bootFailedReason={bootFailedReason}
           onRetryBoot={retryBoot}
           activity={paneActivity}
           chatMessages={chatMessages}

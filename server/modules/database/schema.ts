@@ -147,6 +147,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- 'ready' = boot turn completed, 'failed' = boot errored or was aborted
     -- (pending rows are swept to 'failed' at server start).
     boot_state TEXT,
+    -- One plain line saying why a boot failed (ui17 job 17), so a handoff
+    -- placeholder row can say what went wrong instead of a generic message.
+    -- NULL unless boot_state is 'failed'.
+    boot_error TEXT,
     isArchived BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

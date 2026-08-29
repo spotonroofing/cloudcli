@@ -29,6 +29,8 @@ interface ChatMessagesPaneProps {
   isBootingSession?: boolean;
   /** True when the boot turn errored or ended without a ready message. */
   bootFailed?: boolean;
+  /** One plain line saying why the boot failed; falls back to the generic copy. */
+  bootFailedReason?: string | null;
   onRetryBoot?: () => void;
   /** The viewed session's in-flight activity; drives the inline thinking indicator. */
   activity?: SessionActivity | null;
@@ -66,6 +68,7 @@ function ChatMessagesPane({
   isProcessing = false,
   isBootingSession = false,
   bootFailed = false,
+  bootFailedReason = null,
   onRetryBoot,
   activity = null,
   chatMessages,
@@ -296,7 +299,7 @@ function ChatMessagesPane({
       {bootFailed && chatMessages.length === 0 ? (
         <div className="mt-8 text-center">
           <p className="text-sm text-muted-foreground">
-            {t('session.boot.failed', { defaultValue: 'The session failed to start.' })}
+            {bootFailedReason || t('session.boot.failed', { defaultValue: 'The session failed to start.' })}
           </p>
           <Button variant="outline" size="sm" className="mt-3" onClick={onRetryBoot}>
             {t('session.boot.retry', { defaultValue: 'Retry' })}
@@ -431,7 +434,7 @@ function ChatMessagesPane({
           {bootFailed && (
             <div className="py-4 text-center">
               <p className="text-sm text-muted-foreground">
-                {t('session.boot.failed', { defaultValue: 'The session failed to start.' })}
+                {bootFailedReason || t('session.boot.failed', { defaultValue: 'The session failed to start.' })}
               </p>
               <Button variant="outline" size="sm" className="mt-3" onClick={onRetryBoot}>
                 {t('session.boot.retry', { defaultValue: 'Retry' })}

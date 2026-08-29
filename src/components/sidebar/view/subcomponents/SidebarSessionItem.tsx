@@ -61,7 +61,11 @@ export default function SidebarSessionItem({
   const providerLabel = PROVIDER_LABELS[session.__provider];
   // Activity shimmer: a mid-turn chat row carries the border beam (it replaced
   // the old green pulse dot); appearance and disappearance are engine fades.
-  const beam = useBeamPresence(isProcessing);
+  // A planner successor reserved by a Handoff click carries the same beam
+  // before its boot ever runs (ui17 job 17), so the new row reads as loading
+  // from the moment it appears.
+  const isReservedBoot = session.bootState === 'pending';
+  const beam = useBeamPresence(isProcessing || isReservedBoot);
 
   const selectSession = () => {
     onSessionViewed(String(session.id));
@@ -88,6 +92,7 @@ export default function SidebarSessionItem({
         isSelected={isSelected}
         onSelect={selectSession}
         overlay={beam.mounted ? <BorderBeamOverlay identity="planner" strength={0.3} {...beam.beamProps} /> : null}
+        isLoading={isReservedBoot}
         responseKinds={{ planner: responseKind === 'planner', worker: responseKind === 'worker' }}
         isWatchdogWakeTarget={session.watchdogWakeTarget === true}
         onRename={(name) => onSaveEditingSession(project.projectId, session.id, name, session.__provider)}

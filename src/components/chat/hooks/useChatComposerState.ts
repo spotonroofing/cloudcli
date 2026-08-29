@@ -176,6 +176,8 @@ export type BootState = {
   phase: 'idle' | 'booting' | 'failed';
   sessionId: string | null;
   attempt: number;
+  /** One plain line for a failure the server explained (ui17 job 17). */
+  reason?: string | null;
 };
 
 export type CommandModalKind = 'help' | 'models' | 'cost' | 'status';

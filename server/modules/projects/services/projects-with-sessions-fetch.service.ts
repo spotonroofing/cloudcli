@@ -18,6 +18,8 @@ type SessionSummary = {
   /** True when the first message was an auto-sent boot prompt; boot-prologue hiding keys off it. */
   booted: boolean;
   bootState: string | null;
+  /** One plain line saying why the boot failed; null unless bootState is 'failed'. */
+  bootError: string | null;
   /** True when this chat receives project-level watchdog wakes. */
   watchdogWakeTarget: boolean;
   messageCount: number;
@@ -31,6 +33,7 @@ type SessionRepositoryRow = {
   origin?: string | null;
   booted?: number | null;
   boot_state?: string | null;
+  boot_error?: string | null;
   watchdog_wake_target?: number | null;
   updated_at?: string | null;
   created_at?: string | null;
@@ -142,6 +145,7 @@ function mapSessionRowToSummary(row: SessionRepositoryRow): SessionSummary {
     origin: row.origin ?? null,
     booted: Boolean(row.booted),
     bootState: row.boot_state ?? null,
+    bootError: row.boot_error ?? null,
     watchdogWakeTarget: Boolean(row.watchdog_wake_target),
     messageCount: 0,
     lastActivity: row.updated_at ?? row.created_at ?? new Date().toISOString(),

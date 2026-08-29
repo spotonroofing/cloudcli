@@ -3,6 +3,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { Check, ChevronRight, X } from 'lucide-react';
 
 import { cn } from '../../../../lib/utils';
+import { Skeleton } from '../../../../shared/view/ui';
 import { MarqueeLabel } from '../../../../shared/view/beui';
 
 import ChatRowMenu, { WATCHDOG_WAKE_TARGET_CHANGED_EVENT, type ChatRowMenuProps } from './ChatRowMenu';
@@ -30,6 +31,11 @@ type ChatRowProps = {
    * Read by the row menu only; the row itself shows nothing for it.
    */
   isWatchdogWakeTarget?: boolean;
+  /**
+   * The chat exists but has not started yet (a planner successor reserved by a
+   * Handoff click). The row reads as loading: skeleton title, no age.
+   */
+  isLoading?: boolean;
   /** Saves an inline rename; the row owns the editing state. */
   onRename: (name: string) => void | Promise<void>;
   menu: Omit<ChatRowMenuProps, 'onRename'>;
@@ -57,6 +63,7 @@ export default function ChatRow({
   overlay,
   responseKinds = { planner: false, worker: false },
   isWatchdogWakeTarget = false,
+  isLoading = false,
   onRename,
   menu,
   dataTestId,
@@ -110,6 +117,7 @@ export default function ChatRow({
       data-slot="chat-row"
       onClick={handleClick}
       data-marquee-hover
+      aria-busy={isLoading || undefined}
       className={cn(
         'group relative flex min-w-0 items-center gap-2 rounded-lg py-2 pl-3 pr-3 text-left transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
@@ -162,19 +170,31 @@ export default function ChatRow({
           <MarqueeLabel active={false} activateOnParentHover className="text-[13px] font-normal leading-4">
             {title}
           </MarqueeLabel>
-          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground">
-            {subtitle && (
+          <span
+            data-slot={isLoading ? 'chat-row-loading' : undefined}
+            className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground"
+          >
+            {isLoading ? (
+              // A reserved chat has no history to date yet: the second line
+              // holds its space with the same skeleton the transcript uses
+              // while its first turn is still on the way.
+              <Skeleton className="h-2 w-16 rounded-sm" />
+            ) : (
               <>
-                <span className={cn('truncate', subtitleItalic && 'italic text-muted-foreground/70')}>
-                  {subtitle}
-                </span>
-                {age && <span className="flex-shrink-0 text-muted-foreground/40">·</span>}
+                {subtitle && (
+                  <>
+                    <span className={cn('truncate', subtitleItalic && 'italic text-muted-foreground/70')}>
+                      {subtitle}
+                    </span>
+                    {age && <span className="flex-shrink-0 text-muted-foreground/40">·</span>}
+                  </>
+                )}
+                {age && (
+                  <time className="flex-shrink-0 tabular-nums" dateTime={timestamp ?? undefined}>
+                    {age}
+                  </time>
+                )}
               </>
-            )}
-            {age && (
-              <time className="flex-shrink-0 tabular-nums" dateTime={timestamp ?? undefined}>
-                {age}
-              </time>
             )}
           </span>
         </span>

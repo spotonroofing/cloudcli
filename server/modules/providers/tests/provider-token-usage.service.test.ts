@@ -24,6 +24,7 @@ function createSessionRow(overrides: Record<string, unknown> = {}) {
     watchdog_wake_target: 0,
     booted: 0,
     boot_state: null,
+    boot_error: null,
     jsonl_path: null,
     custom_name: null,
     model: null,

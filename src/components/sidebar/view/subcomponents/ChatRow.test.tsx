@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import ChatRow from './ChatRow';
 
-const renderRow = (sessionId: string, wakeTarget = false) => renderToStaticMarkup(
+const renderRow = (sessionId: string, wakeTarget = false, isLoading = false) => renderToStaticMarkup(
   <ChatRow
     href={`/session/${sessionId}`}
     bounceKey={sessionId}
@@ -13,6 +13,7 @@ const renderRow = (sessionId: string, wakeTarget = false) => renderToStaticMarku
     age="now"
     isSelected
     isWatchdogWakeTarget={wakeTarget}
+    isLoading={isLoading}
     onSelect={() => undefined}
     onRename={() => undefined}
     menu={{
@@ -39,4 +40,13 @@ test('the wake target leaves no mark on the row (ui17 job 15)', () => {
 
   assert.doesNotMatch(markup, /watchdog-wake-target-mark/);
   assert.doesNotMatch(markup, />wake</);
+});
+
+test('a reserved handoff successor reads as a loading row (ui17 job 17)', () => {
+  const markup = renderRow('session-successor', false, true);
+
+  assert.match(markup, /data-slot="chat-row-loading"/);
+  assert.match(markup, /aria-busy="true"/);
+  // No age line: the row has no history to date yet.
+  assert.doesNotMatch(markup, />now</);
 });
