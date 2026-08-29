@@ -93,9 +93,9 @@ Done check: on dev during a running turn and on a loaded transcript with tool, t
 
 Goal: dragging a file over a pane shows the dotted outline and wash (`data-slot="pane-drop-highlight"`, ui15 job 2), but it flickers in and out while the file is held over the pane. Files: the pane dropzone in `src/components/chat/view/ChatInterface.tsx` (`paneRef`, the dragenter/dragover/dragleave handlers), `design/composer.md`.
 
-- [ ] Find the cause with evidence (almost always dragleave firing when the pointer crosses child elements, or dragover not calling preventDefault on every event) and fix it structurally: a depth counter or a single transparent overlay that owns the drag events while active, so the highlight stays on from the first dragenter until a drop or the pointer truly leaves the pane, with no flicker over children; the drop itself still works everywhere in the pane.
-- [ ] The highlight's own transitions are ramped (motion law) and never re-trigger while active; both panes; phone unaffected.
-- [ ] A regression test drives dragenter over the pane, dragover across three nested children, and asserts the highlight element stays mounted and opaque throughout; then dragleave outside the pane removes it.
+- [x] Find the cause with evidence (almost always dragleave firing when the pointer crosses child elements, or dragover not calling preventDefault on every event) and fix it structurally: a depth counter or a single transparent overlay that owns the drag events while active, so the highlight stays on from the first dragenter until a drop or the pointer truly leaves the pane, with no flicker over children; the drop itself still works everywhere in the pane.
+- [x] The highlight's own transitions are ramped (motion law) and never re-trigger while active; both panes; phone unaffected.
+- [x] A regression test drives dragenter over the pane, dragover across three nested children, and asserts the highlight element stays mounted and opaque throughout; then dragleave outside the pane removes it.
 
 Done check: on dev with agent-browser, synthetic drag events across the pane's children keep `pane-drop-highlight` present and at full opacity for the whole sequence; a drop still attaches the file; tests pass. Commit.
 

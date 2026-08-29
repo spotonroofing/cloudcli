@@ -18,6 +18,7 @@ import { createQueuedMessageId } from '../utils/chatStorage';
 import { useMemoryUpdates } from '../hooks/useMemoryUpdates';
 import { useMessageVersions } from '../hooks/useMessageVersions';
 import { findEditGroupId } from '../utils/messageVersions';
+import { createPaneDragTracker, type PaneDragTracker } from '../utils/paneDropHighlight';
 
 import { convertMarkdownToPlainText } from './subcomponents/MessageCopyControl';
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
@@ -25,6 +26,14 @@ import ChatComposer from './subcomponents/ChatComposer';
 import { ChatProjectContext } from './subcomponents/ChatProjectContext';
 import CommandResultModal from './subcomponents/CommandResultModal';
 import type { ProviderModelGroup } from './subcomponents/ComposerModelMenu';
+
+// Only a real file drag paints the pane: project rows and text drags carry no
+// `Files` entry in the transfer types.
+function isFileDrag(event: React.DragEvent): boolean {
+  const types = event.dataTransfer?.types;
+  if (!types) return false;
+  return Array.from(types).includes('Files');
+}
 
 function inferLivePhase(messages: ChatMessage[], runStartedAt: number): SessionActivityPhase | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -253,7 +262,6 @@ function ChatInterface({
     fileErrors,
     getRootProps,
     getInputProps,
-    isDragActive,
     openAttachmentPicker,
     handleSubmit,
     queuedDrafts,
@@ -563,6 +571,45 @@ function ChatInterface({
     return () => observer.disconnect();
   }, [selectedProject]);
 
+  // File-drop highlight (ui17 job 6): the pane owns the drag state through a
+  // target tracker instead of react-dropzone's `isDragActive`, which the
+  // overridden root ref left blind to its own children — every hop between
+  // nested elements read as a leave and blinked the wash off. The tracker
+  // stays active from the first dragenter until the last child is left, a
+  // drop lands, or the drag ends anywhere on the page.
+  const dragTrackerRef = useRef<PaneDragTracker | null>(null);
+  if (!dragTrackerRef.current) {
+    dragTrackerRef.current = createPaneDragTracker(
+      (target) => target instanceof Node && !!paneRef.current && paneRef.current.contains(target),
+    );
+  }
+  const [isFileOverPane, setIsFileOverPane] = useState(false);
+
+  const handlePaneDragEnter = useCallback((event: React.DragEvent) => {
+    if (!isFileDrag(event)) return;
+    setIsFileOverPane(dragTrackerRef.current!.enter(event.target));
+  }, []);
+
+  const handlePaneDragLeave = useCallback((event: React.DragEvent) => {
+    setIsFileOverPane(dragTrackerRef.current!.leave(event.target));
+  }, []);
+
+  const endPaneDrag = useCallback(() => {
+    setIsFileOverPane(dragTrackerRef.current!.end());
+  }, []);
+
+  // A drag that ends off the pane (dropped on another surface, or cancelled)
+  // never sends the pane a leave, so the page-level end clears the highlight.
+  useEffect(() => {
+    if (!isFileOverPane) return;
+    window.addEventListener('dragend', endPaneDrag);
+    window.addEventListener('drop', endPaneDrag);
+    return () => {
+      window.removeEventListener('dragend', endPaneDrag);
+      window.removeEventListener('drop', endPaneDrag);
+    };
+  }, [isFileOverPane, endPaneDrag]);
+
   // Rerun action on assistant turns: resend the prompt that produced the turn
   // through the normal submit path, without touching the composer draft.
   const handleRerun = useCallback((content: string, event: React.MouseEvent) => {
@@ -603,6 +650,19 @@ function ChatInterface({
     }, content);
   }, [submitMessageEdit, messageVersionGroups]);
 
+  // getRootProps carries react-dropzone's own root ref; the pane needs the
+  // same node for its composer measurements, so a callback ref feeds both.
+  const { ref: dropzoneRootRef, ...paneRootProps } = getRootProps({
+    onDragEnter: handlePaneDragEnter,
+    onDragLeave: handlePaneDragLeave,
+    onDrop: endPaneDrag,
+  }) as React.HTMLAttributes<HTMLDivElement> & { ref?: React.MutableRefObject<HTMLDivElement | null> };
+
+  const setPaneNode = useCallback((node: HTMLDivElement | null) => {
+    paneRef.current = node;
+    if (dropzoneRootRef) dropzoneRootRef.current = node;
+  }, [dropzoneRootRef]);
+
   const selectedProviderLabel =
     provider === 'cursor'
       ? t('messageTypes.cursor')
@@ -632,13 +692,14 @@ function ChatInterface({
       {/* Inline transcript images resolve against this pane's project workspace. */}
       <ChatProjectContext.Provider value={selectedProject.projectId ?? null}>
       {/* The whole pane is the file-drop target (ui15 job 2): dropping
-          anywhere on it attaches to this pane's composer. getRootProps'
-          internal ref is unused (noClick + noKeyboard), so paneRef wins. */}
-      <div {...getRootProps()} ref={paneRef} data-slot="chat-pane" className="relative flex h-full min-h-0 flex-col">
-        {isDragActive && (
+          anywhere on it attaches to this pane's composer. The pane node goes
+          to both refs (ui17 job 6) so react-dropzone can still tell its own
+          descendants apart while paneRef measures the composer. */}
+      <div {...paneRootProps} ref={setPaneNode} data-slot="chat-pane" className="relative flex h-full min-h-0 flex-col">
+        {isFileOverPane && (
           <div
             data-slot="pane-drop-highlight"
-            className="pointer-events-none absolute inset-0 z-30 p-1"
+            className="overlay-enter pointer-events-none absolute inset-0 z-30 p-1"
             aria-hidden
           >
             <div className="flex h-full w-full items-end justify-center rounded-lg border-2 border-dashed border-primary/40 bg-primary/[0.06] pb-24">
