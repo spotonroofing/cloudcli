@@ -19,6 +19,7 @@ import { copyTextToClipboard } from '../../../../utils/clipboard';
 import { usePaletteOps } from '../../../../contexts/PaletteOpsContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
 
+import MarkdownFileLink from './MarkdownFileLink';
 import MarkdownInlineImage from './MarkdownInlineImage';
 
 type MarkdownProps = {
@@ -26,6 +27,12 @@ type MarkdownProps = {
   className?: string;
   /** Render single newlines as hard line breaks (for user-typed messages). */
   breaks?: boolean;
+  /**
+   * Render a link that resolves to a local file as the shared attachment card
+   * (assistant prose, where a session presents a file to the reader). Off
+   * everywhere else, so ordinary in-chat file references stay plain links.
+   */
+  fileCards?: boolean;
 };
 
 type MarkdownInlineImageProps = {
@@ -253,7 +260,7 @@ const markdownComponents = {
   ),
 };
 
-export function Markdown({ children, className, breaks = false }: MarkdownProps) {
+export function Markdown({ children, className, breaks = false, fileCards = false }: MarkdownProps) {
   const content = normalizeInlineCodeFences(String(children ?? ''));
   const remarkPlugins = useMemo(
     () => (breaks
@@ -274,6 +281,16 @@ export function Markdown({ children, className, breaks = false }: MarkdownProps)
         const fileRef = looksLikeFilePath(href) ? href : looksLikeFilePath(linkText) ? linkText : undefined;
 
         if (fileRef && !isExternalHref(href)) {
+          // A bare path is a file being presented; a `:line` reference is a
+          // pointer into code and stays the plain, editor-opening link.
+          if (fileCards && stripLineSuffix(fileRef) === fileRef) {
+            return (
+              <MarkdownFileLink filePath={fileRef} href={href} onOpenInEditor={openFileInEditor}>
+                {linkChildren}
+              </MarkdownFileLink>
+            );
+          }
+
           return (
             <a
               href={href || fileRef}
@@ -300,7 +317,7 @@ export function Markdown({ children, className, breaks = false }: MarkdownProps)
         );
       },
     }),
-    [openFileInEditor],
+    [openFileInEditor, fileCards],
   );
 
   return (

@@ -8,6 +8,8 @@ import {
   isAllowedImageMimeType,
   openStoredAttachmentAsset,
 } from '@/modules/assets/services/image-assets.service.js';
+import { openLocalFile, resolveLocalFile } from '@/modules/assets/services/local-files.service.js';
+import { projectsDb } from '@/modules/database/index.js';
 
 const router = express.Router();
 
@@ -143,6 +145,66 @@ router.get('/files/:filename', async (req, res) => {
     console.error('Error streaming attachment asset:', error);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Error reading asset' });
+    }
+  });
+});
+
+/** The project root a local-file request resolves relative paths against. */
+const readProjectRoot = (projectId: unknown): string | null =>
+  typeof projectId === 'string' && projectId.trim()
+    ? projectsDb.getProjectPathById(projectId)
+    : null;
+
+/**
+ * Describes one file a session presented in chat by path, so the transcript can
+ * draw the shared attachment card (name, size, kind) before opening anything.
+ * Read-only, and only inside the project workspace or the planner memory repo.
+ */
+router.get('/local-file', async (req, res) => {
+  const lookup = await resolveLocalFile(String(req.query.path ?? ''), readProjectRoot(req.query.projectId));
+  if (lookup.status === 'invalid') {
+    return res.status(400).json({ error: 'Invalid file path' });
+  }
+  if (lookup.status === 'missing') {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  res.json({
+    name: lookup.name,
+    size: lookup.size,
+    mimeType: lookup.mimeType,
+    kind: lookup.kind,
+    path: lookup.absolutePath,
+  });
+});
+
+/**
+ * Streams a presented file's bytes for the viewer and its download control.
+ * Same containment as the describe route; `download=1` forces the save dialog.
+ */
+router.get('/local-file/content', async (req, res) => {
+  const lookup = await resolveLocalFile(String(req.query.path ?? ''), readProjectRoot(req.query.projectId));
+  if (lookup.status === 'invalid') {
+    return res.status(400).json({ error: 'Invalid file path' });
+  }
+  if (lookup.status === 'missing') {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  const download = req.query.download === '1';
+  res.setHeader('Content-Type', lookup.mimeType);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Same stored-XSS hardening as the asset routes: an SVG rendered as a
+  // document can carry scripts, so it only ever leaves as a download.
+  const disposition = download || lookup.mimeType === 'image/svg+xml' ? 'attachment' : 'inline';
+  res.setHeader('Content-Disposition', `${disposition}; filename="${lookup.name.replace(/["\r\n]/g, '_')}"`);
+
+  const stream = openLocalFile(lookup.absolutePath);
+  stream.pipe(res);
+  stream.on('error', (error) => {
+    console.error('Error streaming local file:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error reading file' });
     }
   });
 });

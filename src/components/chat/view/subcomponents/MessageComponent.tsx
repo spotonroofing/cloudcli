@@ -454,14 +454,20 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
            Edit mode fills the column width so the editor gets a stable box. */
         <div className={`flex w-full items-end ${isEditingThis ? '' : 'sm:w-auto'} sm:max-w-[85%] md:max-w-md lg:max-w-lg xl:max-w-xl`}>
           <div className={`flex min-w-0 flex-1 flex-col items-end gap-2 ${isEditingThis ? '' : 'sm:flex-initial'}`}>
-            {message.images && message.images.length > 0 && (
-              <ChatMessageImages
-                images={message.images}
-                projectId={selectedProject?.projectId}
-              />
-            )}
-            {message.files && message.files.length > 0 && (
-              <ChatMessageFiles files={message.files} />
+            {/* One card row for the whole turn, the way the composer stacks
+                them: images and other files wrap together, never in two bands. */}
+            {((message.images?.length ?? 0) > 0 || (message.files?.length ?? 0) > 0) && (
+              <div className="flex max-w-full flex-wrap justify-end gap-2">
+                {message.images && message.images.length > 0 && (
+                  <ChatMessageImages
+                    images={message.images}
+                    projectId={selectedProject?.projectId}
+                  />
+                )}
+                {message.files && message.files.length > 0 && (
+                  <ChatMessageFiles files={message.files} />
+                )}
+              </div>
             )}
             {isEditingThis ? (
               <UserMessageEditor
@@ -765,7 +771,7 @@ const MessageComponent = memo(({ message, animateFrom, prevMessage, createDiff, 
                   // Normal rendering for non-JSON content
                   return message.type === 'assistant' ? (
                     <>
-                      <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
+                      <Markdown fileCards className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
                         {content}
                       </Markdown>
                       <AssistantCitations content={content} />

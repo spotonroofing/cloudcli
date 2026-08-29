@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { XIcon } from 'lucide-react';
+import { DownloadIcon, XIcon } from 'lucide-react';
 
 import { authenticatedFetch } from '../../../../utils/api';
 import { Button, Dialog, DialogContent, DialogTitle } from '../../../../shared/view/ui';
+
+import { AttachmentCard } from './AttachmentCard';
 
 /** Pasted-text attachments (created by the paste-over-threshold path) render
  * as the Claude.ai-style PASTED chip instead of the generic file card. */
@@ -40,40 +42,30 @@ export function useStoredPastedText(storedName: string | undefined, enabled: boo
 }
 
 /**
- * Square Claude.ai-style chip for a pasted-text attachment: a miniature text
- * preview fills the card, a PASTED label sits bottom-left, and clicking opens
- * the full text (editable from the composer, read-only on a sent bubble). Shared between the composer and
- * sent user bubbles so both render identically.
+ * The pasted-text face of the shared attachment card: a miniature text preview
+ * fills the square, a PASTED label sits bottom-left, and clicking opens the
+ * full text (editable from the composer, read-only on a sent bubble). The
+ * composer and sent user bubbles render the same card as every other kind.
  */
 export function PastedTextChip({ name, text, onOpen }: { name: string; text: string | null; onOpen: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      data-slot="pasted-text-chip"
-      aria-label={`View ${name}`}
-      className="relative block h-20 w-20 overflow-hidden rounded-lg border border-border/50 bg-background/80 text-left shadow-sm outline-none transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-primary/60"
-    >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none h-full w-full select-none whitespace-pre-wrap break-words p-1.5 text-[6px] leading-[8px] text-muted-foreground"
-      >
-        {text ? text.slice(0, 400) : ''}
-      </div>
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end bg-gradient-to-t from-background via-background/80 to-transparent px-1.5 pb-1 pt-3">
-        <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-          PASTED
-        </span>
-      </span>
-    </button>
+    <AttachmentCard
+      kind="text"
+      slot="pasted-text-chip"
+      name={name}
+      label="PASTED"
+      previewText={text}
+      onOpen={onOpen}
+    />
   );
 }
 
 /**
- * Full-text viewer behind the PASTED chip. With `onSave` (composer chips) the
+ * Full-text viewer behind a text card. With `onSave` (composer chips) the
  * text is editable in place: Save or any close (X, Escape, outside press)
  * writes the edited text back to the attachment, Cancel restores the original.
- * Without it (sent bubbles) the text is read-only and says so.
+ * Without it (sent bubbles, files a session presented) the text is read-only
+ * and says so; `onDownload` adds the download control beside Close.
  */
 export function PastedTextViewer({
   name,
@@ -81,12 +73,14 @@ export function PastedTextViewer({
   open,
   onOpenChange,
   onSave,
+  onDownload,
 }: {
   name: string;
   text: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave?: (text: string) => void;
+  onDownload?: () => void;
 }) {
   const [draft, setDraft] = useState('');
   useEffect(() => {
@@ -121,14 +115,27 @@ export function PastedTextViewer({
             <span className="truncate text-sm font-medium text-foreground">{name.replace(/\.txt$/, '')}</span>
             {!editable && <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Read only</span>}
           </span>
-          <button
-            type="button"
-            onClick={commit}
-            aria-label="Close"
-            className="touch-hit relative inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <XIcon className="h-4 w-4" aria-hidden />
-          </button>
+          <span className="flex items-center gap-0.5">
+            {onDownload && (
+              <button
+                type="button"
+                onClick={onDownload}
+                data-slot="file-viewer-download"
+                aria-label={`Download ${name}`}
+                className="touch-hit relative inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <DownloadIcon className="h-4 w-4" aria-hidden />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={commit}
+              aria-label="Close"
+              className="touch-hit relative inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <XIcon className="h-4 w-4" aria-hidden />
+            </button>
+          </span>
         </div>
         {editable ? (
           <textarea

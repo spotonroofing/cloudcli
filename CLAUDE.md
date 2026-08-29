@@ -6,7 +6,16 @@
 - A live zsh chain keeps reading the runner inode it opened at spawn; `dispatch-chain-runner` hashes itself and re-execs from disk at unit boundaries so a landed runner fix reaches the next unit.
 - For UI work, start at `DESIGN.md` and read only the areas your files touch. Reuse the closest existing element, and update the matching area file whenever implementation changes a documented pattern so design guidance and code stay consistent.
 
-## Showing an image in the chat
+## Showing a file or image in the chat
+
+A session presents a file by writing a markdown link to it, and the chat renders that link as the file card — name, size, kind — which opens in the viewer with a download control:
+
+```
+[the punch list](PUNCHLIST_ui18.md)
+[the system overview](~/Projects/spoton-worker/review-20260829/SYSTEM_OVERVIEW.md)
+```
+
+- The link target may sit inside the project workspace (relative to the project root, or absolute inside it) or inside `~/Projects/spoton-worker`. Anything else — another root, a missing file, an `https://` URL, or a `path:line` code reference — stays an ordinary link. Use this instead of pasting a whole file into the chat.
 
 A session shows an image inline in its transcript by writing a markdown image whose source is either a file inside the project workspace or an HTTPS URL:
 

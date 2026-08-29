@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { authenticatedFetch } from '../../../../utils/api';
 import type { ChatImage } from '../../types/types';
 
+import { AttachmentCard } from './AttachmentCard';
 import { ImageLightbox } from './ImageLightbox';
 
 type ChatMessageImagesProps = {
@@ -86,41 +87,26 @@ function ChatMessageImage({ image, projectId }: { image: ChatImage; projectId?: 
   const [expanded, setExpanded] = useState(false);
   const alt = image.name || 'Attached image';
 
-  if (failed) {
-    return (
-      <div className="flex h-28 w-28 items-center justify-center rounded-lg border border-border/50 bg-muted px-2 text-center text-[10px] text-muted-foreground">
-        {alt}
-      </div>
-    );
-  }
-
-  if (!src) {
-    return <div className="h-28 w-28 animate-pulse rounded-lg border border-border/50 bg-muted" />;
-  }
-
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        aria-label={`Expand ${alt}`}
-        className="block overflow-hidden rounded-lg border border-border/50 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-      >
-        <img
-          src={src}
-          alt={alt}
-          className="h-28 w-28 cursor-zoom-in object-cover transition-transform duration-200 hover:scale-105"
-        />
-      </button>
-      {expanded && <ImageLightbox src={src} alt={alt} onClose={() => setExpanded(false)} />}
+      <AttachmentCard
+        kind="image"
+        name={alt}
+        size={image.size}
+        mimeType={image.mimeType}
+        previewSrc={src ?? undefined}
+        failed={failed}
+        onOpen={src ? () => setExpanded(true) : undefined}
+      />
+      {expanded && src && <ImageLightbox src={src} alt={alt} onClose={() => setExpanded(false)} />}
     </>
   );
 }
 
 /**
- * Image attachments for a user turn, rendered claude.ai-style: standalone
- * rounded square cards shown above the message bubble. Each thumbnail
- * expands to a fullscreen lightbox on click.
+ * Image attachments for a user turn: the shared square attachment card above
+ * the message bubble, identical to the composer's. Each thumbnail expands to a
+ * fullscreen lightbox on click.
  */
 export default function ChatMessageImages({ images, projectId }: ChatMessageImagesProps) {
   if (!images || images.length === 0) {

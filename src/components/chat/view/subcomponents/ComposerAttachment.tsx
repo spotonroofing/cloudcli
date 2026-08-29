@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { FileIcon, XIcon } from 'lucide-react';
+import { XIcon } from 'lucide-react';
 
 import { authenticatedFetch } from '../../../../utils/api';
 import type { ChatAttachment } from '../../types/types';
 
+import { AttachmentCard } from './AttachmentCard';
 import { ImageLightbox } from './ImageLightbox';
 import { PastedTextChip, PastedTextViewer, isPastedTextName, useStoredPastedText } from './PastedTextAttachment';
 
@@ -22,12 +23,6 @@ interface ComposerAttachmentProps {
   uploadProgress?: number;
   error?: string;
 }
-
-const formatFileSize = (size: number) => {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-};
 
 const ComposerAttachment = ({ file, descriptor, onRemove, onReplaceText, uploadProgress, error }: ComposerAttachmentProps) => {
   const [preview, setPreview] = useState<string | undefined>(undefined);
@@ -108,28 +103,16 @@ const ComposerAttachment = ({ file, descriptor, onRemove, onReplaceText, uploadP
   return (
     <div className="group relative max-w-full">
       {isImage && (file || preview) ? (
-        <button
-          type="button"
-          onClick={() => preview && setExpanded(true)}
-          aria-label={`Expand ${name}`}
-          className="block overflow-hidden rounded-lg border border-border/50 bg-background/80 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-        >
-          {preview
-            ? <img src={preview} alt={name} className="h-20 w-20 cursor-zoom-in object-contain" />
-            : <div className="h-20 w-20 animate-pulse bg-muted" />}
-        </button>
+        <AttachmentCard
+          kind="image"
+          name={name}
+          previewSrc={preview}
+          onOpen={preview ? () => setExpanded(true) : undefined}
+        />
       ) : isPastedText ? (
         <PastedTextChip name={name} text={pastedText} onOpen={() => setViewerOpen(true)} />
       ) : (
-        <div
-          className="flex h-20 w-20 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border border-border/50 bg-background/80 px-1.5 shadow-sm"
-        >
-          <FileIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-          <p className="w-full truncate text-center text-[10px] font-medium leading-3 text-foreground">{name}</p>
-          {size !== undefined && (
-            <p className="text-[9px] leading-3 text-muted-foreground">{formatFileSize(size)}</p>
-          )}
-        </div>
+        <AttachmentCard kind="file" name={name} size={size} mimeType={mimeType} />
       )}
       {uploadProgress !== undefined && uploadProgress < 100 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-black/50">
