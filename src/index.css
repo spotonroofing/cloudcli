@@ -1626,25 +1626,24 @@
     animation: status-sweep 0.85s both;
   }
 
-  /* Working-segment glow (ui13 job 7): the active job's ring segment for the
-     task being worked pulses with a white glow, on the same 2.4s beat as
-     row-breathe so ring and title swell together. Resting state (and reduced
-     motion) is the full foreground ink, no filter. */
-  @keyframes segment-glow {
+  /* Working-segment breathing (ui13 job 7; opacity only since ui17 job 7):
+     the active job's ring segment for the task being worked breathes its
+     stroke between dim and full, on the same 2.4s beat as row-breathe so
+     ring and title swell together. No filter, no glow, no scale. Resting
+     state (and reduced motion) is the full foreground ink. */
+  @keyframes segment-breathe {
     0%,
     100% {
       opacity: 0.45;
-      filter: none;
     }
     50% {
       opacity: 1;
-      filter: drop-shadow(0 0 2.5px rgb(255 255 255 / 0.85));
     }
   }
 
-  .animate-segment-glow {
-    animation: segment-glow 2.4s cubic-bezier(0.77, 0, 0.175, 1) infinite;
-    will-change: opacity, filter;
+  .animate-segment-breathe {
+    animation: segment-breathe 2.4s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+    will-change: opacity;
   }
 
   /* Popout entrance (ui13 job 7): the one growing entrance for dropdown
@@ -1741,7 +1740,7 @@
     .animate-counter-breathe,
     .animate-spinner-ramp,
     .animate-row-breathe,
-    .animate-segment-glow,
+    .animate-segment-breathe,
     .popout-enter,
     .overlay-enter {
       animation: none;

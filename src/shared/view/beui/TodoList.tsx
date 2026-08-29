@@ -332,8 +332,9 @@ export function TodoStatusIcon({
  * The segmented job ring (ui12 job 8, shared with the rail in ui13 job 7):
  * one arc per task with small gaps inside a viewBox-24 svg. Pending renders
  * every segment muted and static; active/terminal jobs retain the first
- * `done` segments, failed/unreached segments turn red, and the segment being worked pulses with the white glow
- * (`animate-segment-glow`, on the row-breathe beat; static full-ink under
+ * `done` segments, failed/unreached segments turn red, and the segment being
+ * worked breathes its opacity alone (`animate-segment-breathe`, on the
+ * row-breathe beat, no filter since ui17 job 7; static full-ink under
  * reduced motion).
  */
 export function JobRingSegments({
@@ -386,7 +387,7 @@ export function JobRingSegments({
               working
                 && cn(
                   tone === 'mono' ? 'text-foreground' : 'text-status-working',
-                  !reduce && 'animate-segment-glow',
+                  !reduce && 'animate-segment-breathe',
                 ),
               !done && !working && !failed && 'text-status-idle opacity-40',
             )}

@@ -4,7 +4,7 @@ const ANIMATED_SELECTOR = [
   '[data-beam]',
   '.animate-counter-breathe',
   '.animate-row-breathe',
-  '.animate-segment-glow',
+  '.animate-segment-breathe',
   '.animate-spinner-ramp',
   '.animate-spin',
   '.bui-pixel-cell',

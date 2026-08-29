@@ -103,8 +103,8 @@ Done check: on dev with agent-browser, synthetic drag events across the pane's c
 
 Goal: the running job's segmented ring in the jobs column breathes with a blur that matches nothing else in the app. Keep the breathing, drop the blur: the active segment animates opacity alone (the stroke fading between its dim and full values on the ring's existing ramped curve), no filter, no glow, no scale. Files: the ring in `src/components/worker-pane/JobsSidebar.tsx` (or its ring component) and the keyframes it uses in `src/index.css`, `design/worker-pane-and-jobs.md`.
 
-- [ ] The breathing keyframes animate `opacity` only; every `filter`, `blur`, `drop-shadow` or `box-shadow` step in that animation is removed; timing and ramp unchanged.
-- [ ] Nothing else in the ring changes (segment geometry, colors, the check and the red X from Job 1).
+- [x] The breathing keyframes animate `opacity` only; every `filter`, `blur`, `drop-shadow` or `box-shadow` step in that animation is removed; timing and ramp unchanged.
+- [x] Nothing else in the ring changes (segment geometry, colors, the check and the red X from Job 1).
 
 Done check: on dev with the stub running job, the animated segment's computed style shows no filter at any sampled frame and its opacity moves between the two values; tests pass. Commit.
 
