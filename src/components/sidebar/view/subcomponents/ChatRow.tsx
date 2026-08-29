@@ -25,7 +25,10 @@ type ChatRowProps = {
   /** Renders inside the row's relative box (the activity border beam). */
   overlay?: ReactNode;
   responseKinds?: ActivityKinds;
-  /** This chat is the owning project's fallback watchdog wake destination. */
+  /**
+   * This chat is the owning project's fallback watchdog wake destination.
+   * Read by the row menu only; the row itself shows nothing for it.
+   */
   isWatchdogWakeTarget?: boolean;
   /** Saves an inline rename; the row owns the editing state. */
   onRename: (name: string) => void | Promise<void>;
@@ -177,15 +180,9 @@ export default function ChatRow({
         </span>
       )}
 
-      {wakeTarget && (
-        <span
-          data-slot="watchdog-wake-target-mark"
-          className="hidden h-4 flex-shrink-0 items-center rounded-sm border border-border/70 px-1 font-mono text-[9px] leading-none tracking-tight text-muted-foreground/70 md:group-hover:inline-flex"
-        >
-          wake
-        </span>
-      )}
-
+      {/* ui17 job 15: the wake target no longer marks the row at all; the
+          row menu's "Receive watchdog wakes here" check is the only place it
+          shows. Wake routing itself is unchanged. */}
       <ResponseSignal kinds={responseKinds} />
 
       {/* Trailing control: the arrow is the resting state; on row hover it

@@ -443,6 +443,12 @@ export function useProjectsState({
   }
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
+  /**
+   * Sessions Willem has opened during this run. It is deliberately in memory
+   * only: a cold reload starts with no view records, so no historical chat can
+   * wear an unseen-response bell (ui17 job 15).
+   */
+  const viewedSessionsRef = useRef(new Set<string>());
   /** URL session id whose backend lookup already ran (or is in flight) — one attempt per id. */
   const sessionLookupRef = useRef<string | null>(null);
 
@@ -452,6 +458,17 @@ export function useProjectsState({
 
   const markResponseIndicator = useCallback((targetSessionId?: string | null) => {
     if (!targetSessionId) {
+      return;
+    }
+
+    // ui17 job 15: a bell only ever belongs to a session Willem has opened in
+    // this run. Without this gate a chat he read long ago earns one for free:
+    // the sessions watcher (`sessions-watcher.service.ts`) folds any transcript
+    // file write into the running-sessions poll for a 15s TTL, and when that
+    // TTL lapses the id leaves `activeSessions`, which the completion-edge
+    // effect below cannot tell apart from a finished turn. No view record
+    // counts as seen, so history stays quiet.
+    if (!viewedSessionsRef.current.has(targetSessionId)) {
       return;
     }
 
@@ -518,6 +535,8 @@ export function useProjectsState({
 
   const clearSessionIndicators = useCallback((targetSessionId?: string | null) => {
     if (!targetSessionId) return;
+    // Opening a session is the view record the bell is measured against.
+    viewedSessionsRef.current.add(targetSessionId);
     clearResponseIndicator(targetSessionId);
     setAttentionSessionIds((previous) => {
       if (!previous.has(targetSessionId)) return previous;

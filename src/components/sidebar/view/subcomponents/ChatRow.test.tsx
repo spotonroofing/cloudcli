@@ -34,13 +34,9 @@ test('chat rows expose their session id as the bounce-dot destination', () => {
   assert.match(renderRow('session-b'), /data-bounce-key="session-b"/);
 });
 
-test('the wake target is a hover-only mono tag, never a bell glyph', () => {
+test('the wake target leaves no mark on the row (ui17 job 15)', () => {
   const markup = renderRow('session-a', true);
-  const mark = markup.match(/<span data-slot="watchdog-wake-target-mark"[^>]*>(.*?)<\/span>/)?.[0] ?? '';
 
-  assert.match(mark, />wake<\/span>/);
-  assert.match(mark, /font-mono/);
-  assert.match(mark, /hidden/);
-  assert.match(mark, /group-hover:inline-flex/);
-  assert.doesNotMatch(mark, /<svg/);
+  assert.doesNotMatch(markup, /watchdog-wake-target-mark/);
+  assert.doesNotMatch(markup, />wake</);
 });

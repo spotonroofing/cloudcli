@@ -1,3 +1,5 @@
+import { Bell } from 'lucide-react';
+
 import { cn } from '../../../../lib/utils';
 
 export type ActivityKinds = {
@@ -6,10 +8,11 @@ export type ActivityKinds = {
 };
 
 /**
- * Quiet unread-response mark shared by chat rows, collapsed project rows,
- * and the footer activity button. It deliberately uses short strokes rather
- * than another dot: planner is one primary-ink stroke, worker is a paired
- * emerald stroke, and both stack without needing a label.
+ * Quiet unseen-response mark shared by chat rows, collapsed project rows,
+ * and the footer activity button (ui17 job 15). One muted bell, whatever
+ * answered: the row does not need to say planner or worker, the footer's own
+ * icons already do. It appears when a turn finished after the session was
+ * last opened and disappears the moment it is opened.
  */
 export default function ResponseSignal({
   kinds,
@@ -22,35 +25,13 @@ export default function ResponseSignal({
 
   return (
     <span
-      aria-label={
-        kinds.planner && kinds.worker
-          ? 'Unseen planner and worker responses'
-          : kinds.planner
-            ? 'Unseen planner response'
-            : 'Unseen worker response'
-      }
+      aria-label="Unseen response"
       data-slot="response-indicator"
       data-planner={kinds.planner || undefined}
       data-worker={kinds.worker || undefined}
-      className={cn('flex h-3 w-2.5 flex-shrink-0 flex-col justify-center gap-[2px]', className)}
+      className={cn('flex h-3 w-3 flex-shrink-0 items-center justify-center', className)}
     >
-      {kinds.planner && (
-        <span
-          aria-hidden="true"
-          className="h-px w-2.5 rounded-full bg-primary/75"
-          data-slot="response-indicator-planner"
-        />
-      )}
-      {kinds.worker && (
-        <span
-          aria-hidden="true"
-          className="flex items-center gap-px"
-          data-slot="response-indicator-worker"
-        >
-          <span className="h-px w-1 rounded-full bg-emerald-600/75 dark:bg-emerald-300/75" />
-          <span className="h-px w-1.5 rounded-full bg-emerald-600/75 dark:bg-emerald-300/75" />
-        </span>
-      )}
+      <Bell aria-hidden="true" className="h-3 w-3 text-muted-foreground" />
     </span>
   );
 }

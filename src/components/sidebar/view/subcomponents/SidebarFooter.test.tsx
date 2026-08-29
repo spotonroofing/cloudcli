@@ -74,11 +74,26 @@ test('the active sessions drawer uses monochrome borderless sidebar rows', () =>
   assert.doesNotMatch(markup, /Worker 1\s*(?:--|—)/);
 });
 
-test('planner and worker response strokes remain visibly distinct', () => {
-  const markup = renderToStaticMarkup(createElement(ResponseSignal, {
+test('the unseen-response mark is one bell for planner and worker alike', () => {
+  const both = renderToStaticMarkup(createElement(ResponseSignal, {
     kinds: { planner: true, worker: true },
   }));
+  const plannerOnly = renderToStaticMarkup(createElement(ResponseSignal, {
+    kinds: { planner: true, worker: false },
+  }));
+  const workerOnly = renderToStaticMarkup(createElement(ResponseSignal, {
+    kinds: { planner: false, worker: true },
+  }));
 
-  assert.match(markup, /data-slot="response-indicator-planner"/);
-  assert.match(markup, /data-slot="response-indicator-worker"/);
+  for (const markup of [both, plannerOnly, workerOnly]) {
+    assert.match(markup, /data-slot="response-indicator"/);
+    assert.equal((markup.match(/<svg/g) ?? []).length, 1);
+    assert.doesNotMatch(markup, /response-indicator-planner|response-indicator-worker/);
+    assert.doesNotMatch(markup, /emerald/);
+  }
+
+  assert.equal(
+    renderToStaticMarkup(createElement(ResponseSignal, { kinds: { planner: false, worker: false } })),
+    '',
+  );
 });
