@@ -82,10 +82,10 @@ Done check: on dev with agent-browser, both provider headers render the same mar
 
 Goal: ui15 job 4 put every duration in a right-aligned meta slot, and it reads badly: the thinking indicator's counter floats at the far right edge away from its word, the "Thought for" row shows its seconds stranded on the right with a chevron, and tool rows do the same. Willem wants the whole family rethought so a duration sits where the eye already is. Files: `src/components/chat/view/subcomponents/ActivityIndicator.tsx`, the thinking, tool-call, agent, research, memory and watchdog row components (the indicator row family from ui15 job 14), `design/transcript-rows.md`; git history around 72e46a1 and ecff4e3 shows where the durations moved.
 
-- [ ] One rule for every status row: the duration sits inline immediately after the row's label in the muted mono meta style ("Thought for 19.1s", "Bash 0.3s", the grid word then "47.7s"), a small fixed gap, same baseline; the right edge of a row holds only its expand chevron and nothing else. Live counters tick in that same inline slot.
-- [ ] The thinking indicator (grid, word, counter) is a compact left-aligned group, never full-width justify-between.
-- [ ] Tool rows keep their command preview after the label; the duration goes between the label and the preview ("Bash 0.3s  F=..."), and the preview truncates, never the duration; line-count details stay in the preview's muted style.
-- [ ] Regression test on the family: each row type renders its duration within 12px of its label and no duration element sits in the row's trailing slot; `design/transcript-rows.md` documents the rule with one example per row type.
+- [x] One rule for every status row: the duration sits inline immediately after the row's label in the muted mono meta style ("Thought for 19.1s", "Bash 0.3s", the grid word then "47.7s"), a small fixed gap, same baseline; the right edge of a row holds only its expand chevron and nothing else. Live counters tick in that same inline slot.
+- [x] The thinking indicator (grid, word, counter) is a compact left-aligned group, never full-width justify-between.
+- [x] Tool rows keep their command preview after the label; the duration goes between the label and the preview ("Bash 0.3s  F=..."), and the preview truncates, never the duration; line-count details stay in the preview's muted style.
+- [x] Regression test on the family: each row type renders its duration within 12px of its label and no duration element sits in the row's trailing slot; `design/transcript-rows.md` documents the rule with one example per row type.
 
 Done check: on dev during a running turn and on a loaded transcript with tool, thought, agent and memory rows, every duration's left edge sits within 12px of its label's right edge and the trailing slot contains only the chevron; tests pass; phone holds. Commit.
 

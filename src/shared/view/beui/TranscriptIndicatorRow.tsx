@@ -80,42 +80,54 @@ export function TranscriptIndicatorRow({
       >
         {glyph}
       </span>
-      <span
-        className={cn(
-          'shrink-0 whitespace-nowrap font-medium',
-          active && TEXT_SHIMMER_CLASS_NAME,
-        )}
-        style={active ? textShimmerStyle(1.4) : undefined}
-      >
-        {label}
-      </span>
-      {detail !== undefined ? (
-        onDetailClick ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDetailClick();
-            }}
-            className="min-w-0 flex-1 truncate text-left font-mono text-[11px] text-muted-foreground/70 transition-colors hover:text-primary hover:underline"
-          >
-            {detail}
-          </button>
-        ) : (
-          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/70">
-            {detail}
-          </span>
-        )
-      ) : (
-        <span aria-hidden="true" className="min-w-0 flex-1" />
-      )}
-      {meta && (
-        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
-          {meta}
+      {/* Label and duration are one group: the duration reads as part of the
+          row's own phrase ("Thought for 19.1s", "Bash 0.3s"), never stranded
+          at the far right edge away from the word it belongs to. */}
+      <span data-slot="indicator-label" className="flex shrink-0 items-baseline gap-1.5">
+        <span
+          data-slot="indicator-label-text"
+          className={cn(
+            'whitespace-nowrap font-medium',
+            active && TEXT_SHIMMER_CLASS_NAME,
+          )}
+          style={active ? textShimmerStyle(1.4) : undefined}
+        >
+          {label}
         </span>
-      )}
-      {duration}
-      <span aria-hidden={affordance ? undefined : true} className="grid size-4 shrink-0 place-items-center">
+        {duration}
+      </span>
+      <span data-slot="indicator-detail" className="flex min-w-0 flex-1 items-center gap-2">
+        {detail !== undefined && (
+          onDetailClick ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDetailClick();
+              }}
+              className="min-w-0 shrink truncate text-left font-mono text-[11px] text-muted-foreground/70 transition-colors hover:text-primary hover:underline"
+            >
+              {detail}
+            </button>
+          ) : (
+            <span className="min-w-0 shrink truncate font-mono text-[11px] text-muted-foreground/70">
+              {detail}
+            </span>
+          )
+        )}
+        {/* Counts ride with the preview in the preview's own muted style, so
+            the trailing slot stays the chevron's alone. */}
+        {meta && (
+          <span data-slot="indicator-meta" className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground/70">
+            {meta}
+          </span>
+        )}
+      </span>
+      <span
+        data-slot="indicator-affordance"
+        aria-hidden={affordance ? undefined : true}
+        className="grid size-4 shrink-0 place-items-center"
+      >
         {affordance ?? (expandable && (
           <motion.span
             animate={{ rotate: expanded ? 180 : 0 }}

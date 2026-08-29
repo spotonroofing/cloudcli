@@ -137,7 +137,11 @@ export default function ActivityIndicator({ activity }: ActivityIndicatorProps) 
         )}
         active
         duration={(
-          <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground/60">
+          <span
+            data-slot="status-duration"
+            data-state="running"
+            className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground/60"
+          >
           {/* Ticker layout (fixed glyph boxes, place-keyed digits) but zero
               roll: the tenths digit updates every 100ms, faster than any roll
               can settle, so a rolling column here is perpetually mid-glyph
