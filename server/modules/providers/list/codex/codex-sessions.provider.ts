@@ -124,6 +124,60 @@ function readRunningExecOutput(output: string): { cellId: string; content: strin
   };
 }
 
+type UnifiedExecResult = {
+  continuationId: string | null;
+  running: boolean;
+  content: string;
+};
+
+/**
+ * Codex wrappers print an exec-command result below the orchestration header.
+ * A yielded command has `session_id` and no exit code; its later `write_stdin`
+ * result carries the same command's final output.
+ */
+function readUnifiedExecResult(output: string): UnifiedExecResult | null {
+  const outputMarker = /\r?\nOutput:\r?\n/i.exec(output);
+  if (!outputMarker) return null;
+  const renderedResult = output.slice(outputMarker.index + outputMarker[0].length);
+  try {
+    const result = JSON.parse(renderedResult.trim()) as AnyRecord;
+    if (!result || typeof result !== 'object' || typeof result.output !== 'string') return null;
+    const sessionId = typeof result.session_id === 'number' || typeof result.session_id === 'string'
+      ? String(result.session_id)
+      : null;
+    return {
+      continuationId: sessionId ? `session:${sessionId}` : null,
+      running: Boolean(sessionId && result.exit_code == null),
+      content: result.output,
+    };
+  } catch {
+    // The orchestration wrapper currently emits each result field through a
+    // separate `text(...)` call. The rollout therefore contains rendered
+    // lines (`session_id=…` / `exit=…`) rather than the JSON value returned by
+    // exec_command itself.
+    const sessionMatch = /(?:^|\r?\n)session_id=(\d+)\s*$/.exec(renderedResult);
+    const exitMatch = /(?:^|\r?\n)exit=(-?\d+)\s*$/.exec(renderedResult);
+    const metadataMatch = sessionMatch ?? exitMatch;
+    if (!metadataMatch) return null;
+
+    const content = renderedResult.replace(/(?:session_id=\d+|exit=-?\d+)\s*$/, '');
+    return {
+      continuationId: sessionMatch ? `session:${sessionMatch[1]}` : null,
+      running: Boolean(sessionMatch && !exitMatch),
+      content,
+    };
+  }
+}
+
+/** Continuation key named by a wrapped `write_stdin`/`wait` tool call. */
+function readNestedContinuationId(input: unknown): string | null {
+  const source = typeof input === 'string' ? input : String(input || '');
+  const session = /\btools\.write_stdin\s*\([\s\S]*?\bsession_id\s*:\s*["']?(\d+)["']?/.exec(source);
+  if (session) return `session:${session[1]}`;
+  const cell = /\btools\.wait\s*\([\s\S]*?\bcell_id\s*:\s*["']([^"']+)["']/.exec(source);
+  return cell ? `cell:${cell[1]}` : null;
+}
+
 function decodeJavaScriptStringLiteral(literal: string): string {
   if (literal.startsWith('"')) {
     try {
@@ -143,7 +197,7 @@ function decodeJavaScriptStringLiteral(literal: string): string {
 
 function extractNestedCodexCommands(source: string): string[] {
   const commands: string[] = [];
-  const commandPattern = /(?:["']command["']|\bcommand)\s*:\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/gs;
+  const commandPattern = /(?:["'](?:command|cmd)["']|\b(?:command|cmd))\s*:\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/gs;
   for (const match of source.matchAll(commandPattern)) {
     commands.push(decodeJavaScriptStringLiteral(match[1]));
   }
@@ -248,7 +302,9 @@ async function getCodexSessionMessages(
     const ignoredToolCallIds = new Set<string>();
     const execToolCallIds = new Set<string>();
     const execCallByCellId = new Map<string, string>();
+    const execCallByContinuationId = new Map<string, string>();
     const waitCallToExecCall = new Map<string, string>();
+    const continuationCallToExecCall = new Map<string, string>();
     const pendingExecOutput = new Map<string, string>();
     const completedExecCalls = new Set<string>();
     const subagentsByCallId = new Map<string, CodexSubagentRecord>();
@@ -513,6 +569,14 @@ async function getCodexSessionMessages(
           const input = entry.payload.input || '';
           let toolInput = input;
 
+          const continuationId = readNestedContinuationId(input);
+          const continuedExecCallId = continuationId ? execCallByContinuationId.get(continuationId) : undefined;
+          if (continuedExecCallId) {
+            continuationCallToExecCall.set(entry.payload.call_id, continuedExecCallId);
+            ignoredToolCallIds.add(entry.payload.call_id);
+            continue;
+          }
+
           if (toolName === 'exec') {
             const translated = translateCodexExecInput(input);
             if (translated) {
@@ -571,17 +635,57 @@ async function getCodexSessionMessages(
         }
 
         if (entry.type === 'response_item' && entry.payload?.type === 'custom_tool_call_output') {
+          const continuedExecCallId = continuationCallToExecCall.get(entry.payload.call_id);
+          if (continuedExecCallId) {
+            const output = extractCodexToolOutput(entry.payload.output);
+            const runningOutput = readRunningExecOutput(output);
+            const unified = readUnifiedExecResult(output);
+            const nextContent = runningOutput?.content ?? unified?.content ?? output;
+            const accumulatedOutput = `${pendingExecOutput.get(continuedExecCallId) || ''}${nextContent}`;
+            pendingExecOutput.set(continuedExecCallId, accumulatedOutput);
+            if (runningOutput) {
+              execCallByContinuationId.set(`cell:${runningOutput.cellId}`, continuedExecCallId);
+              continue;
+            }
+            if (unified?.continuationId) {
+              execCallByContinuationId.set(unified.continuationId, continuedExecCallId);
+            }
+            if (!unified?.running && !completedExecCalls.has(continuedExecCallId)) {
+              messages.push({
+                uuid: rolloutRowId(`tool-result-${continuedExecCallId}`),
+                type: 'tool_result',
+                timestamp: entryTimestamp,
+                toolCallId: continuedExecCallId,
+                output: accumulatedOutput,
+              });
+              completedExecCalls.add(continuedExecCallId);
+            }
+            continue;
+          }
+
           if (ignoredToolCallIds.has(entry.payload.call_id)) {
             continue;
           }
 
-          const output = extractCodexToolOutput(entry.payload.output);
+          let output = extractCodexToolOutput(entry.payload.output);
           if (execToolCallIds.has(entry.payload.call_id)) {
             const runningOutput = readRunningExecOutput(output);
             if (runningOutput) {
               execCallByCellId.set(runningOutput.cellId, entry.payload.call_id);
+              execCallByContinuationId.set(`cell:${runningOutput.cellId}`, entry.payload.call_id);
               pendingExecOutput.set(entry.payload.call_id, runningOutput.content);
               continue;
+            }
+            const unified = readUnifiedExecResult(output);
+            if (unified) {
+              output = unified.content;
+              pendingExecOutput.set(entry.payload.call_id, unified.content);
+              if (unified.continuationId) {
+                execCallByContinuationId.set(unified.continuationId, entry.payload.call_id);
+              }
+              if (unified.running) {
+                continue;
+              }
             }
             completedExecCalls.add(entry.payload.call_id);
           }

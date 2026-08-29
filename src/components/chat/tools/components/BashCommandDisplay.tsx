@@ -63,7 +63,7 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
         kind="bash"
         glyph={status ? <ToolRowStatusIcon status={status} /> : <span className="font-mono font-semibold">$</span>}
         label="Bash"
-        detail={command}
+        detail={command.split(/\r?\n/, 1)[0]}
         meta={!open && hasOutput && !isRunning
           ? `${outputLineCount} ${outputLineCount === 1 ? 'line' : 'lines'}`
           : undefined}

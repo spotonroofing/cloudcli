@@ -295,3 +295,116 @@ test('Codex history preserves wrapped exec tool calls and results', { concurrenc
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test('Codex history keeps one live Bash row across a yielded exec command', { concurrency: false }, async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'codex-yielded-exec-'));
+  const workspacePath = path.join(tempRoot, 'workspace');
+  await mkdir(workspacePath, { recursive: true });
+  const restoreHomeDir = patchHomeDir(tempRoot);
+
+  try {
+    const providerSessionId = 'codex-yielded-exec-1';
+    const transcriptPath = await writeCodexTranscript(tempRoot, providerSessionId, workspacePath);
+    const initialCallId = 'long-command-1';
+    const continuationCallId = 'long-command-wait-1';
+    const outerWaitCallId = 'long-command-outer-wait-1';
+    const outputEnvelope = (result: { session_id?: number; exit_code?: number; output: string }) => ([
+      { type: 'input_text', text: 'Script completed\nWall time 1.0 seconds\nOutput:\n' },
+      { type: 'input_text', text: result.output },
+      ...(result.session_id === undefined
+        ? []
+        : [{ type: 'input_text', text: `session_id=${result.session_id}` }]),
+      ...(result.exit_code === undefined
+        ? []
+        : [{ type: 'input_text', text: `exit=${result.exit_code}` }]),
+    ]);
+    await appendFile(transcriptPath, [
+      JSON.stringify({
+        timestamp: '2026-08-29T04:00:00.000Z',
+        type: 'response_item',
+        payload: {
+          type: 'custom_tool_call',
+          name: 'exec',
+          call_id: initialCallId,
+          input: 'const r = await tools.exec_command({cmd:"printf start\\n; sleep 30",yield_time_ms:1000}); text(JSON.stringify(r));',
+        },
+      }),
+      JSON.stringify({
+        timestamp: '2026-08-29T04:00:01.000Z',
+        type: 'response_item',
+        payload: {
+          type: 'custom_tool_call_output',
+          call_id: initialCallId,
+          output: outputEnvelope({ session_id: 51532, output: 'start\n' }),
+        },
+      }),
+    ].join('\n') + '\n');
+
+    await withIsolatedDatabase(async () => {
+      sessionsDb.createAppSession('app-yielded-exec-1', 'codex', workspacePath);
+      sessionsDb.assignProviderSessionId('app-yielded-exec-1', providerSessionId);
+      await new CodexSessionSynchronizer().synchronize();
+
+      const provider = new CodexSessionsProvider();
+      const running = await provider.fetchHistory('app-yielded-exec-1');
+      const runningUses = running.messages.filter((message) => message.kind === 'tool_use');
+      assert.equal(runningUses.length, 1);
+      assert.equal(runningUses[0]?.toolName, 'Bash');
+      assert.equal(runningUses[0]?.toolResult, undefined);
+
+      await appendFile(transcriptPath, [
+        JSON.stringify({
+          timestamp: '2026-08-29T04:00:30.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'custom_tool_call',
+            name: 'exec',
+            call_id: continuationCallId,
+            input: 'const r = await tools.write_stdin({session_id:51532,chars:"",yield_time_ms:30000}); text(JSON.stringify(r));',
+          },
+        }),
+        JSON.stringify({
+          timestamp: '2026-08-29T04:00:30.100Z',
+          type: 'response_item',
+        payload: {
+          type: 'custom_tool_call_output',
+          call_id: continuationCallId,
+          output: [{
+            type: 'input_text',
+            text: 'Script running with cell ID 138\nWall time 11.0 seconds\nOutput:\n',
+          }],
+        },
+      }),
+      JSON.stringify({
+        timestamp: '2026-08-29T04:00:30.200Z',
+        type: 'response_item',
+        payload: {
+          type: 'custom_tool_call',
+          name: 'exec',
+          call_id: outerWaitCallId,
+          input: 'const r = await tools.wait({cell_id:"138",yield_time_ms:30000}); text(r.output);',
+        },
+      }),
+      JSON.stringify({
+        timestamp: '2026-08-29T04:00:30.300Z',
+        type: 'response_item',
+        payload: {
+          type: 'custom_tool_call_output',
+          call_id: outerWaitCallId,
+          output: outputEnvelope({ exit_code: 0, output: 'end\n' }),
+        },
+      }),
+      ].join('\n') + '\n');
+
+      const completed = await provider.fetchHistory('app-yielded-exec-1');
+      const completedUses = completed.messages.filter((message) => message.kind === 'tool_use');
+      assert.equal(completedUses.length, 1);
+      assert.equal(completedUses[0]?.id, runningUses[0]?.id);
+      assert.equal(completedUses[0]?.toolResult?.content, 'start\nend\n');
+      assert.equal(completed.messages.filter((message) => message.kind === 'tool_result').length, 1);
+    });
+  } finally {
+    restoreHomeDir();
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});

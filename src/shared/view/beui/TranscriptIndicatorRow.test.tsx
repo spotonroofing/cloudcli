@@ -51,8 +51,10 @@ test('every transcript indicator kind renders the one shared header anatomy', ()
 });
 
 test('Bash uses a fixed label and the shared muted detail slot', () => {
-  const markup = renderToStaticMarkup(<BashCommandDisplay command="git status" output="clean" />);
+  const markup = renderToStaticMarkup(<BashCommandDisplay command={'git status\necho hidden'} output="clean" />);
   assert.match(markup, />Bash</);
+  assert.match(markup, />git status</);
+  assert.doesNotMatch(markup, /echo hidden/);
   assert.match(markup, /font-mono text-\[11px\] text-muted-foreground\/70[^>]*>git status</);
 });
 

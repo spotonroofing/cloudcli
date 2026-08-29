@@ -24,6 +24,8 @@ export type TwinChain = {
   startedAt: number;
   /** Unit count: manifest length, else the runner-reported phase count. */
   units: number;
+  /** Committed units whose verifier failed; they remain repair candidates. */
+  verifyFailedUnits?: ReadonlySet<number>;
 };
 
 export type UnitStatus = 'completed' | 'in-progress' | 'paused' | 'cancelled' | 'pending';
@@ -41,8 +43,14 @@ const JOB_PATTERN = /\b(?:Job|Phase)\s+(\d+)\s+of\s+(PUNCHLIST_[\w.-]+\.md)/;
 const SUPERSEDES_PATTERN = /<!--\s*supersedes:\s*([\s\S]*?)\s*-->/i;
 
 /** The per-unit status the jobs list derives from a chain's state. */
-export function unitStatus(chain: Pick<TwinChain, 'status' | 'currentPhase'>, index: number): UnitStatus {
+export function unitStatus(
+  chain: Pick<TwinChain, 'status' | 'currentPhase' | 'verifyFailedUnits'>,
+  index: number,
+): UnitStatus {
   const current = chain.currentPhase ?? 0;
+  if (chain.verifyFailedUnits?.has(index)) {
+    return 'cancelled';
+  }
   if (chain.status === 'completed' || index < current) {
     return 'completed';
   }

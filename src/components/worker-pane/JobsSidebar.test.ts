@@ -65,8 +65,8 @@ test('a task-kind unit renders with the same row anatomy as a phase unit (ui17 j
     currentPhase: 1,
     phaseActive: true,
     manifest: [
-      { name: 'Compiled job', tasks: ['One', 'Two'], kind: 'phase', status: 'completed', done: 2 },
-      { name: 'Appended job', tasks: ['One', 'Two'], kind: 'task', status: 'completed', done: 2 },
+      { name: 'Compiled job', tasks: ['One', 'Two'], kind: 'phase', done: 2 },
+      { name: 'Appended job', tasks: ['One', 'Two'], kind: 'task', done: 2 },
     ],
     startedAt: 1,
     lastEventAt: 2,
@@ -324,7 +324,7 @@ test('completed and failed jobs keep segmented rings with centered terminal mark
   assert.match(failedMarkup, /M9 9 15\.2 15\.2M15\.2 9 9 15\.2/);
 });
 
-test('a committed verify failure repaired by its superseding unit stays failed once', () => {
+test('a committed verify failure repaired by its superseding unit reads done once', () => {
   const failed: ChainSnapshot = {
     slug: 'original',
     projectPath: '/workspace/repair-stub',
@@ -363,11 +363,36 @@ test('a committed verify failure repaired by its superseding unit stays failed o
     { chain: repair, run: null, sessions: { 1: 'repair-session' }, startedAt: repair.startedAt },
   ]);
   assert.equal((markup.match(/data-slot="jobs-sidebar-row"/g) ?? []).length, 1);
-  assert.match(markup, /data-chain="original"[^>]*data-status="cancelled"/);
-  assert.equal((markup.match(/data-slot="job-ring-segment"[^>]*data-failed="true"/g) ?? []).length, 1);
-  assert.match(markup, /data-terminal-mark="x"/);
+  assert.match(markup, /data-chain="original"[^>]*data-status="completed"/);
+  assert.equal((markup.match(/data-slot="job-ring-segment"[^>]*data-failed="true"/g) ?? []).length, 0);
+  assert.match(markup, /data-terminal-mark="check"/);
   assert.match(markup, /data-slot="jobs-sidebar-verify-fixed"[^>]*>Verify fixed in Context diet repair<\/li>/);
-  assert.match(markup, /data-slot="jobs-sidebar-failure-reason"[^>]*>Verifier found a regression\.<\/li>/);
+  assert.doesNotMatch(markup, />Verify failed</);
+  assert.doesNotMatch(markup, /data-slot="jobs-sidebar-failure-reason"/);
+});
+
+test('a committed current unit is done when its chain ended before verify', () => {
+  const chain: ChainSnapshot = {
+    slug: 'ended-before-verify',
+    projectPath: '/workspace/ended-before-verify',
+    status: 'failed',
+    phases: 4,
+    currentPhase: 4,
+    phaseActive: false,
+    manifest: [
+      { name: 'One', tasks: [], kind: 'phase', commitHash: '1111111', verify: 'passed' },
+      { name: 'Two', tasks: [], kind: 'phase', commitHash: '2222222', verify: 'passed' },
+      { name: 'Three', tasks: [], kind: 'phase', commitHash: '3333333', verify: 'failed' },
+      { name: 'Footer icons', tasks: ['Land it'], kind: 'phase', commitHash: 'ac73a56', done: 1 },
+    ],
+    startedAt: 1,
+    lastEventAt: 2,
+  };
+  const markup = renderJobs([{ chain, run: null, sessions: {}, startedAt: 1 }]);
+
+  assert.match(markup, /data-job="4"[^>]*data-status="completed"/);
+  assert.match(markup, /data-slot="jobs-sidebar-verify-never-ran"[^>]*>Verify never ran, chain ended<\/li>/);
+  assert.doesNotMatch(markup, /Job stopped before completion/);
 });
 
 test('verify renders live and then settles above engine, commit, and total metadata', () => {

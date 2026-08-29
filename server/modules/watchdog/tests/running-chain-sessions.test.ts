@@ -166,6 +166,44 @@ test('an anchor-less planner manifest streams prompt-derived punch-list check-of
   }
 });
 
+test('phase start baselines existing checks so only this attempt advances', async () => {
+  const projectPath = await mkdtemp(path.join(tmpdir(), 'punchlist-baseline-'));
+  const slug = 'punchlist-baseline-stub';
+  const promptDir = path.join(projectPath, '.dispatch', slug);
+  const punchlistPath = path.join(projectPath, 'PUNCHLIST_fixture.md');
+  await mkdir(promptDir, { recursive: true });
+  await writeFile(path.join(promptDir, '01-rerun.md'), 'Execute Job 16 of PUNCHLIST_fixture.md in this repo.\n');
+  await writeFile(punchlistPath, '## Job 16 — Rerun\n\n- [x] Old check\n- [ ] New check\n');
+
+  try {
+    await withIsolatedDatabase(async () => {
+      appConfigDb.set('watchdog_terminal_wakes', '0');
+      projectsDb.createProjectPath(projectPath);
+      watchdogService.registerChain({
+        slug,
+        projectPath,
+        phases: 1,
+        manifest: [{ name: 'Rerun', tasks: ['Old check', 'New check'], kind: 'phase' }],
+      });
+      watchdogService.chainEvent(slug, 'phase-start', { phase: 1 });
+
+      let snapshot = watchdogService.listWorkerRuns(projectPath).chains[slug];
+      assert.equal(snapshot.manifest?.[0]?.done, 0);
+      assert.deepEqual(snapshot.manifest?.[0]?.taskTimes, []);
+      assert.equal('taskDoneBaseline' in (snapshot.manifest?.[0] ?? {}), false);
+
+      await writeFile(punchlistPath, '## Job 16 — Rerun\n\n- [x] Old check\n- [x] New check\n');
+      snapshot = watchdogService.listWorkerRuns(projectPath).chains[slug];
+      assert.equal(snapshot.manifest?.[0]?.done, 1);
+      assert.equal(snapshot.manifest?.[0]?.taskTimes?.length, 1);
+      assert.equal(typeof snapshot.manifest?.[0]?.taskTimes?.[0], 'number');
+      watchdogService.chainEvent(slug, 'stopped', { phase: 1 });
+    });
+  } finally {
+    await rm(projectPath, { recursive: true, force: true });
+  }
+});
+
 test('an announced title replaces a prompt-shaped name discovery wrote first', async () => {
   await withIsolatedDatabase(() => {
     const projectPath = '/workspace/title-project';

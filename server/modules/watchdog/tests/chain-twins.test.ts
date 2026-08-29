@@ -81,6 +81,25 @@ test('a running rerun wins over the stopped original and completed twins are nev
   assert.deepEqual(hiddenTwinUnits(both, () => keyed('P.md', [1, 2])), []);
 });
 
+test('a committed verify failure stays a repair candidate for its explicit successor', () => {
+  const original = {
+    ...chain('ui15r5', 'failed', 9, 100, 9),
+    verifyFailedUnits: new Set([8]),
+  };
+  const repair = chain('ui15r6', 'completed', 1, 200, 1);
+  const hidden = hiddenTwinUnits([original, repair], (candidate) => {
+    if (candidate.slug === 'ui15r5') {
+      return Array.from({ length: 9 }, (_, index) => ({
+        key: index === 7 ? 'PUNCHLIST_ui15.md#11' : null,
+        supersedes: [],
+      }));
+    }
+    return [{ key: 'PUNCHLIST_ui15.md#11', supersedes: ['ui15r5/8'] }];
+  });
+
+  assert.deepEqual(hidden, [{ slug: 'ui15r5', index: 8, supersededBy: 'ui15r6/1' }]);
+});
+
 test('a running chain queued unit beats a dead chain and units without identity are untouched', () => {
   const chains = [chain('old', 'failed', 2, 100, 3), chain('new', 'running', 1, 200, 3)];
   const identities = (c: TwinChain) => (c.slug === 'old' ? keyed('P.md', [1, 2, 3]) : keyed('P.md', [2, 3, 4]));

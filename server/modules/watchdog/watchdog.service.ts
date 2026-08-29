@@ -55,6 +55,8 @@ export type ChainJobMeta = {
   commitHash?: string;
   commitSubject?: string;
   taskTimes?: (number | null)[];
+  /** Checked items already present when this attempt began; never progress. */
+  taskDoneBaseline?: number;
   /** One-line source detail captured when this job fails or stops. */
   failureReason?: string;
   /**
@@ -821,8 +823,9 @@ class WatchdogService {
       if (count == null || !meta?.taskTimes) {
         continue;
       }
+      const observedAfterStart = Math.max(0, count - (meta.taskDoneBaseline ?? 0));
       const live = chain.status === 'running' && chain.phaseActive && chain.currentPhase === i + 1;
-      while (meta.taskTimes.length < count) {
+      while (meta.taskTimes.length < observedAfterStart) {
         meta.taskTimes.push(live ? Date.now() : null);
         changed = true;
       }
@@ -848,10 +851,17 @@ class WatchdogService {
           currentPhase: chain.currentPhase,
           startedAt: chain.startedAt,
           units: chain.manifest?.length ?? Math.max(chain.phases ?? 0, chain.currentPhase ?? 0),
+          verifyFailedUnits: new Set(
+            Object.entries(chain.jobs)
+              .filter(([, meta]) => meta.verify === 'failed')
+              .map(([index]) => Number(index)),
+          ),
         });
       }
     }
-    const signature = chains.map((chain) => `${chain.slug}:${chain.status}:${chain.currentPhase}:${chain.units}`).join('|');
+    const signature = chains.map((chain) => (
+      `${chain.slug}:${chain.status}:${chain.currentPhase}:${chain.units}:${[...(chain.verifyFailedUnits ?? [])].join(',')}`
+    )).join('|');
     const cached = this.twinResults.get(projectPath);
     if (cached && cached.signature === signature) {
       return cached.hidden;
@@ -875,8 +885,12 @@ class WatchdogService {
     // Per-unit done counts come from the punch list file, re-read here on
     // every snapshot — so each chain event's broadcast and each worker-runs
     // fetch (the 20s poll catches mid-phase commits) carries fresh counts.
-    const doneCounts = punchlistDoneCounts(chain.manifest, this.punchlistSections(chain));
-    this.observeTaskCheckoffs(chain, doneCounts);
+    const rawDoneCounts = punchlistDoneCounts(chain.manifest, this.punchlistSections(chain));
+    this.observeTaskCheckoffs(chain, rawDoneCounts);
+    const doneCounts = rawDoneCounts?.map((count, index) => {
+      if (count == null) return null;
+      return Math.max(0, count - (chain.jobs[index + 1]?.taskDoneBaseline ?? 0));
+    }) ?? null;
     const hidden = this.hiddenTwins(chain.projectPath).get(chain.slug);
     return {
       slug: chain.slug,
@@ -888,12 +902,15 @@ class WatchdogService {
       fastMode: chain.fastMode,
       verifyFailures: countVerifyFailures(chain),
       manifest: chain.manifest
-        ? chain.manifest.map((entry, i) => ({
-            ...entry,
-            done: doneCounts?.[i] ?? null,
-            ...(chain.jobs[i + 1] ?? {}),
-            ...(hidden?.has(i + 1) ? { hidden: true as const, supersededBy: hidden.get(i + 1) } : {}),
-          }))
+        ? chain.manifest.map((entry, i) => {
+            const { taskDoneBaseline: _taskDoneBaseline, ...publicJobMeta } = chain.jobs[i + 1] ?? {};
+            return {
+              ...entry,
+              done: doneCounts?.[i] ?? null,
+              ...publicJobMeta,
+              ...(hidden?.has(i + 1) ? { hidden: true as const, supersededBy: hidden.get(i + 1) } : {}),
+            };
+          })
         : null,
       startedAt: chain.startedAt,
       lastEventAt: chain.lastEventAt,
@@ -991,6 +1008,8 @@ class WatchdogService {
       if (event === 'phase-start') {
         meta.startedAt = Date.now();
         meta.taskTimes = [];
+        const doneCounts = punchlistDoneCounts(chain.manifest, this.punchlistSections(chain));
+        meta.taskDoneBaseline = doneCounts?.[detail.phase - 1] ?? 0;
         meta.fastMode = detail.fastMode === true;
       } else if (event === 'phase-end') {
         meta.endedAt = Date.now();
@@ -2096,6 +2115,9 @@ export function parseJobMeta(value: unknown): Record<number, ChainJobMeta> {
     }
     if (Array.isArray(entry.taskTimes)) {
       meta.taskTimes = entry.taskTimes.map((t) => (Number.isFinite(Number(t)) && t !== null ? Number(t) : null));
+    }
+    if (Number.isInteger(Number(entry.taskDoneBaseline)) && Number(entry.taskDoneBaseline) >= 0) {
+      meta.taskDoneBaseline = Number(entry.taskDoneBaseline);
     }
     if (typeof entry.failureReason === 'string' && entry.failureReason.trim()) {
       meta.failureReason = entry.failureReason.trim().slice(-2000);

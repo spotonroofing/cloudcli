@@ -104,6 +104,8 @@ type Unit = {
   tokenCount?: number | null;
   /** A landed verify failure repaired by this named superseding unit. */
   verifyFixedIn?: string;
+  /** The build landed, but its terminal chain never launched this verifier. */
+  verifyNeverRan?: boolean;
 };
 
 type RepairTruth = {
@@ -117,6 +119,7 @@ const unitRefKey = (reference: string): string => reference.replace(/\/(\d+)$/, 
 function baseUnitStatus(chain: ChainSnapshot, entry: ChainManifestEntry, index: number): TodoListItemStatus {
   const current = chain.currentPhase ?? 0;
   if (entry.verify === 'failed') return 'cancelled';
+  if (entry.commitHash) return 'completed';
   if (chain.status === 'completed' || index < current) return 'completed';
   if (index === current) return chain.status === 'running' ? 'in-progress' : 'cancelled';
   return 'pending';
@@ -181,9 +184,9 @@ function chainUnits(chain: ChainSnapshot, repairTruth: RepairTruth): Unit[] {
     if ((entry.hidden && !verifyFixedIn) || repairTruth.repairWinners.has(key)) {
       return [];
     }
-    // A later repair does not rewrite the original verifier result. The
-    // fixed-in note explains the repair while the historical row stays red.
-    const status: TodoListItemStatus = baseUnitStatus(chain, entry, index);
+    // A landed superseding unit resolves the old verifier failure on the one
+    // logical row; the quiet fixed-in note preserves the history.
+    const status: TodoListItemStatus = verifyFixedIn ? 'completed' : baseUnitStatus(chain, entry, index);
     const paused = chain.status === 'paused' && index === current;
     return [{
       key,
@@ -209,6 +212,12 @@ function chainUnits(chain: ChainSnapshot, repairTruth: RepairTruth): Unit[] {
       model: entry.model,
       fastMode: entry.fastMode,
       verifyFixedIn,
+      verifyNeverRan: Boolean(
+        entry.commitHash
+        && !entry.verify
+        && index === current
+        && (chain.status === 'stopped' || chain.status === 'failed')
+      ),
     }];
   });
 }
@@ -443,6 +452,19 @@ function VerifyFixedNote({ unit }: { unit: Unit }) {
       className="min-h-5 truncate text-[11px] leading-4 text-muted-foreground/60"
     >
       Verify fixed in {unit.verifyFixedIn}
+    </li>
+  );
+}
+
+/** A landed build is done even when its dead chain never launched verify. */
+function VerifyNeverRanNote({ unit }: { unit: Unit }) {
+  if (!unit.verifyNeverRan) return null;
+  return (
+    <li
+      data-slot="jobs-sidebar-verify-never-ran"
+      className="min-h-5 truncate text-[11px] leading-4 text-muted-foreground/60"
+    >
+      Verify never ran, chain ended
     </li>
   );
 }
@@ -1040,6 +1062,7 @@ function JobsSidebar({
                       })}
                       <VerifyRow unit={unit} onOpenSession={onOpenSession} />
                       <VerifyFixedNote unit={unit} />
+                      <VerifyNeverRanNote unit={unit} />
                       <FailureReason unit={unit} />
                       <EngineRow unit={unit} />
                       <JobCommitRow unit={unit} />

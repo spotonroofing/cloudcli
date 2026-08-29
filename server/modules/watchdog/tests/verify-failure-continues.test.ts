@@ -88,7 +88,9 @@ test('a failed verifier is recorded and announced while the next build and chain
     const phaseOne = path.join(repo, '01-one.md');
     const phaseTwo = path.join(repo, '02-two.md');
     const phaseThree = path.join(repo, '03-three.md');
-    await writeFile(phaseOne, '<!-- name: One -->\nFIRST_BUILD_STUB\n');
+    const punchlist = path.join(repo, 'PUNCHLIST_fixture.md');
+    await writeFile(punchlist, '## Job 16 — One\n\n- [x] Previously complete\n');
+    await writeFile(phaseOne, '<!-- name: One -->\nExecute Job 16 of PUNCHLIST_fixture.md in this repo.\nFIRST_BUILD_STUB\n');
     await writeFile(phaseTwo, '<!-- name: Two -->\nSECOND_BUILD_STUB\n');
     await writeFile(phaseThree, '<!-- name: Three -->\nTHIRD_BUILD_STUB\n');
     await runGit(repo, ['add', '.']);
@@ -162,7 +164,9 @@ print -r -- "done" > "$output"
     runner = null;
 
     assert.match(stdout, /completed with 1 verify failure \(3 phases\)/);
-    assert.equal(await runGit(repo, ['rev-list', '--count', 'HEAD']), '4');
+    assert.equal(await runGit(repo, ['rev-list', '--count', 'HEAD']), '5');
+    assert.equal(await readFile(punchlist, 'utf8'), '## Job 16 — One\n\n- [ ] Previously complete\n');
+    assert.match(await runGit(repo, ['log', '--format=%s']), new RegExp(`docs\\(dispatch\\): reset job 16 for ${slug}`));
     const callLines = (await readFile(calls, 'utf8')).trim().split('\n');
     assert.deepEqual(callLines.filter((line) => line.startsWith('build|')), [
       'build|one',
