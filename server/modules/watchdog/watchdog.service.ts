@@ -555,6 +555,82 @@ class WatchdogService {
   }
 
   /**
+   * Used by the watchdog remanifest route to repair any stored chain in place
+   * from the runner's durable phase-file list and its still-queued appends.
+   * The chain registry entry is mutated instead of re-registered so running,
+   * completed, and failed state plus job metadata remain intact.
+   */
+  remanifestChain(
+    slug: string,
+    projectPath: string,
+  ): { status: 'ok'; entries: number } | { status: 'unknown' | 'project-mismatch' | 'unavailable'; message: string } {
+    const chain = this.chains.get(slug);
+    if (!chain) {
+      return { status: 'unknown', message: `Chain "${slug}" is not registered.` };
+    }
+    if (normalizeProjectPath(chain.projectPath) !== normalizeProjectPath(projectPath)) {
+      return { status: 'project-mismatch', message: `Chain "${slug}" is not registered for this project.` };
+    }
+
+    const runtimeDirectory = chainJournalDir(slug);
+    const resumePath = path.join(runtimeDirectory, 'resume.json');
+    let phaseFiles: string[];
+    try {
+      const resume = JSON.parse(fs.readFileSync(resumePath, 'utf8')) as { repo?: unknown; phaseFiles?: unknown };
+      if (typeof resume.repo === 'string'
+        && normalizeProjectPath(resume.repo) !== normalizeProjectPath(chain.projectPath)) {
+        return { status: 'unavailable', message: `${resumePath} belongs to a different project.` };
+      }
+      phaseFiles = Array.isArray(resume.phaseFiles)
+        ? resume.phaseFiles.filter((file): file is string => typeof file === 'string' && file.trim() !== '')
+        : [];
+    } catch (error) {
+      return {
+        status: 'unavailable',
+        message: `Cannot read ${resumePath}: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+    if (!phaseFiles.length) {
+      return { status: 'unavailable', message: `${resumePath} lists no phase files.` };
+    }
+
+    const appendDirectory = path.join(runtimeDirectory, 'append');
+    try {
+      const queuedAppends = fs.readdirSync(appendDirectory, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+        .map((entry) => path.join(appendDirectory, entry.name))
+        .sort((left, right) => left.localeCompare(right));
+      phaseFiles.push(...queuedAppends);
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        return {
+          status: 'unavailable',
+          message: `Cannot read ${appendDirectory}: ${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
+    }
+    phaseFiles = [...new Set(phaseFiles.map((file) => path.resolve(file)))];
+
+    const rebuilt = manifestFromPhaseFiles(phaseFiles);
+    if ('error' in rebuilt) {
+      return { status: 'unavailable', message: rebuilt.error };
+    }
+    chain.manifest = rebuilt.entries;
+    chain.phases = rebuilt.entries.length;
+    chain.punchlist = rebuilt.punchlist
+      ? path.isAbsolute(rebuilt.punchlist)
+        ? rebuilt.punchlist
+        : path.join(chain.projectPath, rebuilt.punchlist)
+      : null;
+    chain.lastEventAt = Date.now();
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    this.syncPunchlistWatcher(chain);
+    log(`chain ${slug}: manifest rebuilt from phase files (${rebuilt.entries.length} entries)`);
+    return { status: 'ok', entries: rebuilt.entries.length };
+  }
+
+  /**
    * Merges per-job commit/timing metadata into a chain (ui13 job 14): the
    * backfill path for jobs whose phase-end event predates the commit-carrying
    * runner. Supplied fields overwrite per job; untouched jobs keep theirs.
@@ -621,25 +697,30 @@ class WatchdogService {
   }
 
   /**
-   * Amends a not-yet-started unit's manifest entry in place (ui14 job 8):
-   * the planner folds a small same-files addition into a queued job as an
-   * extra task, and the jobs view must show the new row and denominator
-   * before the job starts. Only a unit strictly after the current one on a
-   * running chain qualifies — the executing or finished unit's counters stay
-   * honest. Adds no unit, so `phases` is untouched.
+   * Amends a queued unit or repairs the executing unit's name/tasks in place
+   * (ui18 job 3). Once the executing unit is ticking its anchor is immutable,
+   * preserving the punch-list watcher and recorded task boundaries. Finished
+   * units remain immutable. Adds no unit, so `phases` is untouched.
    */
   amendChainPhase(
     slug: string,
     phaseIndex: number,
     patch: { tasks?: string[]; name?: string; anchor?: string },
-  ): 'ok' | 'unknown' | 'not-queued' {
+  ): 'ok' | 'unknown' | 'not-queued' | 'anchor-started' {
     const chain = this.chains.get(slug);
     if (!chain || !chain.manifest) {
       return 'unknown';
     }
     const entry = chain.manifest[phaseIndex - 1];
-    if (!entry || chain.status !== 'running' || phaseIndex <= (chain.currentPhase ?? 0)) {
+    const executing = chain.status === 'running'
+      && chain.phaseActive
+      && phaseIndex === chain.currentPhase;
+    const queued = chain.status === 'running' && phaseIndex > (chain.currentPhase ?? 0);
+    if (!entry || (!executing && !queued)) {
       return 'not-queued';
+    }
+    if (executing && patch.anchor) {
+      return 'anchor-started';
     }
     if (patch.tasks) {
       entry.tasks = patch.tasks;
@@ -2337,6 +2418,50 @@ function readPlannerBootPrompt(): string {
   }
   return 'Boot as this project\'s planner: read PLANNER.md, the project\'s PROJECT.md and STATE.md '
     + 'in the planner memory repo, and open with the session-start summary.';
+}
+
+/**
+ * Rebuilds dispatch display metadata from phase prompt headers. This is the
+ * watchdog-side equivalent of dispatch's fail-fast manifest compiler: names
+ * and tasks are mandatory, explicit anchors win, and the standard
+ * "Execute Job N of PUNCHLIST_x.md" identity supplies the task-count anchor.
+ */
+function manifestFromPhaseFiles(
+  phaseFiles: string[],
+): { entries: ChainManifestEntry[]; punchlist: string | null } | { error: string } {
+  const entries: ChainManifestEntry[] = [];
+  let punchlist: string | null = null;
+  for (const phaseFile of phaseFiles) {
+    let text: string;
+    try {
+      text = fs.readFileSync(phaseFile, 'utf8');
+    } catch (error) {
+      return { error: `Cannot read phase file ${phaseFile}: ${error instanceof Error ? error.message : String(error)}` };
+    }
+    const metadata = new Map<string, string>();
+    for (const match of text.slice(0, 4096).matchAll(/<!--\s*(name|tasks|anchor):\s*(.*?)\s*-->/gi)) {
+      metadata.set(match[1].toLowerCase(), match[2].trim());
+    }
+    const name = metadata.get('name') ?? '';
+    const tasks = (metadata.get('tasks') ?? '').split('|').map((task) => task.trim()).filter(Boolean);
+    const missing = [...(!name ? ['name'] : []), ...(!tasks.length ? ['tasks'] : [])];
+    if (missing.length) {
+      return { error: `Phase file ${phaseFile} has no ${missing.join(' or ')}.` };
+    }
+
+    const identity = /Execute\s+Job\s+(\d+)\s+of\s+([^\s`]+?\.md)\b/i.exec(text);
+    const explicitAnchor = metadata.get('anchor');
+    const anchor = explicitAnchor || (identity ? `Job ${identity[1]}` : undefined);
+    if (identity) {
+      const identityPunchlist = identity[2];
+      if (punchlist && punchlist !== identityPunchlist) {
+        return { error: `Phase file ${phaseFile} names ${identityPunchlist}, not chain punch list ${punchlist}.` };
+      }
+      punchlist = identityPunchlist;
+    }
+    entries.push({ name, tasks, kind: 'phase', ...(anchor ? { anchor } : {}) });
+  }
+  return { entries, punchlist };
 }
 
 /**

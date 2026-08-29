@@ -6,6 +6,7 @@
 #   dispatch hold <project> <slug>
 #   dispatch release-hold <project> <slug>
 #   dispatch resume <project> <slug>
+#   dispatch remanifest <project> <slug>
 #   dispatch fast <project> <slug> on|off
 #   dispatch append <project> <slug> <file ...> [--phase]
 #   dispatch amend <project> <slug> <unit> --tasks "a | b | c" [--name N] [--anchor A]
@@ -47,9 +48,9 @@
 # unit only, over the chain's DISPATCH_ENGINE / DISPATCH_MODEL /
 # DISPATCH_EFFORT. An engine header naming anything else is refused here.
 #
-# `dispatch amend` rewrites a not-yet-started unit's stored task list (ui14
-# job 8) so a fold-in the planner made to the prompt file and punch list also
-# reaches the jobs view; the executing or finished unit is refused.
+# `dispatch amend` rewrites a queued unit's stored display metadata (ui14 job
+# 8). The executing unit also accepts name/task repairs, but its punch-list
+# anchor is immutable once task timing has started; finished units are refused.
 set -u
 
 SCRIPT_DIR="${0:A:h}"
@@ -80,12 +81,101 @@ usage() {
   print -u2 "       dispatch hold <project> <slug>"
   print -u2 "       dispatch release-hold <project> <slug>"
   print -u2 "       dispatch resume <project> <slug>"
+  print -u2 "       dispatch remanifest <project> <slug>"
   print -u2 "       dispatch fast <project> <slug> on|off"
   print -u2 "       dispatch append <project> <slug> <file ...> [--phase]"
   print -u2 "       dispatch amend <project> <slug> <unit> --tasks \"a | b | c\" [--name N] [--anchor A]"
   exit 64
 }
 [[ $# -ge 2 ]] || usage
+
+# ----- remanifest: rebuild one stored chain from its persisted phase files -----
+if [[ "$1" == "remanifest" ]]; then
+  shift
+  [[ $# -eq 2 ]] || usage
+  PROJECT_ARG="$1"; SLUG="$2"
+  if [[ "$PROJECT_ARG" == /* ]]; then
+    REPO="$PROJECT_ARG"
+  else
+    REPO="$PROJECTS_ROOT/$PROJECT_ARG"
+  fi
+  [[ -d "$REPO/.git" ]] || { print -u2 "dispatch: $REPO is not a git repo"; exit 66; }
+  REPO="${REPO:A}"
+
+  API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
+  [[ -n "$API_KEY" ]] || { print -u2 "dispatch: no active API key in server config"; exit 78; }
+  HEADER_FILE=$(mktemp)
+  chmod 600 "$HEADER_FILE"
+  print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
+  trap 'rm -f "$HEADER_FILE"' EXIT
+  BODY=$(REPO="$REPO" python3 -c 'import json, os; print(json.dumps({"projectPath": os.environ["REPO"]}))')
+  RESPONSE=$(curl -s -K "$HEADER_FILE" -m 30 -X POST "$SERVER_URL/api/watchdog/chains/$SLUG/remanifest" \
+      -H 'Content-Type: application/json' -d "$BODY" -w '\n%{http_code}' 2>/dev/null)
+  STATUS="${RESPONSE##*$'\n'}"
+  # Deployment bridge: an older live server does not have the remanifest
+  # route until the current unit commits and promote reaches its boundary.
+  # Compile the same durable file list client-side and use the existing
+  # in-place manifest patch; once promoted, the route above is always used.
+  if [[ "$STATUS" == "404" ]]; then
+    BODY=$(python3 - "$HOME/forge-logs/$SLUG" <<'PYEOF'
+import glob, json, os, re, sys
+
+runtime = sys.argv[1]
+resume_path = os.path.join(runtime, 'resume.json')
+try:
+    resume = json.load(open(resume_path, encoding='utf-8'))
+except Exception as error:
+    print(f"dispatch: cannot read {resume_path}: {error}", file=sys.stderr)
+    raise SystemExit(66)
+phase_files = [path for path in resume.get('phaseFiles', []) if isinstance(path, str) and path.strip()]
+phase_files.extend(sorted(glob.glob(os.path.join(runtime, 'append', '*.md'))))
+phase_files = list(dict.fromkeys(map(os.path.abspath, phase_files)))
+if not phase_files:
+    print(f"dispatch: {resume_path} lists no phase files", file=sys.stderr)
+    raise SystemExit(66)
+
+entries = []
+for phase_file in phase_files:
+    try:
+        text = open(phase_file, encoding='utf-8', errors='replace').read()
+    except OSError as error:
+        print(f"dispatch: cannot read phase file {phase_file}: {error}", file=sys.stderr)
+        raise SystemExit(66)
+    meta = {
+        key.lower(): value.strip()
+        for key, value in re.findall(r'<!--\s*(name|tasks|anchor):\s*(.*?)\s*-->', text[:4096], re.I)
+    }
+    name = meta.get('name', '')
+    tasks = [task.strip() for task in meta.get('tasks', '').split('|') if task.strip()]
+    missing = []
+    if not name:
+        missing.append('name')
+    if not tasks:
+        missing.append('tasks')
+    if missing:
+        print(f"dispatch: phase file {phase_file} has no {' or '.join(missing)}", file=sys.stderr)
+        raise SystemExit(65)
+    identity = re.search(r'Execute\s+Job\s+(\d+)\s+of\s+([^\s`]+?\.md)\b', text, re.I)
+    entry = {'name': name, 'tasks': tasks, 'kind': 'phase'}
+    if meta.get('anchor'):
+        entry['anchor'] = meta['anchor']
+    elif identity:
+        entry['anchor'] = f"Job {identity.group(1)}"
+    entries.append(entry)
+print(json.dumps({'entries': entries}))
+PYEOF
+    ) || exit $?
+    RESPONSE=$(curl -s -K "$HEADER_FILE" -m 30 -X PATCH "$SERVER_URL/api/watchdog/chains/$SLUG/manifest" \
+        -H 'Content-Type: application/json' -d "$BODY" -w '\n%{http_code}' 2>/dev/null)
+    STATUS="${RESPONSE##*$'\n'}"
+  fi
+  if [[ "$STATUS" != "200" ]]; then
+    print -u2 "dispatch: chain $SLUG refused remanifest (HTTP ${STATUS:-000}: ${RESPONSE%$'\n'*})"
+    exit 69
+  fi
+  print -r -- "dispatch: chain $SLUG manifest rebuilt from its persisted phase files"
+  exit 0
+fi
 
 # ----- fast: change the next Codex build unit without restarting the chain -----
 if [[ "$1" == "fast" ]]; then
@@ -493,13 +583,68 @@ for f in "${PHASE_FILES[@]}"; do
 done
 
 # Phase manifest (ui9 B4): explicit DISPATCH_MANIFEST, else the convention
-# path. Optional; when present it must parse as JSON before anything launches.
+# path. A supplied manifest wins. Without one, build the manifest from the
+# phase headers and refuse incomplete unit metadata before anything launches.
+JOURNAL_DIR="$HOME/forge-logs/$SLUG"
+mkdir -p "$JOURNAL_DIR"
 MANIFEST_PATH="${DISPATCH_MANIFEST:-$REPO/.dispatch/$SLUG/manifest.json}"
 if [[ -r "$MANIFEST_PATH" ]]; then
   python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$MANIFEST_PATH" 2>/dev/null \
     || { print -u2 "dispatch: manifest $MANIFEST_PATH is not valid JSON"; exit 65; }
 else
-  MANIFEST_PATH=""
+  MANIFEST_PATH="$JOURNAL_DIR/manifest.generated.json"
+  if ! python3 - "$MANIFEST_PATH" "${ABS_PHASE_FILES[@]}" <<'PYEOF'
+import json, os, re, sys
+
+output, *phase_files = sys.argv[1:]
+entries = []
+punchlist = None
+for phase_file in phase_files:
+    text = open(phase_file, encoding='utf-8', errors='replace').read()
+    meta = {
+        key.lower(): value.strip()
+        for key, value in re.findall(r'<!--\s*(name|tasks|anchor):\s*(.*?)\s*-->', text[:4096], re.I)
+    }
+    name = meta.get('name', '')
+    tasks = [task.strip() for task in meta.get('tasks', '').split('|') if task.strip()]
+    missing = []
+    if not name:
+        missing.append('name')
+    if not tasks:
+        missing.append('tasks')
+    if missing:
+        print(f"dispatch: phase file {phase_file} has no {' or '.join(missing)}", file=sys.stderr)
+        raise SystemExit(65)
+
+    identity = re.search(r'Execute\s+Job\s+(\d+)\s+of\s+([^\s`]+?\.md)\b', text, re.I)
+    entry = {'name': name, 'tasks': tasks, 'kind': 'phase'}
+    if meta.get('anchor'):
+        entry['anchor'] = meta['anchor']
+    elif identity:
+        entry['anchor'] = f"Job {identity.group(1)}"
+    if identity:
+        identity_punchlist = identity.group(2)
+        if punchlist and punchlist != identity_punchlist:
+            print(
+                f"dispatch: phase file {phase_file} names {identity_punchlist}, not chain punch list {punchlist}",
+                file=sys.stderr,
+            )
+            raise SystemExit(65)
+        punchlist = identity_punchlist
+    entries.append(entry)
+
+manifest = {'entries': entries}
+if punchlist:
+    manifest['punchlist'] = punchlist
+temporary = output + '.tmp'
+with open(temporary, 'w', encoding='utf-8') as handle:
+    json.dump(manifest, handle, indent=2)
+    handle.write('\n')
+os.replace(temporary, output)
+PYEOF
+  then
+    exit 65
+  fi
 fi
 
 # Fail fast while the planner is still listening; the runner re-reads the key
@@ -510,21 +655,46 @@ API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_act
 RUNNER="${0:A:h}/dispatch-chain-runner"
 [[ -x "$RUNNER" ]] || { print -u2 "dispatch: runner missing at $RUNNER"; exit 70; }
 
-JOURNAL_DIR="$HOME/forge-logs/$SLUG"
-mkdir -p "$JOURNAL_DIR"
+# Register before detaching so the jobs surface has the complete compiled
+# manifest before the first unit can tick. The runner repeats this call for
+# restart resilience; registerChain preserves this manifest in place.
+HEADER_FILE=$(mktemp)
+chmod 600 "$HEADER_FILE"
+print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
+trap 'rm -f "$HEADER_FILE"' EXIT
+REGISTRATION_BODY=$(python3 - "$SLUG" "$REPO" "${#ABS_PHASE_FILES[@]}" "$MANIFEST_PATH" "$DISPATCHING_SESSION_ID" <<'PYEOF'
+import json, sys
+slug, repo, phases, manifest_path, dispatching_session_id = sys.argv[1:]
+body = {
+    'slug': slug,
+    'projectPath': repo,
+    'phases': int(phases),
+    'dispatchingSessionId': dispatching_session_id,
+    'manifest': json.load(open(manifest_path)),
+}
+print(json.dumps(body))
+PYEOF
+)
+if ! curl -sf -K "$HEADER_FILE" -m 30 -X POST "$SERVER_URL/api/watchdog/chains" \
+    -H 'Content-Type: application/json' -d "$REGISTRATION_BODY" >/dev/null 2>&1; then
+  print -u2 "dispatch: watchdog refused chain $SLUG registration; no runner was started"
+  exit 69
+fi
 
 # Detach via setsid (start_new_session): the runner leaves this process tree
 # entirely, so neither the planner's session ending nor a server restart can
 # reach it.
 RUNNER_PID=$(DISPATCH_RUNNER_LOG="$JOURNAL_DIR/runner.log" \
-  DISPATCH_MANIFEST="$MANIFEST_PATH" \
-  python3 - "$RUNNER" "$REPO" "$SLUG" "${ABS_PHASE_FILES[@]}" <<'PYEOF'
+  python3 - "$RUNNER" "$REPO" "$SLUG" "$MANIFEST_PATH" "${ABS_PHASE_FILES[@]}" <<'PYEOF'
 import os, subprocess, sys
+runner, repo, slug, manifest, *phase_files = sys.argv[1:]
+environment = os.environ.copy()
+environment['DISPATCH_MANIFEST'] = manifest
 with open(os.environ['DISPATCH_RUNNER_LOG'], 'ab') as out:
     proc = subprocess.Popen(
-        sys.argv[1:],
+        [runner, repo, slug, *phase_files],
         stdin=subprocess.DEVNULL, stdout=out, stderr=out,
-        start_new_session=True, cwd='/',
+        start_new_session=True, cwd='/', env=environment,
     )
 print(proc.pid)
 PYEOF

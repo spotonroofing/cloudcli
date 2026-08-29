@@ -295,6 +295,32 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
+  // Rebuild a stored chain in place from the runner's durable prompt list;
+  // every terminal state is eligible and active registry state is preserved.
+  router.post(
+    '/chains/:slug/remanifest',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
+      if (!projectPath) {
+        throw new AppError('projectPath is required.', {
+          code: 'WATCHDOG_CHAIN_PROJECT_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const slug = String(req.params.slug);
+      const result = watchdogService.remanifestChain(slug, projectPath);
+      if (result.status !== 'ok') {
+        throw new AppError(result.message, {
+          code: result.status === 'unknown' ? 'WATCHDOG_CHAIN_UNKNOWN' : 'WATCHDOG_REMANIFEST_UNAVAILABLE',
+          statusCode: result.status === 'unknown' ? 404 : result.status === 'project-mismatch' ? 409 : 422,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, entries: result.entries }));
+    }),
+  );
+
   // In-place manifest edit (ui13 job 13): replaces a chain's labels without
   // resetting its phase state the way re-registration does.
   router.patch(
@@ -425,9 +451,9 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
-  // Amend a queued unit's task list (ui14 job 8): the planner folds a small
-  // addition into a not-yet-started job as an extra task and the jobs view
-  // shows the row at once. The executing or finished unit is refused.
+  // Amend queued display metadata or repair the executing unit's name/tasks.
+  // Anchors stay immutable once a unit starts ticking; finished units remain
+  // immutable (ui18 job 3).
   router.post(
     '/chains/:slug/phases/:phase/tasks',
     requireApiKey,
@@ -462,6 +488,12 @@ export function createWatchdogRouter(): express.Router {
       if (result === 'not-queued') {
         throw new AppError(`Unit ${phase} of chain "${slug}" is not a queued unit (already started, finished, or out of range).`, {
           code: 'WATCHDOG_AMEND_NOT_QUEUED',
+          statusCode: 409,
+        });
+      }
+      if (result === 'anchor-started') {
+        throw new AppError(`Unit ${phase} of chain "${slug}" has started, so its punch-list anchor cannot change.`, {
+          code: 'WATCHDOG_AMEND_ANCHOR_STARTED',
           statusCode: 409,
         });
       }
