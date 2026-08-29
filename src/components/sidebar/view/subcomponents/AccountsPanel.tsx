@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Ban, ChevronDown, ChevronUp, Loader2, LogIn, Plus, Power, Terminal, Undo2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { Ban, ChevronDown, ChevronUp, Loader2, LogIn, Power, Undo2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import ProviderLoginModal from '../../../provider-auth/view/ProviderLoginModal';
-import LLMProviderLogo from '../../../llm-provider-logo/LLMProviderLogo';
+import ProviderMark from '../../../llm-provider-logo/ProviderMark';
 import { useWebSocket } from '../../../../contexts/WebSocketContext';
-import { Button, Skeleton } from '../../../../shared/view/ui';
+import { Skeleton } from '../../../../shared/view/ui';
 import { authenticatedFetch } from '../../../../utils/api';
 import { cn } from '../../../../lib/utils';
-import { addCompleted, captureAddBaseline } from '../../utils/accountsAdd';
-import type { AddBaseline } from '../../utils/accountsAdd';
 
 import SidebarFooterDrawer from './SidebarFooterDrawer';
 
@@ -20,12 +18,11 @@ import SidebarFooterDrawer from './SidebarFooterDrawer';
  * The active row carries the accent wash; there is no dot. Row actions (use,
  * hold/return, reorder) take no space at rest on desktop and appear on hover
  * or focus, which is the only time the name truncates; touch shows them
- * always. Adding an account is the real flow: log in, then `cswap add`, each
- * a shell window opened from the two-step block, with the panel watching
- * cswap's list until the account lands. Below the Claude accounts sits the
- * ChatGPT group (codex job 3): the one Codex login with the same meters,
- * read from Codex's own rollout files, pushed live over the websocket while
- * the drawer is open. No controls: there is one login and nothing switches it.
+ * always. Below the Claude accounts sits the ChatGPT group (codex job 3):
+ * the one Codex login on the very same `AccountRow`, read from Codex's own
+ * rollout files and pushed live over the websocket while the drawer is open.
+ * No controls there: there is one login and nothing switches it. Accounts are
+ * added by hand on the mini, so the drawer carries no add flow (ui17 job 4).
  */
 
 type CswapWindow = {
@@ -78,29 +75,6 @@ type AccountsPanelProps = {
   t: TFunction;
 };
 
-/**
- * The add flow's two shell commands. Both run against the machine-global
- * Claude profile (CLAUDE_CONFIG_DIR stripped, like every cswap call in
- * server/modules/accounts) so the login lands where cswap reads it, even
- * from an instance that runs on its own config dir. `claude auth login` is
- * the CLI's login subcommand: the same browser flow as `/login`, without
- * opening the REPL (and its trust prompt) in the shell's cwd. BROWSER is a
- * no-op so the server machine does not open its own browser: the CLI prints
- * the sign-in URL in the terminal, which Willem opens from wherever he is.
- */
-const ADD_STEPS = {
-  login: {
-    label: 'claude /login',
-    command: 'env -u CLAUDE_CONFIG_DIR BROWSER=/usr/bin/true claude auth login',
-  },
-  add: { label: 'cswap add', command: 'env -u CLAUDE_CONFIG_DIR cswap add' },
-} as const;
-
-type AddStep = keyof typeof ADD_STEPS;
-
-/** How often the panel re-reads cswap's list while the add block is open. */
-const ADD_POLL_MS = 5000;
-
 const fetchAccountList = async (): Promise<AccountList> => {
   const response = await authenticatedFetch('/api/accounts');
   const body = await response.json();
@@ -123,15 +97,6 @@ const formatAge = (readAt: string, now: number): string => {
   if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h`;
   return `${Math.floor(seconds / 86_400)}d`;
 };
-
-/** The OpenAI mark, in the numeral slot of the ChatGPT row. */
-function OpenAIMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
-      <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" />
-    </svg>
-  );
-}
 
 const postAccountAction = async (url: string, payload: Record<string, unknown>) => {
   const response = await authenticatedFetch(url, {
@@ -221,12 +186,96 @@ function ProviderGroupHeader({ provider }: { provider: 'claude' | 'chatgpt' }) {
       data-slot="account-group-header"
       data-provider={provider}
     >
-      <span className="flex w-4 flex-shrink-0 justify-end" aria-hidden="true">
-        {provider === 'claude'
-          ? <LLMProviderLogo provider="claude" className="h-3.5 w-3.5" />
-          : <OpenAIMark className="h-3.5 w-3.5" />}
+      {/* The model switcher's marks: a plain glyph in the ink around it, no
+          disc, plate or tint behind it, so both providers read the same. */}
+      <span className="flex w-4 flex-shrink-0 justify-end text-foreground" aria-hidden="true">
+        <ProviderMark provider={provider === 'claude' ? 'claude' : 'codex'} className="h-3.5 w-3.5" />
       </span>
       <span>{provider === 'claude' ? 'Claude' : 'ChatGPT'}</span>
+    </li>
+  );
+}
+
+type AccountMeter = {
+  key: string;
+  label: string;
+  kind: string;
+  window?: CswapWindow;
+  emptyLabel?: string;
+};
+
+/**
+ * The one account row both providers use (ui17 job 4), so the two lists
+ * cannot drift again: the slot numeral, the email, its tags and any row
+ * actions on the header line, then the meters and the meta line indented to
+ * the email's left edge. The header line wraps rather than crushing the
+ * email — on a phone the tags and actions drop under it once the email is
+ * down to its minimum, which no viewport takes below eight characters.
+ */
+function AccountRow({
+  number,
+  email,
+  plan,
+  tag,
+  actions,
+  meters,
+  meta,
+  active = false,
+  dim = false,
+  attributes,
+}: {
+  number: ReactNode;
+  email: string;
+  plan?: string | null;
+  tag?: ReactNode;
+  actions?: ReactNode;
+  meters: AccountMeter[];
+  meta: ReactNode;
+  active?: boolean;
+  dim?: boolean;
+  attributes?: Record<string, string | number | boolean | undefined>;
+}) {
+  const trailing = tag || plan || actions;
+  return (
+    <li
+      className={cn('group rounded-lg px-2 py-2.5', active && 'bg-accent/40', dim && 'opacity-60')}
+      data-slot="account-row"
+      {...attributes}
+    >
+      <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="w-4 flex-shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+          {number}
+        </span>
+        <span
+          className={cn(
+            'min-w-[10ch] flex-1 truncate text-[13px] font-medium',
+            active ? 'text-foreground' : 'text-muted-foreground',
+          )}
+          data-slot="account-name"
+        >
+          {email}
+        </span>
+        {trailing && (
+          <span className="ml-auto flex max-w-full flex-shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
+            {tag}
+            <PlanTag plan={plan} />
+            {actions}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-1.5 space-y-1 pl-6">
+        {meters.map((meter) => (
+          <UsageBar
+            key={meter.key}
+            label={meter.label}
+            kind={meter.kind}
+            window={meter.window}
+            emptyLabel={meter.emptyLabel}
+          />
+        ))}
+        {meta}
+      </div>
     </li>
   );
 }
@@ -241,13 +290,8 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
   const [error, setError] = useState<string | null>(null);
   /** `<action>:<slot>` while a row action runs; disables every action. */
   const [busy, setBusy] = useState<string | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
-  /** Which add step's shell window is open. */
-  const [shellStep, setShellStep] = useState<AddStep | null>(null);
-  /** cswap's list as it stood when the add block opened. */
-  const addBaselineRef = useRef<AddBaseline | null>(null);
 
-  const refresh = useCallback(async (): Promise<CswapAccount[] | null> => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const list = await fetchAccountList();
@@ -256,10 +300,8 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
       setNow(Date.now());
       setError(null);
       onActiveChange(list.accounts.find((account) => account.active)?.email ?? null);
-      return list.accounts;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      return null;
     } finally {
       setLoading(false);
     }
@@ -269,8 +311,6 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
     if (open) {
       void refresh();
     } else {
-      setShowAdd(false);
-      setShellStep(null);
       setError(null);
     }
   }, [open, refresh]);
@@ -308,30 +348,6 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
     const id = window.setInterval(() => setNow(Date.now()), 10_000);
     return () => window.clearInterval(id);
   }, [open]);
-
-  // Re-read cswap's list and close the add block once the flow is done: a
-  // new slot appeared, or the active slot changed (an in-place re-add).
-  const checkAdd = useCallback(async () => {
-    const list = await refresh();
-    const baseline = addBaselineRef.current;
-    if (list && baseline && addCompleted(baseline, list)) {
-      setShowAdd(false);
-      setShellStep(null);
-    }
-  }, [refresh]);
-
-  // While the add block is open, poll for it; a shell window closing checks
-  // immediately.
-  useEffect(() => {
-    if (!showAdd) return;
-    const id = window.setInterval(() => void checkAdd(), ADD_POLL_MS);
-    return () => window.clearInterval(id);
-  }, [showAdd, checkAdd]);
-
-  const openAdd = () => {
-    addBaselineRef.current = captureAddBaseline(accounts ?? []);
-    setShowAdd(true);
-  };
 
   const runAction = async (key: string, action: () => Promise<void>) => {
     setBusy(key);
@@ -412,41 +428,30 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
           const scoped = Array.isArray(usage?.scoped) ? usage.scoped : [];
           const rowBusy = busy !== null && busy.endsWith(`:${account.number}`);
           return (
-            <li
+            <AccountRow
               key={account.number}
-              className={cn(
-                'group rounded-lg px-2 py-2.5',
-                account.active && 'bg-accent/40',
-                account.disabled && 'opacity-60',
-              )}
-              data-slot="account-row"
-              data-account-number={account.number}
-              data-active={account.active || undefined}
-              data-disabled={account.disabled || undefined}
-              data-parked={account.parkedUntil || undefined}
-            >
-              <div className="flex h-7 items-center gap-2">
-                <span className="w-4 flex-shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-                  {account.number}
-                </span>
-                <span
-                  className={cn(
-                    'min-w-0 flex-1 truncate text-[13px] font-medium',
-                    account.active ? 'text-foreground' : 'text-muted-foreground',
-                  )}
-                  data-slot="account-name"
-                >
-                  {account.alias || account.email}
-                </span>
-                {account.disabled && (
+              number={account.number}
+              email={account.alias || account.email}
+              plan={account.plan}
+              active={account.active}
+              dim={Boolean(account.disabled)}
+              attributes={{
+                'data-account-number': account.number,
+                'data-active': account.active || undefined,
+                'data-disabled': account.disabled || undefined,
+                'data-parked': account.parkedUntil || undefined,
+              }}
+              tag={
+                account.disabled ? (
                   <span className="flex-shrink-0 rounded-sm border border-border px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
                     {t('accounts.disabledTag', 'disabled')}
                   </span>
-                )}
-                <PlanTag plan={account.plan} />
-                {/* Actions take no width at rest on desktop, so the name has
-                    the whole row; they appear (and the name truncates) only
-                    on hover or focus. Touch shows them always. */}
+                ) : null
+              }
+              actions={
+                /* Actions take no width at rest on desktop, so the email has
+                   the whole row; they appear (and the email truncates) only
+                   on hover or focus. Touch shows them always. */
                 <span
                   className="flex flex-shrink-0 items-center gap-0.5 md:hidden md:group-focus-within:flex md:group-hover:flex"
                   data-slot="account-actions"
@@ -522,19 +527,18 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
                     </>
                   )}
                 </span>
-              </div>
-
-              <div className="mt-1.5 space-y-1 pl-6">
-                <UsageBar label={t('accounts.fiveHour', '5h')} kind="5h" window={usage?.fiveHour} />
-                <UsageBar label={t('accounts.sevenDay', '7d')} kind="7d" window={usage?.sevenDay} />
-                {scoped.map((entry) => (
-                  <UsageBar
-                    key={entry.name ?? 'scoped'}
-                    label={entry.name ?? t('accounts.model', 'Model')}
-                    kind={`scoped:${entry.name ?? ''}`}
-                    window={entry}
-                  />
-                ))}
+              }
+              meters={[
+                { key: '5h', label: t('accounts.fiveHour', '5h'), kind: '5h', window: usage?.fiveHour },
+                { key: '7d', label: t('accounts.sevenDay', '7d'), kind: '7d', window: usage?.sevenDay },
+                ...scoped.map((entry) => ({
+                  key: `scoped:${entry.name ?? ''}`,
+                  label: entry.name ?? t('accounts.model', 'Model'),
+                  kind: `scoped:${entry.name ?? ''}`,
+                  window: entry,
+                })),
+              ]}
+              meta={
                 <p
                   className={cn('text-[10px] text-muted-foreground', account.parkedUntil && 'text-amber-600 dark:text-amber-400')}
                   data-slot={account.parkedUntil ? 'account-parked-meta' : 'account-usage-meta'}
@@ -545,8 +549,8 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
                       ? t('accounts.updatedAgo', 'updated {{age}} ago', { age: formatAge(account.usageFetchedAt, now) })
                       : t('accounts.noUsage', 'no usage recorded yet')}
                 </p>
-              </div>
-            </li>
+              }
+            />
           );
         })}
 
@@ -556,109 +560,46 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
           </li>
         )}
 
-        {accounts !== null && <li data-slot="account-add-row">
-          {showAdd ? (
-            <div className="rounded-lg bg-muted/30 px-2 py-2.5" data-slot="account-add-steps">
-              <ol className="space-y-1.5">
-                {(['login', 'add'] as const).map((step, index) => (
-                  <li key={step} className="flex h-7 items-center gap-2">
-                    <span className="w-4 flex-shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-                      {index + 1}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
-                      {step === 'login'
-                        ? t('accounts.stepLogin', 'Log in')
-                        : t('accounts.stepAdd', 'Add to cswap')}
-                    </span>
-                    <button
-                      type="button"
-                      className="flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md border border-border/60 bg-background px-2 font-mono text-[11px] text-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      onClick={() => setShellStep(step)}
-                      data-slot={`account-add-${step}`}
-                    >
-                      <Terminal className="h-3 w-3 text-muted-foreground" />
-                      {ADD_STEPS[step].label}
-                    </button>
-                  </li>
-                ))}
-              </ol>
-              <div className="mt-2 flex items-center justify-between gap-2 pl-6">
-                <span
-                  className="flex min-w-0 items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-                  data-slot="account-add-watching"
-                >
-                  <Loader2 className="h-3 w-3 flex-shrink-0 animate-spin" />
-                  <span className="truncate">{t('accounts.addWatching', 'Waiting for it')}</span>
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={() => {
-                    setShowAdd(false);
-                    setShellStep(null);
-                  }}
-                >
-                  {t('actions.cancel', 'Cancel')}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <button
-              className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-              onClick={openAdd}
-              data-slot="account-add-trigger"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {t('accounts.add', 'Add account')}
-            </button>
-          )}
-        </li>}
-
-        {/* The ChatGPT group (codex job 3): one login, no controls. */}
+        {/* The ChatGPT group (codex job 3): the same row, no controls. */}
         {chatgpt && (
           <>
             <ProviderGroupHeader provider="chatgpt" />
-            <li
-              className="rounded-lg px-2 py-2.5"
-              data-slot="account-row"
-              data-account="chatgpt"
-              data-state={chatgpt.state}
-            >
-              <div className="flex h-7 items-center gap-2">
-                <span className="flex w-4 flex-shrink-0 justify-end text-muted-foreground">
-                  <OpenAIMark className="h-3.5 w-3.5" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground" data-slot="account-name">
-                  {chatgpt.email ?? 'ChatGPT'}
-                </span>
-                <PlanTag plan={chatgpt.plan} />
-              </div>
-              {chatgpt.state === 'ok' ? (
-                <div className="mt-1.5 space-y-1 pl-6">
-                  <UsageBar
-                    label={t('accounts.fiveHour', '5h')}
-                    kind="5h"
-                    window={chatgpt.usage?.fiveHour}
-                    emptyLabel={t('accounts.noFiveHourWindow', 'no 5-hour window on this plan')}
-                  />
-                  <UsageBar label={t('accounts.sevenDay', '7d')} kind="7d" window={chatgpt.usage?.sevenDay} />
+            <AccountRow
+              number={1}
+              email={chatgpt.email ?? 'ChatGPT'}
+              plan={chatgpt.plan}
+              attributes={{ 'data-account': 'chatgpt', 'data-state': chatgpt.state }}
+              meters={
+                chatgpt.state === 'ok'
+                  ? [
+                      {
+                        key: '5h',
+                        label: t('accounts.fiveHour', '5h'),
+                        kind: '5h',
+                        window: chatgpt.usage?.fiveHour,
+                        emptyLabel: t('accounts.noFiveHourWindow', 'no 5-hour window on this plan'),
+                      },
+                      { key: '7d', label: t('accounts.sevenDay', '7d'), kind: '7d', window: chatgpt.usage?.sevenDay },
+                    ]
+                  : []
+              }
+              meta={
+                chatgpt.state === 'ok' ? (
                   <p className="text-[10px] text-muted-foreground" data-slot="account-usage-meta">
                     {chatgpt.usage
                       ? t('accounts.updatedAgo', 'updated {{age}} ago', { age: formatAge(chatgpt.usage.readAt, now) })
                       : t('accounts.noUsage', 'no usage recorded yet')}
                   </p>
-                </div>
-              ) : (
-                <p className="mt-1.5 pl-6 text-[10px] text-muted-foreground" data-slot="account-login-fix">
-                  {chatgpt.state === 'logged_out'
-                    ? t('accounts.chatgptLoggedOut', 'Logged out.')
-                    : t('accounts.chatgptStale', 'Login stale.')}{' '}
-                  <span className="font-mono text-foreground">codex login</span> on the mini
-                </p>
-              )}
-            </li>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground" data-slot="account-login-fix">
+                    {chatgpt.state === 'logged_out'
+                      ? t('accounts.chatgptLoggedOut', 'Logged out.')
+                      : t('accounts.chatgptStale', 'Login stale.')}{' '}
+                    <span className="font-mono text-foreground">codex login</span> on the mini
+                  </p>
+                )
+              }
+            />
           </>
         )}
       </ul>
@@ -669,17 +610,6 @@ export default function AccountsPanel({ open, onOpenChange, onActiveChange, isMo
         </p>
       )}
 
-      {shellStep && (
-        <ProviderLoginModal
-          isOpen
-          onClose={() => {
-            setShellStep(null);
-            void checkAdd();
-          }}
-          customCommand={ADD_STEPS[shellStep].command}
-          title={ADD_STEPS[shellStep].label}
-        />
-      )}
     </SidebarFooterDrawer>
   );
 }

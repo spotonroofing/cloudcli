@@ -192,13 +192,17 @@ export default function SidebarFooter({
 
       {/* Footer drawers unfold here, between the divider and the taskbar, on
           the sidebar's own background (ui13 job 4): opening grows the footer
-          so the lists above squish up; the taskbar never moves. */}
+          so the lists above squish up; the taskbar never moves.
+          The account drawer's live-watching exception to outside dismissal
+          holds on desktop only: a click away leaves the meters up, while the
+          phone sheet dismisses on an outside tap like every other footer
+          drawer (ui17 job 4). */}
       <AccountsPanel
         open={openDrawer === 'accounts'}
         onOpenChange={(open) => setOpenDrawer(open ? 'accounts' : null)}
         onActiveChange={setActiveAccountEmail}
         isMobile={isMobile}
-        dismissOnOutside={false}
+        dismissOnOutside={isMobile}
         t={t}
       />
 
