@@ -34,9 +34,9 @@ Done check: on dev with the stub chain mid-unit, a dry-run promote (ui17 Job 18'
 
 Goal: Willem wants to see exactly when things went live: a thin divider between jobs in the history at the point a promote landed, with "Promoted" on the left and the date and time on the right, so he can tell which jobs are on live and which are not. Files: `src/components/worker-pane/JobsSidebar.tsx` (the history list and its period grouping), the watchdog promotes feed from Job 0, `design/worker-pane-and-jobs.md`.
 
-- [ ] A promote row: one hairline in the border color spanning the list width, a small mono muted "Promoted" label on the left and the promote's time on the right (the app's own time format for the row, a full date and time on hover), sitting between the last unit that landed before the promote and the first unit after it; it is not a job, has no ring, no chevron, no click, and never counts in any job total.
-- [ ] Rows come from the promotes feed live (a promote landing while the column is open inserts the row with the list's existing ramped entry motion); history pages that load later include theirs; before the first recorded promote nothing is drawn, no backfill and no guessing from tags.
-- [ ] Both column modes (side column and full-pane takeover), phone parity; `design/worker-pane-and-jobs.md` documents the row.
+- [x] A promote row: one hairline in the border color spanning the list width, a small mono muted "Promoted" label on the left and the promote's time on the right (the app's own time format for the row, a full date and time on hover), sitting between the last unit that landed before the promote and the first unit after it; it is not a job, has no ring, no chevron, no click, and never counts in any job total.
+- [x] Rows come from the promotes feed live (a promote landing while the column is open inserts the row with the list's existing ramped entry motion); history pages that load later include theirs; before the first recorded promote nothing is drawn, no backfill and no guessing from tags.
+- [x] Both column modes (side column and full-pane takeover), phone parity; `design/worker-pane-and-jobs.md` documents the row.
 
 Done check: on dev with the stub chain and two stub promotes rows, the column shows two promote rows at the right positions with the label and time, no ring or chevron, and a third stub promote appearing live inserts a row with the entry motion; 390px holds; tests pass. Commit.
 

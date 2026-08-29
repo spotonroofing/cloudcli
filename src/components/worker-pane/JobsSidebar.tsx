@@ -115,6 +115,18 @@ type Unit = {
   verifyNeverRan?: boolean;
 };
 
+/**
+ * One landed promote from the watchdog's promotes feed (ui18 job 0). The jobs
+ * column draws it as a boundary line, never as a job.
+ */
+export type PromoteRecord = {
+  id: number;
+  promotedAt: number;
+  promotedCommit: string;
+  previousLiveCommit: string;
+  dryRun: boolean;
+};
+
 type RepairTruth = {
   fixedFailures: ReadonlyMap<string, string>;
   repairWinners: ReadonlySet<string>;
@@ -269,6 +281,75 @@ function formatJobDate(endedAt: number): string | null {
     day: 'numeric',
     timeZone: 'America/New_York',
   });
+}
+
+/**
+ * The promote row's time, in the history's own owner-facing terms: the
+ * Eastern clock time, with the compact date ahead of it once the promote is
+ * older than a day, exactly as a job row carries its date beside its total.
+ */
+function formatPromoteTime(promotedAt: number): string {
+  const time = new Date(promotedAt).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'America/New_York',
+  }).toLowerCase();
+  const date = formatJobDate(promotedAt);
+  return date ? `${date}, ${time}` : time;
+}
+
+/** The hover title: the whole date and time, never abbreviated. */
+function formatPromoteTitle(promotedAt: number): string {
+  return new Date(promotedAt).toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'America/New_York',
+  });
+}
+
+/**
+ * The promote boundary in the history (ui18 job 1): a hairline across the
+ * list with "Promoted" and the time. It is not a job — no ring, no chevron,
+ * no click, and it never counts in a month, year, or page total.
+ */
+function PromoteRow({
+  promote,
+  reduce,
+  live,
+}: {
+  promote: PromoteRecord;
+  reduce: boolean;
+  /** Landed while this column was open, so it earns the entry motion. A row
+   *  that was already history when the column opened is simply there. */
+  live: boolean;
+}) {
+  return (
+    <motion.li
+      data-slot="jobs-sidebar-promote"
+      data-promote={promote.id}
+      data-commit={promote.promotedCommit}
+      title={formatPromoteTitle(promote.promotedAt)}
+      initial={reduce || !live ? { opacity: 1 } : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={reduce || !live ? { duration: 0 } : { duration: 0.22, ease: EASE_OUT }}
+      className="my-1 flex min-h-5 items-center gap-2 border-t border-border/60 px-1.5 pt-1 text-[10px] text-muted-foreground/60"
+    >
+      <span className="flex-shrink-0 font-mono">Promoted</span>
+      <span
+        data-slot="jobs-sidebar-promote-time"
+        className="ml-auto flex-shrink-0 font-mono tabular-nums"
+      >
+        {formatPromoteTime(promote.promotedAt)}
+      </span>
+    </motion.li>
+  );
 }
 
 /**
@@ -560,6 +641,29 @@ export type JobGroup = {
 /** A unit with its bottom-to-top position in the flat list (1 = oldest). */
 type PositionedUnit = Unit & { position: number; historyStartedAt: number };
 
+/**
+ * Where each promote sits in the newest-first history: directly above the
+ * newest unit that had already landed when it ran, which is the first row
+ * from the top whose own time is at or before the promote. A promote newer
+ * than every row sits at the top; one older than every row sits at the foot.
+ * Nothing is drawn before the first recorded promote, and no tag or commit is
+ * ever guessed into a boundary.
+ */
+function promotesByPosition(
+  stacked: PositionedUnit[],
+  promotes: PromoteRecord[],
+): Map<number, PromoteRecord[]> {
+  const buckets = new Map<number, PromoteRecord[]>();
+  for (const promote of [...promotes].sort((a, b) => b.promotedAt - a.promotedAt)) {
+    const found = stacked.findIndex(
+      (unit) => (unit.endedAt ?? unit.startedAt ?? unit.historyStartedAt) <= promote.promotedAt,
+    );
+    const index = found < 0 ? stacked.length : found;
+    buckets.set(index, [...(buckets.get(index) ?? []), promote]);
+  }
+  return buckets;
+}
+
 type HistoryPeriod = { year: string; month: string; monthKey: string; monthLabel: string };
 
 function historyPeriod(startedAt: number): HistoryPeriod {
@@ -576,6 +680,8 @@ function historyPeriod(startedAt: number): HistoryPeriod {
 type JobsSidebarProps = {
   /** Every run of the project, newest first. */
   groups: JobGroup[];
+  /** Landed promotes for this project; each draws one boundary row. */
+  promotes?: PromoteRecord[];
   /** The first worker-runs snapshot is still in flight. */
   loading?: boolean;
   /** The session the pane is showing; marks its row. */
@@ -643,6 +749,7 @@ export function ChainFastModeToggle({ chain, pending = false, showHint = false, 
  */
 function JobsSidebar({
   groups,
+  promotes = [],
   loading = false,
   activeSessionId,
   onOpenSession,
@@ -699,6 +806,9 @@ function JobsSidebar({
   const [tappedTask, setTappedTask] = useState<string | null>(null);
   const [historyPage, setHistoryPage] = useState(0);
   const listRef = useRef<HTMLOListElement>(null);
+  // When this column opened: the boundary between promote history and a
+  // promote landing under the reader's eyes.
+  const openedAtRef = useRef(Date.now());
 
   const historyPageCount = Math.max(1, Math.ceil(stacked.length / JOBS_HISTORY_PAGE_SIZE));
   const activeUnitIndex = activeSessionId
@@ -728,6 +838,17 @@ function JobsSidebar({
   useEffect(() => {
     seenCountRef.current = stacked.length;
   }, [stacked.length]);
+
+  // Boundary rows, keyed by the unit they sit above. They are computed over
+  // the whole history and rendered only where their unit is on this page, so
+  // paging, month counts and the stagger never see them.
+  const promoteRows = promotesByPosition(stacked, promotes);
+  const trailingPromotes = historyPage === historyPageCount - 1
+    ? promoteRows.get(stacked.length) ?? []
+    : [];
+  // Only a promote that landed after this column opened is an arrival; the
+  // ones already in the history render settled, exactly as its job rows do.
+  const isLivePromote = (promote: PromoteRecord) => promote.promotedAt > openedAtRef.current;
 
   const periods = stacked.map((unit) => historyPeriod(unit.historyStartedAt));
   const monthDoneCounts = new Map<string, number>();
@@ -827,6 +948,14 @@ function JobsSidebar({
             const crossedMonth = previousPeriod != null && previousPeriod.monthKey !== period.monthKey;
             return (
               <React.Fragment key={unit.key}>
+              {(promoteRows.get(unitIndex) ?? []).map((promote) => (
+                <PromoteRow
+                  key={`promote:${promote.id}`}
+                  promote={promote}
+                  reduce={reduce}
+                  live={isLivePromote(promote)}
+                />
+              ))}
               {crossedYear && (
                 <li
                   data-slot="jobs-sidebar-year-group"
@@ -1114,6 +1243,14 @@ function JobsSidebar({
               </React.Fragment>
             );
           })}
+          {trailingPromotes.map((promote) => (
+            <PromoteRow
+              key={`promote:${promote.id}`}
+              promote={promote}
+              reduce={reduce}
+              live={isLivePromote(promote)}
+            />
+          ))}
         </AnimatePresence>
       </ol>
       )}

@@ -1470,7 +1470,7 @@ class WatchdogService {
       dry_run: input.dryRun ? 1 : 0,
     });
     log(`promote recorded: ${input.promotedCommit}`, { id, projectPath, dryRun: input.dryRun });
-    return {
+    const record = {
       id,
       projectPath,
       promotedAt,
@@ -1478,6 +1478,15 @@ class WatchdogService {
       previousLiveCommit: input.previousLiveCommit,
       dryRun: input.dryRun,
     };
+    // The jobs column draws its promote divider from this feed, so a promote
+    // landing while the column is open arrives without waiting for a poll.
+    const event = JSON.stringify({ kind: 'promote_recorded', promote: record });
+    connectedClients.forEach((client) => {
+      if (client.readyState === WS_OPEN_STATE) {
+        client.send(event);
+      }
+    });
+    return record;
   }
 
   /** Supplies the watchdog promotes route consumed by the jobs history. */

@@ -26,6 +26,7 @@ import JobsSidebar, {
   JOBS_COLUMN_BASIS,
   type ChainSnapshot,
   type JobGroup,
+  type PromoteRecord,
 } from './JobsSidebar';
 import {
   findWorkerFollowTarget,
@@ -211,6 +212,9 @@ export default function WorkerPane({
   // holds its space with a skeleton meanwhile (ui11 phase 11).
   const [runsLoaded, setRunsLoaded] = useState(false);
   const [chains, setChains] = useState<Record<string, ChainSnapshot>>({});
+  // Promote boundaries for the jobs history (ui18 job 1). Fetched once per
+  // project; a promote landing later arrives on its own websocket frame.
+  const [promotes, setPromotes] = useState<PromoteRecord[]>([]);
   const [fastModePendingSlug, setFastModePendingSlug] = useState<string | null>(null);
   const [fastModeHintSlug, setFastModeHintSlug] = useState<string | null>(null);
   const fastModeHintSeenRef = useRef<Set<string>>(new Set());
@@ -280,15 +284,35 @@ export default function WorkerPane({
     }
   }, [projectPath]);
 
+  const refreshPromotes = useCallback(async () => {
+    if (!projectPath) {
+      return;
+    }
+    try {
+      const response = await authenticatedFetch(
+        `/api/watchdog/promotes?projectPath=${encodeURIComponent(projectPath)}`,
+      );
+      if (!response.ok) {
+        return;
+      }
+      const body = (await response.json()) as { data?: { promotes?: PromoteRecord[] } };
+      setPromotes((previous) => preserveJsonEqual(previous, body.data?.promotes ?? []));
+    } catch {
+      // transient; a landing promote still arrives on its websocket frame
+    }
+  }, [projectPath]);
+
   // Project switch: reset and re-resolve which worker runs to show.
   useEffect(() => {
     setPaneSession(null);
     setRuns([]);
     setRunsLoaded(false);
     setChains({});
+    setPromotes([]);
     setManualPinUntil(0);
     void refreshRuns();
-  }, [refreshRuns]);
+    void refreshPromotes();
+  }, [refreshRuns, refreshPromotes]);
 
   // The server sorts worker runs newest-first. Verifier rows remain in the
   // jobs navigator but never become the pane's implicit follow target.
@@ -314,6 +338,7 @@ export default function WorkerPane({
       kind?: string;
       sessionId?: string;
       chain?: ChainSnapshot;
+      promote?: PromoteRecord & { projectPath?: string };
       project?: { projectId?: string } | null;
     } | null) => {
       // Only this project's sessions can change its run list (ui13 job 15):
@@ -333,6 +358,14 @@ export default function WorkerPane({
             : previous,
         );
         void refreshRuns();
+      }
+      // A promote landing while the column is open inserts its boundary row
+      // straight away; only this project's promotes reach this pane.
+      if (event?.kind === 'promote_recorded' && event.promote?.projectPath === projectPath) {
+        const promote = event.promote;
+        setPromotes((previous) =>
+          previous.some((existing) => existing.id === promote.id) ? previous : [promote, ...previous],
+        );
       }
     });
     const interval = setInterval(() => {
@@ -668,6 +701,7 @@ export default function WorkerPane({
           >
             <JobsSidebar
               groups={jobGroups}
+              promotes={promotes}
               loading={!runsLoaded}
               activeSessionId={paneSession?.id ?? null}
               onOpenSession={handleOpenJobSession}

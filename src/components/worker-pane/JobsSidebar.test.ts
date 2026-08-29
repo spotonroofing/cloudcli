@@ -516,3 +516,71 @@ test('long jobs history mounts one replace-in-place page', () => {
   assert.match(markup, /data-slot="jobs-history-older"/);
   assert.match(markup, />1 \/ 2</);
 });
+
+test('promote boundaries land between the jobs they separate and count as nothing', () => {
+  const startedAt = Date.parse('2026-08-29T12:00:00.000Z');
+  const chain: ChainSnapshot = {
+    slug: 'promote-stub',
+    projectPath: '/workspace/promote-stub',
+    status: 'completed',
+    phases: 3,
+    currentPhase: 3,
+    phaseActive: false,
+    manifest: [
+      { name: 'Unit one', tasks: [], kind: 'phase', startedAt, endedAt: startedAt + 1_000, commitHash: 'aaa1111' },
+      { name: 'Unit two', tasks: [], kind: 'phase', startedAt: startedAt + 1_000, endedAt: startedAt + 2_000, commitHash: 'bbb2222' },
+      { name: 'Unit three', tasks: [], kind: 'phase', startedAt: startedAt + 2_000, endedAt: startedAt + 3_000, commitHash: 'ccc3333' },
+    ],
+    startedAt,
+    lastEventAt: startedAt + 3_000,
+  };
+  const groups: JobGroup[] = [{ chain, run: null, sessions: {}, startedAt }];
+  const promotes = [
+    { id: 1, promotedAt: startedAt + 1_500, promotedCommit: 'aaa1111', previousLiveCommit: '0000000', dryRun: false },
+    { id: 2, promotedAt: startedAt + 2_500, promotedCommit: 'bbb2222', previousLiveCommit: 'aaa1111', dryRun: false },
+  ];
+
+  const markup = renderToStaticMarkup(createElement(JobsSidebar, {
+    groups,
+    promotes,
+    activeSessionId: null,
+    onOpenSession: () => undefined,
+  }));
+
+  // Newest first: unit three, the promote that followed unit two, unit two,
+  // the promote that followed unit one, unit one.
+  const order = [
+    'Unit three',
+    'data-promote="2"',
+    'Unit two',
+    'data-promote="1"',
+    'Unit one',
+  ].map((needle) => markup.indexOf(needle));
+  assert.ok(order.every((index) => index >= 0));
+  assert.deepEqual(order, [...order].sort((a, b) => a - b));
+
+  // A boundary is not a job: no row anatomy, no ring, no chevron, no counting.
+  assert.equal((markup.match(/data-slot="jobs-sidebar-promote"/g) ?? []).length, 2);
+  assert.equal((markup.match(/data-slot="jobs-sidebar-row"/g) ?? []).length, 3);
+  assert.match(markup, /data-history-total="3"/);
+  const promoteStart = markup.indexOf('data-slot="jobs-sidebar-promote" data-promote="2"');
+  const promoteRow = markup.slice(promoteStart, markup.indexOf('</li>', promoteStart));
+  assert.doesNotMatch(promoteRow, /job-ring-segment|svg/);
+  assert.match(promoteRow, /Promoted/);
+  // History renders settled. Only a promote landing while the column is open
+  // animates in, so a loaded row can never be stranded at opacity 0.
+  assert.doesNotMatch(promoteRow, /opacity:0/);
+  assert.match(promoteRow, /data-slot="jobs-sidebar-promote-time"/);
+});
+
+test('nothing is drawn before the first recorded promote', () => {
+  const startedAt = Date.now() - 10_000;
+  const groups: JobGroup[] = [{
+    chain: null,
+    run: { label: 'One-off, Sol, 5:40 pm', state: 'finished' },
+    sessions: { 1: 'session-a' },
+    startedAt,
+  }];
+
+  assert.doesNotMatch(renderJobs(groups), /jobs-sidebar-promote/);
+});

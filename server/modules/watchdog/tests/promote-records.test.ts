@@ -15,8 +15,10 @@ import {
   userDb,
   watchdogDb,
 } from '@/modules/database/index.js';
+import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
+import type { RealtimeClientConnection } from '@/shared/types.js';
 
-import { createWatchdogRouter } from '../index.js';
+import { createWatchdogRouter, watchdogService } from '../index.js';
 
 test('the notify path records one promote row and the promotes route exposes it', async () => {
   const previousDatabasePath = process.env.DATABASE_PATH;
@@ -72,6 +74,46 @@ test('the notify path records one promote row and the promotes route exposes it'
     if (server) {
       await new Promise<void>((resolve) => server?.close(() => resolve()));
     }
+    closeConnection();
+    if (previousDatabasePath === undefined) {
+      delete process.env.DATABASE_PATH;
+    } else {
+      process.env.DATABASE_PATH = previousDatabasePath;
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('a recorded promote reaches open clients so the jobs column can insert its row live', async () => {
+  const previousDatabasePath = process.env.DATABASE_PATH;
+  const directory = await mkdtemp(path.join(tmpdir(), 'watchdog-promote-feed-'));
+  closeConnection();
+  process.env.DATABASE_PATH = path.join(directory, 'auth.db');
+  const messages: string[] = [];
+  const client = {
+    readyState: WS_OPEN_STATE,
+    send: (message: string) => { messages.push(message); },
+  } as unknown as RealtimeClientConnection;
+  connectedClients.add(client);
+  try {
+    await initializeDatabase();
+    const projectPath = '/workspace/promote-feed-project';
+    watchdogService.recordPromote({
+      projectPath,
+      promotedCommit: 'feed1234567',
+      previousLiveCommit: 'prev7654321',
+      dryRun: false,
+    });
+
+    const frames = messages
+      .map((message) => JSON.parse(message) as { kind?: string; promote?: Record<string, unknown> })
+      .filter((frame) => frame.kind === 'promote_recorded');
+    assert.equal(frames.length, 1);
+    assert.equal(frames[0]?.promote?.projectPath, projectPath);
+    assert.equal(frames[0]?.promote?.promotedCommit, 'feed1234567');
+    assert.equal(typeof frames[0]?.promote?.promotedAt, 'number');
+  } finally {
+    connectedClients.delete(client);
     closeConnection();
     if (previousDatabasePath === undefined) {
       delete process.env.DATABASE_PATH;
