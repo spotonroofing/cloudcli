@@ -126,6 +126,12 @@
        the app's visualViewport hook) — the inset would otherwise leave a dead
        band between the bar and the keyboard's top edge. */
     --composer-bottom-pad: max(0.5rem, env(safe-area-inset-bottom, 0px));
+
+    /* Mobile taskbar (ui17 job 8): a 44px segment row (the touch law's
+       minimum) plus its 4px top gutter, over the home-indicator inset. One
+       source of truth for the bar and for the slot that collapses when a
+       composer takes focus. */
+    --mobile-taskbar-height: calc(3rem + 1px + env(safe-area-inset-bottom, 0px));
   }
 
   html[data-keyboard="open"] {
@@ -1479,6 +1485,30 @@
       height: calc(var(--safe-area-inset-top, 0px) + var(--header-base-padding) + 1.875rem);
       padding-top: calc(var(--safe-area-inset-top, 0px) + var(--header-base-padding));
       padding-bottom: 0.375rem;
+    }
+  }
+
+  /* Mobile taskbar (ui17 job 8): the bar owns a real slot at the bottom of
+     the pane column, so nothing overlaps the composer. Focusing a composer
+     collapses the slot and slides the bar out together on the drawer ramp —
+     the keyboard rises against the composer, never against dead space. */
+  .mobile-taskbar-slot {
+    height: var(--mobile-taskbar-height);
+    transition: height 300ms cubic-bezier(0.77, 0, 0.175, 1);
+  }
+
+  .mobile-taskbar-slot[data-hidden="true"] {
+    height: 0;
+  }
+
+  .mobile-taskbar {
+    height: var(--mobile-taskbar-height);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-taskbar-slot {
+      transition: none;
     }
   }
 

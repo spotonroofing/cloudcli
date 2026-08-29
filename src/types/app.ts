@@ -39,6 +39,18 @@ export type ProviderModelActions = {
 
 export type AppTab = 'chat' | 'worker' | 'files' | 'git';
 
+/**
+ * A session the app asks the worker pane to show (ui17 job 8): the phone's
+ * activity drawer sends its worker rows to the Worker segment instead of
+ * opening them under the planner header. The token makes a repeat tap on the
+ * same session a fresh request.
+ */
+export type WorkerSessionRequest = {
+  sessionId: string;
+  provider: LLMProvider;
+  token: number;
+};
+
 export interface ProjectSession {
   id: string;
   title?: string;

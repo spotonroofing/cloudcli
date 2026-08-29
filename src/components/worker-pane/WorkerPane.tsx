@@ -1,4 +1,4 @@
-import { Hammer, MessageSquare, Milestone, Plus, Terminal, X } from 'lucide-react';
+import { Hammer, Milestone, Plus, X } from 'lucide-react';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import ChatInterface from '../chat/view/ChatInterface';
@@ -13,9 +13,8 @@ import { authenticatedFetch } from '../../utils/api';
 import { onSettingChange, writeSetting } from '../../utils/cloudSettings';
 import { cn } from '../../lib/utils';
 import { Badge, Button, Skeleton, Tooltip } from '../../shared/view/ui';
-import { ActionSwapIcon } from '../../shared/view/beui';
 import type { MarkSessionIdle, MarkSessionProcessing, SessionActivityMap } from '../../hooks/useSessionProtection';
-import type { Project, ProjectSession } from '../../types/app';
+import type { Project, ProjectSession, WorkerSessionRequest } from '../../types/app';
 import { titleFromPrompt } from '../../../shared/sessionTitle.js';
 import { workerRunLabel } from '../../utils/workerRunLabel';
 import { preserveJsonEqual } from '../../utils/preserveEqual';
@@ -143,6 +142,10 @@ type WorkerPaneProps = {
   /** Phone only (ui14 job 11): the top bar opens the sidebar and carries the window selector. */
   onMenuClick?: () => void;
   windowSelector?: ReactNode;
+  /** Phone only (ui17 job 8): the Shell taskbar segment is the active one. */
+  shellOpen?: boolean;
+  /** A session the app asks this pane to show (the footer activity drawer). */
+  requestedSession?: WorkerSessionRequest | null;
 };
 
 /**
@@ -171,6 +174,8 @@ export default function WorkerPane({
   onJobsViewOpenChange,
   onMenuClick,
   windowSelector,
+  shellOpen = false,
+  requestedSession = null,
 }: WorkerPaneProps) {
   const { subscribe, isConnected } = useWebSocket();
   const { preferences } = useUiPreferences();
@@ -194,9 +199,6 @@ export default function WorkerPane({
       return next;
     });
   }, [projectId, projectPath]);
-  // Mobile chat/shell toggle (ui13 job 9): swaps the pane's transcript for a
-  // terminal bound to the pane's own session, mirroring the planner pane.
-  const [shellOpen, setShellOpen] = useState(false);
   const [paneSession, setPaneSession] = useState<ProjectSession | null>(null);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
   const knownRunIdsRef = useRef<ReadonlySet<string>>(new Set());
@@ -287,6 +289,10 @@ export default function WorkerPane({
   // The server sorts worker runs newest-first. Verifier rows remain in the
   // jobs navigator but never become the pane's implicit follow target.
   const followTarget = useMemo(() => findWorkerFollowTarget(runs), [runs]);
+  const runsRef = useRef<WorkerRun[]>(runs);
+  runsRef.current = runs;
+  const followTargetRef = useRef<WorkerRun | null>(followTarget);
+  followTargetRef.current = followTarget;
 
   // A visible worker transcript counts as seen. Including the processing map
   // makes the completion render clear a response mark that may have landed in
@@ -379,6 +385,31 @@ export default function WorkerPane({
     );
   }, [followTarget]);
 
+  // A worker row tapped in the sidebar's activity drawer lands here on the
+  // phone (ui17 job 8) instead of the planner pane. The run list may not have
+  // arrived yet, so the request builds its own pane session; the pin keeps a
+  // newly announced build from taking the pane out from under the tap.
+  const requestToken = requestedSession?.token ?? 0;
+  useEffect(() => {
+    if (!requestedSession) {
+      return;
+    }
+    const run = runsRef.current.find((candidate) => candidate.sessionId === requestedSession.sessionId);
+    setManualPinUntil(workerSessionPinUntil(run ?? null, followTargetRef.current));
+    setPaneSession((previous) =>
+      preserveWorkerSessionSelection(previous, {
+        id: requestedSession.sessionId,
+        __provider: (run?.provider || requestedSession.provider || 'claude') as ProjectSession['__provider'],
+        summary: run?.title ?? undefined,
+        origin: run?.origin ?? 'direct',
+        booted: Boolean(run?.booted),
+      }),
+    );
+    // The token is the request; re-running on a run-list refresh would undo a
+    // later manual selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestToken]);
+
   const handleNewWorkerSession = () => {
     setManualPinUntil(workerSessionPinUntil(null, followTarget));
     setPaneSession(null);
@@ -467,6 +498,9 @@ export default function WorkerPane({
     }
   }, [handleSelectRun, runs]);
   const jobsFullPane = jobsTakeover || isMobile;
+  // The phone's Shell segment (ui17 job 8) takes the whole pane: the jobs
+  // takeover steps aside for it and comes back on the Worker segment.
+  const shellSegmentOpen = isMobile && shellOpen;
   const handleOpenJobSession = useCallback((sessionId: string) => {
     handleOpenSession(sessionId);
     if (jobsFullPane) setJobsViewOpen(false);
@@ -507,24 +541,6 @@ export default function WorkerPane({
           />
         )}
         {isMobile && windowSelector}
-        {isMobile && (
-          <Tooltip content={shellOpen ? 'Show chat' : 'Show shell'} position="bottom">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-              onClick={() => setShellOpen((open) => !open)}
-              aria-label={shellOpen ? 'Show chat' : 'Show shell'}
-              data-slot="pane-view-toggle"
-            >
-              <ActionSwapIcon value={shellOpen ? 'chat' : 'shell'}>
-                {shellOpen
-                  ? <MessageSquare className="h-3.5 w-3.5" />
-                  : <Terminal className="h-3.5 w-3.5" />}
-              </ActionSwapIcon>
-            </Button>
-          </Tooltip>
-        )}
         <Tooltip content="New worker session" position="bottom">
           <Button
             variant="ghost"
@@ -574,9 +590,9 @@ export default function WorkerPane({
         <PaneShell
           project={selectedProject}
           session={paneSession}
-          open={isMobile && shellOpen && !jobsViewOpen}
+          open={shellSegmentOpen}
           busy={Boolean(paneSession && processingSessions?.has(String(paneSession.id)))}
-          hidden={jobsViewOpen && jobsFullPane}
+          hidden={jobsViewOpen && jobsFullPane && !shellSegmentOpen}
         >
         <ErrorBoundary showDetails>
           <ChatInterface
@@ -622,7 +638,7 @@ export default function WorkerPane({
             bootCommandName="/worker"
             sessionOrigin="direct"
             onRenderedSessionChange={setRenderedSessionId}
-            holdQueuedFlush={isMobile && shellOpen && !jobsViewOpen}
+            holdQueuedFlush={shellSegmentOpen}
           />
         </ErrorBoundary>
         </PaneShell>
@@ -631,7 +647,7 @@ export default function WorkerPane({
             the whole pane where the pane is too narrow for both; the same
             rows, drawers, and footers either way. Opening a job's explicit chat control
             keeps the column; the full-pane view swaps back to the transcript. */}
-        {jobsViewOpen && (
+        {jobsViewOpen && !shellSegmentOpen && (
           <div
             data-slot="jobs-view"
             data-layout={jobsFullPane ? 'pane' : 'column'}

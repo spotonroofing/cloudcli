@@ -33,6 +33,7 @@ function Sidebar({
   onCloseWorkspaceProject,
   onProjectSelect,
   onSessionSelect,
+  onOpenWorkerSession,
   onNewSession,
   onSessionDelete,
   onLoadMoreSessions,
@@ -311,6 +312,12 @@ function Sidebar({
   const handleOpenActiveSession = useCallback(
     (row: ActiveSessionRow) => {
       onSessionViewed(row.sessionId);
+      // Phone (ui17 job 8): a worker run belongs in the Worker segment, not
+      // under the planner header the planner path would give it.
+      if (row.kind === 'worker' && onOpenWorkerSession) {
+        onOpenWorkerSession(row);
+        return;
+      }
       const project = row.projectId ? projects.find((p) => p.projectId === row.projectId) : null;
       const loaded = project?.sessions?.find((s) => String(s.id) === row.sessionId);
       if (loaded) {
@@ -322,7 +329,7 @@ function Sidebar({
         row.projectId ?? '',
       );
     },
-    [projects, handleSessionClick, onSessionViewed],
+    [projects, handleSessionClick, onOpenWorkerSession, onSessionViewed],
   );
 
   const handleProjectCreated = () => {

@@ -56,7 +56,9 @@ export default function TerminalShortcutsPanel({
   wsRef,
   terminalRef,
   isConnected,
-  bottomOffset = 'bottom-0',
+  // The phone taskbar (ui17 job 8) publishes its height while it is up, so
+  // the key bar clears it instead of covering the segments.
+  bottomOffset = 'bottom-[var(--mobile-taskbar-offset,0px)]',
 }: TerminalShortcutsPanelProps) {
   const { t } = useTranslation('settings');
   const [ctrlActive, setCtrlActive] = useState(false);

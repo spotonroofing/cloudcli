@@ -154,7 +154,7 @@ export default function ComposerModelMenu({
           updateAnchor();
           setIsOpen((current) => !current);
         }}
-        className="flex h-7 max-w-24 shrink-0 items-center gap-1 rounded-lg px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:max-w-56"
+        className="touch-hit relative flex h-7 min-w-0 max-w-56 shrink items-center gap-1 rounded-lg px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
         data-slot="composer-model-switcher"
         aria-haspopup="menu"
         aria-expanded={isOpen}
@@ -165,14 +165,19 @@ export default function ComposerModelMenu({
             <ProviderMark provider={provider} className="h-3.5 w-3.5" />
           </span>
         )}
-        <span className="truncate">
+        <span className="min-w-0 truncate">
           <SwapText value={hasModelSection ? modelLabel : currentEffortLabel}>
             {hasModelSection ? modelLabel : currentEffortLabel}
           </SwapText>
         </span>
-        {/* Effort shows on every form factor (ui13 job 12): phones read it too. */}
+        {/* Effort shows on every form factor (ui13 job 12): phones read it too.
+            Below md it compacts to the same small tag the fast mark uses
+            (ui17 job 8), so the model name keeps the room it needs at 390px. */}
         {hasModelSection && hasEffortSection && (
-          <span className="shrink-0 text-muted-foreground">
+          <span
+            data-slot="composer-effort-tag"
+            className="shrink-0 rounded bg-muted px-1 py-px text-[9px] font-medium lowercase leading-none text-muted-foreground md:rounded-none md:bg-transparent md:p-0 md:text-xs md:normal-case md:leading-normal"
+          >
             <SwapText value={currentEffortLabel}>{currentEffortLabel}</SwapText>
           </span>
         )}

@@ -1,18 +1,19 @@
-import { Check, Compass, FolderTree, GitBranch, Hammer, PanelsTopLeft, type LucideIcon } from 'lucide-react';
+import { Check, Compass, FolderTree, GitBranch, Hammer, PanelsTopLeft, Terminal, type LucideIcon } from 'lucide-react';
 
 import { ActionMenu } from '../../../shared/view/ui';
 
-import { WINDOW_LABELS, type WindowId } from './useProjectWindows';
+import { WINDOW_LABELS, type SelectorWindowId } from './useProjectWindows';
 
-const WINDOW_ICONS: Record<WindowId, LucideIcon> = {
+const WINDOW_ICONS: Record<SelectorWindowId, LucideIcon> = {
   planner: Compass,
   worker: Hammer,
   files: FolderTree,
   git: GitBranch,
+  shell: Terminal,
 };
 
 export type WindowSelectorItem = {
-  id: WindowId;
+  id: SelectorWindowId;
   /** Renders the trailing check; the row still toggles either way. */
   open: boolean;
   onSelect: () => void;
@@ -22,7 +23,9 @@ export type WindowSelectorItem = {
  * The window selector (ui13 job 10): a control in each project's pane chrome
  * listing the project's available windows — Planner, Worker, Files, Source
  * Control — with a check on the open ones. Desktop toggles windows in the
- * pane strip; mobile routes the same list to full-pane views.
+ * pane strip; on the phone it lists the tool windows only (Files, Source
+ * Control, Shell) and opening one gives it a taskbar segment, since Planner
+ * and Worker are permanent segments there (ui17 job 8).
  */
 export default function WindowSelector({ items }: { items: WindowSelectorItem[] }) {
   return (

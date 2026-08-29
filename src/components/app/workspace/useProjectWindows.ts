@@ -23,11 +23,18 @@ export type ProjectWindows = {
 
 export const WINDOW_ORDER: WindowId[] = ['planner', 'worker', 'files', 'git'];
 
-export const WINDOW_LABELS: Record<WindowId, string> = {
+/**
+ * Everything the window selector can list. The shell is a phone-only window
+ * (ui17 job 8): it is a taskbar segment there, never a pane in the strip.
+ */
+export type SelectorWindowId = WindowId | 'shell';
+
+export const WINDOW_LABELS: Record<SelectorWindowId, string> = {
   planner: 'Planner',
   worker: 'Worker',
   files: 'Files',
   git: 'Source Control',
+  shell: 'Shell',
 };
 
 const STORAGE_KEY = 'project-windows-v1';

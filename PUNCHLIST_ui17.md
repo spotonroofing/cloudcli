@@ -118,7 +118,7 @@ Goal: on a phone the app is hard to move around in. From a planner chat there is
 - [x] Worker on mobile: the Worker segment shows the project's worker session full-screen; its header says Worker (never Planner) and carries the jobs button; the jobs view opens as a full-screen takeover on mobile with a clear way back (the taskbar stays underneath it).
 - [x] Composer bottom row fits at 390px in both planner and worker: the model switcher label compacts (model name, effort as a short tag) and nothing is clipped or pushed off screen; the counter, history, switcher, usage and handoff controls all remain tappable.
 - [x] The footer activity drawer's session taps land in the right pane on mobile (a worker opens as the Worker segment, a planner as Planner).
-- [ ] `design/mobile.md` documents the taskbar (segments, hide-on-focus, full-screen windows) and the mobile header rules.
+- [x] `design/mobile.md` documents the taskbar (segments, hide-on-focus, full-screen windows) and the mobile header rules.
 
 Done check: with the WebKit iPhone recipe at 393x852: the taskbar shows Planner and Worker at equal width, opening the shell adds a third equal segment, tapping Worker renders the worker header and the jobs button, the jobs view fills the screen and closes back, focusing the composer hides the bar and blurring restores it, the bottom row's controls all lie inside the viewport; desktop unchanged (no taskbar above the phone breakpoint); tests for the segment math. Commit.
 

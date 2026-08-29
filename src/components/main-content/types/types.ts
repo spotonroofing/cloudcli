@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 
-import type { AppTab, Project, ProjectSession } from '../../../types/app';
+import type { AppTab, Project, ProjectSession, WorkerSessionRequest } from '../../../types/app';
 import type {
   MarkSessionIdle,
   MarkSessionProcessing,
@@ -35,6 +35,8 @@ export type MainContentProps = {
   onProjectSelect: (project: Project) => void;
   /** Silently re-syncs the sidebar project list after worktree projects change. */
   onProjectsRefresh: () => void;
+  /** Phone only: the session the activity drawer sent to the Worker segment. */
+  workerSessionRequest?: WorkerSessionRequest | null;
 };
 
 export type MainContentStateViewProps = {

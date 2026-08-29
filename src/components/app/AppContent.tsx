@@ -3,8 +3,8 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { BellRing } from 'lucide-react';
 
 import Sidebar from '../sidebar/view/Sidebar';
-import type { RunningRunInfo } from '../sidebar/types/types';
-import type { LLMProvider } from '../../types/app';
+import type { ActiveSessionRow, RunningRunInfo } from '../sidebar/types/types';
+import type { LLMProvider, WorkerSessionRequest } from '../../types/app';
 import CommandPalette from '../command-palette/CommandPalette';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
@@ -128,6 +128,26 @@ function AppContentInner() {
     activeSessions: processingSessions,
     runningRuns,
   });
+
+  // Phone (ui17 job 8): a worker run tapped in the sidebar's activity drawer
+  // opens in the Worker taskbar segment, with the project it belongs to
+  // selected — never under the planner header.
+  const [workerSessionRequest, setWorkerSessionRequest] = useState<WorkerSessionRequest | null>(null);
+  const handleOpenWorkerSession = useCallback(
+    (row: ActiveSessionRow) => {
+      const project = row.projectId
+        ? projects.find((candidate) => candidate.projectId === row.projectId)
+        : undefined;
+      if (project && project.projectId !== selectedProject?.projectId) {
+        handleProjectSelect(project);
+      } else {
+        setSidebarOpen(false);
+      }
+      setActiveTab('worker');
+      setWorkerSessionRequest({ sessionId: row.sessionId, provider: row.provider, token: Date.now() });
+    },
+    [projects, selectedProject?.projectId, handleProjectSelect, setActiveTab, setSidebarOpen],
+  );
 
   // Multi-project workspace (phase 7): which projects are open as stacked
   // rows. With a single open project the surface renders exactly as before.
@@ -424,7 +444,12 @@ function AppContentInner() {
             className={`h-full w-full transform bg-background transition-transform duration-[320ms] ease-[cubic-bezier(0.77,0,0.175,1)] ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
               }`}
           >
-            <Sidebar {...sidebarSharedProps} runningRuns={runningRuns} onClose={() => setSidebarOpen(false)} />
+            <Sidebar
+              {...sidebarSharedProps}
+              runningRuns={runningRuns}
+              onOpenWorkerSession={handleOpenWorkerSession}
+              onClose={() => setSidebarOpen(false)}
+            />
           </div>
         </div>
       )}
@@ -460,6 +485,7 @@ function AppContentInner() {
           newSessionTrigger={newSessionTrigger}
           onProjectSelect={handleProjectSelect}
           onProjectsRefresh={() => void refreshProjectsSilently()}
+          workerSessionRequest={workerSessionRequest}
         />
       </div>
 

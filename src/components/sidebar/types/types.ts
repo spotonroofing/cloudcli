@@ -108,6 +108,11 @@ export type SidebarProps = {
   onCloseWorkspaceProject?: (project: Project) => void;
   onProjectSelect: (project: Project) => void;
   onSessionSelect: (session: ProjectSession) => void;
+  /**
+   * Phone only (ui17 job 8): a worker row in the activity drawer opens in the
+   * Worker taskbar segment. Absent on desktop, where both kinds open in place.
+   */
+  onOpenWorkerSession?: (row: ActiveSessionRow) => void;
   onNewSession: (project: Project) => void;
   onSessionDelete?: (sessionId: string) => void;
   onLoadMoreSessions?: (projectId: string) => Promise<void> | void;

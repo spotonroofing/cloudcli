@@ -1,4 +1,4 @@
-import { Compass, FolderTree, GitBranch, Hammer, MessageSquare, Terminal, X } from 'lucide-react';
+import { Compass, FolderTree, GitBranch, Hammer, X } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
@@ -13,8 +13,7 @@ import { useFileOpenResolver } from '../../../hooks/useFileOpenResolver';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
 import EditorSidebar from '../../code-editor/view/EditorSidebar';
 import { STANDALONE_PROJECT_ID } from '../../../types/app';
-import { Badge, Button, Tooltip } from '../../../shared/view/ui';
-import { ActionSwapIcon } from '../../../shared/view/beui';
+import { Badge, Button } from '../../../shared/view/ui';
 import { cn } from '../../../lib/utils';
 import PaneStrip, { type StripPane } from '../../app/workspace/PaneStrip';
 import PaneShell from '../../app/workspace/PaneShell';
@@ -25,6 +24,11 @@ import { PANE_HEADER_CLASS } from '../../app/workspace/paneHeader';
 
 import MainContentStateView from './subcomponents/MainContentStateView';
 import MobileMenuButton from './subcomponents/MobileMenuButton';
+import MobileTaskbar, {
+  taskbarSegments,
+  type TaskbarSegmentId,
+  type TaskbarWindowId,
+} from './subcomponents/MobileTaskbar';
 import ErrorBoundary from './ErrorBoundary';
 
 function MainContent({
@@ -50,6 +54,7 @@ function MainContent({
   onNewProjectSession,
   onProjectSelect,
   onProjectsRefresh,
+  workerSessionRequest,
 }: MainContentProps) {
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
@@ -76,10 +81,31 @@ function MainContent({
     }
     jobsViewOpenRef.current = { projectId: selectedProjectId, open };
   }, [resetPaneWeights, selectedProjectId]);
-  // Mobile chat/shell toggle (ui13 job 9): the planner pane's top bar swaps
-  // the transcript for a terminal bound to the pane's own session. Not
-  // persisted — a fresh open always lands on chat.
-  const [plannerShellOpen, setPlannerShellOpen] = useState(false);
+  // Phone navigation (ui17 job 8): the bottom taskbar is the only switcher.
+  // Planner and Worker are permanent segments; the window selector opens the
+  // tool windows, each of which becomes one more segment. The shell is one of
+  // them — it takes the active chat pane's place, so there is no header swap
+  // button. None of it is persisted; a fresh open always lands on Planner.
+  const [openWindows, setOpenWindows] = useState<Record<TaskbarWindowId, boolean>>({
+    files: false,
+    git: false,
+    shell: false,
+  });
+  const [shellActive, setShellActive] = useState(false);
+  const [lastChatTab, setLastChatTab] = useState<'chat' | 'worker'>('chat');
+  // The keyboard owns the bottom of the screen while a composer has focus.
+  const [composerFocused, setComposerFocused] = useState(false);
+  const handleInputFocusChange = useCallback((focused: boolean) => {
+    if (isMobile) {
+      setComposerFocused(focused);
+    }
+    onInputFocusChange(focused);
+  }, [isMobile, onInputFocusChange]);
+  useEffect(() => {
+    if (activeTab === 'chat' || activeTab === 'worker') {
+      setLastChatTab(activeTab);
+    }
+  }, [activeTab]);
   // The Planner header mirrors the worker pane's header bar; the title is the
   // open session's stored name.
   const sessionTitle = (selectedSession?.summary || selectedSession?.title || '').trim();
@@ -167,6 +193,10 @@ function MainContent({
     return <MainContentStateView mode="empty" isMobile={isMobile} onMenuClick={onMenuClick} />;
   }
 
+  // The phone shows the planner's shell in place of its transcript while the
+  // Shell segment is the active one (ui17 job 8).
+  const plannerShellOpen = isMobile && shellActive && activeTab === 'chat';
+
   const plannerChat = (
     <ErrorBoundary showDetails>
       <ChatInterface
@@ -176,7 +206,7 @@ function MainContent({
         ws={ws}
         sendMessage={sendMessage}
         onFileOpen={handleFileOpen}
-        onInputFocusChange={onInputFocusChange}
+        onInputFocusChange={handleInputFocusChange}
         onSessionProcessing={onSessionProcessing}
         onSessionIdle={onSessionIdle}
         processingSessions={processingSessions}
@@ -194,7 +224,7 @@ function MainContent({
           setRenderedSessionId(renderedId);
           if (renderedId && activeTab === 'chat') onSessionViewed(renderedId);
         }}
-        holdQueuedFlush={isMobile && plannerShellOpen}
+        holdQueuedFlush={plannerShellOpen}
       />
     </ErrorBoundary>
   );
@@ -355,19 +385,44 @@ function MainContent({
     );
   }
 
-  // Mobile (and the project-less standalone chat): full-pane views, one
-  // switcher (ui14 job 11) — the pane header's window selector is the only
-  // way between Planner, Worker, Files, and Source Control; the old top strip
-  // is gone. The standalone chat has no windows, so no selector.
-  const mobileSelectorItems: WindowSelectorItem[] = [
-    { id: 'planner' as const, tab: 'chat' as const },
-    { id: 'worker' as const, tab: 'worker' as const },
-    { id: 'files' as const, tab: 'files' as const },
-    { id: 'git' as const, tab: 'git' as const },
-  ].map(({ id, tab }) => ({
+  // Mobile (and the project-less standalone chat): full-pane views. The
+  // bottom taskbar is the navigation (ui17 job 8) and the top bar's window
+  // selector is what opens and closes the tool windows it carries — Planner
+  // and Worker are always segments, so the selector lists only Files, Source
+  // Control and Shell. The standalone chat has no windows, so no selector.
+  const windowSegmentOpen = (id: TaskbarWindowId): boolean => (
+    openWindows[id] || (id !== 'shell' && activeTab === id)
+  );
+  const showWindow = (id: TaskbarWindowId) => {
+    setOpenWindows((previous) => ({ ...previous, [id]: true }));
+    if (id === 'shell') {
+      setShellActive(true);
+      if (activeTab !== 'chat' && activeTab !== 'worker') setActiveTab(lastChatTab);
+      return;
+    }
+    setShellActive(false);
+    setActiveTab(id);
+  };
+  const closeWindow = (id: TaskbarWindowId) => {
+    setOpenWindows((previous) => ({ ...previous, [id]: false }));
+    if (id === 'shell') {
+      setShellActive(false);
+    } else if (activeTab === id) {
+      setActiveTab(lastChatTab);
+    }
+  };
+  const handleTaskbarSelect = (id: TaskbarSegmentId) => {
+    if (id === 'planner' || id === 'worker') {
+      setShellActive(false);
+      setActiveTab(id === 'planner' ? 'chat' : 'worker');
+      return;
+    }
+    showWindow(id);
+  };
+  const mobileSelectorItems: WindowSelectorItem[] = (['files', 'git', 'shell'] as const).map((id) => ({
     id,
-    open: activeTab === tab,
-    onSelect: () => setActiveTab(tab),
+    open: windowSegmentOpen(id),
+    onSelect: () => (windowSegmentOpen(id) ? closeWindow(id) : showWindow(id)),
   }));
   const mobileSelector = workerPaneAvailable ? <WindowSelector items={mobileSelectorItems} /> : null;
   const mobileMenu = isMobile ? <MobileMenuButton onMenuClick={onMenuClick} /> : null;
@@ -381,7 +436,7 @@ function MainContent({
         <div
           className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}
         >
-          <div className={`h-full ${activeTab === 'chat' ? 'flex flex-col' : 'hidden'}`}>
+          <div className={`h-full min-h-0 ${activeTab === 'chat' ? 'flex flex-col' : 'hidden'}`}>
             {(workerPaneAvailable || isMobile) && (
               <div className={PANE_HEADER_CLASS} data-slot="pane-header">
                 {mobileMenu}
@@ -399,30 +454,12 @@ function MainContent({
                 {failSafeBadges}
                 <span className="min-w-0 flex-1" />
                 {mobileSelector}
-                {workerPaneAvailable && (
-                  <Tooltip content={plannerShellOpen ? 'Show chat' : 'Show shell'} position="bottom">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="touch-hit relative h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                      onClick={() => setPlannerShellOpen((open) => !open)}
-                      aria-label={plannerShellOpen ? 'Show chat' : 'Show shell'}
-                      data-slot="pane-view-toggle"
-                    >
-                      <ActionSwapIcon value={plannerShellOpen ? 'chat' : 'shell'}>
-                        {plannerShellOpen
-                          ? <MessageSquare className="h-3.5 w-3.5" />
-                          : <Terminal className="h-3.5 w-3.5" />}
-                      </ActionSwapIcon>
-                    </Button>
-                  </Tooltip>
-                )}
               </div>
             )}
             <PaneShell
               project={selectedProject}
               session={selectedSession}
-              open={isMobile && plannerShellOpen}
+              open={plannerShellOpen}
               busy={plannerBusy}
             >
               {plannerChat}
@@ -437,7 +474,7 @@ function MainContent({
                 sendMessage={sendMessage}
                 isActive={activeTab === 'worker'}
                 onFileOpen={resolvedFileOpen}
-                onInputFocusChange={onInputFocusChange}
+                onInputFocusChange={handleInputFocusChange}
                 onSessionProcessing={onSessionProcessing}
                 onSessionIdle={onSessionIdle}
                 processingSessions={processingSessions}
@@ -445,6 +482,8 @@ function MainContent({
                 onShowSettings={onShowSettings}
                 onMenuClick={onMenuClick}
                 windowSelector={mobileSelector}
+                shellOpen={shellActive}
+                requestedSession={workerSessionRequest}
               />
             </div>
           )}
@@ -495,6 +534,19 @@ function MainContent({
           fillSpace={activeTab === 'files'}
         />
       </div>
+
+      {isMobile && (
+        <MobileTaskbar
+          segments={taskbarSegments({
+            workerAvailable: workerPaneAvailable,
+            openWindows,
+            activeTab,
+            shellActive,
+          })}
+          hidden={composerFocused}
+          onSelect={handleTaskbarSelect}
+        />
+      )}
     </div>
   );
 }
