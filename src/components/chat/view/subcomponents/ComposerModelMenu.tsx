@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Zap } from 'lucide-react';
 
 import type { LLMProvider, ProviderModelOption } from '../../../../types/app';
 import { prettifyModelId } from '../../../../utils/modelLabels';
@@ -181,13 +181,10 @@ export default function ComposerModelMenu({
             <SwapText value={currentEffortLabel}>{currentEffortLabel}</SwapText>
           </span>
         )}
+        {/* Fast mode reads as a bolt, not a word (ui17 job 12): same ink and
+            box as the trigger's chevron so it sits as a quiet mark. */}
         {hasFastMode && fastMode && (
-          <span
-            data-slot="composer-fast-tag"
-            className="shrink-0 rounded bg-muted px-1 py-px text-[9px] font-medium lowercase leading-none text-muted-foreground"
-          >
-            fast
-          </span>
+          <Zap data-slot="composer-fast-mark" className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
         )}
         <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
       </button>
