@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { WebSocket } from 'ws';
 
 import { messageVersionsDb, sessionsDb } from '@/modules/database/index.js';
-import { providerModelsService, scheduleSessionShortLabel } from '@/modules/providers/index.js';
+import { notifySessionRowChanged, providerModelsService, scheduleSessionShortLabel } from '@/modules/providers/index.js';
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import {
@@ -510,7 +510,17 @@ async function handleChatSend(
     // aborted or errored boot as a failed boot, never as a plain chat.
     if (clientOptions.bootPrompt === true) {
       const failed = runtimeThrew || run.sawError || run.aborted;
-      sessionsDb.setSessionBootState(sessionId, failed ? 'failed' : 'ready');
+      // The failure carries its own plain line (ui17 job 21) so a retry that
+      // fails again replaces the reason the first failure left instead of
+      // blanking it back to the generic copy.
+      const bootError = run.aborted
+        ? 'The boot was stopped before it finished.'
+        : 'The boot ended with an error before the session was ready.';
+      sessionsDb.setSessionBootState(sessionId, failed ? 'failed' : 'ready', failed ? bootError : null);
+      // Push the row's new boot state to the sidebar and the pane at once, so
+      // a retry's outcome replaces the line the previous failure left instead
+      // of waiting for the next project fetch.
+      notifySessionRowChanged(provider, sessionId);
     }
 
     const limitErrors = run.events

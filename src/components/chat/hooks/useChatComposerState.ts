@@ -762,6 +762,9 @@ export function useChatComposerState({
       // tracks it and the resend targets the same session.
       sessionId: previous.sessionId ?? currentSessionId ?? null,
       attempt: previous.attempt + 1,
+      // The previous failure's line goes with it (ui17 job 21): a second
+      // failure writes its own, so the row never shows a stale reason.
+      reason: null,
     }));
     pendingBootRetryRef.current = { seqAtRequest: commandsFetchSeq };
     setBootRetryTick((tick) => tick + 1);

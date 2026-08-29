@@ -64,6 +64,8 @@ type SessionDetails = {
   booted: boolean;
   /** Persisted boot lifecycle: null | 'pending' | 'ready' | 'failed'. */
   bootState: string | null;
+  /** One plain line saying why the boot failed; null unless bootState is 'failed'. */
+  bootError: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   lastActivity: string | null;
@@ -512,6 +514,7 @@ export const sessionsService = {
         origin: session.origin ?? null,
         booted: Boolean(session.booted),
         bootState: session.boot_state ?? null,
+        bootError: session.boot_error ?? null,
         createdAt: session.created_at ?? null,
         updatedAt: session.updated_at ?? null,
         lastActivity: session.updated_at ?? session.created_at ?? null,
@@ -536,6 +539,7 @@ export const sessionsService = {
       origin: session.origin ?? null,
       booted: Boolean(session.booted),
       bootState: session.boot_state ?? null,
+      bootError: session.boot_error ?? null,
       createdAt: session.created_at ?? null,
       updatedAt: session.updated_at ?? null,
       lastActivity: session.updated_at ?? session.created_at ?? null,

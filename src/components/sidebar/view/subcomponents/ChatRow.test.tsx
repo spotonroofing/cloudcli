@@ -5,7 +5,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import ChatRow from './ChatRow';
 
-const renderRow = (sessionId: string, wakeTarget = false, isLoading = false) => renderToStaticMarkup(
+const renderRow = (
+  sessionId: string,
+  wakeTarget = false,
+  isLoading = false,
+  failedReason: string | null = null,
+) => renderToStaticMarkup(
   <ChatRow
     href={`/session/${sessionId}`}
     bounceKey={sessionId}
@@ -14,6 +19,8 @@ const renderRow = (sessionId: string, wakeTarget = false, isLoading = false) => 
     isSelected
     isWatchdogWakeTarget={wakeTarget}
     isLoading={isLoading}
+    failedReason={failedReason}
+    onRetry={() => undefined}
     onSelect={() => undefined}
     onRename={() => undefined}
     menu={{
@@ -48,5 +55,21 @@ test('a reserved handoff successor reads as a loading row (ui17 job 17)', () => 
   assert.match(markup, /data-slot="chat-row-loading"/);
   assert.match(markup, /aria-busy="true"/);
   // No age line: the row has no history to date yet.
+  assert.doesNotMatch(markup, />now</);
+});
+
+test('a failed successor row carries its reason and a Retry control (ui17 job 21)', () => {
+  const markup = renderRow(
+    'session-successor',
+    false,
+    false,
+    'The handoff turn was stopped before it finished.',
+  );
+
+  assert.match(markup, /data-slot="chat-row-boot-failed"/);
+  assert.match(markup, /The handoff turn was stopped before it finished\./);
+  assert.match(markup, /data-slot="chat-row-boot-retry"/);
+  assert.match(markup, />Retry</);
+  // The reason takes the age's place, so the row still reads as two lines.
   assert.doesNotMatch(markup, />now</);
 });

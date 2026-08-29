@@ -74,6 +74,8 @@ type SessionDetailsApiPayload = {
     summary?: string;
     origin?: string | null;
     booted?: boolean;
+    bootState?: string | null;
+    bootError?: string | null;
     createdAt?: string | null;
     lastActivity?: string | null;
     project?: {
@@ -980,7 +982,13 @@ export function useProjectsState({
         const normalizedSession = normalizeSessionProvider(match);
         const shouldUpdateProject = selectedProject?.projectId !== project.projectId;
         const shouldUpdateSession =
-          selectedSession?.id !== sessionId || selectedSession.__provider !== normalizedSession.__provider;
+          selectedSession?.id !== sessionId
+          || selectedSession.__provider !== normalizedSession.__provider
+          // The project payload is the fuller record: when its boot lifecycle
+          // has moved on (a successor that failed, or one that just booted),
+          // take it, so the pane never holds a stale boot state.
+          || (selectedSession.bootState ?? null) !== (normalizedSession.bootState ?? null)
+          || (selectedSession.bootError ?? null) !== (normalizedSession.bootError ?? null);
 
         if (shouldUpdateProject) {
           setSelectedProject(project);
@@ -1087,6 +1095,12 @@ export function useProjectsState({
         summary: details.summary ?? '',
         origin: details.origin ?? null,
         booted: Boolean(details.booted),
+        // A deep-linked session resolved through this lookup carries its boot
+        // lifecycle too (ui17 job 21): without it a reopened failed handoff
+        // successor read as a plain empty chat, with neither its reason line
+        // nor Retry, because this object is what the pane sees.
+        bootState: details.bootState ?? null,
+        bootError: details.bootError ?? null,
         createdAt: details.createdAt ?? undefined,
         lastActivity: details.lastActivity ?? undefined,
         __provider:
@@ -1102,7 +1116,17 @@ export function useProjectsState({
           : resolvedSession,
       );
     })();
-  }, [basePath, navigate, sessionId, projects, selectedProject, selectedSession?.id, selectedSession?.__provider]);
+  }, [
+    basePath,
+    navigate,
+    sessionId,
+    projects,
+    selectedProject,
+    selectedSession?.id,
+    selectedSession?.__provider,
+    selectedSession?.bootState,
+    selectedSession?.bootError,
+  ]);
 
   const handleProjectSelect = useCallback(
     (project: Project) => {

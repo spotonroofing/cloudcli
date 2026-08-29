@@ -36,6 +36,13 @@ type ChatRowProps = {
    * Handoff click). The row reads as loading: skeleton title, no age.
    */
   isLoading?: boolean;
+  /**
+   * The chat's boot failed and this is the one line saying why (ui17 job 21).
+   * The second line carries it in place of the age, with Retry beside it.
+   */
+  failedReason?: string | null;
+  /** Re-runs the failed boot in this same row. */
+  onRetry?: () => void;
   /** Saves an inline rename; the row owns the editing state. */
   onRename: (name: string) => void | Promise<void>;
   menu: Omit<ChatRowMenuProps, 'onRename'>;
@@ -64,6 +71,8 @@ export default function ChatRow({
   responseKinds = { planner: false, worker: false },
   isWatchdogWakeTarget = false,
   isLoading = false,
+  failedReason = null,
+  onRetry,
   onRename,
   menu,
   dataTestId,
@@ -171,7 +180,13 @@ export default function ChatRow({
             {title}
           </MarqueeLabel>
           <span
-            data-slot={isLoading ? 'chat-row-loading' : undefined}
+            data-slot={
+              isLoading
+                ? 'chat-row-loading'
+                : failedReason
+                  ? 'chat-row-boot-failed'
+                  : undefined
+            }
             className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground"
           >
             {isLoading ? (
@@ -179,6 +194,27 @@ export default function ChatRow({
               // holds its space with the same skeleton the transcript uses
               // while its first turn is still on the way.
               <Skeleton className="h-2 w-16 rounded-sm" />
+            ) : failedReason ? (
+              // A boot that died says so on the row itself (ui17 job 21): the
+              // reason takes the age's place and Retry sits beside it, so the
+              // list never shows a successor that silently never started.
+              <>
+                <span className="truncate">{failedReason}</span>
+                {onRetry && (
+                  <button
+                    type="button"
+                    data-slot="chat-row-boot-retry"
+                    className="touch-hit relative flex-shrink-0 rounded px-1 text-[10px] leading-3 text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onRetry();
+                    }}
+                  >
+                    Retry
+                  </button>
+                )}
+              </>
             ) : (
               <>
                 {subtitle && (

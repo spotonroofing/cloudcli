@@ -8,6 +8,7 @@ import type { SessionActivityPhase } from '../../../hooks/useSessionProtection';
 import { useSessionStore } from '../../../stores/useSessionStore';
 import type { LLMProvider } from '../../../types/app';
 import { copyTextToClipboard } from '../../../utils/clipboard';
+import { BOOT_RETRY_REQUESTED_EVENT, resolveBootFailure } from '../../../utils/bootFailure';
 import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
 import type { ChatInterfaceProps, ChatMessage } from '../types/types';
 import { useChatProviderState } from '../hooks/useChatProviderState';
@@ -360,16 +361,16 @@ function ChatInterface({
   // A reopened session whose persisted boot failed (aborted mid-boot, server
   // died) shows the failed-boot view instead of a plain empty chat. The local
   // machinery takes over the moment a retry engages, and any ready assistant
-  // text means the chat became usable despite the stamp.
-  const persistedBootFailedView =
-    bootState.phase === 'idle'
-    && selectedSession?.bootState === 'failed'
-    && !hasReadyAssistantText;
-  const bootFailedView = (viewingBootSession && bootState.phase === 'failed') || persistedBootFailedView;
-  // The line a failed handoff left: live from the frame, or persisted on the
-  // row so a reload still says what went wrong rather than the generic copy.
-  const bootFailedReason = (viewingBootSession ? bootState.reason : null)
-    ?? (typeof selectedSession?.bootError === 'string' ? selectedSession.bootError : null);
+  // text means the chat became usable despite the stamp. The sidebar row reads
+  // the same pair, so both surfaces say the same sentence (ui17 job 21).
+  const { failed: bootFailedView, reason: bootFailedReason } = resolveBootFailure({
+    bootPhase: bootState.phase,
+    bootReason: bootState.reason,
+    viewingBootSession,
+    sessionBootState: selectedSession?.bootState,
+    sessionBootError: selectedSession?.bootError,
+    hasReadyAssistantText,
+  });
   const errorMessageCount = useMemo(
     () => chatMessages.filter((message) => message.type === 'error').length,
     [chatMessages],
@@ -436,6 +437,30 @@ function ChatInterface({
       onNavigateToSession?.(toSessionId);
     });
   }, [subscribe, selectedSession?.id, currentSessionId, onNavigateToSession]);
+
+  // Retry from the sidebar row (ui17 job 21): the row asks by session id, and
+  // whichever pane holds that session runs the boot. The request is kept until
+  // the pane is actually on that row, so a Retry clicked from a row that is not
+  // open still fires once the click's own navigation lands.
+  const [sidebarRetryRequest, setSidebarRetryRequest] = useState<string | null>(null);
+  useEffect(() => {
+    const handleRetryRequested = (event: Event) => {
+      const requestedSessionId = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId;
+      if (requestedSessionId) {
+        setSidebarRetryRequest(requestedSessionId);
+      }
+    };
+    window.addEventListener(BOOT_RETRY_REQUESTED_EVENT, handleRetryRequested);
+    return () => window.removeEventListener(BOOT_RETRY_REQUESTED_EVENT, handleRetryRequested);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarRetryRequest || sidebarRetryRequest !== activeSessionKey) {
+      return;
+    }
+    setSidebarRetryRequest(null);
+    retryBoot();
+  }, [sidebarRetryRequest, activeSessionKey, retryBoot]);
 
   // The handoff turn errored, was stopped, or did not push (ui17 job 17): the
   // successor row stays exactly where it is and its pane says what went wrong

@@ -72,3 +72,20 @@ test('getSessionDetailsById throws SESSION_NOT_FOUND for unknown ids', async () 
     );
   });
 });
+
+test('a deep link to a failed handoff successor carries its boot state and reason (ui17 job 21)', async () => {
+  await withIsolatedDatabase(() => {
+    const projectPath = '/home/user/handoff-project';
+    projectsDb.createProjectPath(projectPath);
+    const sessionId = sessionsDb.createAppSession('successor-1', 'claude', projectPath, 'Planner', 'planner');
+    sessionsDb.markSessionBooted(sessionId);
+    sessionsDb.setSessionBootState(sessionId, 'failed', 'The handoff turn was stopped before it finished.');
+
+    // This lookup is what a cold load of /session/<id> reads, so the failed
+    // boot's line has to survive it or the pane opens as a plain empty chat.
+    const details = sessionsService.getSessionDetailsById(sessionId);
+
+    assert.equal(details.bootState, 'failed');
+    assert.equal(details.bootError, 'The handoff turn was stopped before it finished.');
+  });
+});

@@ -4,6 +4,7 @@ import { BorderBeamOverlay, useBeamPresence } from '../../../../shared/view/beui
 import type { Project, ProjectSession, LLMProvider } from '../../../../types/app';
 import type { SessionWithProvider } from '../../types/types';
 import { createSessionViewModel, formatCompactAge } from '../../utils/utils';
+import { BOOT_FAILED_FALLBACK_REASON, BOOT_RETRY_REQUESTED_EVENT } from '../../../../utils/bootFailure';
 
 import ChatRow from './ChatRow';
 
@@ -66,6 +67,14 @@ export default function SidebarSessionItem({
   // from the moment it appears.
   const isReservedBoot = session.bootState === 'pending';
   const beam = useBeamPresence(isProcessing || isReservedBoot);
+  // A successor whose boot died says so on its row (ui17 job 21): the same
+  // line its pane shows, with Retry beside it.
+  const bootFailedReason =
+    session.bootState === 'failed'
+      ? (typeof session.bootError === 'string' && session.bootError.trim()
+          ? session.bootError
+          : BOOT_FAILED_FALLBACK_REASON)
+      : null;
 
   const selectSession = () => {
     onSessionViewed(String(session.id));
@@ -93,6 +102,15 @@ export default function SidebarSessionItem({
         onSelect={selectSession}
         overlay={beam.mounted ? <BorderBeamOverlay identity="planner" strength={0.3} {...beam.beamProps} /> : null}
         isLoading={isReservedBoot}
+        failedReason={bootFailedReason}
+        onRetry={() => {
+          // Open the row first, then ask: the pane holding that session runs
+          // the boot, and it keeps the request until it is on that row.
+          selectSession();
+          window.dispatchEvent(new CustomEvent(BOOT_RETRY_REQUESTED_EVENT, {
+            detail: { sessionId: String(session.id) },
+          }));
+        }}
         responseKinds={{ planner: responseKind === 'planner', worker: responseKind === 'worker' }}
         isWatchdogWakeTarget={session.watchdogWakeTarget === true}
         onRename={(name) => onSaveEditingSession(project.projectId, session.id, name, session.__provider)}

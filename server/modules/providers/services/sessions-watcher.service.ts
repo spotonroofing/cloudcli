@@ -236,6 +236,9 @@ async function buildSessionUpsertedEvent(updatedProviderSessionId: string): Prom
       origin: row.origin ?? null,
       booted: Boolean(row.booted),
       bootState: row.boot_state ?? null,
+      // The failed boot's one line rides along (ui17 job 21) so a retry that
+      // fails again replaces what the row and its pane say, live.
+      bootError: row.boot_error ?? null,
       messageCount: 0,
       lastActivity: row.updated_at ?? row.created_at ?? new Date().toISOString(),
     },

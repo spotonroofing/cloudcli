@@ -253,7 +253,7 @@ Done check: on dev with the stub chain: a Claude unit runs to commit under accep
 
 Goal: Job 17 landed at b8aadb5 and its verify failed on one thing: opening a persisted successor whose boot aborted renders an empty planner pane. The record carries `bootState: "failed"` and the abort reason, but the pane renders neither the reason line nor the Retry control (verify log `~/forge-logs/ui17r/verify15.log`, successor `9ba1356a` on dev). Files: the planner pane's successor loading and failure rendering from Job 17 (`src/components/chat/` loading row and failed state pieces, the session boot state read on load), `design/composer.md` and `design/sidebar.md` where Job 17 documented the flow.
 
-- [ ] A successor with `bootState` failed renders, on cold load and live alike, the one-line reason and the Retry control in the planner pane and the sidebar row, at desktop and 390px; a regression test loads a persisted failed successor and asserts both are visible.
+- [x] A successor with `bootState` failed renders, on cold load and live alike, the one-line reason and the Retry control in the planner pane and the sidebar row, at desktop and 390px; a regression test loads a persisted failed successor and asserts both are visible.
 - [ ] Retry re-runs the boot in the same row; a second failure replaces the reason line; success clears it and the opening lands in the row.
 
 Done check: on dev with agent-browser, opening the stub's persisted failed successor shows the reason line and the Retry control (cold load, then again after a live abort), at desktop and 390px; tests pass. Commit.
