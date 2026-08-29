@@ -291,6 +291,14 @@ function ChatMessagesPane({
       data-session-id={selectedSession?.id || undefined}
       viewportRef={scrollContainerRef as unknown as RefObject<HTMLElement>}
       viewportClassName="chat-messages-pane overflow-x-hidden pt-3 sm:pt-4"
+      // Bottom-anchored transcript (ui18 job 6). A transcript shorter than its
+      // pane used to sit at the top with the live indicator stranded hundreds
+      // of pixels above the composer and a wheel that did nothing. The content
+      // is at least one pane tall and lays its rows out from the bottom, so
+      // spare space goes above the first row: the last row - the live thinking
+      // or tool indicator while a run is in flight - always sits one row gap
+      // above the composer, in the same spot at every transcript length.
+      contentClassName="flex min-h-full flex-col justify-end"
       viewportProps={{ onWheel, onTouchMove }}
       busy={isProcessing}
       label={t('session.transcriptLabel', { defaultValue: 'Conversation' })}
@@ -450,6 +458,7 @@ function ChatMessagesPane({
           re-pins the live edge when the composer grows. */}
       <div
         aria-hidden
+        data-slot="composer-clearance"
         className="h-[calc(var(--composer-height,5.5rem)+0.75rem)] sm:h-[calc(var(--composer-height,5.5rem)+1rem)]"
       />
     </MessageScroller>

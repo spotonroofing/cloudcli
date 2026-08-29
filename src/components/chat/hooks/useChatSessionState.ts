@@ -618,7 +618,7 @@ export function useChatSessionState({
   // transcript is exhausted; each fill page re-pins the bottom via
   // pendingFillPinRef. Re-runs whenever a page lands (chatMessages.length),
   // so the loop converges without polling.
-  useEffect(() => {
+  const fillTranscriptToViewport = useCallback(() => {
     if (!isActive) return;
     const container = scrollContainerRef.current;
     if (!container || chatMessages.length === 0) return;
@@ -659,6 +659,23 @@ export function useChatSessionState({
     loadOlderMessages,
     visibleMessageCount,
   ]);
+
+  useEffect(() => {
+    fillTranscriptToViewport();
+  }, [fillTranscriptToViewport]);
+
+  // A pane that grows - the window resized, the jobs column closed, a pane
+  // divider dragged - can leave a window that filled the old height short of
+  // the new one (ui18 job 6). Nothing in the fill loop's inputs changes when
+  // that happens, and an unscrollable pane can never fire the scroll event
+  // that would grow the window, so the resize itself has to ask again.
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => fillTranscriptToViewport());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [fillTranscriptToViewport]);
 
   const handleScroll = useCallback(async () => {
     if (!isActive) return;
