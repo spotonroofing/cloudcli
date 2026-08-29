@@ -679,7 +679,7 @@ function JobsSidebar({
   const monthDoneCounts = new Map<string, number>();
   const yearDoneCounts = new Map<string, number>();
   stacked.forEach((unit, index) => {
-    if (unit.kind !== 'phase' || unit.status !== 'completed') return;
+    if (unit.status !== 'completed') return;
     const period = periods[index];
     monthDoneCounts.set(period.monthKey, (monthDoneCounts.get(period.monthKey) ?? 0) + 1);
     yearDoneCounts.set(period.year, (yearDoneCounts.get(period.year) ?? 0) + 1);
@@ -759,7 +759,7 @@ function JobsSidebar({
               setDrawerOverrides((previous) => ({ ...previous, [unit.key]: !drawerOpen }));
             const titleClasses = cn(
               'flex max-w-full min-w-0 text-left leading-5',
-              unit.kind === 'task' ? 'text-[12px]' : 'text-[13px]',
+              'text-[13px]',
               unit.status === 'pending' && 'text-muted-foreground/65',
               unit.status === 'in-progress' && 'text-foreground',
               unit.status === 'completed' && 'text-muted-foreground/60',
@@ -823,7 +823,7 @@ function JobsSidebar({
                   data-marquee-hover
                   className={cn(
                     'group/row relative flex w-full items-center gap-2 rounded-md px-1.5 text-left',
-                    unit.kind === 'task' ? 'min-h-7 pl-4' : 'min-h-8',
+                    'min-h-8',
                     hasDrawer && 'cursor-pointer',
                     (hasDrawer || navigable) && 'hover:bg-accent/50',
                   )}
@@ -837,7 +837,7 @@ function JobsSidebar({
                       className="absolute bottom-1.5 left-0 top-1.5 w-0.5 rounded-full bg-foreground/70"
                     />
                   )}
-                  <span className={cn(unit.kind === 'task' && 'scale-90')}>
+                  <span>
                     {/* The active job's indicator breathes (ui12 job 8);
                         the pulse wraps only the icon, not the row. */}
                     <span

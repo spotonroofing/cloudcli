@@ -146,9 +146,9 @@ Done check: on dev, no download control exists inside the transcript area on eit
 
 Goal: appended units of kind "task" render as smaller, indented, lighter rows in the jobs column (see "Ring breathing, no blur" and "Download in the top bar" in the ui17 chain); Willem wants one row format for every job, whatever its kind or origin. Files: `src/components/worker-pane/JobsSidebar.tsx` and its row pieces, the chain record's unit kind (`server/modules/watchdog/`, the append path in `scripts/macos/dispatch` and the runner), `design/worker-pane-and-jobs.md`.
 
-- [ ] The jobs column renders every unit with the same row anatomy, size, indent, ring and type treatment: no lighter or nested variant for "task" appends, no different ring, no smaller text; existing chains (ui17 included) render uniformly without any data migration, because the renderer ignores the kind.
-- [ ] The `dispatch append` default kind becomes phase (the `--phase` flag stays accepted and is a no-op); the runner and watchdog keep accepting the stored "task" kind for old records; the dispatch header comment and the planner reference are updated by the planner, not this job (say so in the summary).
-- [ ] The area file documents that units have one row style.
+- [x] The jobs column renders every unit with the same row anatomy, size, indent, ring and type treatment: no lighter or nested variant for "task" appends, no different ring, no smaller text; existing chains (ui17 included) render uniformly without any data migration, because the renderer ignores the kind.
+- [x] The `dispatch append` default kind becomes phase (the `--phase` flag stays accepted and is a no-op); the runner and watchdog keep accepting the stored "task" kind for old records; the dispatch header comment and the planner reference are updated by the planner, not this job (say so in the summary).
+- [x] The area file documents that units have one row style.
 
 Done check: on dev with a stub chain that has one phase unit and one task-kind unit, both rows measure the same height, indent and font size and carry the same ring; `dispatch append` without `--phase` stores kind phase; tests pass. Commit.
 

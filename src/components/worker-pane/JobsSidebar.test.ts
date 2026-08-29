@@ -56,6 +56,38 @@ test('the jobs column renders the paused state on the current chain row', () => 
   assert.match(markup, /data-slot="jobs-sidebar-paused-icon" aria-label="Paused"/);
 });
 
+test('a task-kind unit renders with the same row anatomy as a phase unit (ui17 job 11)', () => {
+  const chain: ChainSnapshot = {
+    slug: 'uniform-stub',
+    projectPath: '/workspace/uniform-stub',
+    status: 'running',
+    phases: 2,
+    currentPhase: 1,
+    phaseActive: true,
+    manifest: [
+      { name: 'Compiled job', tasks: ['One', 'Two'], kind: 'phase', status: 'completed', done: 2 },
+      { name: 'Appended job', tasks: ['One', 'Two'], kind: 'task', status: 'completed', done: 2 },
+    ],
+    startedAt: 1,
+    lastEventAt: 2,
+  };
+  const markup = renderJobs([{ chain, run: null, sessions: {}, startedAt: 1 }]);
+
+  const rows = [...markup.matchAll(/<div[^>]*data-slot="jobs-sidebar-row"[^>]*>/g)].map((m) => m[0]);
+  assert.equal(rows.length, 2);
+  const rowClass = (row: string) => /class="([^"]*)"/.exec(row)?.[1] ?? '';
+  // The kind still rides on the row for data, but nothing about the look
+  // reads it: same height, no indent, no scaled icon, one title size.
+  const phaseRow = rows.find((row) => row.includes('data-kind="phase"'));
+  const taskRow = rows.find((row) => row.includes('data-kind="task"'));
+  assert.ok(phaseRow && taskRow);
+  assert.equal(rowClass(phaseRow), rowClass(taskRow));
+  assert.doesNotMatch(markup, /min-h-7/);
+  assert.doesNotMatch(markup, /scale-90/);
+  assert.equal((markup.match(/text-\[12px\]/g) ?? []).length, 0);
+  assert.equal((markup.match(/data-slot="job-ring-segment"/g) ?? []).length, 4);
+});
+
 test('the running chain header exposes the bolt toggle and fast units keep their bolt', () => {
   const chain: ChainSnapshot = {
     slug: 'fast-stub',

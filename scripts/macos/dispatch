@@ -267,12 +267,15 @@ if [[ "$1" == "append" ]]; then
   [[ $# -ge 3 ]] || usage
   PROJECT_ARG="$1"; SLUG="$2"; shift 2
 
-  KIND="task"
+  # One row style for every unit (ui17 job 11): appends are phases like any
+  # other unit. `--phase` stays accepted as a no-op so old call sites keep
+  # working.
+  KIND="phase"
   typeset -a APPEND_FILES
   APPEND_FILES=()
   for arg in "$@"; do
     if [[ "$arg" == "--phase" ]]; then
-      KIND="phase"
+      :
     else
       APPEND_FILES+=("$arg")
     fi
