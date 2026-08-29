@@ -22,6 +22,12 @@
 // usage: node scripts/dev/check-worker-pane-truth.mjs <jsonl> <sessionId> <cwd> [cdpPort]
 //   The page under test must already be open in the CDP Chrome (port 9500 by
 //   default) on the dev origin, showing that session.
+//
+// The session needs a transcript several viewports tall, or stage A has no
+// room to depart into. A fixture is 40 user/assistant pairs whose assistant
+// turns carry ten paragraphs of text, written to
+// ~/.claude-dev/projects/<encoded-cwd>/<session-id>.jsonl, then flipped to
+// `origin='planner'` in ~/.cloudcli-dev/auth.db so /api/projects lists it.
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
