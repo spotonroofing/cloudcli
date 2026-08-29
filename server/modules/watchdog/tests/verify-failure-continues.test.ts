@@ -1,0 +1,228 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { once } from 'node:events';
+import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+import express from 'express';
+
+import {
+  apiKeysDb,
+  appConfigDb,
+  closeConnection,
+  initializeDatabase,
+  projectsDb,
+  userDb,
+} from '@/modules/database/index.js';
+import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
+import type { RealtimeClientConnection } from '@/shared/types.js';
+
+import { createWatchdogRouter, watchdogService } from '../index.js';
+
+const runnerPath = path.resolve('scripts/macos/dispatch-chain-runner');
+
+async function executable(filePath: string, content: string): Promise<void> {
+  await writeFile(filePath, content);
+  await chmod(filePath, 0o755);
+}
+
+async function runGit(repo: string, args: string[]): Promise<string> {
+  const process = spawn('/usr/bin/git', args, { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'] });
+  let stdout = '';
+  let stderr = '';
+  process.stdout?.on('data', (chunk) => { stdout += String(chunk); });
+  process.stderr?.on('data', (chunk) => { stderr += String(chunk); });
+  const [exitCode] = await once(process, 'exit') as [number];
+  assert.equal(exitCode, 0, `git ${args.join(' ')} failed: ${stderr}`);
+  return stdout.trim();
+}
+
+test('a failed verifier is recorded and announced while the next build and chain completion continue', {
+  skip: process.platform !== 'darwin',
+  timeout: 30_000,
+}, async () => {
+  const previousDatabasePath = process.env.DATABASE_PATH;
+  const cleanupDirectory = await mkdtemp(path.join(tmpdir(), 'verify-failure-continues-'));
+  const directory = await realpath(cleanupDirectory);
+  const repo = path.join(directory, 'repo');
+  const bin = path.join(directory, 'bin');
+  const fakeHome = path.join(directory, 'home');
+  const database = path.join(directory, 'auth.db');
+  const calls = path.join(directory, 'codex-calls.log');
+  const slug = `verify-failure-stub-${Date.now()}`;
+  const messages: string[] = [];
+  const notificationClient = {
+    readyState: WS_OPEN_STATE,
+    send: (message: string) => { messages.push(message); },
+  } as unknown as RealtimeClientConnection;
+  let server: ReturnType<express.Application['listen']> | null = null;
+  let runner: ReturnType<typeof spawn> | null = null;
+
+  closeConnection();
+  process.env.DATABASE_PATH = database;
+  try {
+    await Promise.all([mkdir(repo), mkdir(bin), mkdir(path.join(fakeHome, 'forge-logs'), { recursive: true })]);
+    await initializeDatabase();
+    const user = userDb.createUser('verify-failure-test', 'unused');
+    apiKeysDb.createApiKey(Number(user.id), 'verify-failure-test');
+    projectsDb.createProjectPath(repo);
+    // The terminal fleet notification carries the same payload queued for a
+    // planner wake; disabling delivery keeps this runner regression hermetic.
+    appConfigDb.set('watchdog_terminal_wakes', '0');
+    connectedClients.add(notificationClient);
+
+    const app = express();
+    app.use(express.json());
+    app.use('/api/watchdog', createWatchdogRouter());
+    server = app.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const address = server.address() as AddressInfo;
+    const serverUrl = `http://127.0.0.1:${address.port}`;
+
+    await runGit(repo, ['init', '-q']);
+    await runGit(repo, ['config', 'user.email', 'stub@example.com']);
+    await runGit(repo, ['config', 'user.name', 'Verify Failure Stub']);
+    const phaseOne = path.join(repo, '01-one.md');
+    const phaseTwo = path.join(repo, '02-two.md');
+    const phaseThree = path.join(repo, '03-three.md');
+    await writeFile(phaseOne, '<!-- name: One -->\nFIRST_BUILD_STUB\n');
+    await writeFile(phaseTwo, '<!-- name: Two -->\nSECOND_BUILD_STUB\n');
+    await writeFile(phaseThree, '<!-- name: Three -->\nTHIRD_BUILD_STUB\n');
+    await runGit(repo, ['add', '.']);
+    await runGit(repo, ['commit', '-q', '-m', 'stub base']);
+
+    await executable(path.join(bin, 'codex'), `#!/bin/zsh
+prompt=$(</dev/stdin)
+stage=build
+[[ "$prompt" == *"fresh-context verifier"* ]] && stage=verify
+unit=unknown
+[[ "$prompt" == *"FIRST_BUILD_STUB"* ]] && unit=one
+[[ "$prompt" == *"SECOND_BUILD_STUB"* ]] && unit=two
+[[ "$prompt" == *"THIRD_BUILD_STUB"* ]] && unit=three
+print -r -- "$stage|$unit" >> "$STUB_CALLS"
+output=""
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == "-o" ]]; then output="$2"; shift 2; else shift; fi
+done
+thread="stub-$stage-$unit-$$"
+print -r -- "{\\"type\\":\\"thread.started\\",\\"thread_id\\":\\"$thread\\"}"
+if [[ "$stage" == verify ]]; then
+  if [[ "$unit" == two ]]; then
+    print -r -- "VERIFY: FAIL: second unit missed its budget" > "$output"
+  else
+    print -r -- "VERIFY: PASS" > "$output"
+  fi
+  exit 0
+fi
+/usr/bin/git -C "$STUB_REPO" commit --allow-empty -q -m "stub build $unit"
+print -r -- "done" > "$output"
+`);
+
+    watchdogService.registerChain({
+      slug,
+      projectPath: repo,
+      phases: 3,
+      manifest: [
+        { name: 'One', tasks: [], kind: 'phase' },
+        { name: 'Two', tasks: [], kind: 'phase' },
+        { name: 'Three', tasks: [], kind: 'phase' },
+      ],
+    });
+
+    const environment = {
+      ...process.env,
+      HOME: fakeHome,
+      PATH: `${bin}:/usr/bin:/bin:/usr/sbin:/sbin`,
+      DISPATCH_SERVER_URL: serverUrl,
+      DISPATCH_DB_PATH: database,
+      DISPATCH_ENGINE: 'codex',
+      DISPATCH_MODEL: 'gpt-test-build',
+      DISPATCH_VERIFY_ENGINE: 'codex',
+      DISPATCH_VERIFY_MODEL: 'gpt-test-verify',
+      DISPATCH_RESUME_FROM: '1',
+      DISPATCH_RESUMING: '',
+      STUB_CALLS: calls,
+      STUB_REPO: repo,
+    } as NodeJS.ProcessEnv;
+
+    runner = spawn('/bin/zsh', [runnerPath, repo, slug, phaseOne, phaseTwo, phaseThree], {
+      cwd: repo,
+      env: environment,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    runner.stdout?.on('data', (chunk) => { stdout += String(chunk); });
+    runner.stderr?.on('data', (chunk) => { stderr += String(chunk); });
+    const [runnerExit] = await once(runner, 'exit') as [number];
+    assert.equal(runnerExit, 0, `runner stderr: ${stderr}\nrunner stdout: ${stdout}`);
+    runner = null;
+
+    assert.match(stdout, /completed with 1 verify failure \(3 phases\)/);
+    assert.equal(await runGit(repo, ['rev-list', '--count', 'HEAD']), '4');
+    const callLines = (await readFile(calls, 'utf8')).trim().split('\n');
+    assert.deepEqual(callLines.filter((line) => line.startsWith('build|')), [
+      'build|one',
+      'build|two',
+      'build|three',
+    ]);
+    assert.deepEqual(callLines.filter((line) => line.startsWith('verify|')), [
+      'verify|one',
+      'verify|two',
+      'verify|three',
+    ]);
+
+    const snapshot = watchdogService.listWorkerRuns(repo).chains[slug];
+    assert.equal(snapshot.status, 'completed');
+    assert.equal(snapshot.currentPhase, 3);
+    assert.equal(snapshot.verifyFailures, 1);
+    assert.equal(snapshot.manifest?.[1]?.verify, 'failed');
+    assert.match(snapshot.manifest?.[1]?.failureReason ?? '', /second unit missed its budget/);
+    assert.match(snapshot.manifest?.[1]?.failureReason ?? '', /Resume point: append a fix unit for job 2/);
+    assert.equal(snapshot.manifest?.[2]?.verify, 'passed');
+
+    const fleetNotifications = messages
+      .map((message) => JSON.parse(message) as {
+        kind?: string;
+        notificationKind?: string;
+        title?: string;
+        body?: string;
+      })
+      .filter((message) => message.kind === 'fleet_notification');
+    const failureNotification = fleetNotifications.find((message) => message.title?.includes('job 2 verify failed'));
+    assert.equal(failureNotification?.notificationKind, 'decision-needed');
+    assert.match(failureNotification?.body ?? '', /Job 2 of 3 \(Two\) failed verification/);
+    assert.match(failureNotification?.body ?? '', /second unit missed its budget/);
+
+    const terminalNotification = fleetNotifications.find((message) => message.title?.includes('completed with 1 verify failure'));
+    assert.equal(terminalNotification?.notificationKind, 'decision-needed');
+    assert.match(terminalNotification?.body ?? '', /completed with 1 verify failure/);
+    assert.match(terminalNotification?.body ?? '', /Job 2 \(Two\).*second unit missed its budget/);
+    assert.match(terminalNotification?.body ?? '', /Resume point: append a fix unit for job 2/);
+
+    const journal = await readFile(path.join(fakeHome, 'forge-logs', slug, 'JOURNAL.md'), 'utf8');
+    assert.match(journal, /verify 2\/3 \| FAILED \| VERIFY: FAIL: second unit missed its budget/);
+    assert.match(journal, /run \| end \| all 3 phases committed; completed with 1 verify failure/);
+    assert.doesNotMatch(journal, /\| (?:killed|rewind) \|/);
+    assert.doesNotMatch(journal, /parked after .*failed verify/);
+  } finally {
+    if (runner && runner.exitCode === null) {
+      runner.kill('SIGTERM');
+      await once(runner, 'exit').catch(() => undefined);
+    }
+    connectedClients.delete(notificationClient);
+    if (server) {
+      await new Promise<void>((resolve) => server?.close(() => resolve()));
+    }
+    closeConnection();
+    if (previousDatabasePath === undefined) {
+      delete process.env.DATABASE_PATH;
+    } else {
+      process.env.DATABASE_PATH = previousDatabasePath;
+    }
+    await rm(cleanupDirectory, { recursive: true, force: true });
+  }
+});

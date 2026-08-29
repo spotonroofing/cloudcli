@@ -174,10 +174,10 @@ Done check: on dev with a stub chain: flipping the toggle stores the flag and th
 
 Goal: three chains today died because one unit's verify came back FAIL (ui17 on a 25.5 versus 25 percent budget), killing every queued unit and parking the next job's work. The verify verdict stays valuable, but it must not be a kill switch. Files: `scripts/macos/dispatch-chain-runner` (verify handling, rewind, park), the watchdog chain routes and records (`server/modules/watchdog/`), the jobs column failure rendering, `design/worker-pane-and-jobs.md`, the planner's dispatch reference is updated by the planner (say so in the summary).
 
-- [ ] On VERIFY: FAIL the runner records the verdict on that unit (status verify-failed, the reason line), leaves its commit on main, does not kill the unit already building, does not rewind, does not park, and continues the chain; the chain ends `completed with N verify failures` and the terminal wake lists them with their reasons and resume points so the planner appends fix units.
-- [ ] A decision-needed notification fires at the moment of each verify failure (not a wake), naming the unit and reason, so Willem sees it in the moment.
-- [ ] The jobs column marks the unit with the red ring and X (Job 1's mark) while the chain keeps running; the chain header shows the failure count.
-- [ ] The only things that still stop a chain: a build unit that lands no commit (the commit gate), a usage limit the runner cannot recover from, and an explicit pause; regression tests cover verify-fail-continues, the notification, and the terminal wake payload.
+- [x] On VERIFY: FAIL the runner records the verdict on that unit (status verify-failed, the reason line), leaves its commit on main, does not kill the unit already building, does not rewind, does not park, and continues the chain; the chain ends `completed with N verify failures` and the terminal wake lists them with their reasons and resume points so the planner appends fix units.
+- [x] A decision-needed notification fires at the moment of each verify failure (not a wake), naming the unit and reason, so Willem sees it in the moment.
+- [x] The jobs column marks the unit with the red ring and X (Job 1's mark) while the chain keeps running; the chain header shows the failure count.
+- [x] The only things that still stop a chain: a build unit that lands no commit (the commit gate), a usage limit the runner cannot recover from, and an explicit pause; regression tests cover verify-fail-continues, the notification, and the terminal wake payload.
 
 Done check: on dev with a stub chain whose second unit's verify answers FAIL, the third unit still runs and the chain completes with one recorded verify failure, the notification fired, the wake payload lists the failure, the row shows the red mark; tests pass. Commit.
 

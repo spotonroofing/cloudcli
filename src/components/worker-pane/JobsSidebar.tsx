@@ -59,6 +59,8 @@ export type ChainSnapshot = {
   phaseActive: boolean;
   /** Chain preference read by the runner at the next Codex build boundary. */
   fastMode?: boolean;
+  /** Failed verifier verdicts recorded while the chain continues. */
+  verifyFailures?: number;
   manifest: ChainManifestEntry[] | null;
   startedAt: number;
   lastEventAt: number;
@@ -694,9 +696,18 @@ function JobsSidebar({
         <div
           data-slot="jobs-chain-header"
           data-chain={runningChain.slug}
+          data-verify-failures={runningChain.verifyFailures ?? 0}
           className="flex min-h-8 items-center gap-2 border-b border-border/50 px-2 text-[11px] text-muted-foreground"
         >
           <span className="min-w-0 flex-1 truncate">{runningChain.slug}</span>
+          {(runningChain.verifyFailures ?? 0) > 0 && (
+            <span
+              data-slot="jobs-chain-verify-failures"
+              className="flex-shrink-0 tabular-nums text-rose-600 dark:text-rose-400"
+            >
+              {runningChain.verifyFailures} verify {runningChain.verifyFailures === 1 ? 'failure' : 'failures'}
+            </span>
+          )}
           <ChainFastModeToggle
             chain={runningChain}
             pending={fastModePendingSlug === runningChain.slug}

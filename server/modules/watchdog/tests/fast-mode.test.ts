@@ -163,6 +163,8 @@ print -r -- "done" > "$output"
       DISPATCH_MODEL: 'gpt-test-build',
       DISPATCH_VERIFY_ENGINE: 'codex',
       DISPATCH_VERIFY_MODEL: 'gpt-test-verify',
+      DISPATCH_RESUME_FROM: '1',
+      DISPATCH_RESUMING: '',
       STUB_CALLS: calls,
       STUB_FIRST_STARTED: firstStarted,
       STUB_RELEASE_FIRST: releaseFirst,

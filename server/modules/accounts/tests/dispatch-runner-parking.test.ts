@@ -95,6 +95,8 @@ fi
       DISPATCH_SERVER_URL: `http://127.0.0.1:${address.port}`,
       DISPATCH_DB_PATH: database,
       DISPATCH_ENGINE: 'claude',
+      DISPATCH_RESUME_FROM: '1',
+      DISPATCH_RESUMING: '',
       CSWAP_PATH: path.join(bin, 'cswap'),
       STUB_CLAUDE_STATE: claudeState,
       STUB_CSWAP_CALLS: cswapCalls,

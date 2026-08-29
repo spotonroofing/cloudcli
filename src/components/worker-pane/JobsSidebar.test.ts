@@ -87,6 +87,46 @@ test('the running chain header exposes the bolt toggle and fast units keep their
   assert.match(markup, /data-slot="jobs-sidebar-fast-unit"/);
 });
 
+test('a verify-failed unit stays red while the running chain header counts the failure', () => {
+  const chain: ChainSnapshot = {
+    slug: 'verify-continues-stub',
+    projectPath: '/workspace/verify-continues-stub',
+    status: 'running',
+    phases: 3,
+    currentPhase: 3,
+    phaseActive: true,
+    verifyFailures: 1,
+    manifest: [
+      { name: 'One', tasks: [], kind: 'phase', commitHash: 'abc1111', verify: 'passed' },
+      {
+        name: 'Two',
+        tasks: ['Ship', 'Meet the budget'],
+        kind: 'phase',
+        done: 1,
+        commitHash: 'abc2222',
+        verify: 'failed',
+        failureReason: 'Second unit missed its budget.',
+      },
+      { name: 'Three', tasks: [], kind: 'phase' },
+    ],
+    startedAt: 1,
+    lastEventAt: 2,
+  };
+
+  const markup = renderToStaticMarkup(createElement(JobsSidebar, {
+    groups: [{ chain, run: null, sessions: {}, startedAt: 1 }],
+    activeSessionId: null,
+    onOpenSession: () => undefined,
+    onToggleFastMode: () => undefined,
+  }));
+
+  assert.match(markup, /data-slot="jobs-chain-header" data-chain="verify-continues-stub" data-verify-failures="1"/);
+  assert.match(markup, /data-slot="jobs-chain-verify-failures"[^>]*>1 verify failure</);
+  assert.match(markup, /data-job="2" data-chain="verify-continues-stub" data-kind="phase" data-status="cancelled"/);
+  assert.equal((markup.match(/data-slot="job-ring-segment"[^>]*data-failed="true"/g) ?? []).length, 2);
+  assert.match(markup, /data-terminal-mark="x"/);
+});
+
 test('a committed job holds its check behind a centered spinner while verify runs', () => {
   const chain: ChainSnapshot = {
     slug: 'verify-stub',

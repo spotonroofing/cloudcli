@@ -117,6 +117,11 @@ type ChainRecord = {
   fastMode: boolean;
 };
 
+/** Number of committed units whose verifier rejected the result. */
+function countVerifyFailures(chain: ChainRecord): number {
+  return Object.values(chain.jobs).filter((meta) => meta.verify === 'failed').length;
+}
+
 type DispatchRunRecord = {
   sessionId: string;
   projectPath: string;
@@ -190,6 +195,8 @@ type ChainSnapshot = {
   phaseActive: boolean;
   /** Current chain preference; changing it affects the next build unit only. */
   fastMode: boolean;
+  /** Failed verifier verdicts recorded so far; they never change chain status. */
+  verifyFailures: number;
   /** Manifest entries with the punch-list `done` count and the unit's commit
    *  and timing metadata (ui13 job 14) folded in per unit; a twin superseded
    *  by another chain's unit (codex job 5) is marked hidden with its winner. */
@@ -291,9 +298,13 @@ class WatchdogService {
 
   /** Posts the terminal notice, then queues the separately gated planner wake. */
   private handleTerminalChain(chain: ChainRecord): void {
+    const verifyFailures = countVerifyFailures(chain);
+    const terminalLabel = chain.status === 'completed' && verifyFailures > 0
+      ? `completed with ${verifyFailures} verify ${verifyFailures === 1 ? 'failure' : 'failures'}`
+      : chain.status;
     this.notify(
       'decision-needed',
-      `Chain ${chain.slug} ${chain.status}`,
+      `Chain ${chain.slug} ${terminalLabel}`,
       terminalWakePrompt(chain),
       { chainSlug: chain.slug, projectPath: chain.projectPath, status: chain.status },
     );
@@ -875,6 +886,7 @@ class WatchdogService {
       currentPhase: chain.currentPhase,
       phaseActive: chain.phaseActive,
       fastMode: chain.fastMode,
+      verifyFailures: countVerifyFailures(chain),
       manifest: chain.manifest
         ? chain.manifest.map((entry, i) => ({
             ...entry,
@@ -927,10 +939,10 @@ class WatchdogService {
       log(`chain ${slug}: paused`, { phase: chain.currentPhase });
       return true;
     }
-    // Verify-stage events (ui14 job 10) belong to a unit whose build already
-    // ended; they never move currentPhase or phaseActive, which track the
-    // build in flight. verify-failed is terminal: the runner has rewound and
-    // its summaryTail is the resume point the wake carries.
+    // Verify-stage events belong to a unit whose build already ended. They
+    // never move currentPhase or phaseActive, which track the build in flight.
+    // A failed verdict is recorded and announced immediately, but the runner
+    // and every queued unit continue; the terminal wake aggregates failures.
     if (event === 'verify-start' || event === 'verify-end' || event === 'verify-failed') {
       if (typeof detail?.phase === 'number') {
         const meta = chain.jobs[detail.phase] ?? (chain.jobs[detail.phase] = {});
@@ -946,17 +958,23 @@ class WatchdogService {
           }
         }
       }
-      if (detail?.summaryTail) {
+      if (detail?.summaryTail && event !== 'verify-failed') {
         chain.lastSummaryTail = detail.summaryTail.slice(-2000);
       }
       log(`chain ${slug}: ${event}`, { phase: detail?.phase ?? null, status: chain.status });
       if (event === 'verify-failed') {
-        chain.status = 'failed';
-        chain.phaseActive = false;
         this.persistChain(chain);
         this.broadcastChainProgress(chain);
-        this.syncPunchlistWatcher(chain);
-        this.handleTerminalChain(chain);
+        const phase = detail?.phase;
+        const meta = typeof phase === 'number' ? chain.jobs[phase] : undefined;
+        const unitName = typeof phase === 'number' ? chain.manifest?.[phase - 1]?.name : undefined;
+        const reason = meta?.failureReason ?? 'The verifier reported a failure without a reason.';
+        this.notify(
+          'decision-needed',
+          `Chain ${slug} job ${phase ?? '?'} verify failed`,
+          `Job ${phase ?? '?'}${chain.phases ? ` of ${chain.phases}` : ''}${unitName ? ` (${unitName})` : ''} failed verification: ${reason}\n\nThe chain is continuing. Append a fix unit at the terminal wake's resume point.`,
+          { chainSlug: slug, projectPath: chain.projectPath, status: 'verify-failed', phase },
+        );
       } else {
         this.persistChain(chain);
         this.broadcastChainProgress(chain);
@@ -2203,16 +2221,17 @@ function punchlistDoneCounts(
  */
 function terminalWakePrompt(chain: ChainRecord): string {
   const tail = chain.lastSummaryTail ? `\n\nFinal summary tail:\n${chain.lastSummaryTail}` : '';
-  // A verify-stage failure (ui14 job 10): the build committed but the
-  // fresh-context verifier rejected it and the runner rewound. The tail is
-  // the runner's resume point (failing commit, parked branch, next unit).
-  const failedVerify = Object.entries(chain.jobs).find(([, meta]) => meta.verify === 'failed');
-  if (chain.status === 'failed' && failedVerify) {
-    const [unit, meta] = failedVerify;
-    return `Watchdog: dispatched chain "${chain.slug}" FAILED VERIFY at job ${unit}${chain.phases ? ` of ${chain.phases}` : ''}`
-      + `${meta.commitHash ? ` (commit ${meta.commitHash})` : ''}: the build committed but the fresh-context verifier rejected it, `
-      + 'and the runner stopped the chain and rewound. Read the resume point below, fix the job from its commit, and re-dispatch '
-      + `from the unit it names.${tail}`;
+  const failedVerifies = Object.entries(chain.jobs).filter(([, meta]) => meta.verify === 'failed');
+  if (chain.status === 'completed' && failedVerifies.length > 0) {
+    const failures = failedVerifies.map(([unit, meta]) => {
+      const name = chain.manifest?.[Number(unit) - 1]?.name;
+      const reason = meta.failureReason ?? 'The verifier reported a failure without a reason or resume point.';
+      return `- Job ${unit}${name ? ` (${name})` : ''}${meta.commitHash ? ` at ${meta.commitHash}` : ''}: ${reason}`;
+    }).join('\n');
+    return `Watchdog: dispatched chain "${chain.slug}" completed with ${failedVerifies.length} verify `
+      + `${failedVerifies.length === 1 ? 'failure' : 'failures'}. Every build commit stayed on main and all queued units ran. `
+      + 'Append fix units for these recorded failures and start from each listed resume point:\n'
+      + failures;
   }
   const flag = chain.status === 'completed'
     ? 'ended'

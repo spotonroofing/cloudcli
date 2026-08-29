@@ -29,9 +29,9 @@
 # the background while the next unit's build starts, so the verify tail
 # leaves the critical path.
 # A phase file that carries `<!-- verify: no -->` in its header skips its
-# verify stage. A failing verify rewinds: the in-flight build is killed, its
-# work is parked as a WIP commit on a branch (main is never rewritten), and
-# the terminal verify-failed event carries the exact resume point.
+# verify stage. A failing verify is recorded on that unit without touching
+# the build already in flight; the chain continues and its terminal wake
+# carries every failed verdict with an exact repair resume point.
 #
 # Watchdog events carry projectPath and phases so a server that restarted
 # mid-chain (and lost its in-memory chain registry) re-registers the chain
@@ -682,6 +682,8 @@ VERIFY_COMMIT=""
 VERIFY_SUBJECT=""
 VERIFY_RETRY=0
 VERIFY_THREAD=""
+typeset -a VERIFY_FAILURES
+VERIFY_FAILURES=()
 PAUSING=0
 PHASE_NUM=$((RESUME_FROM - 1))
 
@@ -824,7 +826,8 @@ start_verify() {
 # Reads a finished verifier's verdict off its log. PASS and INCONCLUSIVE clear
 # the stage (the latter with a journal note and recovery notification); a
 # limit exit without a verdict marks the stage for a re-run once no build is
-# in flight (reconcile_verify); only an explicit FAIL rewinds.
+# in flight (reconcile_verify); an explicit FAIL is recorded and clears the
+# stage without disturbing the build already in flight.
 settle_verify() {
   local rc log="$JOURNAL_DIR/verify$VERIFY_NUM.log" verdict verdict_source
   wait $VERIFY_PID
@@ -870,62 +873,24 @@ PYEOF
     VERIFY_NUM=0
     return 0
   fi
-  rewind_after_verify_failure "$verdict"
+  record_verify_failure "$verdict"
 }
 
-# A failed verify stops the chain and rewinds: the in-flight build (unit
-# N+1) is killed, whatever it produced is parked as a WIP commit on a branch
-# (main is never rewritten: the failing commit and anything after it may
-# already be pushed), and the verify-failed event carries the resume point.
-rewind_after_verify_failure() {
-  local reason="$1" state head main_branch next_file branch
-  local next=$((VERIFY_NUM + 1))
-  branch="dispatch/$SLUG/job$next-parked"
+# A failed verify is a repair signal, not a chain boundary. Record the exact
+# reason and resume point on the committed unit, then let the current build
+# and every queued unit continue unchanged.
+record_verify_failure() {
+  local reason="$1" resume
   journal "verify $VERIFY_NUM/$TOTAL" "FAILED" "$reason"
-  if [[ -n "$BUILD_PID" ]] && kill -0 $BUILD_PID 2>/dev/null; then
-    # The build is its own process group (run_claude): the whole tree goes.
-    kill -TERM -- -$BUILD_PID 2>/dev/null || kill -TERM $BUILD_PID 2>/dev/null
-    local i=0
-    while kill -0 $BUILD_PID 2>/dev/null && [[ $i -lt 30 ]]; do sleep 1; i=$((i + 1)); done
-    kill -0 $BUILD_PID 2>/dev/null && { kill -KILL -- -$BUILD_PID 2>/dev/null || kill -KILL $BUILD_PID 2>/dev/null; }
-    wait $BUILD_PID 2>/dev/null
-    journal "phase $next/$TOTAL" "killed" "build of $PHASE_NAME stopped mid-run: job $VERIFY_NUM failed verify"
-  fi
-  BUILD_PID=""
-  head=$(git -C "$REPO" rev-parse --short HEAD)
-  main_branch=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
-  local resume_unit=$next
-  if [[ -n "$(git -C "$REPO" status --porcelain)" ]]; then
-    if git -C "$REPO" checkout -q -b "$branch" \
-      && git -C "$REPO" add -A \
-      && git -C "$REPO" commit -q --no-verify -m "wip(dispatch): job $next parked after job $VERIFY_NUM failed verify"; then
-      state="job $next's uncommitted work is parked as a WIP commit on branch $branch; $main_branch is untouched at $head"
-    else
-      state="job $next's uncommitted work could not be parked (git refused the branch or commit); the tree is left as it stands"
-    fi
-    git -C "$REPO" checkout -q "$main_branch" 2>/dev/null
-  elif [[ "$head" != "$VERIFY_COMMIT" ]]; then
-    git -C "$REPO" branch -f "$branch" HEAD
-    state="job $next already committed on $main_branch after the failing commit ($head, built on the unverified job $VERIFY_NUM; review it against the fix); branch $branch marks it"
-    resume_unit=$((next + 1))
-  else
-    state="job $next left no work; $main_branch is at $VERIFY_COMMIT"
-  fi
-  journal "run" "rewind" "$state"
-  next_file="${PHASE_FILES[$resume_unit]:-}"
-  if [[ -n "$next_file" ]]; then
-    next_file="then re-dispatch from unit $resume_unit ($next_file)"
-  else
-    next_file="no unit is left to re-dispatch after job $((resume_unit - 1))"
-  fi
-  RESUME="Job $VERIFY_NUM ($VERIFY_NAME) failed verify at commit $VERIFY_COMMIT: ${reason#VERIFY: FAIL: }. $state. Resume point: fix job $VERIFY_NUM from $VERIFY_COMMIT (verify log $JOURNAL_DIR/verify$VERIFY_NUM.log), $next_file."
+  resume="Job $VERIFY_NUM ($VERIFY_NAME) failed verify at commit $VERIFY_COMMIT: ${reason#VERIFY: FAIL: }. Resume point: append a fix unit for job $VERIFY_NUM from $VERIFY_COMMIT; verifier log: $JOURNAL_DIR/verify$VERIFY_NUM.log."
+  VERIFY_FAILURES+=("$resume")
   api_post "/api/watchdog/chains/$SLUG/events" \
-    "$(event_body verify-failed $VERIFY_NUM "$(print -rn -- "$RESUME" | json_string)")" 80
-  exit 3
+    "$(event_body verify-failed $VERIFY_NUM "$(print -rn -- "$resume" | json_string)")" 80
+  VERIFY_NUM=0
 }
 
 # Blocks until the in-flight verify (if any) has settled, re-running it after
-# a limit exit now that no build is in flight; a FAIL rewinds and exits.
+# a limit exit now that no build is in flight; a FAIL is recorded and clears.
 reconcile_verify() {
   while true; do
     if [[ -n "$VERIFY_PID" ]]; then
@@ -1087,22 +1052,17 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   WAIT_TOTAL=0
   PARK_ESCALATED=0
 
-  if [[ $RC -ne 0 ]]; then
-    reconcile_verify
-    journal "phase $PHASE_NUM/$TOTAL" "FAILED" "$UNIT_ENGINE exited $RC; stopping chain (phase$PHASE_NUM.log)"
-    api_post "/api/watchdog/chains/$SLUG/events" \
-      "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) failed: $UNIT_ENGINE exited $RC." | json_string)")" 80
-    exit 1
-  fi
-
-  # Commit gate: a phase that lands no commit stops the chain right here.
+  # The commit is the build boundary. A non-zero CLI exit after landing one
+  # does not erase shipped work or kill queued units; without a commit, the
+  # ordinary commit gate remains terminal.
+  [[ $RC -eq 0 ]] || journal "phase $PHASE_NUM/$TOTAL" "build-exit" "$UNIT_ENGINE exited $RC; checking the commit gate"
   if [[ "$NEW_COMMIT" == "$BASE_COMMIT" ]]; then
     reconcile_verify
     if [[ "$UNIT_ENGINE" == "codex" ]]; then
       LOG_TAIL=$(head -c 300 "$JOURNAL_DIR/phase$PHASE_NUM.log.last" 2>/dev/null | tr '\n' ' ')
-      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME; last message: ${LOG_TAIL:-none}"
+      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME (exit $RC); last message: ${LOG_TAIL:-none}"
     else
-      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME"
+      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME (exit $RC)"
     fi
     api_post "/api/watchdog/chains/$SLUG/events" \
       "$(event_body stopped $PHASE_NUM "$(print -rn -- "Commit gate stopped the chain: phase $PHASE_NUM ($PHASE_NAME) produced no commit." | json_string)")" 80
@@ -1131,7 +1091,17 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
 done
 
 reconcile_verify
+VERIFY_FAILURE_COUNT=${#VERIFY_FAILURES[@]}
 TAIL=$(git -C "$REPO" log --oneline "$CHAIN_BASE"..HEAD 2>/dev/null | head -20 | json_string)
-journal run "end" "all $TOTAL phases committed and verified"
+if [[ $VERIFY_FAILURE_COUNT -gt 0 ]]; then
+  VERIFY_FAILURE_NOUN="$([[ $VERIFY_FAILURE_COUNT -eq 1 ]] && print failure || print failures)"
+  journal run "end" "all $TOTAL phases committed; completed with $VERIFY_FAILURE_COUNT verify $VERIFY_FAILURE_NOUN"
+else
+  journal run "end" "all $TOTAL phases committed and verified"
+fi
 api_post "/api/watchdog/chains/$SLUG/events" "$(event_body completed $TOTAL "$TAIL")" 80
-print -r -- "dispatch: chain $SLUG completed ($TOTAL phases)"
+if [[ $VERIFY_FAILURE_COUNT -gt 0 ]]; then
+  print -r -- "dispatch: chain $SLUG completed with $VERIFY_FAILURE_COUNT verify $VERIFY_FAILURE_NOUN ($TOTAL phases)"
+else
+  print -r -- "dispatch: chain $SLUG completed ($TOTAL phases)"
+fi
