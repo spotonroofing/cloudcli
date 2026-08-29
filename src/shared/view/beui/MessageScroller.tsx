@@ -9,6 +9,14 @@ import {
 } from 'react';
 
 import { cn } from '../../../lib/utils';
+import {
+  applyGestureSettled,
+  applyReaderGesture,
+  applyRepinStarted,
+  applyScroll,
+  createFollowState,
+  shouldRepin,
+} from './followOutput';
 
 /**
  * beUI message-scroller (beui.dev/components/agents/message-scroller),
@@ -20,6 +28,9 @@ import { cn } from '../../../lib/utils';
  * not vendored (the transcript has no home for it — the export menu owns
  * that edge).
  */
+/** How long after a reader gesture the engine re-reads the true scroll position. */
+const GESTURE_SETTLE_MS = 400;
+
 export interface MessageScrollerProps extends ComponentPropsWithRef<'div'> {
   /** Keep streamed output pinned while the reader remains near the end. */
   followOutput?: boolean;
@@ -57,9 +68,9 @@ export function MessageScroller({
   const reduce = useReducedMotion() ?? false;
   const viewportRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const followingRef = useRef(followOutput);
-  const programmaticScrollRef = useRef(false);
+  const followRef = useRef(createFollowState(followOutput));
   const scrollTimerRef = useRef<number | undefined>(undefined);
+  const settleTimerRef = useRef<number | undefined>(undefined);
   const frameRef = useRef<number | undefined>(undefined);
   const {
     onScroll: onViewportScroll,
@@ -81,14 +92,20 @@ export function MessageScroller({
     [externalViewportRef],
   );
 
-  const setFollowing = useCallback(
-    (next: boolean) => {
-      if (followingRef.current === next) return;
-      followingRef.current = next;
-      onFollowChange?.(next);
+  const commitFollowState = useCallback(
+    (next: typeof followRef.current) => {
+      const wasFollowing = followRef.current.following;
+      followRef.current = next;
+      if (next.following !== wasFollowing) onFollowChange?.(next.following);
     },
     [onFollowChange],
   );
+
+  const distanceFromEnd = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return 0;
+    return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+  }, []);
 
   const scrollToEnd = useCallback((behavior: ScrollBehavior) => {
     const viewport = viewportRef.current;
@@ -97,7 +114,7 @@ export function MessageScroller({
     // programmatic flag for a scroll that cannot happen.
     if (viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 1) return;
 
-    programmaticScrollRef.current = true;
+    followRef.current = applyRepinStarted(followRef.current);
     if (typeof viewport.scrollTo === 'function') {
       viewport.scrollTo({ top: viewport.scrollHeight, behavior });
     } else {
@@ -112,32 +129,42 @@ export function MessageScroller({
     // and the transcript kept growing under a viewport that never moved.
     if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
     scrollTimerRef.current = window.setTimeout(() => {
-      programmaticScrollRef.current = false;
+      followRef.current = { ...followRef.current, programmatic: false };
     }, behavior === 'smooth' ? 2000 : 100);
   }, []);
 
+  // A reader gesture that produced no scroll event (a wheel with nothing left
+  // to scroll) settles on the viewport's real distance instead of leaving the
+  // departure latch, and the engine, stuck.
+  const armGestureSettle = useCallback(() => {
+    if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = window.setTimeout(() => {
+      commitFollowState(applyGestureSettled(followRef.current, distanceFromEnd(), followThreshold));
+    }, GESTURE_SETTLE_MS);
+  }, [commitFollowState, distanceFromEnd, followThreshold]);
+
   const handleScroll = useCallback(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const distance = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-    if (programmaticScrollRef.current) {
-      // Scroll events from the engine's own scroll: only arrival matters.
-      if (distance <= followThreshold) {
-        programmaticScrollRef.current = false;
-        if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
-      }
-      return;
+    if (!viewportRef.current) return;
+    const wasDeparted = followRef.current.departed;
+    const next = applyScroll(followRef.current, distanceFromEnd(), followThreshold);
+    if (!next.programmatic && scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
+    commitFollowState(next);
+    if (next.departed) {
+      armGestureSettle();
+    } else if (wasDeparted && settleTimerRef.current) {
+      window.clearTimeout(settleTimerRef.current);
     }
-    setFollowing(distance <= followThreshold);
-  }, [followThreshold, setFollowing]);
+  }, [armGestureSettle, commitFollowState, distanceFromEnd, followThreshold]);
 
+  // Wheel, touch and page keys: the reader's departure lands before the scroll
+  // event does, so a resize arriving in between can never repin over them.
   const leaveLiveEdge = useCallback(() => {
-    programmaticScrollRef.current = false;
-  }, []);
+    commitFollowState(applyReaderGesture(followRef.current));
+    armGestureSettle();
+  }, [armGestureSettle, commitFollowState]);
 
   useLayoutEffect(() => {
-    followingRef.current = followOutput;
+    followRef.current = createFollowState(followOutput);
     if (!followOutput) return;
 
     frameRef.current = requestAnimationFrame(() => scrollToEnd('auto'));
@@ -151,7 +178,7 @@ export function MessageScroller({
     if (!content || typeof ResizeObserver === 'undefined') return;
 
     const observer = new ResizeObserver(() => {
-      if (!followOutput || !followingRef.current) return;
+      if (!shouldRepin(followRef.current, followOutput)) return;
       scrollToEnd(reduce || !smooth ? 'auto' : 'smooth');
     });
     observer.observe(content);
@@ -162,6 +189,7 @@ export function MessageScroller({
   useEffect(
     () => () => {
       if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
+      if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
     },
     [],
