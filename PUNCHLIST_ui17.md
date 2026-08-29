@@ -212,3 +212,14 @@ Goal: clicking Handoff runs /handoff and then nothing happens, because the follo
 - [ ] Phone parity: the same flow at 390px, the new row and loading pane reachable from the bottom taskbar.
 
 Done check: on dev: clicking Handoff on a planner session shows a new loading row and a loading planner pane within a second; after the handoff turn ends the successor boots and its opening lands in that row; the follow-through switch no longer exists in Settings and the key is gone from app_config; an aborted handoff shows the failure line; tests pass. Commit.
+
+## Job 18: Promote pauses and resumes running chains itself (2026-08-28, Willem: a paused worker must never happen again). Verify: yes
+
+Goal: the mid-chain promote at 7:40 pm needed the planner to pause ui17r first (the tag guard refuses a commit a running chain is building), and the promote's live restart severs the planner's own turn, so the resume waited on Willem's next message; the chain sat paused from 7:40 pm to 10:45 pm. The promote must own the whole dance so no human and no planner turn is in the loop. Files: `scripts/macos/promote.sh`, `scripts/macos/dispatch` (the pause and resume subcommands and what they call), the watchdog chain routes and records in `server/modules/watchdog/`, tests, the planner's dispatch reference is updated by the planner (say so in the summary).
+
+- [ ] promote.sh finds every chain running in the project (watchdog rows with status running), pauses each through the same path `dispatch pause` uses before the drain step, journals `HH:MM | run | PAUSED | promote` on each, and after the post-promote health check passes resumes each through the `dispatch resume` path, journaling the resume; the runner continues from the unit it was on or the next.
+- [ ] A promote that aborts, fails its health check, or rolls back still resumes every chain it paused; a resume that fails fires a decision-needed notification naming the slug and the reason, never a silent stall.
+- [ ] The tag guard stays as the safety net but is never the reason a human acts: with the pause folded in, `promote.sh` runs to completion on a repo with a running chain and no manual step; `promote --tag-guard` dry run unchanged.
+- [ ] A dry-run flag exercises the pause and resume steps without building or restarting (pointed at dev per the memory repo lesson promote-tag-guard-dry-run-on-dev), and regression tests cover pause before drain, resume after health, and resume after rollback.
+
+Done check: on dev with a stub chain registered mid-phase, the dry run pauses it before the drain step and it is running again after the health step, both journal lines present; the abort path resumes it too; tests pass. Commit.
