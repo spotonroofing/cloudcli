@@ -211,7 +211,7 @@ Goal: clicking Handoff runs /handoff and then nothing happens, because the follo
 - [x] Clicking Handoff creates the successor session at once: a new planner-origin row for the same project with its lineage set, shown in the sidebar in a loading state, and the planner pane switches to it with the loading animation while /handoff runs in the old session; when the old session's /handoff turn completes cleanly and the push check passes, the successor boots with /planner in that row, and the loading state holds until the boot's opening message lands.
 - [x] The Handoff button and a typed /handoff always follow through; the "Handoff follow-through" switch leaves Settings and its config key is dropped (Willem's own action is the consent). "Planner auto-rotation" still governs the watchdog's own rotations and stays off by default, untouched.
 - [x] Failure stays visible: a handoff turn that errors or aborts leaves the placeholder row in place with one line saying what went wrong, and the old session stays where it was; never a silent roll back.
-- [ ] Phone parity: the same flow at 390px, the new row and loading pane reachable from the bottom taskbar.
+- [x] Phone parity: the same flow at 390px, the new row and loading pane reachable from the bottom taskbar.
 
 Done check: on dev: clicking Handoff on a planner session shows a new loading row and a loading planner pane within a second; after the handoff turn ends the successor boots and its opening lands in that row; the follow-through switch no longer exists in Settings and the key is gone from app_config; an aborted handoff shows the failure line; tests pass. Commit.
 
