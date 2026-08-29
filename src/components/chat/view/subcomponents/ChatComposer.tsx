@@ -10,7 +10,7 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { Loader2, ArrowUpIcon, FileTextIcon, History, XIcon } from 'lucide-react';
+import { Loader2, ArrowUpIcon, FileTextIcon, History } from 'lucide-react';
 
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
@@ -36,6 +36,7 @@ import TokenUsageSummary from './TokenUsageSummary';
 import QueuedMessageCard from './QueuedMessageCard';
 import ComposerModelMenu from './ComposerModelMenu';
 import ComposerPlusMenu from './ComposerPlusMenu';
+import ComposerClearCounter from './ComposerClearCounter';
 import PromptHistoryPanel from './PromptHistoryPanel';
 
 interface MentionableFile {
@@ -468,9 +469,9 @@ export default function ChatComposer({
             />
           </PromptInputBody>
 
-          {/* The enclosure holds only prompt-making controls: plus and its
-              clear/undo companion, voice, then send on the right (ui16 job
-              1). Session utilities live in the separate row below. */}
+          {/* The enclosure holds only prompt-making controls: plus, voice,
+              then send on the right (ui16 job 1; the clear went back to the
+              counter in ui17 job 9). Session utilities live in the row below. */}
           <div data-slot="composer-input-controls" className="flex items-center gap-1 px-2 pb-1.5 pt-0.5">
             <ComposerPlusMenu
               onUpload={openAttachmentPicker}
@@ -479,30 +480,6 @@ export default function ChatComposer({
             />
 
             <PromptInputTools className="min-w-0 gap-1.5">
-              {clearUndoPending ? (
-                <button
-                  type="button"
-                  data-slot="composer-undo-clear"
-                  onClick={onUndoClear}
-                  className="touch-hit relative flex h-7 items-center rounded-md px-1.5 pb-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  {t('input.undoClear', { defaultValue: 'Undo?' })}
-                  <span aria-hidden className="absolute inset-x-1.5 bottom-1 h-0.5 overflow-hidden rounded-sm bg-muted-foreground/20">
-                    <span className="undo-deplete block h-full w-full rounded-sm bg-muted-foreground/60" />
-                  </span>
-                </button>
-              ) : canClear ? (
-                <button
-                  type="button"
-                  data-slot="composer-clear"
-                  onClick={onClearComposer}
-                  aria-label={t('input.clear', { defaultValue: 'Clear message' })}
-                  className="touch-hit relative grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <XIcon aria-hidden className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
-
               {onVoiceTranscript && voiceAvailable && (
                 <VoiceInputButton state={voiceState} onToggle={voiceToggle} errorMsg={voiceError} className="h-7 w-7" />
               )}
@@ -548,22 +525,19 @@ export default function ChatComposer({
         </PromptInput>
 
         {/* Full-width row below the enclosure (ui16 job 1): the character
-            count stays flush left; pane/session utilities keep their existing
-            order and height on the right. */}
+            count stays flush left and carries the two-tap clear (ui17 job 9);
+            pane/session utilities keep their order and height on the right. */}
         <div
           data-slot="composer-controls-row"
           className="mt-1 flex min-w-0 items-center justify-between gap-2"
         >
-          <span
-            data-slot="char-counter"
-            className="h-7 min-w-5 shrink-0 px-0.5 pt-2 font-mono text-[10px] font-medium tabular-nums text-muted-foreground"
-            aria-label={t('input.characterCount', {
-              defaultValue: '{{count}} characters',
-              count: input.length,
-            })}
-          >
-            {input.length.toLocaleString('en-US')}
-          </span>
+          <ComposerClearCounter
+            length={input.length}
+            canClear={canClear}
+            clearUndoPending={clearUndoPending}
+            onClearComposer={onClearComposer}
+            onUndoClear={onUndoClear}
+          />
 
           <div data-slot="composer-controls-right" className="flex min-w-0 shrink items-center gap-1">
             {handoffAvailable && (
