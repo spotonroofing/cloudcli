@@ -2,6 +2,8 @@ import { Hammer, Milestone, Plus, X } from 'lucide-react';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import ChatInterface from '../chat/view/ChatInterface';
+import ChatExportButton from '../chat/view/subcomponents/ChatExportButton';
+import { ChatExportProvider } from '../chat/state/chatExportTarget';
 import PaneShell from '../app/workspace/PaneShell';
 import { PANE_HEADER_CLASS } from '../app/workspace/paneHeader';
 import ErrorBoundary from '../main-content/view/ErrorBoundary';
@@ -507,6 +509,7 @@ export default function WorkerPane({
   }, [handleOpenSession, jobsFullPane, setJobsViewOpen]);
 
   return (
+    <ChatExportProvider>
     <div className="flex h-full min-w-0 flex-col">
       {/* Worker top bar (ui14 job 2): the planner header's anatomy — icon,
           "Worker", the shown run's title as plain text (no dropdown; jobs are
@@ -541,6 +544,7 @@ export default function WorkerPane({
           />
         )}
         {isMobile && windowSelector}
+        <ChatExportButton />
         <Tooltip content="New worker session" position="bottom">
           <Button
             variant="ghost"
@@ -670,5 +674,6 @@ export default function WorkerPane({
         )}
       </div>
     </div>
+    </ChatExportProvider>
   );
 }

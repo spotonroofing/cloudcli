@@ -136,9 +136,9 @@ Done check: on dev, the prompt enclosure contains no clear control at rest; hove
 
 Goal: the floating download-chat button that hovers over the transcript (visible at the right edge on desktop and phone) goes away; the same action lives in the pane's top bar instead, as a bare icon. Files: the floating download control in the chat view (`src/components/chat/view/` and its subcomponents), the planner and worker pane top bars, `design/transcript-rows.md` or the area file that documents the pane top bar.
 
-- [ ] The floating button is removed entirely (no overlay element left in the transcript on any viewport).
-- [ ] The top bar of both the planner pane and the worker pane gains the download action as an icon-only button: the same icon, no background, no outline, no border; hover and press states follow the other top-bar icon buttons (window selector, shell), same size and spacing; same functionality and file output as before.
-- [ ] Desktop and phone; the area file documents the top bar's control set.
+- [x] The floating button is removed entirely (no overlay element left in the transcript on any viewport).
+- [x] The top bar of both the planner pane and the worker pane gains the download action as an icon-only button: the same icon, no background, no outline, no border; hover and press states follow the other top-bar icon buttons (window selector, shell), same size and spacing; same functionality and file output as before.
+- [x] Desktop and phone; the area file documents the top bar's control set.
 
 Done check: on dev, no download control exists inside the transcript area on either pane; each pane's top bar has the download icon button with transparent background and no border in computed style; clicking it downloads the same file as before; 390px holds. Commit.
 

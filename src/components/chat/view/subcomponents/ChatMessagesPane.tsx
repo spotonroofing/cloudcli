@@ -11,12 +11,12 @@ import { groupConsecutiveTools, isToolGroupItem } from '../../utils/toolGrouping
 import { Button, Skeleton } from '../../../../shared/view/ui';
 import { MessageScroller } from '../../../../shared/view/beui';
 import { Loader } from '../../../../shared/view/beui/Loader';
+import { useProvideChatExport } from '../../state/chatExportTarget';
 
 import ActivityIndicator from './ActivityIndicator';
 import MessageComponent from './MessageComponent';
 import MessageVersionNavigator from './MessageVersionNavigator';
 import ToolGroupContainer from './ToolGroupContainer';
-import ChatExportMenu from './ChatExportMenu';
 
 interface ChatMessagesPaneProps {
   scrollContainerRef: RefObject<HTMLDivElement>;
@@ -265,6 +265,10 @@ function ChatMessagesPane({
     return finals;
   }, [visibleMessages]);
 
+  // The pane top bar owns the download control (ui17 job 10); the transcript
+  // just publishes what there is to export.
+  useProvideChatExport(chatMessages, selectedSession?.title);
+
   // Only the newest turn may own live tool/agent indicators. Historical
   // unresolved rows, including rows above a confirmed interrupt, stay still.
   const runningTurnMessages = useMemo(() => {
@@ -288,13 +292,6 @@ function ChatMessagesPane({
       busy={isProcessing}
       label={t('session.transcriptLabel', { defaultValue: 'Conversation' })}
     >
-      {chatMessages.length > 0 && (
-        <div className="pointer-events-none sticky right-4 top-3 z-10 mb-2 flex justify-end sm:px-4">
-          <div className="pointer-events-auto">
-            <ChatExportMenu messages={chatMessages} sessionTitle={selectedSession?.title} />
-          </div>
-        </div>
-      )}
       <div className="mx-auto w-full max-w-[54.25rem] space-y-3 px-4 sm:space-y-4">
       {bootFailed && chatMessages.length === 0 ? (
         <div className="mt-8 text-center">

@@ -21,6 +21,8 @@ import WindowPane from '../../app/workspace/WindowPane';
 import WindowSelector, { type WindowSelectorItem } from '../../app/workspace/WindowSelector';
 import { WINDOW_LABELS, WINDOW_ORDER, useProjectWindows } from '../../app/workspace/useProjectWindows';
 import { PANE_HEADER_CLASS } from '../../app/workspace/paneHeader';
+import ChatExportButton from '../../chat/view/subcomponents/ChatExportButton';
+import { ChatExportProvider } from '../../chat/state/chatExportTarget';
 
 import MainContentStateView from './subcomponents/MainContentStateView';
 import MobileMenuButton from './subcomponents/MobileMenuButton';
@@ -284,7 +286,7 @@ function MainContent({
     };
 
     pushPane('planner', 200, (
-      <>
+      <ChatExportProvider>
         <div className={PANE_HEADER_CLASS} data-slot="pane-header">
           {leftPaneIsWorkerSession ? (
             <Hammer className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
@@ -299,6 +301,7 @@ function MainContent({
           )}
           {failSafeBadges}
           <span className="min-w-0 flex-1" />
+          <ChatExportButton />
           <WindowSelector items={selectorItems} />
           <Button
             variant="ghost"
@@ -311,7 +314,7 @@ function MainContent({
           </Button>
         </div>
         <div className="min-h-0 flex-1">{plannerChat}</div>
-      </>
+      </ChatExportProvider>
     ));
 
     pushPane('worker', 280, (
@@ -436,6 +439,7 @@ function MainContent({
         <div
           className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}
         >
+          <ChatExportProvider>
           <div className={`h-full min-h-0 ${activeTab === 'chat' ? 'flex flex-col' : 'hidden'}`}>
             {(workerPaneAvailable || isMobile) && (
               <div className={PANE_HEADER_CLASS} data-slot="pane-header">
@@ -453,6 +457,7 @@ function MainContent({
                 )}
                 {failSafeBadges}
                 <span className="min-w-0 flex-1" />
+                <ChatExportButton />
                 {mobileSelector}
               </div>
             )}
@@ -465,6 +470,7 @@ function MainContent({
               {plannerChat}
             </PaneShell>
           </div>
+          </ChatExportProvider>
 
           {isMobile && workerPaneAvailable && (
             <div className={`h-full overflow-hidden ${activeTab === 'worker' ? 'block' : 'hidden'}`}>
