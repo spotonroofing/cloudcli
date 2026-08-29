@@ -3,12 +3,14 @@
 #
 # Flow: full build (dev-scoped: dist-dev + dist-server-dev) → server test
 # suite → boot the dev instance on the fresh build and health-check it →
-# drain live's in-flight dispatched turns (wait for the commit gate; past the
+# pause this project's running chains through dispatch → drain live's
+# in-flight dispatched turns (past the
 # wait budget it becomes a decision-needed notification and the promote
 # aborts) → copy artifacts into live's dist/ + dist-server/ → restart live
 # via launchd → post-promote health check → on success advance the last-good
-# artifact snapshot and the mini-last-good git tag; on failure restore the
-# last-good artifacts, restart live back to health, and fire decision-needed.
+# artifact snapshot and the mini-last-good git tag → resume every chain;
+# on failure restore the last-good artifacts, restart live back to health,
+# resume every chain, and fire decision-needed.
 #
 # The tag has a guard (ui14 job 9): mini-last-good never lands on a commit a
 # running chain is still building. `promote --tag-guard` runs only that check
@@ -21,30 +23,172 @@ NODE=$(command -v node || echo /usr/local/bin/node)
 eval "$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --shell)"
 CONFIGURED_REPO=$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --environment REPO)
 REPO="${CONFIGURED_REPO:-$COMMAND_CENTER_RUNTIME_PROJECT_DIR}"
-SERVER_URL="${PROMOTE_SERVER_URL:-http://127.0.0.1:4747}"
-DEV_URL="http://127.0.0.1:4748"
+DEV_URL="${PROMOTE_DEV_URL:-http://127.0.0.1:4748}"
 SNAPSHOT_DIR="$REPO/.last-good"
 DRAIN_BUDGET_S="${PROMOTE_DRAIN_BUDGET_S:-1800}"
 UID_NUM=$(id -u)
-DB_PATH="${PROMOTE_DB_PATH:-$COMMAND_CENTER_RUNTIME_DATA_DIR/auth.db}"
 DEV_LAUNCHD_LABEL="$COMMAND_CENTER_RUNTIME_LAUNCHD_PREFIX-dev"
 LIVE_LAUNCHD_LABEL="$COMMAND_CENTER_RUNTIME_LAUNCHD_PREFIX-live"
+DISPATCH_PATH="${PROMOTE_DISPATCH_PATH:-$SCRIPT_DIR/dispatch}"
+DRY_RUN=0
+
+case "${1:-}" in
+  "") ;;
+  --tag-guard) ;;
+  --dry-run) DRY_RUN=1 ;;
+  *) print -u2 "usage: promote.sh [--tag-guard|--dry-run]"; exit 64 ;;
+esac
+
+if [[ $DRY_RUN -eq 1 ]]; then
+  # A dry run is deliberately isolated to dev: it exercises real watchdog
+  # pause/resume state without touching live artifacts or launchd services.
+  SERVER_URL="${PROMOTE_SERVER_URL:-$DEV_URL}"
+  DB_PATH="${PROMOTE_DB_PATH:-$COMMAND_CENTER_RUNTIME_DEV_DATA_DIR/auth.db}"
+else
+  SERVER_URL="${PROMOTE_SERVER_URL:-http://127.0.0.1:4747}"
+  DB_PATH="${PROMOTE_DB_PATH:-$COMMAND_CENTER_RUNTIME_DATA_DIR/auth.db}"
+fi
 
 log() { print -r -- "[promote $(date +%H:%M:%S)] $*"; }
 fail() { log "ABORT: $*"; exit 1; }
 
 API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
+[[ -n "$API_KEY" ]] || fail "no active API key in $DB_PATH"
 HEADER_FILE=$(mktemp); chmod 600 "$HEADER_FILE"
 print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
-trap 'rm -f "$HEADER_FILE"' EXIT
+
+typeset -a PAUSED_CHAINS
+PAUSED_CHAINS=()
 
 notify() {
+  local body
+  body=$(python3 - "$1" "$2" "$3" <<'PYEOF'
+import json, sys
+kind, title, message = sys.argv[1:4]
+print(json.dumps({'kind': kind, 'title': title, 'body': message}))
+PYEOF
+)
   curl -s -K "$HEADER_FILE" -m 15 -X POST "$SERVER_URL/api/watchdog/notify" \
     -H 'Content-Type: application/json' \
-    -d "{\"kind\":\"$1\",\"title\":\"$2\",\"body\":\"$3\"}" >/dev/null 2>&1 || true
+    -d "$body" >/dev/null 2>&1 || true
 }
 
 health() { curl -s -m 5 "$1/health" | grep -q '"status":"ok"'; }
+
+chain_journal() {
+  local slug="$1" state="$2" journal_dir="$HOME/forge-logs/$slug"
+  mkdir -p "$journal_dir" || return 1
+  print -r -- "$(date +%H:%M) | run | $state | promote" >> "$journal_dir/JOURNAL.md"
+}
+
+# Resumes the exact set this invocation paused. Every chain is attempted even
+# after one failure; a failed dispatch call becomes a decision-needed notice
+# with the CLI's reason so a chain can never stall silently.
+resume_paused_chains() {
+  local slug output reason failed=0
+  typeset -a pending
+  pending=("${PAUSED_CHAINS[@]}")
+  PAUSED_CHAINS=()
+  for slug in "${pending[@]}"; do
+    if output=$(DISPATCH_SERVER_URL="$SERVER_URL" DISPATCH_DB_PATH="$DB_PATH" \
+        "$DISPATCH_PATH" resume "$REPO" "$slug" 2>&1); then
+      chain_journal "$slug" RESUMED || {
+        notify decision-needed "Promote could not journal resumed chain $slug" \
+          "Chain $slug resumed, but promote could not append its RESUMED boundary to $HOME/forge-logs/$slug/JOURNAL.md."
+        failed=1
+      }
+      log "chain $slug resumed after promote"
+    else
+      reason="${${(f)output}[-1]:-dispatch resume exited without a reason}"
+      notify decision-needed "Promote could not resume chain $slug" \
+        "Chain $slug stayed paused after promote: $reason"
+      log "chain $slug FAILED to resume: $reason"
+      failed=1
+    fi
+  done
+  return $failed
+}
+
+# EXIT is the abort/failed-health/failed-rollback safety net. Successful and
+# rollback paths resume explicitly at their health boundary and empty the set.
+on_exit() {
+  local status=$?
+  trap - EXIT HUP INT TERM
+  if [[ ${#PAUSED_CHAINS[@]} -gt 0 ]]; then
+    log "promote is exiting; resuming ${#PAUSED_CHAINS[@]} paused chain(s)"
+    resume_paused_chains || { [[ $status -ne 0 ]] || status=1; }
+  fi
+  rm -f "$HEADER_FILE"
+  exit $status
+}
+trap on_exit EXIT
+TRAPHUP() { exit 129; }
+TRAPINT() { exit 130; }
+TRAPTERM() { exit 143; }
+
+# Finds every running chain for this physical repo, then delegates the state
+# transition to the same dispatch pause subcommand operators use.
+pause_running_chains() {
+  local listing slug output repo_real
+  typeset -a running
+  repo_real="$(cd "$REPO" && pwd -P)"
+  listing=$(curl -sf -K "$HEADER_FILE" -m 10 "$SERVER_URL/api/watchdog/status" \
+    | REPO_REAL="$repo_real" python3 -c '
+import json, os, sys
+repo = os.environ["REPO_REAL"]
+try:
+    data = json.load(sys.stdin)["data"]
+except Exception as error:
+    print(f"watchdog status unreadable: {error}", file=sys.stderr)
+    raise SystemExit(65)
+for chain in data.get("chains", []):
+    project = chain.get("projectPath")
+    if chain.get("status") == "running" and project and os.path.realpath(project) == repo:
+        print(chain["slug"])
+') || fail "could not read running chains from $SERVER_URL"
+  running=("${(@f)listing}")
+  [[ -n "$listing" ]] || { log "no running chains for $repo_real"; return 0; }
+  for slug in "${running[@]}"; do
+    if ! output=$(DISPATCH_SERVER_URL="$SERVER_URL" DISPATCH_DB_PATH="$DB_PATH" \
+        "$DISPATCH_PATH" pause "$REPO" "$slug" 2>&1); then
+      fail "could not pause chain $slug: ${${(f)output}[-1]:-dispatch pause exited without a reason}"
+    fi
+    if [[ "$output" == *" paused;"* ]]; then
+      PAUSED_CHAINS+=("$slug")
+      chain_journal "$slug" PAUSED || fail "could not journal the promote pause for chain $slug"
+      log "chain $slug paused for promote"
+    elif [[ "$output" == *"nothing changed"* ]]; then
+      log "chain $slug reached a non-running state before promote could pause it"
+    else
+      fail "dispatch pause returned an unrecognized result for chain $slug: $output"
+    fi
+  done
+}
+
+drain_dispatch_runs() {
+  local waited=0 busy
+  log "draining in-flight dispatched turns (budget ${DRAIN_BUDGET_S}s)"
+  while true; do
+    busy=$(curl -s -K "$HEADER_FILE" -m 10 "$SERVER_URL/api/watchdog/status" | python3 -c "
+import json,sys
+try:
+    data=json.load(sys.stdin)['data']
+    runs=[run for run in data.get('dispatchRuns',[]) if not run.get('ended')]
+    print(len(runs))
+except Exception:
+    raise SystemExit(65)") || fail "watchdog status became unreadable while draining"
+    [[ "$busy" == 0 ]] && break
+    if [[ $waited -ge $DRAIN_BUDGET_S ]]; then
+      notify decision-needed "Promote is blocked on in-flight dispatched work" \
+        "Dispatched turns are still running after ${DRAIN_BUDGET_S}s of draining. Promote aborted; its paused chains are being resumed."
+      fail "drain budget exceeded with $busy dispatched item(s) still running"
+    fi
+    log "  $busy dispatched item(s) in flight; waiting"
+    sleep 30
+    waited=$((waited + 30))
+  done
+  log "dispatch runs drained"
+}
 
 # Tag guard: HEAD is safe to tag only when no chain on this repo has a phase
 # mid-flight (phase-start seen, no phase-end yet) and no in-server dispatched
@@ -83,6 +227,18 @@ if [[ "${1:-}" == "--tag-guard" ]]; then
   exit 2
 fi
 
+if [[ $DRY_RUN -eq 1 ]]; then
+  log "dry run against dev: pausing running chains without building or restarting"
+  pause_running_chains
+  [[ "${PROMOTE_DRY_RUN_FAIL_AT:-}" != after-pause ]] || fail "injected dry-run abort after pause"
+  drain_dispatch_runs
+  health "$SERVER_URL" || fail "dry-run dev health check failed"
+  log "dry-run dev health check passed"
+  resume_paused_chains || fail "one or more chains failed to resume after the dry run"
+  log "dry run complete"
+  exit 0
+fi
+
 log "building (client + server)"
 npm run build >/tmp/promote-build.log 2>&1 || fail "build failed; see /tmp/promote-build.log"
 
@@ -99,29 +255,8 @@ done
 [[ $DEV_OK -eq 1 ]] || fail "dev instance failed its health check on the new build"
 log "dev healthy on the new build"
 
-# Chains run out-of-process and survive the restart (their runner re-registers
-# with the watchdog via its events), so only in-server dispatched runs drain.
-log "draining live's in-flight dispatched turns (budget ${DRAIN_BUDGET_S}s)"
-WAITED=0
-while true; do
-  BUSY=$(curl -s -K "$HEADER_FILE" -m 10 "$SERVER_URL/api/watchdog/status" | python3 -c "
-import json,sys
-try:
-    d=json.load(sys.stdin)['data']
-    runs=[r for r in d.get('dispatchRuns',[]) if not r.get('ended')]
-    print(len(runs))
-except Exception:
-    print(0)")
-  [[ "$BUSY" == 0 ]] && break
-  if [[ $WAITED -ge $DRAIN_BUDGET_S ]]; then
-    notify decision-needed "Promote is blocked on in-flight dispatched work" \
-      "Dispatched turns are still running after ${DRAIN_BUDGET_S}s of draining. Promote aborted; re-run when the chain reaches its commit gate or stop it deliberately."
-    fail "drain budget exceeded with $BUSY dispatched item(s) still running"
-  fi
-  log "  $BUSY dispatched item(s) in flight; waiting"
-  sleep 30; WAITED=$((WAITED + 30))
-done
-log "live is drained"
+pause_running_chains
+drain_dispatch_runs
 
 # Build isolation (ui9 A1): npm run build emits dev-scoped artifacts
 # (dist-dev, dist-server-dev). Live serves only dist/ and dist-server/, and
@@ -145,12 +280,11 @@ if [[ $LIVE_OK -eq 1 ]]; then
   mkdir -p "$SNAPSHOT_DIR"
   cp -R "$REPO/dist" "$SNAPSHOT_DIR/dist"
   cp -R "$REPO/dist-server" "$SNAPSHOT_DIR/dist-server"
-  if tag_guard; then
-    git -C "$REPO" tag -f mini-last-good HEAD >/dev/null 2>&1 || true
-    log "promote complete (mini-last-good -> $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null))"
-  else
-    log "promote complete (mini-last-good withheld; re-run promote once the chain is between phases)"
-  fi
+  tag_guard || fail "tag guard refused after promotion paused the project's chains and drained dispatched work"
+  git -C "$REPO" tag -f mini-last-good HEAD >/dev/null 2>&1 \
+    || fail "could not advance mini-last-good"
+  resume_paused_chains || fail "one or more chains failed to resume after the healthy promote"
+  log "promote complete (mini-last-good -> $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null))"
   exit 0
 fi
 
@@ -166,6 +300,7 @@ if [[ -d "$SNAPSHOT_DIR/dist-server" ]]; then
     if health "$SERVER_URL"; then ROLLBACK_OK=1; break; fi
   done
   if [[ $ROLLBACK_OK -eq 1 ]]; then
+    resume_paused_chains || fail "one or more chains failed to resume after rollback"
     notify decision-needed "Promote rolled back" \
       "The new build failed its health check. Live was rolled back to the last-good artifacts (tag mini-last-good) and is healthy. Dev stays up on the bad build for diagnosis."
     log "rollback succeeded; live healthy on last-good artifacts"
