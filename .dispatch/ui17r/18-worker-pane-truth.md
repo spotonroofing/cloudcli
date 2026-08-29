@@ -3,7 +3,7 @@
 <!-- model: claude-opus-5 -->
 <!-- effort: high -->
 <!-- name: Worker pane truth -->
-<!-- tasks: Scroll up releases follow | Spend and cache reads split | Real window for the meter -->
+<!-- tasks: Runaway spacer gone | Scroll up releases follow | Spend and cache reads split | Real window for the meter -->
 Execute Job 19 of PUNCHLIST_ui17.md in this repo (worker pane scroll stays put and its figures mean what they say). The goal and items are that job's section and checkboxes in PUNCHLIST_ui17.md; read only that job's section plus the whole-file rules block at the top (including the run rules), the recent git log, and the files the job names; read files with the Read tool in the ranges you need rather than dumping whole files into your context; trust repo state over this prompt when they disagree, and check each item off in the file the moment it is verified. Done when the job's done check passes against the dev instance.
 
 
