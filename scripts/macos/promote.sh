@@ -86,7 +86,7 @@ chain_journal() {
 # with the CLI's reason so a chain can never stall silently.
 resume_paused_chains() {
   local slug output reason failed=0
-  typeset -a pending
+  typeset -a output_lines pending
   pending=("${PAUSED_CHAINS[@]}")
   PAUSED_CHAINS=()
   for slug in "${pending[@]}"; do
@@ -99,7 +99,8 @@ resume_paused_chains() {
       }
       log "chain $slug resumed after promote"
     else
-      reason="${${(f)output}[-1]:-dispatch resume exited without a reason}"
+      output_lines=("${(@f)output}")
+      reason="${output_lines[-1]:-dispatch resume exited without a reason}"
       notify decision-needed "Promote could not resume chain $slug" \
         "Chain $slug stayed paused after promote: $reason"
       log "chain $slug FAILED to resume: $reason"
@@ -112,14 +113,14 @@ resume_paused_chains() {
 # EXIT is the abort/failed-health/failed-rollback safety net. Successful and
 # rollback paths resume explicitly at their health boundary and empty the set.
 on_exit() {
-  local status=$?
+  local exit_code=$?
   trap - EXIT HUP INT TERM
   if [[ ${#PAUSED_CHAINS[@]} -gt 0 ]]; then
     log "promote is exiting; resuming ${#PAUSED_CHAINS[@]} paused chain(s)"
-    resume_paused_chains || { [[ $status -ne 0 ]] || status=1; }
+    resume_paused_chains || { [[ $exit_code -ne 0 ]] || exit_code=1; }
   fi
   rm -f "$HEADER_FILE"
-  exit $status
+  exit $exit_code
 }
 trap on_exit EXIT
 TRAPHUP() { exit 129; }
@@ -130,7 +131,7 @@ TRAPTERM() { exit 143; }
 # transition to the same dispatch pause subcommand operators use.
 pause_running_chains() {
   local listing slug output repo_real
-  typeset -a running
+  typeset -a output_lines running
   repo_real="$(cd "$REPO" && pwd -P)"
   listing=$(curl -sf -K "$HEADER_FILE" -m 10 "$SERVER_URL/api/watchdog/status" \
     | REPO_REAL="$repo_real" python3 -c '
@@ -151,7 +152,8 @@ for chain in data.get("chains", []):
   for slug in "${running[@]}"; do
     if ! output=$(DISPATCH_SERVER_URL="$SERVER_URL" DISPATCH_DB_PATH="$DB_PATH" \
         "$DISPATCH_PATH" pause "$REPO" "$slug" 2>&1); then
-      fail "could not pause chain $slug: ${${(f)output}[-1]:-dispatch pause exited without a reason}"
+      output_lines=("${(@f)output}")
+      fail "could not pause chain $slug: ${output_lines[-1]:-dispatch pause exited without a reason}"
     fi
     if [[ "$output" == *" paused;"* ]]; then
       PAUSED_CHAINS+=("$slug")

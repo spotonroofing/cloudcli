@@ -49,6 +49,7 @@ test('pause and resume preserve one chain and restart at the first job without a
     });
     watchdogService.chainEvent(slug, 'verify-start', { phase: 1 });
     watchdogService.chainEvent(slug, 'phase-start', { phase: 2 });
+    watchdogService.chainEvent(slug, 'verify-end', { phase: 1 });
     assert.equal(watchdogService.chainEvent(slug, 'paused', { phase: 2 }), true);
 
     const paused = watchdogService.listWorkerRuns(projectPath).chains[slug];
@@ -56,7 +57,7 @@ test('pause and resume preserve one chain and restart at the first job without a
     assert.equal(paused.phaseActive, false);
     assert.equal(paused.currentPhase, 2);
     assert.equal(paused.manifest?.length, 3);
-    assert.equal(paused.manifest?.[0].verify, 'stopped');
+    assert.equal(paused.manifest?.[0].verify, 'passed');
 
     assert.deepEqual(watchdogService.resumeChain(slug, projectPath), { phase: 2, phases: 3 });
     const resumed = watchdogService.listWorkerRuns(projectPath).chains[slug];

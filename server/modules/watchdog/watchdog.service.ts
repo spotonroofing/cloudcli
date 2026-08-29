@@ -239,6 +239,9 @@ const WAKE_RETRY_MS = 60 * 1000;
 const WAKE_MAX_FAILURES = 3;
 /** A live phase with no runner event and no journal/transcript writes this long is wedged. */
 const CHAIN_WEDGE_MS = Number(process.env.WATCHDOG_CHAIN_WEDGE_MS || 3 * 60 * 60 * 1000);
+// Consumed by the dispatch pause route: one unattended verifier gets its full
+// 30-minute turn budget before the control request reports a timeout.
+const CHAIN_PAUSE_TIMEOUT_MS = Number(process.env.WATCHDOG_CHAIN_PAUSE_TIMEOUT_MS || 30 * 60 * 1000);
 /** Debounce for punch-list writes (ui14 job 8): editors save in bursts. */
 const PUNCHLIST_DEBOUNCE_MS = 250;
 const RESOURCE_ALERT_THROTTLE_MS = 24 * 60 * 60 * 1000;
@@ -660,7 +663,8 @@ class WatchdogService {
     } catch {
       return 'no-runner';
     }
-    for (let attempt = 0; attempt < 450; attempt += 1) {
+    const deadline = Date.now() + CHAIN_PAUSE_TIMEOUT_MS;
+    while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       const current = this.chains.get(slug);
       if (current?.status === 'paused') {
@@ -946,7 +950,6 @@ class WatchdogService {
     if (event === 'paused') {
       chain.status = 'paused';
       chain.phaseActive = false;
-      settleRunningVerifies(chain);
       if (detail?.summaryTail) {
         chain.lastSummaryTail = detail.summaryTail.slice(-2000);
       }

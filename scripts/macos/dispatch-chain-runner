@@ -745,6 +745,8 @@ typeset -a VERIFY_FAILURES
 VERIFY_FAILURES=()
 PAUSING=0
 PHASE_NUM=$((RESUME_FROM - 1))
+PAUSE_REQUEST="$JOURNAL_DIR/pause.requested"
+rm -f "$PAUSE_REQUEST"
 
 # Stops one stage and everything it spawned. Build and verify sessions each
 # run in their own process group, so TERM reaches the whole stage before the
@@ -784,17 +786,24 @@ park_paused_work() {
   print -r -- "$state"
 }
 
-# SIGUSR1 is reserved for `dispatch pause`. The runner, rather than the CLI,
-# owns stage shutdown, parking, the PAUSED journal boundary, and the watchdog
-# event, so a normal pause can never be mistaken for a liveness crash.
+# SIGUSR1 is reserved for `dispatch pause`. The signal handler only leaves a
+# durable request: zsh may run a trap in the interrupted wait's context, where
+# child ownership and variable updates are not safe to carry back. The normal
+# runner flow owns build shutdown, verifier settlement, parking, the PAUSED
+# journal boundary, and the watchdog event. A verifier is a correctness
+# boundary: pause waits for its own bounded turn to finish and records the
+# verdict instead of killing it.
 pause_chain() {
   [[ $PAUSING -eq 0 ]] || return 0
   PAUSING=1
   trap - USR1
+  rm -f "$PAUSE_REQUEST"
   stop_stage_for_pause "$BUILD_PID"
-  stop_stage_for_pause "$VERIFY_PID"
   BUILD_PID=""
-  VERIFY_PID=""
+  if [[ -n "$VERIFY_PID" ]]; then
+    journal "verify $VERIFY_NUM/$TOTAL" "pause-wait" "pause requested; waiting for the verifier's verdict"
+    reconcile_verify
+  fi
   local state
   state=$(park_paused_work)
   journal "phase $PHASE_NUM/$TOTAL" "PAUSED" "$state"
@@ -802,7 +811,8 @@ pause_chain() {
     "$(event_body paused "$PHASE_NUM" "$(print -rn -- "$state" | json_string)")" 80
   exit 0
 }
-TRAPUSR1() { pause_chain; }
+TRAPUSR1() { : > "$PAUSE_REQUEST"; }
+honor_pause_request() { [[ -f "$PAUSE_REQUEST" ]] && pause_chain; }
 
 # Restores the paused WIP without creating a commit on the main branch. The
 # resumed worker receives the same dirty tree the interrupted worker left.
@@ -889,8 +899,13 @@ start_verify() {
 # stage without disturbing the build already in flight.
 settle_verify() {
   local rc log="$JOURNAL_DIR/verify$VERIFY_NUM.log" verdict verdict_source
-  wait $VERIFY_PID
-  rc=$?
+  # A pause signal can interrupt zsh's wait without ending the verifier. Keep
+  # waiting while that exact child is alive, then interpret only its real exit.
+  while true; do
+    wait $VERIFY_PID
+    rc=$?
+    kill -0 "$VERIFY_PID" 2>/dev/null || break
+  done
   VERIFY_PID=""
   # Codex writes its final assistant message to .last; Claude's verdict stays
   # in the session log. The verdict is the last VERIFY: line, wherever markdown wrapped it
@@ -974,6 +989,7 @@ reconcile_verify() {
 # a FAIL kills the build within seconds instead of after it finishes.
 watch_build() {
   while kill -0 $BUILD_PID 2>/dev/null; do
+    [[ -f "$PAUSE_REQUEST" ]] && return 0
     if [[ -n "$VERIFY_PID" ]] && ! kill -0 $VERIFY_PID 2>/dev/null; then
       settle_verify
     fi
@@ -1026,6 +1042,7 @@ pickup_appends() {
 }
 
 while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
+  honor_pause_request
   PHASE_NUM=$((PHASE_NUM + 1))
   PHASE_FILE="${PHASE_FILES[$PHASE_NUM]}"
   PHASE_NAME=$(basename "$PHASE_FILE")
@@ -1083,6 +1100,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   fi
   watch_build
   RC=$?
+  honor_pause_request
   BUILD_PID=""
 
   if [[ "$UNIT_ENGINE" == "codex" && "$UNIT_FAST_MODE" == "1" && $RC -eq 0 ]]; then
@@ -1143,6 +1161,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   # The previous unit's verify must have passed before this unit's starts:
   # at most one verify is in flight, one build behind it.
   reconcile_verify
+  honor_pause_request
   if verify_wanted "$PHASE_FILE"; then
     VERIFY_NUM=$PHASE_NUM
     VERIFY_NAME="$UNIT_NAME"
@@ -1156,6 +1175,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
 done
 
 reconcile_verify
+honor_pause_request
 VERIFY_FAILURE_COUNT=${#VERIFY_FAILURES[@]}
 TAIL=$(git -C "$REPO" log --oneline "$CHAIN_BASE"..HEAD 2>/dev/null | head -20 | json_string)
 if [[ $VERIFY_FAILURE_COUNT -gt 0 ]]; then

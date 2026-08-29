@@ -164,7 +164,12 @@ PYEOF
       || { print -u2 "dispatch: $REPO has uncommitted work; cannot restore paused work onto it"; exit 69; }
   fi
 
-  RESPONSE=$(curl -s -K "$HEADER_FILE" -m 60 -X POST "$SERVER_URL/api/watchdog/chains/$SLUG/$ACTION" \
+  REQUEST_TIMEOUT_S=60
+  # A pause is allowed to wait for the current verifier's full unattended
+  # budget. The watchdog uses 30 minutes; the CLI leaves a small response
+  # margin so it never gives up first and strands a pause that later lands.
+  [[ "$ACTION" == "pause" ]] && REQUEST_TIMEOUT_S="${DISPATCH_PAUSE_TIMEOUT_S:-1830}"
+  RESPONSE=$(curl -s -K "$HEADER_FILE" -m "$REQUEST_TIMEOUT_S" -X POST "$SERVER_URL/api/watchdog/chains/$SLUG/$ACTION" \
     -H 'Content-Type: application/json' -d "$BODY" -w '\n%{http_code}' 2>/dev/null)
   STATUS="${RESPONSE##*$'\n'}"
   RESPONSE_BODY="${RESPONSE%$'\n'*}"
@@ -178,7 +183,7 @@ PYEOF
   fi
 
   if [[ "$ACTION" == "pause" ]]; then
-    print -r -- "dispatch: chain $SLUG paused; its runner and active stages have exited"
+    print -r -- "dispatch: chain $SLUG paused; its runner and active build have exited and any verifier recorded its verdict"
     exit 0
   fi
 
