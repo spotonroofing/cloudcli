@@ -617,12 +617,20 @@ function ChatInterface({
     const area = composerAreaRef.current;
     if (!pane || !area) return;
 
+    // Clamped to the pane (ui17 job 19): the spacer is dead space below the
+    // last row, so a composer that outgrows its pane - a tall permission
+    // banner, a stack of queued cards - must not be able to push the whole
+    // transcript out of view behind it. One viewport is the hard ceiling.
     const publish = () => {
-      pane.style.setProperty('--composer-height', `${area.offsetHeight}px`);
+      const clearance = pane.clientHeight > 0
+        ? Math.min(area.offsetHeight, pane.clientHeight)
+        : area.offsetHeight;
+      pane.style.setProperty('--composer-height', `${clearance}px`);
     };
     publish();
     const observer = new ResizeObserver(publish);
     observer.observe(area);
+    observer.observe(pane);
     return () => observer.disconnect();
   }, [selectedProject]);
 

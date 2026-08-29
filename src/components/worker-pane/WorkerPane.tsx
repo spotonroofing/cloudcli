@@ -92,8 +92,10 @@ type WorkerRun = {
   lastActivity: string | null;
   /** Honest run start; used for chain-less labels and history grouping. */
   startedAt: number | string | null;
-  /** Whole-session token cost from the provider transcript or rollout. */
+  /** Whole-session spend (fresh input plus output) from the provider transcript or rollout. */
   tokenCount: number | null;
+  /** Context re-read from cache across the session; never part of the spend. */
+  cacheReadCount: number | null;
 };
 
 /**
@@ -471,15 +473,17 @@ export default function WorkerPane({
     ...Object.values(chains).map((chain) => {
       const sessions: Record<number, string> = {};
       const tokenCounts: Record<number, number | null> = {};
+      const cacheReadCounts: Record<number, number | null> = {};
       // The job row opens the build session; the verify session (ui14 job
       // 10) is reached from the drawer's verify row instead.
       for (const run of runs) {
         if (run.chainSlug === chain.slug && run.chainPhase != null && run.chainStage !== 'verify') {
           sessions[run.chainPhase] = run.sessionId;
           tokenCounts[run.chainPhase] = run.tokenCount;
+          cacheReadCounts[run.chainPhase] = run.cacheReadCount;
         }
       }
-      return { chain, run: null, sessions, tokenCounts, startedAt: chain.startedAt };
+      return { chain, run: null, sessions, tokenCounts, cacheReadCounts, startedAt: chain.startedAt };
     }),
     ...runs
       .filter((run) => !run.chainSlug)
@@ -488,6 +492,7 @@ export default function WorkerPane({
         run: { label: runLabel(run, chains), state: run.state },
         sessions: { 1: run.sessionId },
         tokenCounts: { 1: run.tokenCount },
+        cacheReadCounts: { 1: run.cacheReadCount },
         startedAt: typeof run.startedAt === 'number'
           ? run.startedAt
           : run.startedAt ? Date.parse(run.startedAt) : 0,

@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { authenticateToken } from '@/modules/auth/index.js';
 import { apiKeysDb, sessionsDb } from '@/modules/database/index.js';
+import { seedDispatchedClaudeContextWindow } from '@/modules/providers/index.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
 import { CHAIN_EVENT_NAMES, parseJobMeta, parseManifest, watchdogService } from './watchdog.service.js';
@@ -204,6 +205,11 @@ export function createWatchdogRouter(): express.Router {
       // (codex job 5): "<name>" for a build, "Verify: <name>" for a verify.
       const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 120) : null;
       sessionsDb.setSessionOrigin(sessionId, 'dispatch', baseCommit, slug, model, { provider, projectPath }, phase, title);
+      // A headless unit never reports its own context window, so the meter
+      // read a cataloged guess for the whole run (ui17 job 19).
+      if (provider === 'claude') {
+        seedDispatchedClaudeContextWindow(model);
+      }
       // The verify stage's session (ui14 job 10) is the same row shape, tagged
       // on the chain's job metadata so the UI can tell it from the build; a
       // build announce records the unit's engine and model for the jobs column.

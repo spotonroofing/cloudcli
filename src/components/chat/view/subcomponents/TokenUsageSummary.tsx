@@ -119,6 +119,14 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
       },
     ]
     : [];
+  // Spend and cache reads are different things (ui17 job 19). A Claude turn
+  // re-reads the whole context from cache, so the honest cost of the turn is
+  // fresh input plus output; the cache read is reported beside it and never
+  // added in.
+  const cacheReadTokens = readUsageNumber(usage?.cacheReadTokens);
+  const freshInputTokens = Math.max(0, inputTokens - cacheReadTokens);
+  const spendTokens = freshInputTokens + outputTokens;
+  const showSpendSplit = !isCodex && cacheReadTokens > 0;
   const percentUsed = totalTokens > 0
     ? Math.min(100, Math.round((usedTokens / totalTokens) * 100))
     : 0;
@@ -224,6 +232,35 @@ export default function TokenUsageSummary({ usage }: TokenUsageSummaryProps) {
               className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
             />
           </button>
+
+          {showSpendSplit && (
+            <div className="px-1 pb-1" data-slot="usage-spend-split">
+              <div
+                className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs"
+                data-usage-field="spend"
+                data-token-count={spendTokens}
+              >
+                <span className="min-w-0 flex-1 truncate text-foreground/90">
+                  {t('composer.contextSpend', { defaultValue: 'Spent this turn' })}
+                </span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  {spendTokens.toLocaleString()}
+                </span>
+              </div>
+              <div
+                className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs"
+                data-usage-field="cache-reads"
+                data-token-count={cacheReadTokens}
+              >
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                  {t('composer.contextCacheReads', { defaultValue: 'Read from cache' })}
+                </span>
+                <span className="shrink-0 tabular-nums text-muted-foreground/60">
+                  {cacheReadTokens.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          )}
 
           {totalIsUsableWindow && (
             <p className="px-2.5 pb-1 text-[11px] leading-4 text-muted-foreground">

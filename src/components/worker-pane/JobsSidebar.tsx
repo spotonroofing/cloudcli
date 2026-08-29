@@ -100,8 +100,10 @@ type Unit = {
   model?: string;
   /** This historical unit launched on the fast Codex service tier. */
   fastMode?: boolean;
-  /** Whole build-session token cost from its provider-native source. */
+  /** Whole build-session spend, fresh input plus output (ui17 job 19). */
   tokenCount?: number | null;
+  /** Context re-read from cache across the build session; shown apart, never summed in. */
+  cacheReadCount?: number | null;
   /** A landed verify failure repaired by this named superseding unit. */
   verifyFixedIn?: string;
   /** The build landed, but its terminal chain never launched this verifier. */
@@ -241,6 +243,13 @@ function formatTokenCount(tokens: number): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(tokens);
 }
 
+/** Cache reads run to tens of millions, so the quiet figure stays short. */
+function formatCacheReads(tokens: number): string {
+  if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`;
+  if (tokens >= 1_000) return `${Math.round(tokens / 100) / 10}k`;
+  return String(tokens);
+}
+
 /**
  * Compact date for jobs older than 24 hours (ui14 job 12), e.g. "Aug 25" —
  * owner-facing, so rendered in America/New_York regardless of host timezone.
@@ -308,7 +317,12 @@ function JobCommitRow({ unit }: { unit: Unit }) {
   );
 }
 
-/** Drawer-bottom token figure beside the live or fixed total time. */
+/**
+ * Drawer-bottom token figures beside the live or fixed total time. The first
+ * figure is what the unit spent (fresh input plus output); cache reads sit
+ * beside it as their own quieter number and are never added in (ui17 job 19) -
+ * summing them turned 133k of real output into a 12 million runaway.
+ */
 function JobTotalRow({ unit }: { unit: Unit }) {
   const running = unit.status === 'in-progress' && unit.endedAt == null;
   const hasTime = unit.startedAt != null && (running || unit.endedAt != null);
@@ -333,6 +347,15 @@ function JobTotalRow({ unit }: { unit: Unit }) {
         {unit.tokenCount != null && (
           <span data-slot="jobs-sidebar-token-total" data-token-count={unit.tokenCount}>
             {formatTokenCount(unit.tokenCount)}
+          </span>
+        )}
+        {unit.cacheReadCount != null && unit.cacheReadCount > 0 && (
+          <span
+            data-slot="jobs-sidebar-cache-reads"
+            data-cache-read-count={unit.cacheReadCount}
+            className="text-muted-foreground/40"
+          >
+            {formatCacheReads(unit.cacheReadCount)} cached
           </span>
         )}
         {hasTime && (
@@ -520,8 +543,10 @@ export type JobGroup = {
   run: { label: string; state: 'running' | 'finished' | 'stopped' } | null;
   /** Unit index → session id, for the units that have a session to open. */
   sessions: Record<number, string>;
-  /** Unit index → provider-source whole-session token total. */
+  /** Unit index → provider-source whole-session spend. */
   tokenCounts?: Record<number, number | null>;
+  /** Unit index → provider-source whole-session cache reads. */
+  cacheReadCounts?: Record<number, number | null>;
   /** Ordering key: newer groups sit higher in the list. */
   startedAt: number;
 };
@@ -647,6 +672,7 @@ function JobsSidebar({
         ...unit,
         sessionId: group.sessions[unit.index],
         tokenCount: group.tokenCounts?.[unit.index] ?? null,
+        cacheReadCount: group.cacheReadCounts?.[unit.index] ?? null,
         historyStartedAt: unit.startedAt ?? group.startedAt,
         position: 0,
       });

@@ -122,7 +122,44 @@ test('Claude token usage skips trailing sidechain (subagent) rows', async () => 
   }
 });
 
-test('Claude job tokens sum unique message usage across the whole transcript', async () => {
+// ui17 job 19: Willem's Opus 5 unit sat past 204k while its own calls kept
+// succeeding, and the meter read 98 percent - the cataloged window was 200k and
+// no headless unit ever reports one. The catalog now carries Opus 5's real 1M.
+test('an Opus 5 session past 200k reads a fifth of a million-token window', async () => {
+  const tempDirectory = await mkdtemp(path.join(tmpdir(), 'provider-token-usage-opus5-'));
+  const sessionFilePath = path.join(tempDirectory, 'provider-session.jsonl');
+
+  try {
+    await writeFile(sessionFilePath, JSON.stringify({
+      type: 'assistant',
+      message: {
+        model: 'claude-opus-5',
+        usage: {
+          input_tokens: 6,
+          cache_read_input_tokens: 204_614,
+          cache_creation_input_tokens: 0,
+          output_tokens: 300,
+        },
+      },
+    }));
+
+    const service = createProviderTokenUsageService({
+      getSessionById: () => createSessionRow({ jsonl_path: sessionFilePath, model: 'claude-opus-5' }),
+      getClaudeContextWindow: () => '200000',
+      getPersistedClaudeWindow: () => null,
+    });
+
+    const usage = await service.getSessionTokenUsage('app-session');
+    assert.equal(usage.total, 1_000_000);
+    assert.equal(usage.cacheReadTokens, 204_614);
+    // The pane's ring rounds used/total: 20 percent, not the old 98.
+    assert.equal(Math.round((usage.used / (usage.total ?? 1)) * 100), 20);
+  } finally {
+    await rm(tempDirectory, { recursive: true, force: true });
+  }
+});
+
+test('Claude job tokens count fresh input and output, cache reads apart', async () => {
   const tempDirectory = await mkdtemp(path.join(tmpdir(), 'provider-job-token-usage-claude-'));
   const sessionFilePath = path.join(tempDirectory, 'provider-session.jsonl');
 
@@ -150,10 +187,13 @@ test('Claude job tokens sum unique message usage across the whole transcript', a
       getSessionById: () => createSessionRow({ jsonl_path: sessionFilePath }),
     });
 
+    // ui17 job 19: 1,200 of those input tokens are the same context read back
+    // from cache turn after turn. Spending is 170 fresh input plus 30 output.
     assert.deepEqual(await service.getJobTokenUsage('app-session'), {
-      totalTokens: 1_400,
-      inputTokens: 1_370,
+      totalTokens: 200,
+      inputTokens: 170,
       outputTokens: 30,
+      cacheReadTokens: 1_200,
     });
   } finally {
     await rm(tempDirectory, { recursive: true, force: true });
@@ -188,7 +228,12 @@ test('Codex token usage uses the latest turn rather than cumulative rollout usag
         payload: {
           type: 'token_count',
           info: {
-            total_token_usage: { input_tokens: 4_000, output_tokens: 900, total_tokens: 4_900 },
+            total_token_usage: {
+              input_tokens: 4_000,
+              cached_input_tokens: 3_100,
+              output_tokens: 900,
+              total_tokens: 4_900,
+            },
             last_token_usage: {
               input_tokens: 40,
               cached_input_tokens: 25,
@@ -222,9 +267,10 @@ test('Codex token usage uses the latest turn rather than cumulative rollout usag
       breakdown: { input: 40, output: 9 },
     });
     assert.deepEqual(await service.getJobTokenUsage('app-session'), {
-      totalTokens: 4_900,
-      inputTokens: 4_000,
+      totalTokens: 1_800,
+      inputTokens: 900,
       outputTokens: 900,
+      cacheReadTokens: 3_100,
     });
   } finally {
     await rm(tempDirectory, { recursive: true, force: true });

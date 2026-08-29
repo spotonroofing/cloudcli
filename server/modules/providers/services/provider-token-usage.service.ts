@@ -50,10 +50,20 @@ type TokenUsageResult = {
   message?: string;
 };
 
+/**
+ * A dispatched run's cost, split so the cache never inflates it (ui17 job 19).
+ * A Claude turn re-reads the whole context from cache, so summing cache reads
+ * across a run turned 133k of real output into a 12-14 million "spent" figure
+ * fifteen minutes into a unit.
+ */
 type JobTokenUsageResult = {
+  /** Fresh input plus output: what the run actually spent. */
   totalTokens: number;
+  /** Fresh input only: new prompt content and cache writes. */
   inputTokens: number;
   outputTokens: number;
+  /** Context re-read from cache, never summed into the spend. */
+  cacheReadTokens: number;
 };
 
 type OpenCodeTokenRow = {
@@ -91,6 +101,35 @@ const defaultDependencies: ProviderTokenUsageServiceDependencies = {
     }
   },
 };
+
+/**
+ * Persists a dispatched Claude unit's context window (ui17 job 19).
+ *
+ * Headless units run `claude -p` outside the SDK runtime, so no live turn ever
+ * reports their window: nothing was persisted for `claude-opus-5` and the
+ * meter served the cataloged guess for the whole run. Announcing a dispatched
+ * Claude session seeds the cataloged window when nothing has been observed for
+ * that model yet; the first SDK-reported usable window a live turn observes
+ * overwrites the seed.
+ *
+ * @returns True when a seed was written.
+ */
+export function seedDispatchedClaudeContextWindow(model: string | null | undefined): boolean {
+  const normalizedModel = typeof model === 'string' ? model.trim() : '';
+  if (!normalizedModel) {
+    return false;
+  }
+  const key = `claude_context_window:${normalizedModel}`;
+  if (appConfigDb.get(key)) {
+    return false;
+  }
+  const total = findClaudeContextWindow(normalizedModel);
+  if (!total) {
+    return false;
+  }
+  appConfigDb.set(key, JSON.stringify({ total, totalIsUsableWindow: false }));
+  return true;
+}
 
 function readUsageNumber(value: unknown): number {
   const parsedValue = Number(value);
@@ -191,18 +230,22 @@ function readCodexJobTokenUsage(fileContent: string): JobTokenUsageResult {
         ? entry.payload.info?.total_token_usage as AnyRecord | null
         : null;
       if (!usage) continue;
-      const inputTokens = readUsageNumber(usage.input_tokens);
+      // Codex reports total input with the cached part called out, so fresh
+      // input is the difference.
+      const cacheReadTokens = readUsageNumber(usage.cached_input_tokens);
+      const inputTokens = Math.max(0, readUsageNumber(usage.input_tokens) - cacheReadTokens);
       const outputTokens = readUsageNumber(usage.output_tokens);
       return {
-        totalTokens: readUsageNumber(usage.total_tokens) || inputTokens + outputTokens,
+        totalTokens: inputTokens + outputTokens,
         inputTokens,
         outputTokens,
+        cacheReadTokens,
       };
     } catch {
       // A provider may be writing the last JSONL line while this read happens.
     }
   }
-  return { totalTokens: 0, inputTokens: 0, outputTokens: 0 };
+  return { totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
 }
 
 export type CodexRateLimitWindow = {
@@ -337,6 +380,7 @@ function readClaudeTokenUsage(
 function readClaudeJobTokenUsage(fileContent: string): JobTokenUsageResult {
   let inputTokens = 0;
   let outputTokens = 0;
+  let cacheReadTokens = 0;
   const countedMessageIds = new Set<string>();
   const lines = fileContent.trim().split('\n');
 
@@ -353,16 +397,18 @@ function readClaudeJobTokenUsage(fileContent: string): JobTokenUsageResult {
       if (countedMessageIds.has(messageId)) continue;
       countedMessageIds.add(messageId);
 
+      // Cache writes are fresh content billed as input; cache reads are the
+      // same context read back every turn and are counted on their own.
       inputTokens += readUsageNumber(usage.input_tokens ?? usage.inputTokens)
-        + readUsageNumber(usage.cache_read_input_tokens ?? usage.cacheReadInputTokens)
         + readUsageNumber(usage.cache_creation_input_tokens ?? usage.cacheCreationInputTokens);
+      cacheReadTokens += readUsageNumber(usage.cache_read_input_tokens ?? usage.cacheReadInputTokens);
       outputTokens += readUsageNumber(usage.output_tokens ?? usage.outputTokens);
     } catch {
       // Skip malformed or concurrently-written rows and retain earlier usage.
     }
   }
 
-  return { totalTokens: inputTokens + outputTokens, inputTokens, outputTokens };
+  return { totalTokens: inputTokens + outputTokens, inputTokens, outputTokens, cacheReadTokens };
 }
 
 function readOpenCodeTokenUsage(databasePath: string, providerSessionId: string): TokenUsageResult {

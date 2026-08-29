@@ -138,13 +138,15 @@ export const findClaudeModelOption = (model: string | undefined | null): Provide
 
 // Published context window per model id, the default denominator wherever a
 // live turn has not yet persisted the SDK-observed window. Fable 5 ships 1M by
-// default (observed live); Opus 5 is 200k unless the account's usage-credits
-// toggle grants 1M, so it is cataloged at the honest default. Ids in neither
-// this catalog nor the runtime cache keep the CONTEXT_WINDOW env / 160k fallback.
+// default (observed live), and so do Opus 5 and Sonnet 5 on this account:
+// ui17 job 19 caught an Opus 5 session past 204k reading 98 percent of a
+// cataloged 200k while its own calls kept succeeding, and a live Sonnet 5 turn
+// has since reported 967k. Ids in neither this catalog nor the runtime cache
+// keep the CONTEXT_WINDOW env / 160k fallback.
 export const CLAUDE_CONTEXT_WINDOWS: Record<string, number> = {
   'claude-fable-5': 1_000_000,
-  'claude-opus-5': 200_000,
-  'claude-sonnet-5': 200_000,
+  'claude-opus-5': 1_000_000,
+  'claude-sonnet-5': 1_000_000,
   'claude-haiku-4-5': 200_000,
   'claude-opus-4-8': 200_000,
   'claude-opus-4-7': 200_000,

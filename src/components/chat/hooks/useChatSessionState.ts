@@ -589,8 +589,11 @@ export function useChatSessionState({
         }
 
         // A viewport-fill fetch pins the bottom instead of holding the
-        // anchor: the fill loop's contract is newest-above-the-composer.
-        if (preserveScroll) {
+        // anchor: the fill loop's contract is newest-above-the-composer. The
+        // live-edge test is re-read here, not at request time (ui17 job 19):
+        // the reader can wheel away while the page is in flight, and pinning
+        // them then is the repin this round removed.
+        if (preserveScroll || !isNearBottom()) {
           pendingScrollRestoreRef.current = scrollRestoreState;
         } else {
           pendingFillPinRef.current = true;
@@ -606,7 +609,7 @@ export function useChatSessionState({
         setIsLoadingMoreMessages(false);
       }
     },
-    [hasMoreMessages, isActive, isLoadingMoreMessages, selectedProject, selectedSession, sessionStore],
+    [hasMoreMessages, isActive, isLoadingMoreMessages, isNearBottom, selectedProject, selectedSession, sessionStore],
   );
 
   // Fill-to-viewport (ui12 job 11): one tail page can be shorter than the
@@ -621,14 +624,41 @@ export function useChatSessionState({
     if (!container || chatMessages.length === 0) return;
     const action = resolveTranscriptFillAction({
       hasMore: hasMoreMessages,
+      hasHiddenLoaded: chatMessages.length > visibleMessageCount,
       isLoadingInitial: isLoadingSessionMessages,
       isFetchingPage: isLoadingMoreRef.current,
       scrollHeight: container.scrollHeight,
       clientHeight: container.clientHeight,
     });
+    // A fill only pins to the bottom for a reader who is already there. The
+    // trigger is scroll slack now, not strict unscrollability, so a fill can
+    // land while the reader is scrolled up - and pinning them would be the
+    // very repin this job removed (ui17 job 19).
+    const readerAtLiveEdge = isNearBottom();
+    if (action === 'reveal') {
+      // Rows already loaded, held back only by the client window. Revealing
+      // them is free and, unlike a fetch, it is the sole way out of an
+      // unscrollable pane: the scroll-to-top reveal path needs a scroll event
+      // the pane cannot produce.
+      if (readerAtLiveEdge) {
+        pendingFillPinRef.current = true;
+      } else {
+        pendingScrollRestoreRef.current = captureScrollRestoreState(container);
+      }
+      setVisibleMessageCount((previous) => previous + INITIAL_VISIBLE_MESSAGES);
+      return;
+    }
     if (action !== 'fetch') return;
-    void loadOlderMessages(container, { preserveScroll: false });
-  }, [chatMessages.length, hasMoreMessages, isActive, isLoadingSessionMessages, loadOlderMessages]);
+    void loadOlderMessages(container, { preserveScroll: !readerAtLiveEdge });
+  }, [
+    chatMessages.length,
+    hasMoreMessages,
+    isActive,
+    isLoadingSessionMessages,
+    isNearBottom,
+    loadOlderMessages,
+    visibleMessageCount,
+  ]);
 
   const handleScroll = useCallback(async () => {
     if (!isActive) return;
@@ -636,6 +666,10 @@ export function useChatSessionState({
     if (!container) return;
 
     const nearBottom = isNearBottom();
+    // A reader gesture outranks a pin that a fill queued while they were still
+    // at the live edge (ui17 job 19): the pin is applied a render or a fetch
+    // later, by which time they may have wheeled away.
+    if (!nearBottom) pendingFillPinRef.current = false;
     setIsUserScrolledUp(!nearBottom);
     scrollPositionRef.current = {
       height: container.scrollHeight,

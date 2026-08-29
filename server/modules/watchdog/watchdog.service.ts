@@ -158,8 +158,10 @@ type WorkerRun = {
   /** Original run start, distinct from last transcript activity. */
   startedAt: number | string | null;
   lastActivity: string | null;
-  /** Whole-session token cost from the provider's transcript or rollout. */
+  /** Whole-session spend (fresh input plus output) from the provider's transcript or rollout. */
   tokenCount: number | null;
+  /** Context re-read from cache across the session, never part of the spend. */
+  cacheReadCount: number | null;
 };
 
 type ChainEventName =
@@ -1177,6 +1179,7 @@ class WatchdogService {
         startedAt: run.startedAt,
         lastActivity: new Date(run.lastEventAt).toISOString(),
         tokenCount: null,
+        cacheReadCount: null,
       }));
 
     // Only the newest run of a chain can carry the chain's stopped/failed
@@ -1235,6 +1238,7 @@ class WatchdogService {
         startedAt: row.created_at ?? live?.startedAt ?? null,
         lastActivity: row.updated_at ?? row.created_at ?? null,
         tokenCount: null,
+        cacheReadCount: null,
       };
     });
 
@@ -1269,7 +1273,11 @@ class WatchdogService {
     const runs = await Promise.all(snapshot.runs.map(async (run) => {
       try {
         const usage = await providerTokenUsageService.getJobTokenUsage(run.sessionId);
-        return { ...run, tokenCount: usage?.totalTokens ?? null };
+        return {
+          ...run,
+          tokenCount: usage?.totalTokens ?? null,
+          cacheReadCount: usage?.cacheReadTokens ?? null,
+        };
       } catch (error) {
         console.warn('Could not read worker run token usage', {
           sessionId: run.sessionId,
