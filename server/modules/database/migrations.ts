@@ -16,6 +16,7 @@ import {
   VAPID_KEYS_TABLE_SCHEMA_SQL,
   WATCHDOG_CHAINS_TABLE_SCHEMA_SQL,
   WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL,
+  WATCHDOG_PROMOTES_TABLE_SCHEMA_SQL,
 } from '@/modules/database/schema.js';
 
 import { isCommentShapedTitle, titleFromPrompt } from '../../../shared/sessionTitle.js';
@@ -496,6 +497,8 @@ const addWatchdogChainManifestColumns = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'job_meta', 'TEXT');
   addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'wake_pending', 'INTEGER NOT NULL DEFAULT 0');
   addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'fast_mode', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'hold_requested', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'hold_reason', 'TEXT');
 };
 
 /**
@@ -712,6 +715,7 @@ export const runMigrations = (db: Database) => {
     db.exec(WATCHDOG_CHAINS_TABLE_SCHEMA_SQL);
     addWatchdogChainManifestColumns(db);
     db.exec(WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL);
+    db.exec(WATCHDOG_PROMOTES_TABLE_SCHEMA_SQL);
     db.exec(MESSAGE_VERSIONS_TABLE_SCHEMA_SQL);
     db.exec('CREATE INDEX IF NOT EXISTS idx_message_versions_session ON message_versions(session_id)');
 

@@ -243,8 +243,29 @@ CREATE TABLE IF NOT EXISTS watchdog_chains (
     wake_pending INTEGER NOT NULL DEFAULT 0,
     -- Per-chain Codex fast-mode preference (ui17 job 13). The runner reads
     -- this before every build unit; verifier launches never inherit it.
-    fast_mode INTEGER NOT NULL DEFAULT 0
+    fast_mode INTEGER NOT NULL DEFAULT 0,
+    -- A promote-owned boundary hold. The runner reads this between committed,
+    -- settled units; it is never a signal to interrupt active work.
+    hold_requested INTEGER NOT NULL DEFAULT 0,
+    hold_reason TEXT
 );
+`;
+
+/**
+ * Completed promote history. The project path associates a promote with its
+ * jobs history; the two commits describe the live boundary Job 1 will draw.
+ */
+export const WATCHDOG_PROMOTES_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS watchdog_promotes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_path TEXT NOT NULL,
+    promoted_at INTEGER NOT NULL,
+    promoted_commit TEXT NOT NULL,
+    previous_live_commit TEXT NOT NULL,
+    dry_run INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_watchdog_promotes_project_time
+ON watchdog_promotes(project_path, promoted_at DESC);
 `;
 
 export const WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL = `
@@ -400,6 +421,8 @@ ${COMPOSER_DRAFTS_TABLE_SCHEMA_SQL}
 ${WATCHDOG_CHAINS_TABLE_SCHEMA_SQL}
 
 ${WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL}
+
+${WATCHDOG_PROMOTES_TABLE_SCHEMA_SQL}
 
 ${MESSAGE_VERSIONS_TABLE_SCHEMA_SQL}
 CREATE INDEX IF NOT EXISTS idx_message_versions_session ON message_versions(session_id);

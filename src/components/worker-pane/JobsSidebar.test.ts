@@ -56,6 +56,30 @@ test('the jobs column renders the paused state on the current chain row', () => 
   assert.match(markup, /data-slot="jobs-sidebar-paused-icon" aria-label="Paused"/);
 });
 
+test('a promote boundary uses the paused treatment and labels why it is held', () => {
+  const chain: ChainSnapshot = {
+    slug: 'promote-hold-stub',
+    projectPath: '/workspace/promote-hold-stub',
+    status: 'paused',
+    phases: 2,
+    currentPhase: 1,
+    phaseActive: false,
+    holdRequested: true,
+    holdReason: 'promote',
+    manifest: [
+      { name: 'Committed job', tasks: [], kind: 'phase', commitHash: 'abc1234', verify: 'passed' },
+      { name: 'Next job', tasks: [], kind: 'phase' },
+    ],
+    startedAt: 1,
+    lastEventAt: 2,
+  };
+  const markup = renderJobs([{ chain, run: null, sessions: {}, startedAt: 1 }]);
+
+  assert.match(markup, /data-chain="promote-hold-stub" data-kind="phase" data-status="paused"/);
+  assert.match(markup, /data-slot="jobs-sidebar-paused-icon" aria-label="Paused"/);
+  assert.match(markup, /data-slot="jobs-sidebar-hold-label"[^>]*>holding for promote</);
+});
+
 test('a task-kind unit renders with the same row anatomy as a phase unit (ui17 job 11)', () => {
   const chain: ChainSnapshot = {
     slug: 'uniform-stub',

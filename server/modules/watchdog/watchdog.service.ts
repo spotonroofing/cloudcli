@@ -117,6 +117,10 @@ type ChainRecord = {
   wakePending: boolean;
   /** Read afresh by the runner before each build unit; false by default. */
   fastMode: boolean;
+  /** True while the runner owes a clean boundary stop requested by promote. */
+  holdRequested: boolean;
+  /** The boundary hold owner shown by the jobs history while held. */
+  holdReason: string | null;
 };
 
 /** Number of committed units whose verifier rejected the result. */
@@ -172,6 +176,7 @@ type ChainEventName =
   | 'verify-failed'
   | 'limit'
   | 'paused'
+  | 'held'
   | 'completed'
   | 'stopped'
   | 'failed';
@@ -184,6 +189,7 @@ export const CHAIN_EVENT_NAMES: ChainEventName[] = [
   'verify-failed',
   'limit',
   'paused',
+  'held',
   'completed',
   'stopped',
   'failed',
@@ -199,6 +205,10 @@ type ChainSnapshot = {
   phaseActive: boolean;
   /** Current chain preference; changing it affects the next build unit only. */
   fastMode: boolean;
+  /** True until a requested clean boundary hold is released or resumed. */
+  holdRequested: boolean;
+  /** `promote` while the paused treatment represents a promotion boundary. */
+  holdReason: string | null;
   /** Failed verifier verdicts recorded so far; they never change chain status. */
   verifyFailures: number;
   /** Manifest entries with the punch-list `done` count and the unit's commit
@@ -358,6 +368,8 @@ class WatchdogService {
           jobs: parseJobMeta(row.job_meta),
           wakePending: Boolean(row.wake_pending),
           fastMode: Boolean(row.fast_mode),
+          holdRequested: Boolean(row.hold_requested),
+          holdReason: row.hold_reason,
         });
       }
       for (const row of watchdogDb.listDispatchRuns()) {
@@ -411,6 +423,8 @@ class WatchdogService {
         job_meta: Object.keys(chain.jobs).length ? JSON.stringify(chain.jobs) : null,
         wake_pending: chain.wakePending ? 1 : 0,
         fast_mode: chain.fastMode ? 1 : 0,
+        hold_requested: chain.holdRequested ? 1 : 0,
+        hold_reason: chain.holdReason,
       });
     } catch (error) {
       log(`chain persist failed for ${chain.slug}: ${error instanceof Error ? error.message : String(error)}`);
@@ -474,6 +488,8 @@ class WatchdogService {
       jobs: existing?.jobs ?? {},
       wakePending: false,
       fastMode: existing?.fastMode ?? false,
+      holdRequested: false,
+      holdReason: null,
     };
     this.chains.set(input.slug, chain);
     if (!existing && dispatchingSessionId) {
@@ -680,6 +696,69 @@ class WatchdogService {
   }
 
   /**
+   * Used by the watchdog hold route for `dispatch hold`: records a promote
+   * request without signaling or interrupting the runner. The runner alone
+   * consumes it after a committed unit and its verifier have settled.
+   */
+  requestChainHold(
+    slug: string,
+    projectPath: string,
+    reason: string,
+  ): 'holding' | 'not-running' {
+    const chain = this.chains.get(slug);
+    if (!chain || normalizeProjectPath(chain.projectPath) !== normalizeProjectPath(projectPath) || chain.status !== 'running') {
+      return 'not-running';
+    }
+    chain.holdRequested = true;
+    chain.holdReason = reason;
+    chain.lastEventAt = Date.now();
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    log(`chain ${slug}: hold requested`, { reason });
+    return 'holding';
+  }
+
+  /**
+   * Used by the runner's boundary read route. A missing or wrong-project
+   * chain returns null so an unauthenticated slug can never leak state.
+   */
+  chainHold(slug: string, projectPath: string): { requested: boolean; reason: string | null } | null {
+    const chain = this.chains.get(slug);
+    if (!chain || normalizeProjectPath(chain.projectPath) !== normalizeProjectPath(projectPath)) {
+      return null;
+    }
+    return { requested: chain.holdRequested, reason: chain.holdReason };
+  }
+
+  /**
+   * Used by promote's timeout cleanup. A still-running chain has its pending
+   * flag cleared; an already-held chain is reported so the unchanged resume
+   * path can restart it from the next unit.
+   */
+  releaseChainHold(
+    slug: string,
+    projectPath: string,
+  ): 'cleared' | 'held' | 'not-holding' {
+    const chain = this.chains.get(slug);
+    if (!chain || normalizeProjectPath(chain.projectPath) !== normalizeProjectPath(projectPath)) {
+      return 'not-holding';
+    }
+    if (chain.status === 'paused' && chain.holdReason === 'promote') {
+      return 'held';
+    }
+    if (chain.status !== 'running' || !chain.holdRequested) {
+      return 'not-holding';
+    }
+    chain.holdRequested = false;
+    chain.holdReason = null;
+    chain.lastEventAt = Date.now();
+    this.persistChain(chain);
+    this.broadcastChainProgress(chain);
+    log(`chain ${slug}: hold released before boundary`);
+    return 'cleared';
+  }
+
+  /**
    * Handles `dispatch resume` for the watchdog route: transitions the same
    * paused record back to running and returns the first job with no recorded
    * commit. Manifest, job metadata, unit count, and chain identity stay put.
@@ -699,6 +778,8 @@ class WatchdogService {
     }
     chain.status = 'running';
     chain.phaseActive = false;
+    chain.holdRequested = false;
+    chain.holdReason = null;
     chain.lastEventAt = Date.now();
     this.persistChain(chain);
     this.broadcastChainProgress(chain);
@@ -906,6 +987,8 @@ class WatchdogService {
       currentPhase: chain.currentPhase,
       phaseActive: chain.phaseActive,
       fastMode: chain.fastMode,
+      holdRequested: chain.holdRequested,
+      holdReason: chain.holdReason,
       verifyFailures: countVerifyFailures(chain),
       manifest: chain.manifest
         ? chain.manifest.map((entry, i) => {
@@ -949,16 +1032,23 @@ class WatchdogService {
       return false;
     }
     chain.lastEventAt = Date.now();
-    if (event === 'paused') {
+    if (event === 'paused' || event === 'held') {
       chain.status = 'paused';
       chain.phaseActive = false;
+      if (event === 'paused') {
+        chain.holdRequested = false;
+        chain.holdReason = null;
+      } else {
+        chain.holdRequested = true;
+        chain.holdReason = 'promote';
+      }
       if (detail?.summaryTail) {
         chain.lastSummaryTail = detail.summaryTail.slice(-2000);
       }
       this.persistChain(chain);
       this.broadcastChainProgress(chain);
       this.syncPunchlistWatcher(chain);
-      log(`chain ${slug}: paused`, { phase: chain.currentPhase });
+      log(`chain ${slug}: ${event}`, { phase: chain.currentPhase });
       return true;
     }
     // Verify-stage events belong to a unit whose build already ended. They
@@ -1351,6 +1441,55 @@ class WatchdogService {
       + `${detail ? `: ${detail}` : ''} (session ${sessionId}${run ? `, ${run.projectPath}` : ''}).`,
       { sessionId },
     );
+  }
+
+  /**
+   * Called only by the watchdog notify route after it validates promote.sh's
+   * completed-promote payload. Returns the persisted row for route callers.
+   */
+  recordPromote(input: {
+    projectPath: string;
+    promotedCommit: string;
+    previousLiveCommit: string;
+    dryRun: boolean;
+  }): {
+    id: number;
+    projectPath: string;
+    promotedAt: number;
+    promotedCommit: string;
+    previousLiveCommit: string;
+    dryRun: boolean;
+  } {
+    const promotedAt = Date.now();
+    const projectPath = normalizeProjectPath(input.projectPath);
+    const id = watchdogDb.recordPromote({
+      project_path: projectPath,
+      promoted_at: promotedAt,
+      promoted_commit: input.promotedCommit,
+      previous_live_commit: input.previousLiveCommit,
+      dry_run: input.dryRun ? 1 : 0,
+    });
+    log(`promote recorded: ${input.promotedCommit}`, { id, projectPath, dryRun: input.dryRun });
+    return {
+      id,
+      projectPath,
+      promotedAt,
+      promotedCommit: input.promotedCommit,
+      previousLiveCommit: input.previousLiveCommit,
+      dryRun: input.dryRun,
+    };
+  }
+
+  /** Supplies the watchdog promotes route consumed by the jobs history. */
+  listPromotes(projectPath: string) {
+    return watchdogDb.listPromotes(normalizeProjectPath(projectPath)).map((row) => ({
+      id: row.id,
+      projectPath: row.project_path,
+      promotedAt: row.promoted_at,
+      promotedCommit: row.promoted_commit,
+      previousLiveCommit: row.previous_live_commit,
+      dryRun: Boolean(row.dry_run),
+    }));
   }
 
   // ----- notifications (spec B8: decision-needed and verified-done broadcast

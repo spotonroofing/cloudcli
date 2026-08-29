@@ -59,6 +59,9 @@ export type ChainSnapshot = {
   phaseActive: boolean;
   /** Chain preference read by the runner at the next Codex build boundary. */
   fastMode?: boolean;
+  /** Durable boundary request and owner reported by the watchdog. */
+  holdRequested?: boolean;
+  holdReason?: string | null;
   /** Failed verifier verdicts recorded while the chain continues. */
   verifyFailures?: number;
   manifest: ChainManifestEntry[] | null;
@@ -81,6 +84,8 @@ type Unit = {
   status: TodoListItemStatus;
   /** True for the current job of a paused chain. */
   paused?: boolean;
+  /** Visible reason for a clean boundary hold; absent for operator pauses. */
+  holdReason?: string | null;
   /** Punch-list done count; null hides the row counter (no manifest counts). */
   done: number | null;
   /** Commit and timing metadata for the drawer footer (ui13 job 14). */
@@ -199,6 +204,7 @@ function chainUnits(chain: ChainSnapshot, repairTruth: RepairTruth): Unit[] {
       kind: entry.kind,
       status,
       paused,
+      holdReason: paused ? chain.holdReason : null,
       done: entry.done ?? null,
       startedAt: entry.startedAt,
       endedAt: entry.endedAt,
@@ -971,6 +977,14 @@ function JobsSidebar({
                       </span>
                     )}
                   </span>
+                  {unit.holdReason === 'promote' && (
+                    <span
+                      data-slot="jobs-sidebar-hold-label"
+                      className="flex-shrink-0 text-[10px] text-muted-foreground"
+                    >
+                      holding for promote
+                    </span>
+                  )}
                   {unit.fastMode && (
                     <Bolt
                       aria-label="Ran fast"

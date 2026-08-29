@@ -23,6 +23,10 @@ export type WatchdogChainRow = {
   wake_pending: number;
   /** 1 when the next Codex build unit should use the fast service tier. */
   fast_mode: number;
+  /** 1 while the runner owes a clean unit-boundary hold. */
+  hold_requested: number;
+  /** Machine-readable owner of the boundary hold; currently `promote`. */
+  hold_reason: string | null;
 };
 
 export type WatchdogDispatchRunRow = {
@@ -37,6 +41,16 @@ export type WatchdogDispatchRunRow = {
   ended: number;
 };
 
+/** One completed promote boundary, consumed by the watchdog routes and jobs history. */
+type WatchdogPromoteRow = {
+  id: number;
+  project_path: string;
+  promoted_at: number;
+  promoted_commit: string;
+  previous_live_commit: string;
+  dry_run: number;
+};
+
 /**
  * Persistence behind the watchdog's in-memory chain and dispatched-run
  * registries. The service stays the runtime source of truth; every mutation
@@ -47,8 +61,8 @@ export const watchdogDb = {
   upsertChain(row: WatchdogChainRow): void {
     const db = getConnection();
     db.prepare(`
-      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, dispatching_session_id, manifest, phase_active, punchlist, job_meta, wake_pending, fast_mode)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO watchdog_chains (slug, project_path, phases, current_phase, status, started_at, last_event_at, last_summary_tail, dispatching_session_id, manifest, phase_active, punchlist, job_meta, wake_pending, fast_mode, hold_requested, hold_reason)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(slug) DO UPDATE SET
         project_path = excluded.project_path,
         phases = excluded.phases,
@@ -63,7 +77,9 @@ export const watchdogDb = {
         punchlist = excluded.punchlist,
         job_meta = excluded.job_meta,
         wake_pending = excluded.wake_pending,
-        fast_mode = excluded.fast_mode
+        fast_mode = excluded.fast_mode,
+        hold_requested = excluded.hold_requested,
+        hold_reason = excluded.hold_reason
     `).run(
       row.slug,
       row.project_path,
@@ -80,6 +96,8 @@ export const watchdogDb = {
       row.job_meta,
       row.wake_pending,
       row.fast_mode,
+      row.hold_requested,
+      row.hold_reason,
     );
   },
 
@@ -130,6 +148,33 @@ export const watchdogDb = {
   listDispatchRuns(): WatchdogDispatchRunRow[] {
     const db = getConnection();
     return db.prepare('SELECT * FROM watchdog_dispatch_runs').all() as WatchdogDispatchRunRow[];
+  },
+
+  /** Inserts the record created by promote.sh's successful notify call. */
+  recordPromote(row: Omit<WatchdogPromoteRow, 'id'>): number {
+    const db = getConnection();
+    const result = db.prepare(`
+      INSERT INTO watchdog_promotes (project_path, promoted_at, promoted_commit, previous_live_commit, dry_run)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      row.project_path,
+      row.promoted_at,
+      row.promoted_commit,
+      row.previous_live_commit,
+      row.dry_run,
+    );
+    return Number(result.lastInsertRowid);
+  },
+
+  /** Lists one project's promote boundaries newest first for the watchdog route. */
+  listPromotes(projectPath: string): WatchdogPromoteRow[] {
+    const db = getConnection();
+    return db.prepare(`
+      SELECT id, project_path, promoted_at, promoted_commit, previous_live_commit, dry_run
+      FROM watchdog_promotes
+      WHERE project_path = ?
+      ORDER BY promoted_at DESC, id DESC
+    `).all(projectPath) as WatchdogPromoteRow[];
   },
 
   deleteDispatchRun(sessionId: string): void {

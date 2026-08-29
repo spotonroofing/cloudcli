@@ -285,6 +285,22 @@ read_chain_fast_mode() {
   print -r -- "${enabled:-0}"
 }
 
+# Reads the promote-owned boundary flag. An unavailable watchdog is visible
+# but never interpreted as permission to stop; promote will keep waiting and
+# the next boundary reads the durable record again.
+read_chain_hold_reason() {
+  local response reason
+  if ! response=$(curl -sf -G -K "$HEADER_FILE" -m 30 \
+      --data-urlencode "projectPath=$REPO" \
+      "$SERVER_URL/api/watchdog/chains/$SLUG/hold" 2>/dev/null); then
+    journal "phase $PHASE_NUM/$TOTAL" "hold-read" "watchdog unavailable; continuing to the next clean boundary"
+    print -r -- ""
+    return 0
+  fi
+  reason=$(RESPONSE_BODY="$response" python3 -c 'import json, os; data=json.loads(os.environ["RESPONSE_BODY"])["data"]; print(data.get("reason", "") if data.get("requested") else "")' 2>/dev/null)
+  print -r -- "${reason:-}"
+}
+
 # Every event carries projectPath and phases so a restarted server can
 # re-register the chain it lost with the event itself.
 event_body() {
@@ -1025,6 +1041,21 @@ reconcile_verify() {
   done
 }
 
+# A promote hold is honored only between units. The just-committed unit's
+# verifier settles first, resume state points at the next uncommitted unit,
+# and no worktree parking is needed because the commit gate left it clean.
+honor_promote_hold() {
+  local reason
+  reason=$(read_chain_hold_reason)
+  [[ "$reason" == "promote" ]] || return 0
+  reconcile_verify
+  save_resume_state "$((PHASE_NUM + 1))"
+  journal run HELD promote
+  api_post "/api/watchdog/chains/$SLUG/events" \
+    "$(event_body held "$PHASE_NUM" '"promote"')" 80
+  exit 0
+}
+
 # Waits for the build in flight, settling the verify the moment it exits so
 # a FAIL kills the build within seconds instead of after it finishes.
 watch_build() {
@@ -1104,6 +1135,7 @@ reload_runner_if_changed() {
 
 while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   honor_pause_request
+  honor_promote_hold
   PHASE_NUM=$((PHASE_NUM + 1))
   PHASE_FILE="${PHASE_FILES[$PHASE_NUM]}"
   PHASE_NAME=$(basename "$PHASE_FILE")
@@ -1235,11 +1267,13 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
     start_verify
   fi
   pickup_appends
+  honor_promote_hold
   reload_runner_if_changed
 done
 
 reconcile_verify
 honor_pause_request
+honor_promote_hold
 VERIFY_FAILURE_COUNT=${#VERIFY_FAILURES[@]}
 TAIL=$(git -C "$REPO" log --oneline "$CHAIN_BASE"..HEAD 2>/dev/null | head -20 | json_string)
 if [[ $VERIFY_FAILURE_COUNT -gt 0 ]]; then

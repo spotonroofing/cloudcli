@@ -176,6 +176,77 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
+  router.get(
+    '/chains/:slug/hold',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const slug = String(req.params.slug);
+      const projectPath = typeof req.query.projectPath === 'string' ? req.query.projectPath.trim() : '';
+      if (!projectPath) {
+        throw new AppError('projectPath is required.', {
+          code: 'WATCHDOG_CHAIN_PROJECT_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const hold = watchdogService.chainHold(slug, projectPath);
+      if (!hold) {
+        throw new AppError(`Chain "${slug}" is not registered for this project.`, {
+          code: 'WATCHDOG_CHAIN_UNKNOWN',
+          statusCode: 404,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, ...hold }));
+    }),
+  );
+
+  router.post(
+    '/chains/:slug/hold',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const slug = String(req.params.slug);
+      const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
+      const reason = body.reason === 'promote' ? body.reason : null;
+      if (!projectPath || !reason) {
+        throw new AppError('projectPath and reason=promote are required.', {
+          code: 'WATCHDOG_CHAIN_HOLD_FIELDS_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      if (watchdogService.requestChainHold(slug, projectPath, reason) === 'not-running') {
+        throw new AppError(`Chain "${slug}" is not running.`, {
+          code: 'WATCHDOG_CHAIN_NOT_RUNNING',
+          statusCode: 409,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, status: 'holding', reason }));
+    }),
+  );
+
+  router.post(
+    '/chains/:slug/release-hold',
+    requireApiKey,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const slug = String(req.params.slug);
+      const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
+      if (!projectPath) {
+        throw new AppError('projectPath is required.', {
+          code: 'WATCHDOG_CHAIN_PROJECT_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const status = watchdogService.releaseChainHold(slug, projectPath);
+      if (status === 'not-holding') {
+        throw new AppError(`Chain "${slug}" has no promote hold.`, {
+          code: 'WATCHDOG_CHAIN_NOT_HOLDING',
+          statusCode: 409,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, status }));
+    }),
+  );
+
   // The dispatch runner announces each stage's session id — chosen up front
   // for Claude, the Codex thread id as soon as `codex exec` reports it — so
   // the row exists tagged origin 'dispatch' (with its chain slug, engine and
@@ -398,12 +469,46 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
-  // The two fleet notification kinds; the planner's verified-done endpoint.
+  router.get(
+    '/promotes',
+    requireApiKeyOrToken,
+    asyncHandler(async (req: Request, res: Response) => {
+      const projectPath = typeof req.query.projectPath === 'string' ? req.query.projectPath.trim() : '';
+      if (!projectPath) {
+        throw new AppError('projectPath is required.', {
+          code: 'WATCHDOG_PROMOTES_PROJECT_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      res.json(createApiSuccessResponse({ promotes: watchdogService.listPromotes(projectPath) }));
+    }),
+  );
+
+  // Fleet notifications plus promote.sh's completed-promote persistence lane.
   router.post(
     '/notify',
     requireApiKey,
     asyncHandler(async (req: Request, res: Response) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
+      if (body.kind === 'promoted') {
+        const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
+        const promotedCommit = typeof body.promotedCommit === 'string' ? body.promotedCommit.trim() : '';
+        const previousLiveCommit = typeof body.previousLiveCommit === 'string' ? body.previousLiveCommit.trim() : '';
+        if (!projectPath || !promotedCommit || !previousLiveCommit || typeof body.dryRun !== 'boolean') {
+          throw new AppError('promoted requires projectPath, promotedCommit, previousLiveCommit, and dryRun.', {
+            code: 'WATCHDOG_PROMOTE_FIELDS_REQUIRED',
+            statusCode: 400,
+          });
+        }
+        const promote = watchdogService.recordPromote({
+          projectPath,
+          promotedCommit,
+          previousLiveCommit,
+          dryRun: body.dryRun,
+        });
+        res.status(201).json(createApiSuccessResponse(promote));
+        return;
+      }
       const kind = body.kind === 'decision-needed' || body.kind === 'verified-done' || body.kind === 'recovery'
         ? body.kind
         : null;

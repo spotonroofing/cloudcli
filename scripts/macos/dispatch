@@ -3,6 +3,8 @@
 #
 #   dispatch <project> <slug> [phase-file ...]
 #   dispatch pause <project> <slug>
+#   dispatch hold <project> <slug>
+#   dispatch release-hold <project> <slug>
 #   dispatch resume <project> <slug>
 #   dispatch fast <project> <slug> on|off
 #   dispatch append <project> <slug> <file ...> [--phase]
@@ -75,6 +77,8 @@ PYEOF
 usage() {
   print -u2 "usage: dispatch <project> <slug> [phase-file ...]"
   print -u2 "       dispatch pause <project> <slug>"
+  print -u2 "       dispatch hold <project> <slug>"
+  print -u2 "       dispatch release-hold <project> <slug>"
   print -u2 "       dispatch resume <project> <slug>"
   print -u2 "       dispatch fast <project> <slug> on|off"
   print -u2 "       dispatch append <project> <slug> <file ...> [--phase]"
@@ -117,6 +121,58 @@ PYEOF
     exit 69
   fi
   print -r -- "dispatch: chain $SLUG fast mode $FAST_VALUE; the next Codex job reads the new setting"
+  exit 0
+fi
+
+# ----- hold/release-hold: promote-owned clean boundary control -----
+if [[ "$1" == "hold" || "$1" == "release-hold" ]]; then
+  ACTION="$1"; shift
+  [[ $# -eq 2 ]] || usage
+  PROJECT_ARG="$1"; SLUG="$2"
+  if [[ "$PROJECT_ARG" == /* ]]; then
+    REPO="$PROJECT_ARG"
+  else
+    REPO="$PROJECTS_ROOT/$PROJECT_ARG"
+  fi
+  [[ -d "$REPO/.git" ]] || { print -u2 "dispatch: $REPO is not a git repo"; exit 66; }
+  REPO="${REPO:A}"
+
+  API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
+  [[ -n "$API_KEY" ]] || { print -u2 "dispatch: no active API key in server config"; exit 78; }
+  HEADER_FILE=$(mktemp)
+  chmod 600 "$HEADER_FILE"
+  print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
+  trap 'rm -f "$HEADER_FILE"' EXIT
+  BODY=$(python3 - "$REPO" "$ACTION" <<'PYEOF'
+import json, sys
+body = {'projectPath': sys.argv[1]}
+if sys.argv[2] == 'hold':
+    body['reason'] = 'promote'
+print(json.dumps(body))
+PYEOF
+)
+  ENDPOINT="$ACTION"
+  RESPONSE=$(curl -s -K "$HEADER_FILE" -m 30 -X POST "$SERVER_URL/api/watchdog/chains/$SLUG/$ENDPOINT" \
+    -H 'Content-Type: application/json' -d "$BODY" -w '\n%{http_code}' 2>/dev/null)
+  STATUS="${RESPONSE##*$'\n'}"
+  RESPONSE_BODY="${RESPONSE%$'\n'*}"
+  if [[ "$STATUS" == "409" ]]; then
+    print -r -- "dispatch: chain $SLUG has no active promote hold; nothing changed"
+    exit 0
+  fi
+  if [[ "$STATUS" != "200" ]]; then
+    print -u2 "dispatch: could not $ACTION chain $SLUG (HTTP ${STATUS:-000}: $RESPONSE_BODY)"
+    exit 69
+  fi
+  if [[ "$ACTION" == "hold" ]]; then
+    print -r -- "dispatch: chain $SLUG will hold after its current job commits and verifies"
+    exit 0
+  fi
+  RELEASE_STATUS=$(RESPONSE_BODY="$RESPONSE_BODY" python3 -c 'import json,os; print(json.loads(os.environ["RESPONSE_BODY"])["data"]["status"])')
+  if [[ "$RELEASE_STATUS" == "held" ]]; then
+    exec "$0" resume "$REPO" "$SLUG"
+  fi
+  print -r -- "dispatch: chain $SLUG promote hold cleared; the current job keeps running"
   exit 0
 fi
 
