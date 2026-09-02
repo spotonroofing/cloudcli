@@ -46,6 +46,7 @@ test('a boundary reload runs new code and a later failed verify still notifies w
   timeout: 30_000,
 }, async () => {
   const previousDatabasePath = process.env.DATABASE_PATH;
+  const previousHome = process.env.HOME;
   const cleanupDirectory = await mkdtemp(path.join(tmpdir(), 'verify-failure-continues-'));
   const directory = await realpath(cleanupDirectory);
   const repo = path.join(directory, 'repo');
@@ -68,6 +69,7 @@ test('a boundary reload runs new code and a later failed verify still notifies w
 
   closeConnection();
   process.env.DATABASE_PATH = database;
+  process.env.HOME = fakeHome;
   try {
     await Promise.all([
       mkdir(repo),
@@ -168,11 +170,14 @@ print -r -- "done" > "$output"
       DISPATCH_SERVER_URL: serverUrl,
       DISPATCH_DB_PATH: database,
       DISPATCH_ENGINE: 'codex',
+      DISPATCH_MANIFEST: '',
       DISPATCH_MODEL: '',
+      DISPATCH_RELOADING: '',
       DISPATCH_VERIFY_ENGINE: 'codex',
       DISPATCH_VERIFY_MODEL: 'gpt-test-verify',
       DISPATCH_RESUME_FROM: '1',
       DISPATCH_RESUMING: '',
+      DISPATCHING_SESSION_ID: '',
       STUB_CALLS: calls,
       STUB_FIRST_BUILD_STARTED: firstBuildStarted,
       STUB_RELEASE_FIRST_BUILD: releaseFirstBuild,
@@ -271,6 +276,11 @@ print -r -- "done" > "$output"
       delete process.env.DATABASE_PATH;
     } else {
       process.env.DATABASE_PATH = previousDatabasePath;
+    }
+    if (previousHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = previousHome;
     }
     await rm(cleanupDirectory, { recursive: true, force: true });
   }

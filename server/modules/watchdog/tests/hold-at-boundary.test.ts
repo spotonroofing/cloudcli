@@ -60,6 +60,7 @@ test('a hold lets the active build commit and verify, then resumes at the next u
   timeout: 35_000,
 }, async () => {
   const previousDatabasePath = process.env.DATABASE_PATH;
+  const previousHome = process.env.HOME;
   const cleanupDirectory = await mkdtemp(path.join(tmpdir(), 'hold-at-boundary-'));
   const directory = await realpath(cleanupDirectory);
   const repo = path.join(directory, 'repo');
@@ -77,6 +78,7 @@ test('a hold lets the active build commit and verify, then resumes at the next u
 
   closeConnection();
   process.env.DATABASE_PATH = database;
+  process.env.HOME = fakeHome;
   try {
     await Promise.all([
       mkdir(repo),
@@ -160,9 +162,14 @@ print -r -- "done" > "$output"
       DISPATCH_SERVER_URL: serverUrl,
       DISPATCH_DB_PATH: database,
       DISPATCH_ENGINE: 'codex',
+      DISPATCH_MANIFEST: '',
       DISPATCH_MODEL: 'gpt-test-build',
+      DISPATCH_RELOADING: '',
+      DISPATCH_RESUME_FROM: '1',
+      DISPATCH_RESUMING: '',
       DISPATCH_VERIFY_ENGINE: 'codex',
       DISPATCH_VERIFY_MODEL: 'gpt-test-verify',
+      DISPATCHING_SESSION_ID: '',
       STUB_FIRST_BUILD_STARTED: firstBuildStarted,
       STUB_RELEASE_BUILD: releaseBuild,
       STUB_RELEASE_VERIFY: releaseVerify,
@@ -261,6 +268,11 @@ print -r -- "done" > "$output"
       delete process.env.DATABASE_PATH;
     } else {
       process.env.DATABASE_PATH = previousDatabasePath;
+    }
+    if (previousHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = previousHome;
     }
     await rm(cleanupDirectory, { recursive: true, force: true });
   }

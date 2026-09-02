@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -63,6 +63,7 @@ test('manifest-less dispatch compiles phase headers, refuses blank tasks, and re
   timeout: 35_000,
 }, async () => {
   const previousDatabasePath = process.env.DATABASE_PATH;
+  const previousHome = process.env.HOME;
   const cleanupDirectory = await mkdtemp(path.join(tmpdir(), 'manifest-chain-'));
   const directory = await realpath(cleanupDirectory);
   const repo = path.join(directory, 'repo');
@@ -76,6 +77,7 @@ test('manifest-less dispatch compiles phase headers, refuses blank tasks, and re
 
   closeConnection();
   process.env.DATABASE_PATH = database;
+  process.env.HOME = fakeHome;
   try {
     await Promise.all([
       mkdir(repo),
@@ -146,6 +148,7 @@ print -r -- "done" > "$output"
       DISPATCH_RELOADING: '',
       DISPATCH_RESUME_FROM: '',
       DISPATCH_RESUMING: '',
+      DISPATCHING_SESSION_ID: '',
       STUB_REPO: repo,
     } as NodeJS.ProcessEnv;
 
@@ -194,7 +197,7 @@ print -r -- "done" > "$output"
     const statuses = ['running', 'completed', 'failed'] as const;
     for (const status of statuses) {
       const repairSlug = `${slug}-${status}`;
-      const runtime = path.join(homedir(), 'forge-logs', repairSlug);
+      const runtime = path.join(fakeHome, 'forge-logs', repairSlug);
       serviceRuntimeDirectories.push(runtime);
       await mkdir(runtime, { recursive: true });
       await writeFile(path.join(runtime, 'resume.json'), `${JSON.stringify({ repo, phaseFiles: [phaseOne, phaseTwo] })}\n`);
@@ -249,6 +252,8 @@ print -r -- "done" > "$output"
     closeConnection();
     if (previousDatabasePath === undefined) delete process.env.DATABASE_PATH;
     else process.env.DATABASE_PATH = previousDatabasePath;
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
     await Promise.all(serviceRuntimeDirectories.map((runtime) => rm(runtime, { recursive: true, force: true })));
     await rm(cleanupDirectory, { recursive: true, force: true });
   }

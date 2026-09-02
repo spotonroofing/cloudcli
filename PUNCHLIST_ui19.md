@@ -23,8 +23,8 @@ Three things Willem needs: the server test suite is red at HEAD which blocks eve
 
 Goal: four server tests fail at HEAD (`hold-at-boundary`, `pause-during-verify`, the all-dry chain recovery case, and the anchor-less planner manifest case; ui18 unit 1's journal called three of them pre-existing and later units confirmed a fourth), and promote.sh runs the full server suite, so a red tree blocks every promote. Fix the tests at the cause: if the code is wrong the code changes, if the test asserts a stale contract the test changes to the real contract, and the summary says which it was per test, with evidence. Files: `server/modules/watchdog/tests/` (the failing files), whatever code they exercise, nothing else.
 
-- [ ] All four named tests pass individually and in the full suite, with the cause of each stated in the summary (code defect or stale assertion), never skipped, never loosened to pass.
-- [ ] The full server suite and client suite pass twice in a row from a clean state (no order dependence, no leaked fixtures from the manifest and hold tests that mutated HOME and env in ui18).
+- [x] All four named tests pass individually and in the full suite, with the cause of each stated in the summary (code defect or stale assertion), never skipped, never loosened to pass.
+- [x] The full server suite and client suite pass twice in a row from a clean state (no order dependence, no leaked fixtures from the manifest and hold tests that mutated HOME and env in ui18).
 
 Done check: two consecutive full-suite runs pass from a clean tree; the summary names each test's cause. Commit.
 
