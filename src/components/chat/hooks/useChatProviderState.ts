@@ -19,10 +19,19 @@ import {
 import { onSettingChange, writeSetting } from '../../../utils/cloudSettings';
 
 const FALLBACK_DEFAULT_MODEL: Record<LLMProvider, string> = {
-  claude: 'claude-fable-5',
+  claude: 'claude-fable-5-1',
   cursor: 'gpt-5.3-codex',
   codex: 'gpt-5.6-sol',
   opencode: 'anthropic/claude-sonnet-4-5',
+};
+const LEGACY_CLAUDE_DEFAULT_MODEL = 'claude-fable-5';
+const CLAUDE_LEGACY_SELECTION_KEY = 'claude-fable-5-explicit-selection';
+
+const readStoredClaudeModel = (): string => {
+  const stored = localStorage.getItem('claude-model');
+  const legacyDefaultNeedsMigration = stored === LEGACY_CLAUDE_DEFAULT_MODEL
+    && localStorage.getItem(CLAUDE_LEGACY_SELECTION_KEY) !== '1';
+  return legacyDefaultNeedsMigration ? FALLBACK_DEFAULT_MODEL.claude : stored || FALLBACK_DEFAULT_MODEL.claude;
 };
 
 const PROVIDERS: LLMProvider[] = ['claude', 'cursor', 'codex', 'opencode'];
@@ -125,9 +134,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   const [cursorModel, setCursorModel] = useState<string>(() => {
     return localStorage.getItem('cursor-model') || FALLBACK_DEFAULT_MODEL.cursor;
   });
-  const [claudeModel, setClaudeModel] = useState<string>(() => {
-    return localStorage.getItem('claude-model') || FALLBACK_DEFAULT_MODEL.claude;
-  });
+  const [claudeModel, setClaudeModel] = useState<string>(readStoredClaudeModel);
   const [codexModel, setCodexModel] = useState<string>(() => {
     return localStorage.getItem('codex-model') || FALLBACK_DEFAULT_MODEL.codex;
   });
@@ -168,6 +175,13 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
 
   const setStoredProviderModel = useCallback((targetProvider: LLMProvider, model: string) => {
     if (targetProvider === 'claude') {
+      // Once Willem explicitly chooses a Claude model, including legacy Fable
+      // 5, it is a preference rather than the pre-5.1 default to migrate.
+      if (model === LEGACY_CLAUDE_DEFAULT_MODEL) {
+        localStorage.setItem(CLAUDE_LEGACY_SELECTION_KEY, '1');
+      } else {
+        localStorage.removeItem(CLAUDE_LEGACY_SELECTION_KEY);
+      }
       setClaudeModel(model);
       writeSetting('claude-model', model);
       return;
@@ -388,7 +402,11 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   useEffect(() => {
     const claude = providerModelCatalog.claude;
     if (claude) {
-      const next = pickStoredOrCurrent('claude-model', claudeModel, claude);
+      const legacyDefaultNeedsMigration = localStorage.getItem('claude-model') === LEGACY_CLAUDE_DEFAULT_MODEL
+        && localStorage.getItem(CLAUDE_LEGACY_SELECTION_KEY) !== '1';
+      const next = legacyDefaultNeedsMigration
+        ? claude.DEFAULT
+        : pickStoredOrCurrent('claude-model', claudeModel, claude);
       if (next !== claudeModel) {
         setClaudeModel(next);
       }
@@ -474,7 +492,17 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     ],
     (key, value) => {
       if (!value) return;
-      if (key === 'claude-model') setClaudeModel(value);
+      if (key === 'claude-model') {
+        if (
+          value === LEGACY_CLAUDE_DEFAULT_MODEL
+          && localStorage.getItem(CLAUDE_LEGACY_SELECTION_KEY) !== '1'
+        ) {
+          setClaudeModel(FALLBACK_DEFAULT_MODEL.claude);
+          writeSetting('claude-model', FALLBACK_DEFAULT_MODEL.claude);
+        } else {
+          setClaudeModel(value);
+        }
+      }
       else if (key === 'cursor-model') setCursorModel(value);
       else if (key === 'codex-model') setCodexModel(value);
       else if (key === 'opencode-model') setOpenCodeModel(value);

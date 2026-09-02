@@ -705,7 +705,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
    *
    * @param {string} model - (Optional) Model identifier for providers.
    *
-   *                        Claude models: real model ids, e.g. 'claude-fable-5', 'claude-sonnet-5', 'claude-haiku-4-5', 'claude-opus-4-8'
+   *                        Claude models: real model ids, e.g. 'claude-fable-5-1', 'claude-sonnet-5', 'claude-haiku-4-5', 'claude-opus-4-8'
    *                        Cursor models: 'gpt-5' (default), 'gpt-5.2', 'gpt-5.2-high', 'sonnet-4.5', 'opus-4.5',
    *                                       'composer-1', 'auto', 'gpt-5.1', 'gpt-5.1-high',
    *                                       'gpt-5.1-codex', 'gpt-5.1-codex-high', 'gpt-5.1-codex-max',

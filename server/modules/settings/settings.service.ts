@@ -94,11 +94,13 @@ export type ModelSelection = { provider: string; model: string; effort: string }
 
 /** Seeds for the Models section: what a new session of each role starts with. */
 const MODEL_ROLE_DEFAULTS: Record<ModelRole, ModelSelection> = {
-  planner: { provider: 'claude', model: 'claude-fable-5', effort: 'medium' },
-  worker: { provider: 'claude', model: 'claude-fable-5', effort: 'high' },
+  planner: { provider: 'claude', model: 'claude-fable-5-1', effort: 'medium' },
+  worker: { provider: 'claude', model: 'claude-fable-5-1', effort: 'high' },
 };
+const LEGACY_CLAUDE_MODEL_DEFAULT = 'claude-fable-5';
 
 const modelSettingKey = (role: ModelRole): string => `model_default_${role}`;
+const modelDefaultMigrationKey = (role: ModelRole): string => `model_default_fable_5_1_migrated_${role}`;
 
 const PLANNER_MCP_SERVERS = [
   'spoton-core',
@@ -158,7 +160,18 @@ export function createSettingsService(dependencies: SettingsDependencies) {
     if (stored === null) {
       return MODEL_ROLE_DEFAULTS[role];
     }
-    return JSON.parse(stored) as ModelSelection;
+    const selection = JSON.parse(stored) as ModelSelection;
+    if (
+      selection.provider === 'claude'
+      && selection.model === LEGACY_CLAUDE_MODEL_DEFAULT
+      && dependencies.appConfig.get(modelDefaultMigrationKey(role)) === null
+    ) {
+      const migrated = { ...selection, model: MODEL_ROLE_DEFAULTS[role].model };
+      dependencies.appConfig.set(modelSettingKey(role), JSON.stringify(migrated));
+      dependencies.appConfig.set(modelDefaultMigrationKey(role), '1');
+      return migrated;
+    }
+    return selection;
   };
 
   const readPlannerMcpServers = (projectPath: string): PlannerMcpServer[] => {
@@ -259,6 +272,9 @@ export function createSettingsService(dependencies: SettingsDependencies) {
     updateModelDefaults(roles: Partial<Record<ModelRole, ModelSelection>>) {
       for (const [role, selection] of Object.entries(roles) as [ModelRole, ModelSelection][]) {
         dependencies.appConfig.set(modelSettingKey(role), JSON.stringify(selection));
+        // Any Settings save is explicit. The migration must never rewrite a
+        // later deliberate Fable 5 choice back to Fable 5.1.
+        dependencies.appConfig.set(modelDefaultMigrationKey(role), '1');
       }
       return this.getModelDefaults();
     },

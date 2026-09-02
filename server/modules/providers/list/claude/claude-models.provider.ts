@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 
+import { query, type ModelInfo } from '@anthropic-ai/claude-agent-sdk';
+
 import { sessionsDb } from '@/modules/database/index.js';
+import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import type { IProviderModels } from '@/shared/interfaces.js';
 import type {
   ProviderCurrentActiveModel,
@@ -9,18 +12,31 @@ import type {
 } from '@/shared/types.js';
 import { buildDefaultProviderCurrentActiveModel } from '@/shared/utils.js';
 
-// The one plain config array driving the model switcher: id (value), friendly
-// name (label), tagline (description), and group ('current' | 'legacy') per
-// model, in display order — adding a future model is one entry here.
-// Labels/descriptions are display-only; values are the real model ids sent to
-// the SDK unchanged (the wire format is untouched).
+// Used only when the installed Claude CLI cannot report its own catalog. Keep
+// the fallback complete enough for an offline server to remain operable.
 export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
   OPTIONS: [
     {
-      value: 'claude-fable-5',
-      label: 'Fable 5',
-      description: 'For your toughest challenges',
+      value: 'claude-fable-5-1',
+      label: 'Claude Fable 5.1',
+      description: 'Most capable for your hardest and longest-running tasks',
       group: 'current',
+      effort: {
+        default: 'high',
+        values: [
+          { value: 'low' },
+          { value: 'medium' },
+          { value: 'high' },
+          { value: 'xhigh' },
+          { value: 'max' },
+        ],
+      },
+    },
+    {
+      value: 'claude-fable-5',
+      label: 'Claude Fable 5',
+      description: 'For your toughest challenges',
+      group: 'legacy',
       effort: {
         default: 'high',
         values: [
@@ -124,16 +140,99 @@ export const CLAUDE_PREDEFINED_MODELS: ProviderModelsDefinition = {
       },
     },
   ],
-  DEFAULT: 'claude-fable-5',
+  DEFAULT: 'claude-fable-5-1',
 };
 
-export const findClaudeModelOption = (model: string | undefined | null): ProviderModelOption | null => {
-  const normalizedModel = typeof model === 'string' ? model.trim() : '';
-  if (!normalizedModel) {
+type ClaudeCliModelInfo = ModelInfo & { resolvedModel?: string };
+type ClaudeModelsLoader = () => Promise<ClaudeCliModelInfo[]>;
+
+const REQUIRED_CLAUDE_OPTIONS = CLAUDE_PREDEFINED_MODELS.OPTIONS.filter((option) => (
+  option.value === 'claude-fable-5-1' || option.value === 'claude-fable-5'
+));
+const CLAUDE_CATALOG_TIMEOUT_MS = 10_000;
+
+const normalizedClaudeModelId = (model: ClaudeCliModelInfo): string => (
+  (model.resolvedModel || model.value).replace(/\[1m\]$/i, '').trim()
+);
+
+const labelForClaudeModel = (modelId: string, fallback: string): string => {
+  const match = /^claude-(fable|opus|sonnet|haiku)-(\d+)(?:-(\d+))?/i.exec(modelId);
+  if (!match) {
+    return fallback;
+  }
+  const family = `${match[1][0].toUpperCase()}${match[1].slice(1).toLowerCase()}`;
+  const minor = match[3]?.length && match[3].length <= 2 ? `.${match[3]}` : '';
+  return `Claude ${family} ${match[2]}${minor}`;
+};
+
+const toClaudeModelOption = (model: ClaudeCliModelInfo): ProviderModelOption | null => {
+  const value = normalizedClaudeModelId(model);
+  if (!value || value === 'default') {
     return null;
   }
+  const supportedEfforts = model.supportedEffortLevels ?? [];
+  return {
+    value,
+    label: labelForClaudeModel(value, model.displayName),
+    description: model.description,
+    group: 'current',
+    ...(model.supportsEffort && supportedEfforts.length > 0
+      ? {
+        effort: {
+          default: supportedEfforts.includes('high') ? 'high' : supportedEfforts[0],
+          values: supportedEfforts.map((effort) => ({ value: effort })),
+        },
+      }
+      : {}),
+  };
+};
 
-  return CLAUDE_PREDEFINED_MODELS.OPTIONS.find((option) => option.value === normalizedModel) ?? null;
+const buildClaudeModelsDefinition = (models: ClaudeCliModelInfo[]): ProviderModelsDefinition | null => {
+  const byId = new Map<string, ProviderModelOption>();
+  for (const model of models) {
+    const option = toClaudeModelOption(model);
+    if (option && !byId.has(option.value)) {
+      byId.set(option.value, option);
+    }
+  }
+  if (byId.size === 0) {
+    return null;
+  }
+  for (const required of REQUIRED_CLAUDE_OPTIONS) {
+    if (!byId.has(required.value)) {
+      byId.set(required.value, required);
+    }
+  }
+  return {
+    OPTIONS: [...byId.values()],
+    DEFAULT: CLAUDE_PREDEFINED_MODELS.DEFAULT,
+  };
+};
+
+const loadInstalledClaudeModels: ClaudeModelsLoader = async () => {
+  const queryInstance = query({
+    prompt: '',
+    options: {
+      pathToClaudeCodeExecutable: resolveClaudeCodeExecutablePath(),
+      persistSession: false,
+      settingSources: [],
+      tools: [],
+    },
+  });
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      queryInstance.supportedModels() as Promise<ClaudeCliModelInfo[]>,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error('Claude model discovery timed out')), CLAUDE_CATALOG_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    queryInstance.close();
+  }
 };
 
 // Published context window per model id, the default denominator wherever a
@@ -144,6 +243,7 @@ export const findClaudeModelOption = (model: string | undefined | null): Provide
 // has since reported 967k. Ids in neither this catalog nor the runtime cache
 // keep the CONTEXT_WINDOW env / 160k fallback.
 export const CLAUDE_CONTEXT_WINDOWS: Record<string, number> = {
+  'claude-fable-5-1': 1_000_000,
   'claude-fable-5': 1_000_000,
   'claude-opus-5': 1_000_000,
   'claude-sonnet-5': 1_000_000,
@@ -279,20 +379,36 @@ const readClaudeSessionModelFromJsonl = async (
   return null;
 };
 
+/** Claude provider registry adapter used by provider routes and runtimes. */
 export class ClaudeProviderModels implements IProviderModels {
+  private catalogPromise: Promise<ProviderModelsDefinition>;
+
+  private initialCatalogPending = true;
+
+  constructor(private readonly loadModels: ClaudeModelsLoader = loadInstalledClaudeModels) {
+    // Provider construction happens during registry initialization, so this
+    // begins discovery at server start without holding module evaluation open.
+    this.catalogPromise = this.discoverModels();
+  }
+
+  private async discoverModels(): Promise<ProviderModelsDefinition> {
+    try {
+      return buildClaudeModelsDefinition(await this.loadModels()) ?? CLAUDE_PREDEFINED_MODELS;
+    } catch (error) {
+      console.warn('[Claude models] Installed CLI catalog unavailable; using static fallback.', error);
+      return CLAUDE_PREDEFINED_MODELS;
+    }
+  }
+
   async getSupportedModels(): Promise<ProviderModelsDefinition> {
-    // claude creates a new jsonl file as a separate session for this request.
-    // As a result, it lists the workspace where this is invoked when it shouldn't.
-    //
-    // Disabled for now:
-    // const queryInstance = query({
-    //   prompt: 'Get supported models',
-    //   options: buildClaudeQueryOptions(),
-    // });
-    // const supportedModels = await queryInstance.supportedModels();
-    // queryInstance.close();
-    // return buildClaudeModelsDefinition(supportedModels);
-    return CLAUDE_PREDEFINED_MODELS;
+    if (this.initialCatalogPending) {
+      this.initialCatalogPending = false;
+      return this.catalogPromise;
+    }
+    // Provider catalog GETs power both the switcher and Settings refresh. A
+    // fresh CLI initialization here picks up models installed since startup.
+    this.catalogPromise = this.discoverModels();
+    return this.catalogPromise;
   }
 
   async getCurrentActiveModel(sessionId?: string): Promise<ProviderCurrentActiveModel> {

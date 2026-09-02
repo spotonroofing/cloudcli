@@ -121,8 +121,8 @@ test('model defaults seed per role and round-trip through the store', () => {
   const appConfig = storedConfig();
   const service = createSettingsService(dependencies({ appConfig }));
   const seeded = service.getModelDefaults();
-  assert.deepEqual(seeded.roles.planner, { provider: 'claude', model: 'claude-fable-5', effort: 'medium' });
-  assert.deepEqual(seeded.roles.worker, { provider: 'claude', model: 'claude-fable-5', effort: 'high' });
+  assert.deepEqual(seeded.roles.planner, { provider: 'claude', model: 'claude-fable-5-1', effort: 'medium' });
+  assert.deepEqual(seeded.roles.worker, { provider: 'claude', model: 'claude-fable-5-1', effort: 'high' });
 
   const updated = service.updateModelDefaults({ worker: { provider: 'codex', model: 'gpt-5.6-sol', effort: 'high' } });
   assert.deepEqual(updated.roles.worker, { provider: 'codex', model: 'gpt-5.6-sol', effort: 'high' });
@@ -130,6 +130,27 @@ test('model defaults seed per role and round-trip through the store', () => {
   assert.deepEqual(
     createSettingsService(dependencies({ appConfig })).getModelDefaults().roles.worker,
     { provider: 'codex', model: 'gpt-5.6-sol', effort: 'high' },
+  );
+});
+
+test('stored pre-5.1 Claude defaults migrate once while an explicit Fable 5 choice remains valid', () => {
+  const appConfig = storedConfig([
+    ['model_default_planner', JSON.stringify({ provider: 'claude', model: 'claude-fable-5', effort: 'medium' })],
+    ['model_default_worker', JSON.stringify({ provider: 'claude', model: 'claude-fable-5', effort: 'high' })],
+  ]);
+  const service = createSettingsService(dependencies({ appConfig }));
+
+  assert.equal(service.getModelDefaults().roles.planner.model, 'claude-fable-5-1');
+  assert.equal(service.getModelDefaults().roles.worker.model, 'claude-fable-5-1');
+  assert.equal(appConfig.map.get('model_default_fable_5_1_migrated_planner'), '1');
+  assert.equal(appConfig.map.get('model_default_fable_5_1_migrated_worker'), '1');
+
+  service.updateModelDefaults({
+    planner: { provider: 'claude', model: 'claude-fable-5', effort: 'medium' },
+  });
+  assert.equal(
+    createSettingsService(dependencies({ appConfig })).getModelDefaults().roles.planner.model,
+    'claude-fable-5',
   );
 });
 
@@ -178,13 +199,13 @@ test('spawn selection carries the previous row of the role, else the Models defa
 
   // No previous planner row in this project: the Models default.
   const fresh = service.resolveSpawnSelection('planner', 'claude', '/empty', null);
-  assert.equal(fresh.model, 'claude-fable-5');
+  assert.equal(fresh.model, 'claude-fable-5-1');
   assert.equal(fresh.effort, 'medium');
 
   // A previous worker row on another provider does not leak its model into
   // a Claude worker; the effort default still applies.
   const worker = service.resolveSpawnSelection('worker', 'claude', '/p', 'new-2');
-  assert.equal(worker.model, 'claude-fable-5');
+  assert.equal(worker.model, 'claude-fable-5-1');
   assert.equal(worker.effort, 'high');
   const codexWorker = service.resolveSpawnSelection('worker', 'codex', '/p', 'new-3');
   assert.equal(codexWorker.model, 'gpt-5.6-sol');
@@ -197,7 +218,7 @@ test('spawn selection carries the previous row of the role, else the Models defa
   assert.equal(derived.model, 'gpt-5.6-sol');
   const derivedFresh = service.resolveSpawnSelection('planner', null, '/empty', null);
   assert.equal(derivedFresh.provider, 'claude');
-  assert.equal(derivedFresh.model, 'claude-fable-5');
+  assert.equal(derivedFresh.model, 'claude-fable-5-1');
 
   // The composer records 'default' on every send when nothing was picked;
   // that placeholder is not a pick, so the Models default effort applies.

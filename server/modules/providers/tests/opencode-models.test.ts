@@ -33,7 +33,13 @@ test('OpenCode exposes only the curated predefined catalog', async () => {
     OPENCODE_PREDEFINED_MODELS.OPTIONS.some((option) => option.value === 'opencode/claude-opus-5'),
   );
   assert.ok(
+    OPENCODE_PREDEFINED_MODELS.OPTIONS.some((option) => option.value === 'opencode/claude-fable-5-1'),
+  );
+  assert.ok(
     OPENCODE_PREDEFINED_MODELS.OPTIONS.some((option) => option.value === 'anthropic/claude-opus-5'),
+  );
+  assert.ok(
+    OPENCODE_PREDEFINED_MODELS.OPTIONS.some((option) => option.value === 'anthropic/claude-fable-5-1'),
   );
   assert.ok(
     OPENCODE_PREDEFINED_MODELS.OPTIONS.some((option) => option.value === 'openai/gpt-5.6'),
