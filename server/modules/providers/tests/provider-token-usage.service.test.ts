@@ -159,6 +159,63 @@ test('an Opus 5 session past 200k reads a fifth of a million-token window', asyn
   }
 });
 
+// ui19 job 2: Willem's phone read 0 for sessions that were far from 0. A run
+// that ends on a limit or an API failure is closed by a `<synthetic>` assistant
+// row whose usage block is all zeros, and that row was taken as the newest
+// reading. A desktop pane open through the run kept the live streamed budget
+// and looked right; the phone, which only ever reads this snapshot, showed 0.
+test('a trailing synthetic API-error row never replaces the last real reading', async () => {
+  const tempDirectory = await mkdtemp(path.join(tmpdir(), 'provider-token-usage-synthetic-'));
+  const sessionFilePath = path.join(tempDirectory, 'provider-session.jsonl');
+
+  try {
+    await writeFile(sessionFilePath, [
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude-fable-5-1',
+          usage: {
+            input_tokens: 82,
+            cache_read_input_tokens: 312_211,
+            cache_creation_input_tokens: 3_779,
+            output_tokens: 1_238,
+          },
+        },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        isApiErrorMessage: true,
+        message: {
+          model: '<synthetic>',
+          usage: {
+            input_tokens: 0,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            output_tokens: 0,
+          },
+        },
+      }),
+    ].join('\n'));
+
+    const service = createProviderTokenUsageService({
+      getSessionById: () => createSessionRow({ jsonl_path: sessionFilePath }),
+      getClaudeContextWindow: () => '180000',
+      getPersistedClaudeWindow: () => null,
+    });
+
+    const usage = await service.getSessionTokenUsage('app-session');
+    assert.equal(usage.used, 317_310);
+    assert.equal(usage.inputTokens, 316_072);
+    assert.equal(usage.outputTokens, 1_238);
+    assert.equal(usage.cacheReadTokens, 312_211);
+    // The synthetic row also carries no model, so the window must still come
+    // from the last real turn's model rather than the 160k fallback.
+    assert.equal(usage.total, 1_000_000);
+  } finally {
+    await rm(tempDirectory, { recursive: true, force: true });
+  }
+});
+
 test('Claude job tokens count fresh input and output, cache reads apart', async () => {
   const tempDirectory = await mkdtemp(path.join(tmpdir(), 'provider-job-token-usage-claude-'));
   const sessionFilePath = path.join(tempDirectory, 'provider-session.jsonl');

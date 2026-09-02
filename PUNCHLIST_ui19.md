@@ -42,7 +42,7 @@ Done check: on dev, the model switcher lists Claude Fable 5.1 and marks it defau
 
 Goal: on the phone the context indicator reads 0 for sessions that are far from 0 (Willem, 2026-08-29, mobile). Reproduce first at a phone viewport with a session that has real usage (the dev fixture or a copied live session), find why the phone reads 0 while desktop reads the true figure (a different store path, a compact formatter truncating, or the mobile footer never receiving the usage payload), and fix it at the cause so phone and desktop always show the same number from the same source. Files: the context window control and usage footer components in `src/components/chat/`, `src/components/worker-pane/`, the token-usage service route, `design/composer.md`.
 
-- [ ] At 390px the context indicator for a session with known usage shows the same figure as the desktop layout, live and after a cold reload, on the planner and worker panes; the cause is stated in the summary with the evidence.
-- [ ] A regression test covers the phone layout reading the same usage source as desktop.
+- [x] At 390px the context indicator for a session with known usage shows the same figure as the desktop layout, live and after a cold reload, on the planner and worker panes; the cause is stated in the summary with the evidence.
+- [x] A regression test covers the phone layout reading the same usage source as desktop.
 
 Done check: on dev with agent-browser at 390px on the fixture session, the indicator shows the known non-zero figure matching desktop; tests pass. Commit.

@@ -333,18 +333,33 @@ function readClaudeTokenUsage(
         continue;
       }
 
-      model = typeof entry.message?.model === 'string' ? entry.message.model : null;
+      const rowModel = typeof entry.message?.model === 'string' ? entry.message.model : null;
       const directInputTokens = readUsageNumber(usage.input_tokens ?? usage.inputTokens);
-      cacheReadTokens = readUsageNumber(
+      const rowCacheReadTokens = readUsageNumber(
         usage.cache_read_input_tokens ?? usage.cacheReadInputTokens ?? usage.cacheReadTokens,
       );
-      cacheCreationTokens = readUsageNumber(
+      const rowCacheCreationTokens = readUsageNumber(
         usage.cache_creation_input_tokens
           ?? usage.cacheCreationInputTokens
           ?? usage.cacheCreationTokens,
       );
-      inputTokens = directInputTokens + cacheReadTokens + cacheCreationTokens;
-      outputTokens = readUsageNumber(usage.output_tokens ?? usage.outputTokens);
+      const rowInputTokens = directInputTokens + rowCacheReadTokens + rowCacheCreationTokens;
+      const rowOutputTokens = readUsageNumber(usage.output_tokens ?? usage.outputTokens);
+      // Claude Code closes a run that hit a limit or an API failure with a
+      // `<synthetic>` assistant row whose usage block is present but all zeros
+      // (ui19 job 2). Taking it as the newest reading made the ring read 0 on
+      // every fresh load, so a pane that had watched the run live showed the
+      // true figure while the phone, which only ever reads this snapshot,
+      // showed nothing. A row that carries no tokens is not a reading: keep
+      // walking back to the last real turn.
+      if (rowModel === '<synthetic>' || entry.isApiErrorMessage === true || rowInputTokens + rowOutputTokens === 0) {
+        continue;
+      }
+      model = rowModel;
+      cacheReadTokens = rowCacheReadTokens;
+      cacheCreationTokens = rowCacheCreationTokens;
+      inputTokens = rowInputTokens;
+      outputTokens = rowOutputTokens;
       break;
     } catch {
       // Skip malformed lines without discarding usage from earlier messages.
