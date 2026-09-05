@@ -1,8 +1,9 @@
 #!/bin/zsh
 # promote.sh — dev-verified promote with drain and auto-rollback (spec B6).
 #
-# Flow: full build (dev-scoped: dist-dev + dist-server-dev) → server test
-# suite → boot the dev instance on the fresh build and health-check it →
+# Flow: full build (dev-scoped: dist-dev + dist-server-dev) → top-level
+# typecheck → server suite → client suite → boot the dev instance on the
+# fresh build and health-check it →
 # hold this project's running chains at their next clean unit boundary →
 # drain live's
 # in-flight dispatched turns (past the
@@ -33,6 +34,11 @@ DEV_LAUNCHD_LABEL="$COMMAND_CENTER_RUNTIME_LAUNCHD_PREFIX-dev"
 LIVE_LAUNCHD_LABEL="$COMMAND_CENTER_RUNTIME_LAUNCHD_PREFIX-live"
 DISPATCH_PATH="${PROMOTE_DISPATCH_PATH:-$SCRIPT_DIR/dispatch}"
 DRY_RUN=0
+HEADER_FILE=""
+ATTEMPT_ID=""
+ATTEMPT_DIR=""
+CURRENT_STAGE="initializing"
+ATTEMPT_FINALIZED=0
 
 case "${1:-}" in
   "") ;;
@@ -52,10 +58,10 @@ else
 fi
 
 log() { print -r -- "[promote $(date +%H:%M:%S)] $*"; }
-fail() { log "ABORT: $*"; exit 1; }
+bootstrap_fail() { log "ABORT at initializing: $*"; exit 1; }
 
 API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
-[[ -n "$API_KEY" ]] || fail "no active API key in $DB_PATH"
+[[ -n "$API_KEY" ]] || bootstrap_fail "no active API key in $DB_PATH"
 HEADER_FILE=$(mktemp); chmod 600 "$HEADER_FILE"
 print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
 
@@ -75,28 +81,78 @@ PYEOF
     -d "$body" >/dev/null 2>&1 || true
 }
 
-record_promote() {
-  local body attempt=1
-  body=$(python3 - "$REPO" "$PROMOTED_COMMIT" "$PREVIOUS_LIVE_COMMIT" "$DRY_RUN" <<'PYEOF'
+persist_promote_attempt() {
+  local attempt_status="$1" stage="$2" failure_detail="${3:-}" body response attempt=1
+  body=$(python3 - "$ATTEMPT_ID" "$REPO" "$PROMOTED_COMMIT" "$PREVIOUS_LIVE_COMMIT" "$DRY_RUN" "$stage" "$attempt_status" "$ATTEMPT_DIR" "$failure_detail" <<'PYEOF'
 import json, sys
-project, promoted, previous, dry_run = sys.argv[1:5]
-print(json.dumps({
-    'kind': 'promoted',
+attempt_id, project, promoted, previous, dry_run, stage, status, log_path, failure_detail = sys.argv[1:10]
+body = {
+    'kind': 'promote-attempt',
     'projectPath': project,
     'promotedCommit': promoted,
     'previousLiveCommit': previous,
     'dryRun': dry_run == '1',
-}))
+    'stage': stage,
+    'status': status,
+    'logPath': log_path,
+}
+if attempt_id:
+    body['attemptId'] = int(attempt_id)
+if failure_detail:
+    body['failureDetail'] = failure_detail
+print(json.dumps(body))
 PYEOF
 )
   while [[ $attempt -le 3 ]]; do
-    if curl -sf -K "$HEADER_FILE" -m 15 -X POST "$SERVER_URL/api/watchdog/notify" \
-        -H 'Content-Type: application/json' -d "$body" >/dev/null; then
+    if response=$(curl -sf -K "$HEADER_FILE" -m 15 -X POST "$SERVER_URL/api/watchdog/notify" \
+        -H 'Content-Type: application/json' -d "$body"); then
+      if [[ -z "$ATTEMPT_ID" ]]; then
+        ATTEMPT_ID=$(print -r -- "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["id"])') \
+          || return 1
+      fi
       return 0
     fi
     attempt=$((attempt + 1))
   done
   return 1
+}
+
+finish_promote_attempt() {
+  local attempt_status="$1" stage="$2" detail="${3:-}"
+  persist_promote_attempt "$attempt_status" "$stage" "$detail" || return 1
+  ATTEMPT_FINALIZED=1
+}
+
+stage_label() {
+  print -r -- "${1//-/ }"
+}
+
+fail() {
+  local detail="$*" label
+  label=$(stage_label "$CURRENT_STAGE")
+  log "ABORT at $label: $detail"
+  if [[ -n "$ATTEMPT_ID" && $ATTEMPT_FINALIZED -eq 0 ]]; then
+    finish_promote_attempt failed "$CURRENT_STAGE" "$detail" \
+      || log "ABORT: could not persist failed attempt $ATTEMPT_ID"
+    notify decision-needed "Promote failed at $label" \
+      "The promote attempt for $PROMOTED_COMMIT failed at $label. $detail Logs: $ATTEMPT_DIR"
+  fi
+  exit 1
+}
+
+advance_stage() {
+  CURRENT_STAGE="$1"
+  persist_promote_attempt running "$CURRENT_STAGE" \
+    || fail "could not persist the stage transition"
+}
+
+run_gate() {
+  local stage="$1" label="$2" output="$3"
+  shift 3
+  advance_stage "$stage"
+  print -r -- "command: $*" > "$output"
+  log "$label"
+  "$@" >> "$output" 2>&1 || fail "$label failed; see $output"
 }
 
 health() { curl -s -m 5 "$1/health" | grep -q '"status":"ok"'; }
@@ -145,11 +201,17 @@ release_held_chains() {
 on_exit() {
   local exit_code=$?
   trap - EXIT HUP INT TERM
+  if [[ $exit_code -ne 0 && -n "$ATTEMPT_ID" && $ATTEMPT_FINALIZED -eq 0 ]]; then
+    finish_promote_attempt failed "$CURRENT_STAGE" "promote exited with status $exit_code" \
+      || log "ABORT: could not persist failed attempt $ATTEMPT_ID"
+    notify decision-needed "Promote failed at $(stage_label "$CURRENT_STAGE")" \
+      "The promote attempt for $PROMOTED_COMMIT exited with status $exit_code at $(stage_label "$CURRENT_STAGE"). Logs: $ATTEMPT_DIR"
+  fi
   if [[ ${#MANAGED_CHAINS[@]} -gt 0 ]]; then
     log "promote is exiting; releasing ${#MANAGED_CHAINS[@]} held chain(s)"
     release_held_chains || { [[ $exit_code -ne 0 ]] || exit_code=1; }
   fi
-  rm -f "$HEADER_FILE"
+  [[ -n "$HEADER_FILE" ]] && rm -f "$HEADER_FILE"
   exit $exit_code
 }
 trap on_exit EXIT
@@ -307,27 +369,39 @@ if [[ "${1:-}" == "--tag-guard" ]]; then
   exit 2
 fi
 
+ATTEMPT_DIR="${PROMOTE_LOG_ROOT:-$HOME/forge-logs/promote}/$(date +%Y%m%d-%H%M)/attempt-$$"
+mkdir -p "$ATTEMPT_DIR" || bootstrap_fail "could not create durable log directory $ATTEMPT_DIR"
+for gate_log in build typecheck test client; do
+  print -r -- "not reached" > "$ATTEMPT_DIR/$gate_log.log"
+done
+persist_promote_attempt running started \
+  || bootstrap_fail "could not persist the promote attempt before its first gate; logs: $ATTEMPT_DIR"
+
+run_gate build "building client and server" "$ATTEMPT_DIR/build.log" npm run build
+run_gate typecheck "running top-level typecheck" "$ATTEMPT_DIR/typecheck.log" npm run typecheck
+run_gate server-test "running server test suite" "$ATTEMPT_DIR/test.log" npm test
+run_gate client-test "running client test suite" "$ATTEMPT_DIR/client.log" npm run test:client
+
 if [[ $DRY_RUN -eq 1 ]]; then
-  log "dry run against dev: holding running chains at clean boundaries without building or restarting"
+  log "dry run against dev: gates passed; holding running chains without touching live"
+  advance_stage boundary-hold
   hold_running_chains
   [[ "${PROMOTE_DRY_RUN_FAIL_AT:-}" != after-hold && "${PROMOTE_DRY_RUN_FAIL_AT:-}" != after-pause ]] \
     || fail "injected dry-run abort after hold request"
   wait_for_held_chains
+  advance_stage drain
   drain_dispatch_runs
+  advance_stage dev-health
   health "$SERVER_URL" || fail "dry-run dev health check failed"
   log "dry-run dev health check passed"
-  record_promote || fail "could not record the completed dry-run promote"
+  CURRENT_STAGE=resume
   release_held_chains || fail "one or more chains failed to resume after the dry run"
+  finish_promote_attempt passed complete || fail "could not record the completed dry-run promote"
   log "dry run complete"
   exit 0
 fi
 
-log "building (client + server)"
-npm run build >/tmp/promote-build.log 2>&1 || fail "build failed; see /tmp/promote-build.log"
-
-log "running server test suite"
-npm test >/tmp/promote-test.log 2>&1 || fail "tests failed; see /tmp/promote-test.log"
-
+advance_stage dev-restart
 log "verifying the fresh build on dev (4748)"
 launchctl kickstart -k "gui/$UID_NUM/$DEV_LAUNCHD_LABEL" || fail "could not start dev"
 DEV_OK=0
@@ -338,17 +412,21 @@ done
 [[ $DEV_OK -eq 1 ]] || fail "dev instance failed its health check on the new build"
 log "dev healthy on the new build"
 
+advance_stage boundary-hold
 hold_running_chains
 wait_for_held_chains
+advance_stage drain
 drain_dispatch_runs
 
 # Build isolation (ui9 A1): npm run build emits dev-scoped artifacts
 # (dist-dev, dist-server-dev). Live serves only dist/ and dist-server/, and
 # this copy is the single place they are ever written.
 log "copying verified artifacts into live's serving location"
+advance_stage artifact-copy
 rsync -a --delete "$REPO/dist-dev/" "$REPO/dist/" || fail "artifact copy (frontend) failed"
 rsync -a --delete "$REPO/dist-server-dev/" "$REPO/dist-server/" || fail "artifact copy (server) failed"
 
+advance_stage live-restart
 log "restarting live on the new build"
 launchctl kickstart -k "gui/$UID_NUM/$LIVE_LAUNCHD_LABEL"
 
@@ -359,6 +437,7 @@ for i in {1..12}; do
 done
 
 if [[ $LIVE_OK -eq 1 ]]; then
+  advance_stage last-good
   log "live healthy post-promote; advancing last-good"
   rm -rf "$SNAPSHOT_DIR"
   mkdir -p "$SNAPSHOT_DIR"
@@ -367,14 +446,16 @@ if [[ $LIVE_OK -eq 1 ]]; then
   tag_guard || fail "tag guard refused after promotion held the project's chains and drained dispatched work"
   git -C "$REPO" tag -f mini-last-good HEAD >/dev/null 2>&1 \
     || fail "could not advance mini-last-good"
-  record_promote || fail "could not record the completed promote"
+  CURRENT_STAGE=resume
   release_held_chains || fail "one or more chains failed to resume after the healthy promote"
+  finish_promote_attempt passed complete || fail "could not record the completed promote"
   log "promote complete (mini-last-good -> $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null))"
   exit 0
 fi
 
 log "live FAILED its post-promote health check; rolling back to last-good artifacts"
 if [[ -d "$SNAPSHOT_DIR/dist-server" ]]; then
+  advance_stage rollback
   rm -rf "$REPO/dist" "$REPO/dist-server"
   cp -R "$SNAPSHOT_DIR/dist" "$REPO/dist"
   cp -R "$SNAPSHOT_DIR/dist-server" "$REPO/dist-server"
@@ -385,9 +466,12 @@ if [[ -d "$SNAPSHOT_DIR/dist-server" ]]; then
     if health "$SERVER_URL"; then ROLLBACK_OK=1; break; fi
   done
   if [[ $ROLLBACK_OK -eq 1 ]]; then
+    CURRENT_STAGE=resume
     release_held_chains || fail "one or more chains failed to resume after rollback"
+    finish_promote_attempt rolled_back rollback "live health check failed; last-good artifacts restored" \
+      || fail "could not record the rolled-back promote"
     notify decision-needed "Promote rolled back" \
-      "The new build failed its health check. Live was rolled back to the last-good artifacts (tag mini-last-good) and is healthy. Dev stays up on the bad build for diagnosis."
+      "The new build failed its health check. Live was rolled back to the last-good artifacts (tag mini-last-good) and is healthy. Dev stays up on the bad build for diagnosis. Logs: $ATTEMPT_DIR"
     log "rollback succeeded; live healthy on last-good artifacts"
     exit 3
   fi

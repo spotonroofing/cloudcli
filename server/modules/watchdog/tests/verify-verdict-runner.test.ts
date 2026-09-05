@@ -166,6 +166,7 @@ test('runner holds a dev restart through a 30-second verify and mechanically rej
     await runGit(fixture.repo, ['commit', '-q', '-m', 'stub base']);
 
     await executable(path.join(fixture.bin, 'npm'), `#!/bin/zsh
+[[ "$*" == test ]] && exit 0
 print -r -- "dev restarted" > "$STUB_DEV_RESTARTED"
 exit 0
 `);
@@ -323,6 +324,7 @@ test('verify cap records INCONCLUSIVE with reason verify cap and releases a held
     await runGit(fixture.repo, ['add', '.']);
     await runGit(fixture.repo, ['commit', '-q', '-m', 'stub base']);
     await executable(path.join(fixture.bin, 'npm'), `#!/bin/zsh
+[[ "$*" == test ]] && exit 0
 print -r -- restarted > "$STUB_DEV_RESTARTED"
 exit 0
 `);
@@ -381,6 +383,77 @@ print -r -- done > "$output"
     const journal = await readFile(path.join(fixture.fakeHome, 'forge-logs', slug, 'JOURNAL.md'), 'utf8');
     assert.match(journal, /INCONCLUSIVE for .*: verify cap/);
     assert.match(journal, /verify totals include 0 failed and 1 inconclusive/);
+  } finally {
+    if (runner && runner.exitCode === null) {
+      runner.kill('SIGTERM');
+      await once(runner, 'exit').catch(() => undefined);
+    }
+    await destroyFixture(fixture);
+  }
+});
+
+test('a red post-commit server suite is recorded on the unit and does not stop the chain', {
+  skip: process.platform !== 'darwin',
+  timeout: 15_000,
+}, async () => {
+  const fixture = await createFixture('suite-gate-runner');
+  const slug = `suite-gate-runner-${Date.now()}`;
+  const npmCalls = path.join(fixture.directory, 'npm-calls');
+  let runner: ReturnType<typeof spawn> | null = null;
+  try {
+    const punchlist = path.join(fixture.repo, 'PUNCHLIST_stub.md');
+    const phase = path.join(fixture.repo, '01-suite.md');
+    await writeFile(punchlist, '## Job 1 — Suite\n\n- [ ] Record red\n\nDone check: red is visible.\n');
+    await writeFile(phase, '<!-- name: Suite gate -->\n<!-- verify: no -->\nExecute Job 1 of PUNCHLIST_stub.md in this repo.\nSUITE_BUILD\n');
+    await runGit(fixture.repo, ['add', '.']);
+    await runGit(fixture.repo, ['commit', '-q', '-m', 'stub base']);
+    await executable(path.join(fixture.bin, 'npm'), `#!/bin/zsh
+print -r -- "$*" >> "$STUB_NPM_CALLS"
+print -r -- "TAP version 13"
+print -r -- "not ok 1 - deliberate server suite failure"
+exit 1
+`);
+    await executable(path.join(fixture.bin, 'codex'), `#!/bin/zsh
+prompt=$(</dev/stdin)
+output=""
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == "-o" ]]; then output="$2"; shift 2; else shift; fi
+done
+print -r -- '{"type":"thread.started","thread_id":"suite-build-stub"}'
+print -r -- changed > "$STUB_REPO/suite.txt"
+/usr/bin/git -C "$STUB_REPO" add suite.txt
+/usr/bin/git -C "$STUB_REPO" commit -q -m "fix(stub): suite unit"
+print -r -- done > "$output"
+`);
+    watchdogService.registerChain({
+      slug,
+      projectPath: fixture.repo,
+      phases: 1,
+      manifest: [{ name: 'Suite gate', tasks: [], kind: 'phase' }],
+    });
+    runner = spawn('/bin/zsh', [runnerPath, fixture.repo, slug, phase], {
+      cwd: fixture.repo,
+      env: runnerEnvironment(fixture, {
+        STUB_NPM_CALLS: npmCalls,
+        STUB_REPO: fixture.repo,
+      }),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    runner.stdout?.on('data', (chunk) => { output += String(chunk); });
+    runner.stderr?.on('data', (chunk) => { output += String(chunk); });
+    const [exitCode] = await once(runner, 'exit') as [number];
+    runner = null;
+    assert.equal(exitCode, 0, output);
+    assert.equal(await readFile(npmCalls, 'utf8'), 'test\n');
+
+    const snapshot = watchdogService.listWorkerRuns(fixture.repo).chains[slug];
+    assert.equal(snapshot.status, 'completed');
+    assert.equal(snapshot.manifest?.[0]?.suite, 'red');
+    assert.deepEqual(snapshot.manifest?.[0]?.suiteFailures, ['deliberate server suite failure']);
+    const journal = await readFile(path.join(fixture.fakeHome, 'forge-logs', slug, 'JOURNAL.md'), 'utf8');
+    assert.equal((journal.match(/\| suite 1\/1 \| end \| RED: deliberate server suite failure/g) ?? []).length, 1);
+    assert.match(await readFile(path.join(fixture.fakeHome, 'forge-logs', slug, 'suite1.log'), 'utf8'), /not ok 1/);
   } finally {
     if (runner && runner.exitCode === null) {
       runner.kill('SIGTERM');

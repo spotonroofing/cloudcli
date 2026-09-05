@@ -529,8 +529,8 @@ test('promote boundaries land between the jobs they separate and count as nothin
   };
   const groups: JobGroup[] = [{ chain, run: null, sessions: {}, startedAt }];
   const promotes = [
-    { id: 1, promotedAt: startedAt + 1_500, promotedCommit: 'aaa1111', previousLiveCommit: '0000000', dryRun: false },
-    { id: 2, promotedAt: startedAt + 2_500, promotedCommit: 'bbb2222', previousLiveCommit: 'aaa1111', dryRun: false },
+    { id: 1, promotedAt: startedAt + 1_500, startedAt: startedAt + 1_000, endedAt: startedAt + 1_500, promotedCommit: 'aaa1111', previousLiveCommit: '0000000', dryRun: false, stage: 'complete', status: 'passed' as const, logPath: '/logs/pass', failureDetail: null },
+    { id: 2, promotedAt: startedAt + 2_500, startedAt: startedAt + 2_000, endedAt: startedAt + 2_500, promotedCommit: 'bbb2222', previousLiveCommit: 'aaa1111', dryRun: false, stage: 'client-test', status: 'failed' as const, logPath: '/logs/fail', failureDetail: 'client failed' },
   ];
 
   const markup = renderToStaticMarkup(createElement(JobsSidebar, {
@@ -559,7 +559,9 @@ test('promote boundaries land between the jobs they separate and count as nothin
   const promoteStart = markup.indexOf('data-slot="jobs-sidebar-promote" data-promote="2"');
   const promoteRow = markup.slice(promoteStart, markup.indexOf('</li>', promoteStart));
   assert.doesNotMatch(promoteRow, /job-ring-segment|svg/);
-  assert.match(promoteRow, /Promoted/);
+  assert.match(promoteRow, /data-status="failed"/);
+  assert.match(promoteRow, /data-stage="client-test"/);
+  assert.match(promoteRow, /Promote failed · client test/);
   // History renders settled. Only a promote landing while the column is open
   // animates in, so a loaded row can never be stranded at opacity 0.
   assert.doesNotMatch(promoteRow, /opacity:0/);

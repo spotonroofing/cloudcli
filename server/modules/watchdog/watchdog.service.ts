@@ -52,6 +52,8 @@ export type ChainManifestEntry = {
  * index on the chain record. Timestamps are epoch ms. `taskTimes[i]` is when
  * the watchdog observed task i checked off in the punch list; null marks a
  * check-off whose time is unknown (observed while the unit was not live).
+ * Watchdog persistence stores it in job_meta and jobs snapshots expose it to
+ * the worker-pane history.
  */
 export type ChainJobMeta = {
   startedAt?: number;
@@ -80,6 +82,10 @@ export type ChainJobMeta = {
   model?: string;
   /** Whether this build unit launched on Codex's fast service tier. */
   fastMode?: boolean;
+  /** Post-commit server-suite result; red does not stop the chain. */
+  suite?: 'green' | 'red';
+  /** Failing test names extracted from the runner's durable suite log. */
+  suiteFailures?: string[];
 };
 
 /**
@@ -189,6 +195,7 @@ type WorkerRun = {
 type ChainEventName =
   | 'phase-start'
   | 'phase-end'
+  | 'suite-end'
   | 'verify-start'
   | 'verify-end'
   | 'verify-failed'
@@ -199,9 +206,11 @@ type ChainEventName =
   | 'stopped'
   | 'failed';
 
+/** The watchdog routes use this allowlist to reject unknown runner events. */
 export const CHAIN_EVENT_NAMES: ChainEventName[] = [
   'phase-start',
   'phase-end',
+  'suite-end',
   'verify-start',
   'verify-end',
   'verify-failed',
@@ -1143,6 +1152,8 @@ class WatchdogService {
       quiet?: boolean;
       fastMode?: boolean;
       verdict?: 'PASS' | 'FAIL' | 'INCONCLUSIVE';
+      suiteStatus?: 'green' | 'red';
+      suiteFailures?: string[];
     },
   ): boolean {
     const chain = this.chains.get(slug);
@@ -1167,6 +1178,23 @@ class WatchdogService {
       this.broadcastChainProgress(chain);
       this.syncPunchlistWatcher(chain);
       log(`chain ${slug}: ${event}`, { phase: chain.currentPhase });
+      return true;
+    }
+    // The post-commit server suite is recorded on its unit but never changes
+    // chain state. A red tree remains visible while later repair units run.
+    if (event === 'suite-end') {
+      if (typeof detail?.phase === 'number' && detail.suiteStatus) {
+        const meta = chain.jobs[detail.phase] ?? (chain.jobs[detail.phase] = {});
+        meta.suite = detail.suiteStatus;
+        meta.suiteFailures = detail.suiteStatus === 'red' ? (detail.suiteFailures ?? []).slice(0, 20) : [];
+      }
+      this.persistChain(chain);
+      this.broadcastChainProgress(chain);
+      log(`chain ${slug}: suite-end`, {
+        phase: detail?.phase ?? null,
+        suite: detail?.suiteStatus ?? null,
+        failures: detail?.suiteFailures ?? [],
+      });
       return true;
     }
     // Verify-stage events belong to a unit whose build already ended. They
@@ -1569,42 +1597,81 @@ class WatchdogService {
   }
 
   /**
-   * Called only by the watchdog notify route after it validates promote.sh's
-   * completed-promote payload. Returns the persisted row for route callers.
+   * Used by the watchdog notify route for promote.sh: inserts before the
+   * first gate and updates the same durable row as the attempt advances.
    */
-  recordPromote(input: {
+  recordPromoteAttempt(input: {
+    attemptId?: number;
     projectPath: string;
     promotedCommit: string;
     previousLiveCommit: string;
     dryRun: boolean;
+    stage: string;
+    status: 'running' | 'passed' | 'failed' | 'rolled_back';
+    logPath: string;
+    failureDetail?: string;
   }): {
     id: number;
     projectPath: string;
     promotedAt: number;
+    startedAt: number;
+    endedAt: number | null;
     promotedCommit: string;
     previousLiveCommit: string;
     dryRun: boolean;
-  } {
-    const promotedAt = Date.now();
+    stage: string;
+    status: 'running' | 'passed' | 'failed' | 'rolled_back';
+    logPath: string;
+    failureDetail: string | null;
+  } | null {
+    const now = Date.now();
+    const endedAt = input.status === 'running' ? null : now;
+    const promotedAt = endedAt ?? now;
     const projectPath = normalizeProjectPath(input.projectPath);
-    const id = watchdogDb.recordPromote({
+    const row = {
       project_path: projectPath,
       promoted_at: promotedAt,
+      ended_at: endedAt,
       promoted_commit: input.promotedCommit,
       previous_live_commit: input.previousLiveCommit,
       dry_run: input.dryRun ? 1 : 0,
+      stage: input.stage,
+      status: input.status,
+      log_path: input.logPath,
+      failure_detail: input.failureDetail?.slice(-2000) ?? null,
+    };
+    const id = input.attemptId ?? watchdogDb.createPromoteAttempt({
+      ...row,
+      started_at: now,
     });
-    log(`promote recorded: ${input.promotedCommit}`, { id, projectPath, dryRun: input.dryRun });
+    if (input.attemptId && !watchdogDb.updatePromoteAttempt({ id, ...row })) {
+      return null;
+    }
+    const stored = watchdogDb.listPromotes(projectPath).find((candidate) => candidate.id === id);
+    if (!stored) return null;
+    log(`promote attempt recorded: ${input.promotedCommit}`, {
+      id,
+      projectPath,
+      stage: input.stage,
+      status: input.status,
+      dryRun: input.dryRun,
+    });
     const record = {
       id,
       projectPath,
-      promotedAt,
-      promotedCommit: input.promotedCommit,
-      previousLiveCommit: input.previousLiveCommit,
-      dryRun: input.dryRun,
+      promotedAt: stored.promoted_at,
+      startedAt: stored.started_at,
+      endedAt: stored.ended_at,
+      promotedCommit: stored.promoted_commit,
+      previousLiveCommit: stored.previous_live_commit,
+      dryRun: Boolean(stored.dry_run),
+      stage: stored.stage,
+      status: stored.status as 'running' | 'passed' | 'failed' | 'rolled_back',
+      logPath: stored.log_path,
+      failureDetail: stored.failure_detail,
     };
-    // The jobs column draws its promote divider from this feed, so a promote
-    // landing while the column is open arrives without waiting for a poll.
+    // The jobs column draws every attempt from this feed, so stage and result
+    // changes land without waiting for a poll.
     const event = JSON.stringify({ kind: 'promote_recorded', promote: record });
     connectedClients.forEach((client) => {
       if (client.readyState === WS_OPEN_STATE) {
@@ -1620,9 +1687,15 @@ class WatchdogService {
       id: row.id,
       projectPath: row.project_path,
       promotedAt: row.promoted_at,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
       promotedCommit: row.promoted_commit,
       previousLiveCommit: row.previous_live_commit,
       dryRun: Boolean(row.dry_run),
+      stage: row.stage,
+      status: row.status,
+      logPath: row.log_path,
+      failureDetail: row.failure_detail,
     }));
   }
 
@@ -2557,7 +2630,8 @@ export function parseManifest(value: unknown, strict = false): ChainManifestEntr
 
 /**
  * Normalizes an untrusted job-meta value (DB JSON or request body) into a
- * clean 1-based index → metadata map, dropping anything malformed.
+ * clean 1-based index → metadata map, dropping anything malformed. Watchdog
+ * database hydration and focused persistence tests consume this boundary.
  */
 export function parseJobMeta(value: unknown): Record<number, ChainJobMeta> {
   let raw = value;
@@ -2624,6 +2698,15 @@ export function parseJobMeta(value: unknown): Record<number, ChainJobMeta> {
     }
     if (typeof entry.fastMode === 'boolean') {
       meta.fastMode = entry.fastMode;
+    }
+    if (entry.suite === 'green' || entry.suite === 'red') {
+      meta.suite = entry.suite;
+    }
+    if (Array.isArray(entry.suiteFailures)) {
+      meta.suiteFailures = entry.suiteFailures
+        .filter((failure): failure is string => typeof failure === 'string' && failure.trim().length > 0)
+        .map((failure) => failure.trim().slice(0, 500))
+        .slice(0, 20);
     }
     if (Object.keys(meta).length) {
       jobs[index] = meta;

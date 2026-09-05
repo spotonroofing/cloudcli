@@ -45,6 +45,7 @@ async function withPromoteHarness(
   const slugs = options.slugs ?? ['promote-stub-a', 'promote-stub-b'];
   const notifications: Array<Record<string, unknown>> = [];
   let healthAttempt = 0;
+  let promoteAttemptId = 0;
 
   mkdirSync(repo, { recursive: true });
   mkdirSync(home, { recursive: true });
@@ -116,6 +117,10 @@ fi
     const commandPath = path.join(commandDirectory, command);
     writeFileSync(commandPath, `#!/bin/zsh
 print -r -- "command:${command}:$*" >> "$STUB_CALL_LOG"
+if [[ "${command}" == npm && -n "${'${STUB_FAIL_NPM_ARGS:-}'}" && "$*" == "${'${STUB_FAIL_NPM_ARGS}'}" ]]; then
+  print -u2 "not ok 1 - deliberate client gate failure"
+  exit 1
+fi
 exit 0
 `);
     chmodSync(commandPath, 0o755);
@@ -162,11 +167,17 @@ exit 0
       request.setEncoding('utf8');
       request.on('data', (chunk) => { body += chunk; });
       request.on('end', () => {
-        notifications.push(JSON.parse(body) as Record<string, unknown>);
+        const notification = JSON.parse(body) as Record<string, unknown>;
+        notifications.push(notification);
         appendFileSync(callLog, 'notify\n');
         response.statusCode = 201;
         response.setHeader('content-type', 'application/json');
-        response.end(JSON.stringify({ data: { ok: true } }));
+        if (notification.kind === 'promote-attempt') {
+          promoteAttemptId = Number(notification.attemptId ?? promoteAttemptId + 1);
+          response.end(JSON.stringify({ data: { id: promoteAttemptId } }));
+        } else {
+          response.end(JSON.stringify({ data: { ok: true } }));
+        }
       });
       return;
     }
@@ -230,10 +241,34 @@ test('dry-run promote waits for committed and verified boundaries, records, then
       assert.match(journal, /^12:00 \| run \| HELD \| promote$/m);
       assert.match(journal, /^\d{2}:\d{2} \| run \| RESUMED \| promote$/m);
     }
-    const promoted = notifications.filter((notification) => notification.kind === 'promoted');
-    assert.equal(promoted.length, 1);
-    assert.equal(promoted[0]?.projectPath, repo);
-    assert.equal(promoted[0]?.dryRun, true);
+    const attempts = notifications.filter((notification) => notification.kind === 'promote-attempt');
+    assert.ok(attempts.length >= 6);
+    assert.equal(attempts.at(-1)?.projectPath, repo);
+    assert.equal(attempts.at(-1)?.dryRun, true);
+    assert.equal(attempts.at(-1)?.status, 'passed');
+    assert.equal(attempts.at(-1)?.stage, 'complete');
+    const logPath = String(attempts.at(-1)?.logPath);
+    assert.match(logPath, /forge-logs\/promote\/\d{8}-\d{4}\/attempt-\d+$/);
+    for (const name of ['build.log', 'typecheck.log', 'test.log', 'client.log']) {
+      assert.equal(readFileSync(path.join(logPath, name), 'utf8').includes('command:'), true);
+    }
+  });
+});
+
+test('a failing client gate stops there, persists failure, and names the stage in its notice', async () => {
+  await withPromoteHarness({}, async ({ calls, notifications, run }) => {
+    await assert.rejects(run(['--dry-run'], { STUB_FAIL_NPM_ARGS: 'run test:client' }), { code: 1 });
+    const commands = readFileSync(calls, 'utf8');
+    assert.match(commands, /command:npm:run typecheck/);
+    assert.match(commands, /command:npm:test/);
+    assert.match(commands, /command:npm:run test:client/);
+    assert.doesNotMatch(commands, /hold:/);
+    const attempt = notifications.filter((entry) => entry.kind === 'promote-attempt').at(-1);
+    assert.equal(attempt?.status, 'failed');
+    assert.equal(attempt?.stage, 'client-test');
+    const notice = notifications.find((entry) => entry.kind === 'decision-needed'
+      && String(entry.title).includes('client test'));
+    assert.match(String(notice?.title), /Promote failed at client test/);
   });
 });
 
@@ -280,6 +315,9 @@ test('a healthy rollback resumes held chains before reporting rollback', async (
     assert.ok(events.indexOf('release-hold:promote-stub-a') > rollbackHealth);
     assert.ok(events.indexOf('release-hold:promote-stub-b') > rollbackHealth);
     assert.equal(notifications.some((notification) => notification.title === 'Promote rolled back'), true);
+    const attempt = notifications.filter((notification) => notification.kind === 'promote-attempt').at(-1);
+    assert.equal(attempt?.status, 'rolled_back');
+    assert.equal(attempt?.stage, 'rollback');
   });
 });
 

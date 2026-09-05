@@ -365,9 +365,10 @@ export default function WorkerPane({
       // straight away; only this project's promotes reach this pane.
       if (event?.kind === 'promote_recorded' && event.promote?.projectPath === projectPath) {
         const promote = event.promote;
-        setPromotes((previous) =>
-          previous.some((existing) => existing.id === promote.id) ? previous : [promote, ...previous],
-        );
+        setPromotes((previous) => {
+          const withoutAttempt = previous.filter((existing) => existing.id !== promote.id);
+          return [promote, ...withoutAttempt].sort((a, b) => b.promotedAt - a.promotedAt);
+        });
       }
     });
     const interval = setInterval(() => {

@@ -66,10 +66,10 @@ Done check: the guard test file passes; running the guard binary by hand against
 
 Goal: promote checks the client too, every promote attempt leaves a record, and a red server suite is visible on the unit that left it. Evidence: audit-codex-sol.md workflow findings 4 and 5 and audit-opus-5.md "Promote's gate misses the client entirely" and "Nothing checks the suite is green before or between units" (ui18 shipped a red tree that cost ui19 Job 0). Files: scripts/macos/promote.sh (checks near line 325), package.json scripts, server/modules/database/schema.ts (watchdog_promotes near 254) plus its repository and the routes that read it, the runner's commit gate. Dependencies: Job 0 (runner).
 
-- [ ] promote.sh runs `npm run typecheck`, `npm test` and `npm run test:client` before the artifact copy and stops on the first failure with the failing command named.
-- [ ] Every promote attempt persists: watchdog_promotes (or a successor table with a migration) records started and ended times, the commit, the stage reached, status (passed, failed at stage, rolled back), and a durable log path under ~/forge-logs/promote/<YYYYMMDD-HHMM>/ (build, test, typecheck, client logs kept per attempt, nothing under /tmp).
-- [ ] A failed promote sends a decision-needed notice naming the failing stage; the jobs history's promoted divider distinguishes a failed attempt from a promotion.
-- [ ] The runner's commit gate runs `npm test` after a unit's commit (server suite only, no rebuild) and records the result on the unit (green or red with the failing test names in job_meta and one journal line); red does not stop the chain.
+- [x] promote.sh runs `npm run typecheck`, `npm test` and `npm run test:client` before the artifact copy and stops on the first failure with the failing command named.
+- [x] Every promote attempt persists: watchdog_promotes (or a successor table with a migration) records started and ended times, the commit, the stage reached, status (passed, failed at stage, rolled back), and a durable log path under ~/forge-logs/promote/<YYYYMMDD-HHMM>/ (build, test, typecheck, client logs kept per attempt, nothing under /tmp).
+- [x] A failed promote sends a decision-needed notice naming the failing stage; the jobs history's promoted divider distinguishes a failed attempt from a promotion.
+- [x] The runner's commit gate runs `npm test` after a unit's commit (server suite only, no rebuild) and records the result on the unit (green or red with the failing test names in job_meta and one journal line); red does not stop the chain.
 
 Done check: a promote dry run on dev with a deliberately failing client test stops at that stage, records the attempt with the log path, and fires the notice; a passing promote records passed; a stub unit with a failing server test shows red in the jobs payload with the test name. Commit.
 

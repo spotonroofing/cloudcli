@@ -138,6 +138,10 @@ function runnerEnvironment(fixture: Fixture, extra: NodeJS.ProcessEnv = {}): Nod
     DISPATCH_MANIFEST: '',
     DISPATCH_MODEL: '',
     DISPATCH_RELOADING: '',
+    // The parent process may itself be a dispatch unit. This fixture verifies
+    // fresh-run defaults, so it must not inherit that outer chain's identity.
+    DISPATCH_RUN_DATE: undefined,
+    DISPATCH_RUN_SUMMARY_PATH: undefined,
     DISPATCH_RESUME_FROM: '1',
     DISPATCH_RESUMING: '',
     DISPATCH_VERIFY_ENGINE: 'codex',

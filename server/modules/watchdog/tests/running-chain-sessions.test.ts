@@ -42,11 +42,11 @@ async function waitFor(assertion: () => boolean, timeoutMs = 4_000): Promise<voi
 test('persisted job metadata round-trips every settled verify verdict', () => {
   assert.deepEqual(parseJobMeta(JSON.stringify({
     11: { engine: 'codex', model: 'gpt-5.6-sol', verify: 'passed' },
-    12: { verify: 'failed', verifyReason: 'observed defect' },
+    12: { verify: 'failed', verifyReason: 'observed defect', suite: 'red', suiteFailures: ['suite case'] },
     13: { verify: 'inconclusive', verifyReason: 'verify cap' },
   })), {
     11: { engine: 'codex', model: 'gpt-5.6-sol', verify: 'passed' },
-    12: { verify: 'failed', verifyReason: 'observed defect' },
+    12: { verify: 'failed', verifyReason: 'observed defect', suite: 'red', suiteFailures: ['suite case'] },
     13: { verify: 'inconclusive', verifyReason: 'verify cap' },
   });
 });
@@ -89,12 +89,19 @@ test('PASS, FAIL, and INCONCLUSIVE remain distinct in job_meta, jobs payload, an
         verdict: 'INCONCLUSIVE',
         summaryTail: 'verify cap',
       });
+      watchdogService.chainEvent(slug, 'suite-end', {
+        phase: 2,
+        suiteStatus: 'red',
+        suiteFailures: ['database contract stays green'],
+      });
       watchdogService.chainEvent(slug, 'completed', { phase: 3 });
 
       const snapshot = watchdogService.listWorkerRuns(projectPath).chains[slug];
       assert.deepEqual(snapshot.verifySummary, { passed: 1, failed: 1, inconclusive: 1 });
       assert.deepEqual(snapshot.manifest?.map((job) => job.verify), ['passed', 'failed', 'inconclusive']);
       assert.equal(snapshot.manifest?.[2]?.verifyReason, 'verify cap');
+      assert.equal(snapshot.manifest?.[1]?.suite, 'red');
+      assert.deepEqual(snapshot.manifest?.[1]?.suiteFailures, ['database contract stays green']);
 
       const persisted = watchdogDb.listChains().find((chain) => chain.slug === slug);
       assert.ok(persisted?.job_meta);

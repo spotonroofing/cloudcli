@@ -20,7 +20,7 @@ import type { RealtimeClientConnection } from '@/shared/types.js';
 
 import { createWatchdogRouter, watchdogService } from '../index.js';
 
-test('the notify path records one promote row and the promotes route exposes it', async () => {
+test('the notify path persists one promote attempt from start through failure', async () => {
   const previousDatabasePath = process.env.DATABASE_PATH;
   const directory = await mkdtemp(path.join(tmpdir(), 'watchdog-promotes-'));
   const database = path.join(directory, 'auth.db');
@@ -44,14 +44,37 @@ test('the notify path records one promote row and the promotes route exposes it'
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey },
       body: JSON.stringify({
-        kind: 'promoted',
+        kind: 'promote-attempt',
         projectPath,
         promotedCommit: 'abc1234567890',
         previousLiveCommit: 'def9876543210',
         dryRun: true,
+        stage: 'started',
+        status: 'running',
+        logPath: '/home/test/forge-logs/promote/20260905-1200/attempt-1',
       }),
     });
     assert.equal(recorded.status, 201);
+    const recordedPayload = await recorded.json() as { data: { id: number } };
+    assert.equal(watchdogDb.listPromotes(projectPath).length, 1);
+
+    const failed = await fetch(`${baseUrl}/api/watchdog/notify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': apiKey },
+      body: JSON.stringify({
+        kind: 'promote-attempt',
+        attemptId: recordedPayload.data.id,
+        projectPath,
+        promotedCommit: 'abc1234567890',
+        previousLiveCommit: 'def9876543210',
+        dryRun: true,
+        stage: 'client-test',
+        status: 'failed',
+        logPath: '/home/test/forge-logs/promote/20260905-1200/attempt-1',
+        failureDetail: 'client gate failed',
+      }),
+    });
+    assert.equal(failed.status, 200);
     assert.equal(watchdogDb.listPromotes(projectPath).length, 1);
 
     const listed = await fetch(`${baseUrl}/api/watchdog/promotes?projectPath=${encodeURIComponent(projectPath)}`, {
@@ -65,11 +88,19 @@ test('the notify path records one promote row and the promotes route exposes it'
       id: 1,
       projectPath,
       promotedAt: payload.data.promotes[0]?.promotedAt,
+      startedAt: payload.data.promotes[0]?.startedAt,
+      endedAt: payload.data.promotes[0]?.endedAt,
       promotedCommit: 'abc1234567890',
       previousLiveCommit: 'def9876543210',
       dryRun: true,
+      stage: 'client-test',
+      status: 'failed',
+      logPath: '/home/test/forge-logs/promote/20260905-1200/attempt-1',
+      failureDetail: 'client gate failed',
     }]);
     assert.equal(typeof payload.data.promotes[0]?.promotedAt, 'number');
+    assert.equal(typeof payload.data.promotes[0]?.startedAt, 'number');
+    assert.equal(typeof payload.data.promotes[0]?.endedAt, 'number');
   } finally {
     if (server) {
       await new Promise<void>((resolve) => server?.close(() => resolve()));
@@ -98,11 +129,14 @@ test('a recorded promote reaches open clients so the jobs column can insert its 
   try {
     await initializeDatabase();
     const projectPath = '/workspace/promote-feed-project';
-    watchdogService.recordPromote({
+    watchdogService.recordPromoteAttempt({
       projectPath,
       promotedCommit: 'feed1234567',
       previousLiveCommit: 'prev7654321',
       dryRun: false,
+      stage: 'complete',
+      status: 'passed',
+      logPath: '/home/test/forge-logs/promote/20260905-1201/attempt-2',
     });
 
     const frames = messages

@@ -252,17 +252,25 @@ CREATE TABLE IF NOT EXISTS watchdog_chains (
 `;
 
 /**
- * Completed promote history. The project path associates a promote with its
- * jobs history; the two commits describe the live boundary Job 1 will draw.
+ * Durable promote-attempt history. Every invocation is inserted before its
+ * gates run, then updated through completion or failure. `promoted_at` stays
+ * as the ordering timestamp used by older clients and existing databases.
+ * The database migration module applies this schema at startup.
  */
 export const WATCHDOG_PROMOTES_TABLE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS watchdog_promotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     project_path TEXT NOT NULL,
     promoted_at INTEGER NOT NULL,
+    started_at INTEGER NOT NULL,
+    ended_at INTEGER,
     promoted_commit TEXT NOT NULL,
     previous_live_commit TEXT NOT NULL,
-    dry_run INTEGER NOT NULL DEFAULT 0
+    dry_run INTEGER NOT NULL DEFAULT 0,
+    stage TEXT NOT NULL,
+    status TEXT NOT NULL,
+    log_path TEXT NOT NULL,
+    failure_detail TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_watchdog_promotes_project_time
 ON watchdog_promotes(project_path, promoted_at DESC);

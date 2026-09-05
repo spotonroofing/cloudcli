@@ -41,14 +41,20 @@ export type WatchdogDispatchRunRow = {
   ended: number;
 };
 
-/** One completed promote boundary, consumed by the watchdog routes and jobs history. */
+/** One durable promote attempt, consumed by the watchdog routes and jobs history. */
 type WatchdogPromoteRow = {
   id: number;
   project_path: string;
   promoted_at: number;
+  started_at: number;
+  ended_at: number | null;
   promoted_commit: string;
   previous_live_commit: string;
   dry_run: number;
+  stage: string;
+  status: string;
+  log_path: string;
+  failure_detail: string | null;
 };
 
 /**
@@ -150,27 +156,60 @@ export const watchdogDb = {
     return db.prepare('SELECT * FROM watchdog_dispatch_runs').all() as WatchdogDispatchRunRow[];
   },
 
-  /** Inserts the record created by promote.sh's successful notify call. */
-  recordPromote(row: Omit<WatchdogPromoteRow, 'id'>): number {
+  /** Inserts an attempt before promote.sh runs its first gate. */
+  createPromoteAttempt(row: Omit<WatchdogPromoteRow, 'id'>): number {
     const db = getConnection();
     const result = db.prepare(`
-      INSERT INTO watchdog_promotes (project_path, promoted_at, promoted_commit, previous_live_commit, dry_run)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO watchdog_promotes (
+        project_path, promoted_at, started_at, ended_at, promoted_commit,
+        previous_live_commit, dry_run, stage, status, log_path, failure_detail
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       row.project_path,
       row.promoted_at,
+      row.started_at,
+      row.ended_at,
       row.promoted_commit,
       row.previous_live_commit,
       row.dry_run,
+      row.stage,
+      row.status,
+      row.log_path,
+      row.failure_detail,
     );
     return Number(result.lastInsertRowid);
+  },
+
+  /** Advances one attempt owned by the same project, preserving its start. */
+  updatePromoteAttempt(row: Omit<WatchdogPromoteRow, 'started_at'>): boolean {
+    const db = getConnection();
+    return db.prepare(`
+      UPDATE watchdog_promotes
+      SET promoted_at = ?, ended_at = ?, promoted_commit = ?, previous_live_commit = ?,
+          dry_run = ?, stage = ?, status = ?, log_path = ?, failure_detail = ?
+      WHERE id = ? AND project_path = ?
+    `).run(
+      row.promoted_at,
+      row.ended_at,
+      row.promoted_commit,
+      row.previous_live_commit,
+      row.dry_run,
+      row.stage,
+      row.status,
+      row.log_path,
+      row.failure_detail,
+      row.id,
+      row.project_path,
+    ).changes > 0;
   },
 
   /** Lists one project's promote boundaries newest first for the watchdog route. */
   listPromotes(projectPath: string): WatchdogPromoteRow[] {
     const db = getConnection();
     return db.prepare(`
-      SELECT id, project_path, promoted_at, promoted_commit, previous_live_commit, dry_run
+      SELECT id, project_path, promoted_at, started_at, ended_at, promoted_commit,
+             previous_live_commit, dry_run, stage, status, log_path, failure_detail
       FROM watchdog_promotes
       WHERE project_path = ?
       ORDER BY promoted_at DESC, id DESC

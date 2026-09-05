@@ -113,6 +113,18 @@ export function createWatchdogRouter(): express.Router {
           statusCode: 400,
         });
       }
+      const suiteStatus: 'green' | 'red' | undefined = body.suiteStatus === 'green' || body.suiteStatus === 'red'
+        ? body.suiteStatus
+        : undefined;
+      const suiteFailures = Array.isArray(body.suiteFailures)
+        ? body.suiteFailures.filter((failure): failure is string => typeof failure === 'string' && failure.trim().length > 0)
+        : [];
+      if (event === 'suite-end' && suiteStatus === undefined) {
+        throw new AppError('suite-end requires suiteStatus green|red.', {
+          code: 'WATCHDOG_SUITE_STATUS_REQUIRED',
+          statusCode: 400,
+        });
+      }
       const detail = {
         phase: Number.isFinite(Number(body.phase)) ? Number(body.phase) : undefined,
         summaryTail: typeof body.summaryTail === 'string' ? body.summaryTail : undefined,
@@ -123,6 +135,8 @@ export function createWatchdogRouter(): express.Router {
         // never carry it and therefore can never mark a unit fast.
         fastMode: body.fastMode === true,
         verdict,
+        suiteStatus,
+        suiteFailures,
       };
       const eventName = event as (typeof CHAIN_EVENT_NAMES)[number];
       let known = watchdogService.chainEvent(slug, eventName, detail);
@@ -540,29 +554,50 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
-  // Fleet notifications plus promote.sh's completed-promote persistence lane.
+  // Fleet notifications plus promote.sh's durable attempt persistence lane.
   router.post(
     '/notify',
     requireApiKey,
     asyncHandler(async (req: Request, res: Response) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      if (body.kind === 'promoted') {
+      if (body.kind === 'promote-attempt') {
+        const attemptId = Number.isInteger(Number(body.attemptId)) && Number(body.attemptId) > 0
+          ? Number(body.attemptId)
+          : undefined;
         const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
         const promotedCommit = typeof body.promotedCommit === 'string' ? body.promotedCommit.trim() : '';
         const previousLiveCommit = typeof body.previousLiveCommit === 'string' ? body.previousLiveCommit.trim() : '';
-        if (!projectPath || !promotedCommit || !previousLiveCommit || typeof body.dryRun !== 'boolean') {
-          throw new AppError('promoted requires projectPath, promotedCommit, previousLiveCommit, and dryRun.', {
+        const stage = typeof body.stage === 'string' ? body.stage.trim() : '';
+        const status = body.status === 'running' || body.status === 'passed'
+          || body.status === 'failed' || body.status === 'rolled_back'
+          ? body.status
+          : null;
+        const logPath = typeof body.logPath === 'string' ? body.logPath.trim() : '';
+        if (!projectPath || !promotedCommit || !previousLiveCommit || typeof body.dryRun !== 'boolean'
+          || !stage || !status || !logPath) {
+          throw new AppError('promote-attempt requires projectPath, commits, dryRun, stage, status, and logPath.', {
             code: 'WATCHDOG_PROMOTE_FIELDS_REQUIRED',
             statusCode: 400,
           });
         }
-        const promote = watchdogService.recordPromote({
+        const promote = watchdogService.recordPromoteAttempt({
+          attemptId,
           projectPath,
           promotedCommit,
           previousLiveCommit,
           dryRun: body.dryRun,
+          stage,
+          status,
+          logPath,
+          failureDetail: typeof body.failureDetail === 'string' ? body.failureDetail.trim() : undefined,
         });
-        res.status(201).json(createApiSuccessResponse(promote));
+        if (!promote) {
+          throw new AppError(`Promote attempt ${attemptId ?? '?'} was not found for this project.`, {
+            code: 'WATCHDOG_PROMOTE_UNKNOWN',
+            statusCode: 404,
+          });
+        }
+        res.status(attemptId ? 200 : 201).json(createApiSuccessResponse(promote));
         return;
       }
       const kind = body.kind === 'decision-needed' || body.kind === 'verified-done' || body.kind === 'recovery'

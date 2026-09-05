@@ -46,6 +46,9 @@ export type ChainManifestEntry = {
   model?: string;
   /** True when this build unit launched with service_tier=fast. */
   fastMode?: boolean;
+  /** Post-commit server suite; red is recorded without stopping later jobs. */
+  suite?: 'green' | 'red';
+  suiteFailures?: string[];
   /** A twin of another chain's unit (codex job 5): hidden from the list, row kept. */
   hidden?: boolean;
   supersededBy?: string;
@@ -124,9 +127,15 @@ type Unit = {
 export type PromoteRecord = {
   id: number;
   promotedAt: number;
+  startedAt: number;
+  endedAt: number | null;
   promotedCommit: string;
   previousLiveCommit: string;
   dryRun: boolean;
+  stage: string;
+  status: 'running' | 'passed' | 'failed' | 'rolled_back';
+  logPath: string;
+  failureDetail: string | null;
 };
 
 type RepairTruth = {
@@ -301,9 +310,18 @@ function formatPromoteTime(promotedAt: number): string {
   return date ? `${date}, ${time}` : time;
 }
 
-/** The hover title: the whole date and time, never abbreviated. */
-function formatPromoteTitle(promotedAt: number): string {
-  return new Date(promotedAt).toLocaleString('en-US', {
+/** One honest label for live promotions, checks, failures, and rollbacks. */
+function promoteLabel(promote: PromoteRecord): string {
+  const stage = promote.stage.replace(/-/g, ' ');
+  if (promote.status === 'running') return `Promoting · ${stage}`;
+  if (promote.status === 'failed') return `Promote failed · ${stage}`;
+  if (promote.status === 'rolled_back') return 'Promote rolled back';
+  return promote.dryRun ? 'Promote check passed' : 'Promoted';
+}
+
+/** The hover title includes the result and whole date/time. */
+function formatPromoteTitle(promote: PromoteRecord): string {
+  const time = new Date(promote.promotedAt).toLocaleString('en-US', {
     weekday: 'short',
     month: 'long',
     day: 'numeric',
@@ -314,6 +332,7 @@ function formatPromoteTitle(promotedAt: number): string {
     hour12: true,
     timeZone: 'America/New_York',
   });
+  return `${promoteLabel(promote)} — ${time}`;
 }
 
 /**
@@ -337,13 +356,21 @@ function PromoteRow({
       data-slot="jobs-sidebar-promote"
       data-promote={promote.id}
       data-commit={promote.promotedCommit}
-      title={formatPromoteTitle(promote.promotedAt)}
+      data-status={promote.status}
+      data-stage={promote.stage}
+      data-log-path={promote.logPath}
+      title={formatPromoteTitle(promote)}
       initial={reduce || !live ? { opacity: 1 } : { opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={reduce || !live ? { duration: 0 } : { duration: 0.22, ease: EASE_OUT }}
-      className="my-1 flex min-h-5 items-center gap-2 border-t border-border/60 px-1.5 pt-1 text-[10px] text-muted-foreground/60"
+      className={cn(
+        'my-1 flex min-h-5 items-center gap-2 border-t px-1.5 pt-1 text-[10px]',
+        promote.status === 'failed' || promote.status === 'rolled_back'
+          ? 'border-destructive/50 text-destructive/80'
+          : 'border-border/60 text-muted-foreground/60',
+      )}
     >
-      <span className="flex-shrink-0 font-mono">Promoted</span>
+      <span className="min-w-0 truncate font-mono">{promoteLabel(promote)}</span>
       <span
         data-slot="jobs-sidebar-promote-time"
         className="ml-auto flex-shrink-0 font-mono tabular-nums"

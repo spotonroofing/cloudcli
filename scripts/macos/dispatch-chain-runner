@@ -399,7 +399,8 @@ orphaned_append_report() {
 event_body() {
   # $1 event, $2 phase (or empty), $3 summaryTail json string (or empty),
   # $4 commit short hash (or empty), $5 commit subject (or empty),
-  # $6 exact verifier verdict (PASS|FAIL|INCONCLUSIVE, or empty)
+  # $6 exact verifier verdict (PASS|FAIL|INCONCLUSIVE, or empty),
+  # $7 suite result (green|red, or empty), $8 JSON failing-test array.
   local event="$1" phase="$2" tail="$3" orphan_count=0 orphan_detail="" orphan_report
   if [[ "$event" == completed || "$event" == stopped || "$event" == failed ]]; then
     orphan_report=$(orphaned_append_report)
@@ -408,9 +409,9 @@ event_body() {
       journal run "orphaned-appends" "$orphan_detail"
     fi
   fi
-  python3 - "$event" "$phase" "$tail" "$REPO" "$TOTAL" "${4:-}" "${5:-}" "${DISPATCHING_SESSION_ID:-}" "${UNIT_FAST_MODE:-0}" "${6:-}" "$orphan_count" "$orphan_detail" <<'PYEOF'
+  python3 - "$event" "$phase" "$tail" "$REPO" "$TOTAL" "${4:-}" "${5:-}" "${DISPATCHING_SESSION_ID:-}" "${UNIT_FAST_MODE:-0}" "${6:-}" "$orphan_count" "$orphan_detail" "${7:-}" "${8:-[]}" <<'PYEOF'
 import json, sys
-event, phase, tail, repo, total, commit_hash, commit_subject, dispatching_session_id, fast_mode, verdict, orphan_count, orphan_detail = sys.argv[1:13]
+event, phase, tail, repo, total, commit_hash, commit_subject, dispatching_session_id, fast_mode, verdict, orphan_count, orphan_detail, suite_status, suite_failures = sys.argv[1:15]
 body = {'event': event, 'projectPath': repo, 'phases': int(total)}
 if dispatching_session_id:
     body['dispatchingSessionId'] = dispatching_session_id
@@ -429,11 +430,45 @@ if event == 'phase-start':
     body['fastMode'] = fast_mode == '1'
 if verdict:
     body['verdict'] = verdict
+if suite_status:
+    body['suiteStatus'] = suite_status
+    body['suiteFailures'] = json.loads(suite_failures)
 print(json.dumps(body))
 PYEOF
 }
 
 json_string() { python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'; }
+
+# The server suite is a mechanical post-commit gate. Red is durable evidence
+# on the unit, not a chain stop: later units may repair the shared tree.
+run_server_suite() {
+  local suite_log="$JOURNAL_DIR/suite$PHASE_NUM.log" failures_json failures_text
+  if (cd "$REPO" && npm test) > "$suite_log" 2>&1; then
+    journal "suite $PHASE_NUM/$TOTAL" "end" "GREEN"
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body suite-end "$PHASE_NUM" '' '' '' '' green '[]')" 3
+    return 0
+  fi
+  failures_json=$(python3 - "$suite_log" <<'PYEOF'
+import json, re, sys
+names = []
+with open(sys.argv[1], encoding='utf-8', errors='replace') as handle:
+    for raw in handle:
+        line = raw.strip()
+        match = re.search(r'(?:not ok \d+ - |[✖✗]\s+)(.+?)(?:\s+\([\d.]+m?s\))?$', line)
+        if match:
+            name = match.group(1).strip()
+            if name and name not in names:
+                names.append(name)
+print(json.dumps(names[:20]))
+PYEOF
+)
+  failures_text=$(print -r -- "$failures_json" | python3 -c 'import json,sys; names=json.load(sys.stdin); print("; ".join(names) if names else "test process exited nonzero; see suite log")')
+  journal "suite $PHASE_NUM/$TOTAL" "end" "RED: $failures_text"
+  api_post "/api/watchdog/chains/$SLUG/events" \
+    "$(event_body suite-end "$PHASE_NUM" '' '' '' '' red "$failures_json")" 3
+  return 0
+}
 
 # Chrome-cap queueing hook: browser-phase chains wait for a Chrome slot
 # instead of launching a fourth instance. The wait is bounded (ui14 job 7):
@@ -1658,6 +1693,7 @@ PYEOF
   # view can show what each job shipped.
   api_post "/api/watchdog/chains/$SLUG/events" \
     "$(event_body phase-end $PHASE_NUM '' "$UNIT_COMMIT_SHORT" "$UNIT_SUBJECT")" 3
+  run_server_suite
 
   # The previous unit's verify must have passed before this unit's starts:
   # at most one verify is in flight, one build behind it.

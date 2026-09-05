@@ -501,6 +501,25 @@ const addWatchdogChainManifestColumns = (db: Database): void => {
   addColumnToTableIfNotExists(db, 'watchdog_chains', columnNames, 'hold_reason', 'TEXT');
 };
 
+/** Adds durable attempt lifecycle fields without discarding legacy promotes. */
+const addWatchdogPromoteAttemptColumns = (db: Database): void => {
+  const columnNames = getTableInfo(db, 'watchdog_promotes').map((column) => column.name);
+  addColumnToTableIfNotExists(db, 'watchdog_promotes', columnNames, 'started_at', 'INTEGER');
+  addColumnToTableIfNotExists(db, 'watchdog_promotes', columnNames, 'ended_at', 'INTEGER');
+  addColumnToTableIfNotExists(db, 'watchdog_promotes', columnNames, 'stage', 'TEXT');
+  addColumnToTableIfNotExists(db, 'watchdog_promotes', columnNames, 'status', 'TEXT');
+  addColumnToTableIfNotExists(db, 'watchdog_promotes', columnNames, 'log_path', 'TEXT');
+  addColumnToTableIfNotExists(db, 'watchdog_promotes', columnNames, 'failure_detail', 'TEXT');
+  db.prepare(`
+    UPDATE watchdog_promotes
+    SET started_at = COALESCE(started_at, promoted_at),
+        ended_at = COALESCE(ended_at, promoted_at),
+        stage = COALESCE(stage, 'complete'),
+        status = COALESCE(status, 'passed'),
+        log_path = COALESCE(log_path, '')
+  `).run();
+};
+
 /**
  * Adds `boot_error` (ui17 job 17): the one plain line a failed boot shows in
  * its placeholder row. Existing failed rows have no line and keep the generic
@@ -716,6 +735,7 @@ export const runMigrations = (db: Database) => {
     addWatchdogChainManifestColumns(db);
     db.exec(WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL);
     db.exec(WATCHDOG_PROMOTES_TABLE_SCHEMA_SQL);
+    addWatchdogPromoteAttemptColumns(db);
     db.exec(MESSAGE_VERSIONS_TABLE_SCHEMA_SQL);
     db.exec('CREATE INDEX IF NOT EXISTS idx_message_versions_session ON message_versions(session_id)');
 
