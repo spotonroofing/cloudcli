@@ -579,3 +579,22 @@ test('nothing is drawn before the first recorded promote', () => {
 
   assert.doesNotMatch(renderJobs(groups), /jobs-sidebar-promote/);
 });
+
+test('a failed load says so with a retry, and an empty history says it is empty', () => {
+  const failed = renderToStaticMarkup(createElement(JobsSidebar, {
+    groups: [],
+    loadError: 'Chain history request returned 500.',
+    onRetryLoad: () => undefined,
+    activeSessionId: null,
+    onOpenSession: () => undefined,
+  }));
+
+  assert.match(failed, /data-slot="jobs-sidebar-load-error"/);
+  assert.match(failed, /Chain history request returned 500\./);
+  assert.match(failed, /data-slot="jobs-sidebar-retry"/);
+  assert.doesNotMatch(failed, /data-slot="jobs-sidebar-empty"/);
+
+  const empty = renderJobs([]);
+  assert.match(empty, /data-slot="jobs-sidebar-empty"/);
+  assert.doesNotMatch(empty, /data-slot="jobs-sidebar-load-error"/);
+});

@@ -7,6 +7,7 @@ import NotificationsSettingsTab from '../view/tabs/NotificationsSettingsTab';
 import SystemSettingsTab from '../view/tabs/SystemSettingsTab';
 import { useSettingsController } from '../hooks/useSettingsController';
 import { useWebPush } from '../../../hooks/useWebPush';
+import { useReportFailure } from '../../../contexts/AppMessageContext';
 import type { SettingsProps } from '../types/types';
 import { getDesktopNotificationsBridge } from '../../../shared/desktopBridge';
 
@@ -26,10 +27,12 @@ function Settings({ isOpen, initialTab = 'system', projects = [] }: SettingsProp
       : getDesktopNotificationsBridge()
   ), []);
   const [desktopNotificationsState, setDesktopNotificationsState] = useState<DesktopNotificationsState | null>(null);
+  const reportFailure = useReportFailure();
   const {
     activeTab,
     setActiveTab,
     saveStatus,
+    saveError,
     codeEditorSettings,
     updateCodeEditorSetting,
     notificationPreferences,
@@ -45,6 +48,7 @@ function Settings({ isOpen, initialTab = 'system', projects = [] }: SettingsProp
     isLoading: isPushLoading,
     isReady: isPushReady,
     error: pushError,
+    lastError: lastPushError,
     requiresHomeScreen: pushRequiresHomeScreen,
     subscribe: pushSubscribe,
     unsubscribe: pushUnsubscribe,
@@ -56,7 +60,15 @@ function Settings({ isOpen, initialTab = 'system', projects = [] }: SettingsProp
         ...previous,
         channels: { ...previous.channels, webPush: true },
       }));
+      return;
     }
+    // The row already carries the reason; the strip carries it out of Settings
+    // so a failed subscribe is visible wherever Willem is (audit1 job 8).
+    reportFailure({
+      id: 'push-subscribe',
+      title: 'Push notifications did not turn on',
+      detail: lastPushError(),
+    });
   };
 
   const handleDisablePush = async () => {
@@ -132,6 +144,17 @@ function Settings({ isOpen, initialTab = 'system', projects = [] }: SettingsProp
         <h2 className="text-sm font-medium text-foreground">{t('title')}</h2>
         {saveStatus === 'success' && (
           <span className="text-xs text-muted-foreground">{t('saveStatus.success')}</span>
+        )}
+        {/* The error state renders too (audit1 job 8): the reason, and the
+            switches already back at what the server holds. */}
+        {saveStatus === 'error' && (
+          <span
+            data-slot="settings-save-error"
+            className="min-w-0 truncate pl-3 text-right text-xs text-destructive"
+            title={saveError ?? undefined}
+          >
+            {saveError ? `${t('saveStatus.error')}: ${saveError}` : t('saveStatus.error')}
+          </span>
         )}
       </div>
 

@@ -429,9 +429,12 @@ export function createWatchdogRouter(): express.Router {
     }),
   );
 
+  // Pause, stop and resume are Willem's controls in the worker pane header
+  // (audit1 job 8) as well as the dispatch CLI's, so all three take the app's
+  // JWT beside the CLI's key.
   router.post(
     '/chains/:slug/pause',
-    requireApiKey,
+    requireApiKeyOrToken,
     asyncHandler(async (req: Request, res: Response) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
@@ -491,7 +494,7 @@ export function createWatchdogRouter(): express.Router {
 
   router.post(
     '/chains/:slug/resume',
-    requireApiKey,
+    requireApiKeyOrToken,
     asyncHandler(async (req: Request, res: Response) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
@@ -502,6 +505,25 @@ export function createWatchdogRouter(): express.Router {
         });
       }
       const slug = String(req.params.slug);
+      // The CLI starts the runner itself after this call; the app cannot, so
+      // it asks the server to do both (audit1 job 8).
+      if (body.startRunner === true) {
+        const launched = watchdogService.resumeChainRunner(slug, projectPath);
+        if (!launched.ok) {
+          throw new AppError(launched.reason, {
+            code: 'WATCHDOG_CHAIN_RESUME_REFUSED',
+            statusCode: 409,
+          });
+        }
+        res.json(createApiSuccessResponse({
+          slug,
+          status: 'running',
+          phase: launched.phase,
+          phases: launched.phases,
+          runnerPid: launched.pid,
+        }));
+        return;
+      }
       const resumed = watchdogService.resumeChain(slug, projectPath);
       if (!resumed) {
         throw new AppError(`Chain "${slug}" is not paused.`, {

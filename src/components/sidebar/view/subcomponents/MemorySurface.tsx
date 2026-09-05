@@ -6,6 +6,8 @@ import type { TFunction } from 'i18next';
 import { PromptInput, PromptInputBody, PromptInputSubmit, PromptInputTextarea, Skeleton } from '../../../../shared/view/ui';
 import { Markdown } from '../../../chat/view/subcomponents/Markdown';
 import { api } from '../../../../utils/api';
+import { useReportFailure } from '../../../../contexts/AppMessageContext';
+import { failureDetail, responseFailureDetail } from '../../../app/appMessages';
 
 import SidebarSurface from './SidebarSurface';
 
@@ -40,16 +42,30 @@ export default function MemorySurface({ open, onClose, isMobile, t }: MemorySurf
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const reportFailure = useReportFailure();
+
   const fetchContent = useCallback(async () => {
     try {
       const response = await api.memoryCurated();
-      if (!response.ok) return;
+      if (!response.ok) {
+        throw new Error(await responseFailureDetail(response));
+      }
       const body = await response.json();
       setContent(typeof body?.data?.content === 'string' ? body.data.content : null);
     } catch (error) {
-      console.error('Failed to fetch curated memory:', error);
+      // A memory that did not load says so on the strip (audit1 job 8) instead
+      // of leaving the surface looking like nothing was ever remembered.
+      reportFailure({
+        id: 'memory-load',
+        title: 'Memory did not load',
+        detail: failureDetail(error),
+        retry: () => void fetchContentRef.current(),
+        retryLabel: 'Load again',
+      });
     }
-  }, []);
+  }, [reportFailure]);
+  const fetchContentRef = useRef<() => Promise<void>>(async () => undefined);
+  fetchContentRef.current = fetchContent;
 
   useEffect(() => {
     if (!open) return;

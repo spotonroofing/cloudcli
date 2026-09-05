@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 
 import { api } from '../../../utils/api';
 import { usePaletteOps } from '../../../contexts/PaletteOpsContext';
+import { useReportFailure } from '../../../contexts/AppMessageContext';
 import type { Project, ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionActivityMap } from '../../../hooks/useSessionProtection';
 import type {
@@ -88,6 +89,12 @@ export type ConversationSearchResults = {
   titleResults: SessionTitleSearchResult[];
   totalMatches: number;
   query: string;
+  /**
+   * True when the search stream broke before it finished (audit1 job 8): what
+   * is on screen is a partial sweep, not the whole history, and an empty
+   * partial result is not "no matches".
+   */
+  partial?: boolean;
 };
 
 export type SearchProgress = {
@@ -158,6 +165,7 @@ export function useSidebarController({
   sidebarVisible,
 }: UseSidebarControllerArgs) {
   const paletteOps = usePaletteOps();
+  const reportFailure = useReportFailure();
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [showNewProject, setShowNewProject] = useState(false);
@@ -592,11 +600,19 @@ export function useSidebarController({
       eventSourceRef.current = null;
       setIsSearching(false);
       setSearchProgress(null);
+      // A broken stream is not a finished search (audit1 job 8): the results
+      // are marked partial, and the failure reaches the app's message strip.
       setConversationResults({
         results: [...accumulated],
         titleResults: [...titleResults],
         totalMatches,
         query,
+        partial: true,
+      });
+      reportFailure({
+        id: 'conversation-search',
+        title: 'Search stopped early',
+        detail: `The search stream for "${query}" broke before every project was scanned.`,
       });
     });
 
@@ -606,7 +622,7 @@ export function useSidebarController({
         eventSourceRef.current = null;
       }
     };
-  }, [conversationsProjectId, debouncedSearchQuery, searchMode]);
+  }, [conversationsProjectId, debouncedSearchQuery, searchMode, reportFailure]);
 
   // All sidebar state keys (expanded, starred, loading, etc.) use the DB
   // `projectId` as their identifier after the migration.

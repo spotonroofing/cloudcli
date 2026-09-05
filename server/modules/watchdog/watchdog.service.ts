@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -992,6 +992,105 @@ export class WatchdogService {
     this.syncPunchlistWatcher(chain);
     log(`chain ${slug}: resumed`, { phase, phases });
     return { phase, phases };
+  }
+
+  /**
+   * Resume from the worker pane's header control (audit1 job 8). `dispatch
+   * resume` does two things the state flip alone does not: it refuses a repo
+   * whose tree is dirty (the paused WIP branch has to land on a clean tree),
+   * and it starts a runner. A chain marked running with no runner is a lie the
+   * jobs column would then tell, so the app's resume does both here. Every
+   * check runs before the flip, so a refusal leaves the chain paused and says
+   * why in words the message strip can show.
+   */
+  resumeChainRunner(
+    slug: string,
+    projectPath: string,
+  ): { ok: true; phase: number; phases: number; pid: number | null } | { ok: false; reason: string } {
+    const chain = this.chains.get(slug);
+    if (!chain || normalizeProjectPath(chain.projectPath) !== normalizeProjectPath(projectPath) || chain.status !== 'paused') {
+      return { ok: false, reason: `Chain "${slug}" is not paused.` };
+    }
+
+    const statePath = path.join(chainJournalDir(slug), 'resume.json');
+    let state: ChainResumeState;
+    try {
+      state = JSON.parse(fs.readFileSync(statePath, 'utf8')) as ChainResumeState;
+    } catch {
+      return { ok: false, reason: `Chain "${slug}" has no saved runner state at ${statePath}.` };
+    }
+    const repo = asText(state.repo);
+    if (!repo || normalizeProjectPath(repo) !== normalizeProjectPath(projectPath) || state.slug !== slug) {
+      return { ok: false, reason: 'The saved runner state does not match this project and slug.' };
+    }
+    const phaseFiles = Array.isArray(state.phaseFiles)
+      ? state.phaseFiles.filter((file): file is string => typeof file === 'string' && file.length > 0)
+      : [];
+    if (phaseFiles.length === 0 || phaseFiles.some((file) => !fs.existsSync(file))) {
+      return { ok: false, reason: 'The saved runner state names a missing phase file.' };
+    }
+    const runner = chainRunnerPath();
+    if (!runner) {
+      return { ok: false, reason: 'The chain runner script is missing from the Command Center repo.' };
+    }
+    let dirty = '';
+    try {
+      dirty = execFileSync('git', ['-C', repo, 'status', '--porcelain'], { encoding: 'utf8', timeout: 20_000 }).trim();
+    } catch (error) {
+      return { ok: false, reason: `Could not read the repo's git status: ${error instanceof Error ? error.message : String(error)}` };
+    }
+    if (dirty) {
+      return { ok: false, reason: 'The repo has uncommitted work; the paused job cannot be restored onto it.' };
+    }
+
+    const resumed = this.resumeChain(slug, projectPath);
+    if (!resumed) {
+      return { ok: false, reason: `Chain "${slug}" is not paused.` };
+    }
+
+    // The runner reports to whichever instance started it, so dev never
+    // reports a resumed chain into live's watchdog.
+    const port = process.env.SERVER_PORT ?? process.env.PORT ?? '3001';
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      DISPATCH_SERVER_URL: process.env.DISPATCH_SERVER_URL ?? `http://127.0.0.1:${port}`,
+      DISPATCH_RUN_DATE: asText(state.runDate),
+      DISPATCH_RUN_SUMMARY_PATH: asText(state.summaryPath),
+      DISPATCH_ENGINE: asText(state.engine) || 'claude',
+      DISPATCH_MODEL: asText(state.model),
+      DISPATCH_EFFORT: asText(state.effort),
+      DISPATCH_VERIFY_ENGINE: asText(state.verifyEngine),
+      DISPATCH_VERIFY_MODEL: asText(state.verifyModel),
+      DISPATCH_RESUME_FROM: String(resumed.phase),
+      DISPATCH_RESUMING: '1',
+      DISPATCHING_SESSION_ID: asText(state.dispatchingSessionId),
+    };
+    if (process.env.DATABASE_PATH) {
+      env.DISPATCH_DB_PATH = process.env.DISPATCH_DB_PATH ?? process.env.DATABASE_PATH;
+    }
+
+    try {
+      fs.mkdirSync(chainJournalDir(slug), { recursive: true });
+      const logFile = fs.openSync(path.join(chainJournalDir(slug), 'runner.log'), 'a');
+      const child = spawn(runner, [repo, slug, ...phaseFiles], {
+        cwd: '/',
+        detached: true,
+        stdio: ['ignore', logFile, logFile],
+        env,
+      });
+      child.unref();
+      fs.closeSync(logFile);
+      log(`chain ${slug}: runner relaunched from the app`, { phase: resumed.phase, pid: child.pid ?? null });
+      return { ok: true, phase: resumed.phase, phases: resumed.phases, pid: child.pid ?? null };
+    } catch (error) {
+      // The flip already happened, so park the chain again rather than leave a
+      // running row with nothing behind it.
+      this.chainEvent(slug, 'paused', {
+        phase: resumed.phase,
+        summaryTail: 'The resume could not start a runner; the chain is parked where it was.',
+      });
+      return { ok: false, reason: `The chain runner did not start: ${error instanceof Error ? error.message : String(error)}` };
+    }
   }
 
   /**
@@ -3116,6 +3215,46 @@ function listChainRunners(): Promise<Map<string, number> | null> {
 function chainJournalDir(slug: string): string {
   return path.join(os.homedir(), 'forge-logs', slug);
 }
+
+/** The runner script this instance would start, or null when it is missing. */
+function chainRunnerPath(): string | null {
+  const roots = [
+    readRenamedEnvironmentVariable('REPO'),
+    getLegacyProjectDirectory(),
+    process.cwd(),
+  ];
+  for (const root of roots) {
+    if (!root) {
+      continue;
+    }
+    const candidate = path.join(root, 'scripts', 'macos', 'dispatch-chain-runner');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/**
+ * The durable state `dispatch` writes for every chain, read back when the app
+ * resumes one (audit1 job 8): the runner is started from this, not from
+ * anything the client sent.
+ */
+type ChainResumeState = {
+  repo?: unknown;
+  slug?: unknown;
+  runDate?: unknown;
+  summaryPath?: unknown;
+  engine?: unknown;
+  model?: unknown;
+  effort?: unknown;
+  verifyEngine?: unknown;
+  verifyModel?: unknown;
+  dispatchingSessionId?: unknown;
+  phaseFiles?: unknown;
+};
+
+const asText = (value: unknown): string => (typeof value === 'string' ? value : '');
 
 function countQueuedAppends(slug: string): number {
   try {

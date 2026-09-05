@@ -737,6 +737,9 @@ type JobsSidebarProps = {
   promotes?: PromoteRecord[];
   /** The first worker-runs snapshot is still in flight. */
   loading?: boolean;
+  /** Why the last load failed (audit1 job 8); null when history is simply empty. */
+  loadError?: string | null;
+  onRetryLoad?: () => void;
   /** The session the pane is showing; marks its row. */
   activeSessionId: string | null;
   /** Navigate the worker pane to a unit's session. */
@@ -798,6 +801,8 @@ function JobsSidebar({
   groups,
   promotes = [],
   loading = false,
+  loadError = null,
+  onRetryLoad,
   activeSessionId,
   onOpenSession,
 }: JobsSidebarProps) {
@@ -962,7 +967,26 @@ function JobsSidebar({
       {/* No header bar of any kind (ui18 job 4): no slug, no title, no
           controls — the list starts at its first row. The chain slug lives on
           a unit's commit line, the fast-mode bolt in the worker pane header. */}
-      {loading && groups.length === 0 ? (
+      {loadError && groups.length === 0 ? (
+        /* A failed load is not an empty history (audit1 job 8): the reason and
+           a retry, never a list that reads as "nothing ever ran here". */
+        <div className="min-h-0 flex-1 px-3 py-4" data-slot="jobs-sidebar-load-error">
+          <p className="text-[13px] font-medium text-foreground">Jobs history did not load</p>
+          <p className="mt-1 text-xs leading-4 text-muted-foreground">{loadError}</p>
+          {onRetryLoad && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-slot="jobs-sidebar-retry"
+              className="mt-3 h-11 px-3 text-xs md:h-8"
+              onClick={onRetryLoad}
+            >
+              Load again
+            </Button>
+          )}
+        </div>
+      ) : loading && groups.length === 0 ? (
         <div
           className="min-h-0 flex-1 space-y-2 overflow-hidden px-2 py-2"
           data-slot="jobs-sidebar-skeleton"
@@ -980,6 +1004,11 @@ function JobsSidebar({
         </div>
       ) : (
       <ol ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        {stacked.length === 0 && !loading && (
+          <li data-slot="jobs-sidebar-empty" className="px-1.5 py-2 text-xs text-muted-foreground/70">
+            No jobs have run in this project yet.
+          </li>
+        )}
         <AnimatePresence initial={false}>
           {visibleStacked.map((unit, pageIndex) => {
             const unitIndex = pageStart + pageIndex;

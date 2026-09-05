@@ -318,15 +318,32 @@ export default function SidebarContent({
               )}
             </div>
           ) : !isSearching && conversationResults && !hasSearchResults ? (
-            <div className="px-4 py-12 text-center md:py-8">
+            /* A stream that broke is not an empty history (audit1 job 8): the
+               empty state says which of the two this is. */
+            <div
+              className="px-4 py-12 text-center md:py-8"
+              data-slot={conversationResults.partial ? 'search-partial-empty' : 'search-empty'}
+            >
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted md:mb-3">
                 <Search className="h-6 w-6 text-muted-foreground" />
               </div>
-              <h3 className="mb-2 text-base font-medium text-foreground md:mb-1">{t('search.noResults')}</h3>
-              <p className="text-sm text-muted-foreground">{t('search.tryDifferentQuery')}</p>
+              <h3 className="mb-2 text-base font-medium text-foreground md:mb-1">
+                {conversationResults.partial ? t('search.stoppedEarly') : t('search.noResults')}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {conversationResults.partial ? t('search.stoppedEarlyEmpty') : t('search.tryDifferentQuery')}
+              </p>
             </div>
           ) : conversationResults && (hasSearchResults || isSearching) ? (
             <div className="space-y-4 px-2" aria-live="polite">
+              {conversationResults.partial && (
+                <p
+                  data-slot="search-partial-notice"
+                  className="px-1 text-[11px] leading-4 text-destructive"
+                >
+                  {t('search.stoppedEarlyPartial')}
+                </p>
+              )}
               {conversationResults.titleResults.length > 0 && (
                 <section className="space-y-1" aria-labelledby="session-title-results-heading">
                   <div className="flex items-center justify-between px-1 py-0.5">

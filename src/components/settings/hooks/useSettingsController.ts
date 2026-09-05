@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useReportFailure } from '../../../contexts/AppMessageContext';
+import { failureDetail, responseFailureDetail } from '../../app/appMessages';
 import { authenticatedFetch } from '../../../utils/api';
 import { setNotificationSoundEnabled } from '../../../utils/notificationSound';
 import {
@@ -131,8 +133,13 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
   const { isDarkMode, toggleDarkMode } = useTheme() as ThemeContextValue;
   const closeTimerRef = useRef<number | null>(null);
 
+  const reportFailure = useReportFailure();
   const [activeTab, setActiveTab] = useState<SettingsMainTab>(() => normalizeMainTab(initialTab));
   const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
+  /** The reason the last save failed, rendered beside the status (audit1 job 8). */
+  const [saveError, setSaveError] = useState<string | null>(null);
+  /** The preferences the server last confirmed; a failed save returns to them. */
+  const savedPreferencesRef = useRef<NotificationPreferencesState | null>(null);
   const [codeEditorSettings, setCodeEditorSettings] = useState<CodeEditorSettingsState>(() => (
     readCodeEditorSettings()
   ));
@@ -181,7 +188,9 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
         if (notificationResponse.ok) {
           const notificationData = await toResponseJson<NotificationPreferencesResponse>(notificationResponse);
           if (notificationData.success && notificationData.preferences) {
-            setNotificationPreferences(normalizeNotificationPreferences(notificationData.preferences));
+            const loaded = normalizeNotificationPreferences(notificationData.preferences);
+            savedPreferencesRef.current = loaded;
+            setNotificationPreferences(loaded);
           } else {
             setNotificationPreferences(createDefaultNotificationPreferences());
           }
@@ -203,6 +212,7 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
 
   const saveSettings = useCallback(async () => {
     setSaveStatus(null);
+    setSaveError(null);
 
     try {
       const now = new Date().toISOString();
@@ -230,15 +240,26 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
         body: JSON.stringify(notificationPreferences),
       });
       if (!notificationResponse.ok) {
-        throw new Error('Failed to save notification preferences');
+        throw new Error(await responseFailureDetail(notificationResponse));
       }
 
+      savedPreferencesRef.current = notificationPreferences;
       setSaveStatus('success');
     } catch (error) {
-      console.error('Error saving settings:', error);
+      // Never a silent failure (audit1 job 8): the reason shows in Settings and
+      // on the app's message strip, and the switches go back to what the server
+      // actually holds instead of standing for a change that did not land.
+      const detail = failureDetail(error);
       setSaveStatus('error');
+      setSaveError(detail);
+      reportFailure({ id: 'settings-save', title: 'Settings did not save', detail });
+      const confirmed = savedPreferencesRef.current;
+      if (confirmed) {
+        setNotificationPreferences(confirmed);
+      }
     }
   }, [
+    reportFailure,
     claudePermissions.allowedTools,
     claudePermissions.disallowedTools,
     claudePermissions.skipPermissions,
@@ -303,9 +324,9 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
     };
   }, [saveSettings]);
 
-  // Clear save status after 2 seconds
+  // Clear the success mark after 2 seconds; an error stays until the next save.
   useEffect(() => {
-    if (saveStatus === null) {
+    if (saveStatus !== 'success') {
       return;
     }
 
@@ -337,6 +358,7 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
     isDarkMode,
     toggleDarkMode,
     saveStatus,
+    saveError,
     codeEditorSettings,
     updateCodeEditorSetting,
     claudePermissions,

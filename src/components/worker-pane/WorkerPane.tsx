@@ -9,6 +9,8 @@ import { PANE_HEADER_CLASS } from '../app/workspace/paneHeader';
 import ErrorBoundary from '../main-content/view/ErrorBoundary';
 import MobileMenuButton from '../main-content/view/subcomponents/MobileMenuButton';
 import { useWebSocket } from '../../contexts/WebSocketContext';
+import { useAppMessages } from '../../contexts/AppMessageContext';
+import { failureDetail, responseFailureDetail } from '../app/appMessages';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useUiPreferences } from '../../hooks/useUiPreferences';
 import { authenticatedFetch } from '../../utils/api';
@@ -28,6 +30,7 @@ import JobsSidebar, {
   type JobGroup,
   type PromoteRecord,
 } from './JobsSidebar';
+import ChainControls, { type ChainAction } from './ChainControls';
 import {
   activeWorkerChain,
   findWorkerFollowTarget,
@@ -186,6 +189,7 @@ export default function WorkerPane({
   requestedSession = null,
 }: WorkerPaneProps) {
   const { subscribe, isConnected } = useWebSocket();
+  const { reportFailure } = useAppMessages();
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
   const { isMobile } = useDeviceSettings({ trackPWA: false });
@@ -220,9 +224,16 @@ export default function WorkerPane({
   // Promote boundaries for the jobs history (ui18 job 1). Fetched once per
   // project; a promote landing later arrives on its own websocket frame.
   const [promotes, setPromotes] = useState<PromoteRecord[]>([]);
+  // A failed runs load is its own state (audit1 job 8): the column says the
+  // load failed and offers a retry instead of reading as an empty history.
+  const [runsError, setRunsError] = useState<string | null>(null);
+  const [chainActionPending, setChainActionPending] = useState<ChainAction | null>(null);
   const [fastModePendingSlug, setFastModePendingSlug] = useState<string | null>(null);
   const [fastModeHintSlug, setFastModeHintSlug] = useState<string | null>(null);
   const fastModeHintSeenRef = useRef<Set<string>>(new Set());
+  // The chain the header names, read by the control handlers without making
+  // them re-create on every snapshot.
+  const headerChainSlugRef = useRef<string | null>(null);
   const [newSessionTrigger, setNewSessionTrigger] = useState(0);
   // An explicit selection pins that session for one minute. After that short
   // grace period, every newly announced build takes the pane again; verifier
@@ -261,6 +272,19 @@ export default function WorkerPane({
     onJobsViewOpenChange?.(jobsViewOpen);
   }, [jobsViewOpen, onJobsViewOpenChange]);
 
+  // Retry from the column and the message strip re-enters the current fetch.
+  const refreshRunsRef = useRef<() => void>(() => undefined);
+  const reportRunsFailure = useCallback((detail: string | null) => {
+    setRunsError(detail ?? 'The jobs history did not load.');
+    reportFailure({
+      id: 'worker-runs',
+      title: 'Jobs history did not load',
+      detail,
+      retry: () => refreshRunsRef.current(),
+      retryLabel: 'Load again',
+    });
+  }, [reportFailure]);
+
   const refreshRuns = useCallback(async () => {
     if (!projectPath) {
       return;
@@ -270,6 +294,7 @@ export default function WorkerPane({
         `/api/providers/sessions/worker-runs?projectPath=${encodeURIComponent(projectPath)}&pageSize=${WORKER_RUNS_PAGE_SIZE}`,
       );
       if (!response.ok) {
+        reportRunsFailure(await responseFailureDetail(response));
         return;
       }
       const body = (await response.json()) as {
@@ -288,13 +313,15 @@ export default function WorkerPane({
         setChains((previous) => preserveJsonEqual(previous, body.data?.chains ?? {}));
         setRunsTotal(body.data?.total ?? 0);
         setRunsNextCursor(body.data?.nextCursor ?? null);
+        setRunsError(null);
       });
-    } catch {
-      // transient; the poll retries
+    } catch (error) {
+      reportRunsFailure(failureDetail(error));
     } finally {
       setRunsLoaded(true);
     }
-  }, [projectPath]);
+  }, [projectPath, reportRunsFailure]);
+  refreshRunsRef.current = () => void refreshRuns();
 
   const refreshPromotes = useCallback(async () => {
     if (!projectPath) {
@@ -321,6 +348,7 @@ export default function WorkerPane({
     setRunsTotal(0);
     setRunsNextCursor(null);
     setRunsLoaded(false);
+    setRunsError(null);
     setChains({});
     setPromotes([]);
     setManualPinUntil(0);
@@ -507,7 +535,7 @@ export default function WorkerPane({
         body: JSON.stringify({ projectPath, fastMode: enabled }),
       });
       if (!response.ok) {
-        throw new Error(`Fast mode route returned ${response.status}`);
+        throw new Error(await responseFailureDetail(response));
       }
       const body = await response.json() as { data?: { fastMode?: boolean } };
       const fastMode = typeof body.data?.fastMode === 'boolean' ? body.data.fastMode : enabled;
@@ -522,11 +550,54 @@ export default function WorkerPane({
         setFastModeHintSlug((current) => current === slug ? null : current);
       }
     } catch (error) {
-      console.error('Unable to change chain fast mode:', error);
+      reportFailure({
+        id: `chain-fast-mode:${slug}`,
+        title: enabled ? 'Fast mode did not turn on' : 'Fast mode did not turn off',
+        detail: failureDetail(error),
+      });
     } finally {
       setFastModePendingSlug((current) => current === slug ? null : current);
     }
-  }, [projectPath]);
+  }, [projectPath, reportFailure]);
+
+  // Chain controls (audit1 job 8): pause, resume and stop from the header.
+  // The row's own chain_updated frame is the truth; the optimistic status keeps
+  // the control honest between the response and that frame.
+  const handleChainAction = useCallback(async (action: ChainAction) => {
+    const slug = headerChainSlugRef.current;
+    if (!slug) {
+      return;
+    }
+    setChainActionPending(action);
+    try {
+      const response = await authenticatedFetch(`/api/watchdog/chains/${encodeURIComponent(slug)}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // A resume from the app has to start the runner too, or the row would
+        // read running with nothing behind it.
+        body: JSON.stringify(action === 'resume' ? { projectPath, startRunner: true } : { projectPath }),
+      });
+      if (!response.ok) {
+        throw new Error(await responseFailureDetail(response));
+      }
+      const status = action === 'pause' ? 'paused' : action === 'resume' ? 'running' : 'stopped';
+      setChains((previous) => {
+        const chain = previous[slug];
+        return chain ? { ...previous, [slug]: { ...chain, status } } : previous;
+      });
+      void refreshRuns();
+    } catch (error) {
+      reportFailure({
+        id: `chain-control:${slug}`,
+        title: action === 'pause'
+          ? `Could not pause ${slug}`
+          : action === 'resume' ? `Could not resume ${slug}` : `Could not stop ${slug}`,
+        detail: failureDetail(error),
+      });
+    } finally {
+      setChainActionPending(null);
+    }
+  }, [projectPath, refreshRuns, reportFailure]);
 
   const selectedRun = runs.find((run) => run.sessionId === paneSession?.id) ?? null;
   const chainList = useMemo(() => Object.values(chains), [chains]);
@@ -542,6 +613,7 @@ export default function WorkerPane({
   // The one fast-mode control in the pane belongs to the chain the title
   // names, so the bolt and the job it affects are read together.
   const headerChain = activeWorkerChain(chainList, selectedRun?.chainSlug ?? null);
+  headerChainSlugRef.current = headerChain?.slug ?? null;
 
   // Explicit job-row chat controls are the navigation (ui16 job 2), and the list spans every run of the
   // project (ui14 job 1): each chain is a group carrying the sessions its
@@ -633,6 +705,16 @@ export default function WorkerPane({
             onToggle={handleToggleChainFastMode}
           />
         )}
+        {/* Chain controls (audit1 job 8): shown for any project that has
+            dispatched, disabled with the reason while nothing is running. */}
+        {chainList.length > 0 && (
+          <ChainControls
+            chain={headerChain}
+            pending={chainActionPending}
+            isMobile={isMobile}
+            onAction={(action) => void handleChainAction(action)}
+          />
+        )}
         {isMobile && windowSelector}
         <ChatExportButton />
         <Tooltip content="New worker session" position="bottom">
@@ -660,7 +742,7 @@ export default function WorkerPane({
             </Button>
           </Tooltip>
         )}
-        {runsLoaded && jobGroups.length > 0 && (
+        {runsLoaded && (jobGroups.length > 0 || runsError) && (
           <Tooltip content={jobsViewOpen ? 'Hide jobs' : 'Show jobs'} position="bottom">
             <Button
               variant="ghost"
@@ -758,6 +840,8 @@ export default function WorkerPane({
               groups={jobGroups}
               promotes={promotes}
               loading={!runsLoaded}
+              loadError={runsError}
+              onRetryLoad={() => void refreshRuns()}
               activeSessionId={paneSession?.id ?? null}
               onOpenSession={handleOpenJobSession}
             />

@@ -10,6 +10,8 @@ import type { LLMProvider } from '../../../types/app';
 import { copyTextToClipboard } from '../../../utils/clipboard';
 import { BOOT_RETRY_REQUESTED_EVENT, resolveBootFailure } from '../../../utils/bootFailure';
 import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
+import { useReportFailure } from '../../../contexts/AppMessageContext';
+import { failureDetail } from '../../app/appMessages';
 import type { ChatInterfaceProps, ChatMessage } from '../types/types';
 import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
@@ -79,6 +81,7 @@ function ChatInterface({
   holdQueuedFlush = false,
 }: ChatInterfaceProps) {
   const { subscribe } = useWebSocket();
+  const reportFailure = useReportFailure();
   const { t } = useTranslation('chat');
 
   const sessionStore = useSessionStore();
@@ -576,9 +579,13 @@ function ChatInterface({
       }
       await selectProviderModel(targetProvider, model, openSessionId);
     } catch (error) {
-      console.error('Error changing the active session model:', error);
+      reportFailure({
+        id: 'composer-model',
+        title: `Could not switch to ${model}`,
+        detail: failureDetail(error),
+      });
     }
-  }, [currentSessionId, onStartNewSession, provider, selectProviderModel, selectedSession?.id]);
+  }, [currentSessionId, onStartNewSession, provider, reportFailure, selectProviderModel, selectedSession?.id]);
 
   // The switcher lists the two engines in use, each under its provider mark.
   const composerModelGroups = useMemo<ProviderModelGroup[]>(() => [
@@ -590,17 +597,25 @@ function ChatInterface({
     try {
       await selectProviderEffort(provider, effort, currentSessionId || selectedSession?.id || null);
     } catch (error) {
-      console.error('Error changing the active session reasoning effort:', error);
+      reportFailure({
+        id: 'composer-effort',
+        title: `Could not set reasoning effort to ${effort}`,
+        detail: failureDetail(error),
+      });
     }
-  }, [currentSessionId, provider, selectProviderEffort, selectedSession?.id]);
+  }, [currentSessionId, provider, reportFailure, selectProviderEffort, selectedSession?.id]);
 
   const handleSelectComposerFastMode = useCallback(async (enabled: boolean) => {
     try {
       await selectCodexFastMode(enabled, currentSessionId || selectedSession?.id || null);
     } catch (error) {
-      console.error('Error changing fast mode for the active Codex session:', error);
+      reportFailure({
+        id: 'composer-fast-mode',
+        title: enabled ? 'Could not turn fast mode on' : 'Could not turn fast mode off',
+        detail: failureDetail(error),
+      });
     }
-  }, [currentSessionId, selectCodexFastMode, selectedSession?.id]);
+  }, [currentSessionId, reportFailure, selectCodexFastMode, selectedSession?.id]);
 
   // The inline thinking indicator hides while a permission request is pending
   // (the permission banner is the active status surface then).

@@ -8,6 +8,7 @@ import type { LLMProvider, WorkerSessionRequest } from '../../types/app';
 import CommandPalette from '../command-palette/CommandPalette';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
+import { AppMessageProvider } from '../../contexts/AppMessageContext';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useProjectsState } from '../../hooks/useProjectsState';
@@ -20,6 +21,7 @@ import { useAuth } from '../auth/context/AuthContext';
 import { api } from '../../utils/api';
 import { isNotificationSoundEnabled } from '../../utils/notificationSound';
 
+import AppMessageStrip from './AppMessageStrip';
 import WorkspaceView from './workspace/WorkspaceView';
 import { useWorkspace } from './workspace/useWorkspace';
 import SeasonalTouch from './seasonal/SeasonalTouch';
@@ -69,7 +71,9 @@ const parseStartedAt = (value: unknown): number | undefined => {
 export default function AppContent() {
   return (
     <PaletteOpsProvider>
-      <AppContentInner />
+      <AppMessageProvider>
+        <AppContentInner />
+      </AppMessageProvider>
     </PaletteOpsProvider>
   );
 }
@@ -560,6 +564,7 @@ function AppContentInner() {
         onShowTab={isMobile ? setActiveTab : undefined}
       />
       <SeasonalTouch />
+      <AppMessageStrip isMobile={isMobile} />
       {usageAlertToasts.length > 0 && (
         <div
           className="pointer-events-none fixed bottom-4 right-4 z-[9999] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2"

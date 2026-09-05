@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { authenticatedFetch } from '../utils/api';
 import { getDesktopNotificationsBridge } from '../shared/desktopBridge';
@@ -9,6 +9,8 @@ type WebPushState = {
   isLoading: boolean;
   isReady: boolean;
   error: string | null;
+  /** The current reason, readable the instant subscribe() settles. */
+  lastError: () => string | null;
   requiresHomeScreen: boolean;
   subscribe: () => Promise<boolean>;
   unsubscribe: () => Promise<boolean>;
@@ -75,7 +77,15 @@ export function useWebPush(): WebPushState {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setErrorState] = useState<string | null>(null);
+  // A caller that awaits subscribe() needs the reason before the state render
+  // reaches it (audit1 job 8), so the reason is mirrored into a ref.
+  const errorRef = useRef<string | null>(null);
+  const setError = useCallback((value: string | null) => {
+    errorRef.current = value;
+    setErrorState(value);
+  }, []);
+  const lastError = useCallback(() => errorRef.current, []);
   const [requiresHomeScreen] = useState(requiresIosHomeScreen);
 
   // Check existing subscription on mount; a local subscription only counts as
@@ -121,7 +131,7 @@ export function useWebPush(): WebPushState {
       setError(caught instanceof Error ? caught.message : 'The notification service worker is not ready.');
       setIsReady(true);
     });
-  }, [isLoading, permission, requiresHomeScreen]);
+  }, [isLoading, permission, requiresHomeScreen, setError]);
 
   const subscribe = useCallback(async () => {
     setError(null);
@@ -183,7 +193,7 @@ export function useWebPush(): WebPushState {
       setIsLoading(false);
       setIsReady(true);
     }
-  }, [permission, requiresHomeScreen]);
+  }, [permission, requiresHomeScreen, setError]);
 
   const unsubscribe = useCallback(async () => {
     setIsLoading(true);
@@ -212,7 +222,7 @@ export function useWebPush(): WebPushState {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [setError]);
 
-  return { permission, isSubscribed, isLoading, isReady, error, requiresHomeScreen, subscribe, unsubscribe };
+  return { permission, isSubscribed, isLoading, isReady, error, lastError, requiresHomeScreen, subscribe, unsubscribe };
 }
