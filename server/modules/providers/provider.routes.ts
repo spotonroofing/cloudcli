@@ -800,7 +800,19 @@ router.get(
     if (!projectPath) {
       throw new AppError('projectPath is required.', { code: 'PROJECT_PATH_REQUIRED', statusCode: 400 });
     }
-    res.json(createApiSuccessResponse(await watchdogService.listWorkerRunsWithTokens(projectPath)));
+    const rawPageSize = readOptionalQueryString(req.query.pageSize);
+    const pageSize = rawPageSize === undefined ? 50 : Number(rawPageSize);
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      throw new AppError('pageSize must be an integer from 1 to 100.', {
+        code: 'WORKER_RUNS_PAGE_SIZE_INVALID',
+        statusCode: 400,
+      });
+    }
+    const rawCursor = readOptionalQueryString(req.query.cursor);
+    const cursor = rawCursor === undefined ? null : parseSessionId(rawCursor);
+    res.json(createApiSuccessResponse(
+      await watchdogService.listWorkerRunsWithTokens(projectPath, pageSize, cursor),
+    ));
   }),
 );
 

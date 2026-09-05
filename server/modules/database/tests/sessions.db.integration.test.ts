@@ -225,3 +225,30 @@ test('recent sessions are globally ordered, paginated, and limited to visible co
     );
   });
 });
+
+test('worker history cursor-pages all 130 sessions with an exact total', async () => {
+  await withIsolatedDatabase(() => {
+    const projectPath = '/workspace/worker-history';
+    projectsDb.createProjectPath(projectPath);
+    for (let index = 0; index < 130; index += 1) {
+      const sessionId = `worker-${String(index).padStart(3, '0')}`;
+      const timestamp = new Date(Date.UTC(2026, 6, 1, 0, 0, index)).toISOString();
+      sessionsDb.createSession(sessionId, 'claude', projectPath, sessionId, timestamp, timestamp);
+    }
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = sessionsDb.listWorkerSessionsPage(projectPath, 50, cursor);
+      assert.equal(page.total, 130);
+      assert.ok(page.sessions.length > 0 && page.sessions.length <= 50);
+      seen.push(...page.sessions.map((session) => session.session_id));
+      cursor = page.nextCursor;
+    } while (cursor);
+
+    assert.equal(seen.length, 130);
+    assert.equal(new Set(seen).size, 130);
+    assert.equal(seen[0], 'worker-129');
+    assert.equal(seen.at(-1), 'worker-000');
+  });
+});

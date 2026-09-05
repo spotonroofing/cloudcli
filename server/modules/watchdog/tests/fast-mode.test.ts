@@ -202,7 +202,7 @@ print -r -- "done" > "$output"
     assert.equal(watchdogDb.listChains().find((row) => row.slug === slug)?.fast_mode, 1);
     assert.equal(messages.some((message) => {
       const event = JSON.parse(message) as { kind?: string; chain?: { slug?: string; fastMode?: boolean } };
-      return event.kind === 'chain_progress' && event.chain?.slug === slug && event.chain.fastMode === true;
+      return event.kind === 'chain_updated' && event.chain?.slug === slug && event.chain.fastMode === true;
     }), true, 'the route broadcasts the changed chain snapshot');
 
     await writeFile(releaseFirst, 'go\n');

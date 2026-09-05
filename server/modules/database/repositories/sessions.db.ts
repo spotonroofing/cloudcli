@@ -568,6 +568,88 @@ export const sessionsDb = {
   },
 
   /**
+   * Cursor page of worker sessions for the watchdog jobs-history service.
+   * The cursor is the last session id from the previous page; its stored
+   * activity timestamp plus id preserve the repository's deterministic
+   * newest-first order without an offset that can drift as runs arrive.
+   */
+  listWorkerSessionsPage(
+    projectPath: string,
+    pageSize: number,
+    cursor: string | null,
+  ): { sessions: SessionRow[]; total: number; nextCursor: string | null } {
+    const db = getConnection();
+    const normalizedProjectPath = normalizeProjectPath(projectPath);
+    const total = Number((db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM sessions
+         WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+           AND origin IN ('direct', 'dispatch', 'external', 'maintenance')
+           AND isArchived = 0`
+      )
+      .get(normalizedProjectPath) as { count: number }).count);
+    const cursorPosition = cursor
+      ? db
+          .prepare(
+            `SELECT COALESCE(updated_at, created_at) AS activity_at, session_id
+             FROM sessions
+             WHERE session_id = ?
+               AND ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+               AND origin IN ('direct', 'dispatch', 'external', 'maintenance')
+               AND isArchived = 0`
+          )
+          .get(cursor, normalizedProjectPath) as { activity_at: string; session_id: string } | undefined
+      : undefined;
+    if (cursor && !cursorPosition) {
+      return { sessions: [], total, nextCursor: null };
+    }
+    const rows = cursorPosition
+      ? db
+          .prepare(
+            `SELECT ${SESSION_ROW_COLUMNS}
+             FROM sessions
+             WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+               AND origin IN ('direct', 'dispatch', 'external', 'maintenance')
+               AND isArchived = 0
+               AND (
+                 datetime(COALESCE(updated_at, created_at)) < datetime(?)
+                 OR (
+                   datetime(COALESCE(updated_at, created_at)) = datetime(?)
+                   AND session_id < ?
+                 )
+               )
+             ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
+             LIMIT ?`
+          )
+          .all(
+            normalizedProjectPath,
+            cursorPosition.activity_at,
+            cursorPosition.activity_at,
+            cursorPosition.session_id,
+            pageSize + 1,
+          ) as SessionRow[]
+      : db
+          .prepare(
+            `SELECT ${SESSION_ROW_COLUMNS}
+             FROM sessions
+             WHERE ${EFFECTIVE_PROJECT_PATH_SQL} = ?
+               AND origin IN ('direct', 'dispatch', 'external', 'maintenance')
+               AND isArchived = 0
+             ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
+             LIMIT ?`
+          )
+          .all(normalizedProjectPath, pageSize + 1) as SessionRow[];
+    const hasMore = rows.length > pageSize;
+    const page = normalizeSessionRows(rows.slice(0, pageSize));
+    return {
+      sessions: page,
+      total,
+      nextCursor: hasMore ? page.at(-1)?.session_id ?? null : null,
+    };
+  },
+
+  /**
    * Every session announced for a dispatch chain, any stage (codex job 5):
    * the watchdog reads a running unit's build and verify sessions off these
    * rows for the running-sessions poll.

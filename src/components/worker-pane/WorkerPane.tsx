@@ -39,6 +39,7 @@ import {
 } from './workerRunFollow';
 
 const JOBS_VIEW_PREFERENCE_KEY = 'worker-jobs-view-open-v1';
+const WORKER_RUNS_PAGE_SIZE = 50;
 
 type JobsViewPreferences = Record<string, boolean>;
 
@@ -208,6 +209,8 @@ export default function WorkerPane({
   }, [projectId, projectPath]);
   const [paneSession, setPaneSession] = useState<ProjectSession | null>(null);
   const [runs, setRuns] = useState<WorkerRun[]>([]);
+  const [runsTotal, setRunsTotal] = useState(0);
+  const [runsNextCursor, setRunsNextCursor] = useState<string | null>(null);
   const knownRunIdsRef = useRef<ReadonlySet<string>>(new Set());
   knownRunIdsRef.current = new Set(runs.map((run) => run.sessionId));
   // False until the first run fetch for this project settles; the top bar
@@ -264,13 +267,18 @@ export default function WorkerPane({
     }
     try {
       const response = await authenticatedFetch(
-        `/api/providers/sessions/worker-runs?projectPath=${encodeURIComponent(projectPath)}`,
+        `/api/providers/sessions/worker-runs?projectPath=${encodeURIComponent(projectPath)}&pageSize=${WORKER_RUNS_PAGE_SIZE}`,
       );
       if (!response.ok) {
         return;
       }
       const body = (await response.json()) as {
-        data?: { runs?: WorkerRun[]; chains?: Record<string, ChainSnapshot> };
+        data?: {
+          runs?: WorkerRun[];
+          chains?: Record<string, ChainSnapshot>;
+          total?: number;
+          nextCursor?: string | null;
+        };
       };
       // A live run can change while the user is sweeping a 100+ row history.
       // Keep that network reconciliation interruptible so pointer and wheel
@@ -278,6 +286,8 @@ export default function WorkerPane({
       startTransition(() => {
         setRuns((previous) => preserveJsonEqual(previous, body.data?.runs ?? []));
         setChains((previous) => preserveJsonEqual(previous, body.data?.chains ?? {}));
+        setRunsTotal(body.data?.total ?? 0);
+        setRunsNextCursor(body.data?.nextCursor ?? null);
       });
     } catch {
       // transient; the poll retries
@@ -308,6 +318,8 @@ export default function WorkerPane({
   useEffect(() => {
     setPaneSession(null);
     setRuns([]);
+    setRunsTotal(0);
+    setRunsNextCursor(null);
     setRunsLoaded(false);
     setChains({});
     setPromotes([]);
@@ -331,15 +343,19 @@ export default function WorkerPane({
     if (isActive && paneSession?.id) onSessionViewed?.(String(paneSession.id));
   }, [isActive, paneSession?.id, processingSessions, onSessionViewed]);
 
-  // Watcher deltas plus a slow poll keep the run list and its states honest
-  // even when a dispatched chain starts sessions with no browser involved.
-  // chain_progress is the watchdog streaming per-phase progress: merge the
-  // snapshot for an instant navigator update, then refetch to reconcile runs.
+  // Lifecycle snapshots reconcile sessions only at chain/unit boundaries.
+  // Checkbox progress arrives as a compact delta and mutates one manifest row
+  // without repeating token reads or the worker-runs request.
   useEffect(() => {
     const unsubscribe = subscribe?.((event: {
       kind?: string;
       sessionId?: string;
       chain?: ChainSnapshot;
+      chainSlug?: string;
+      unit?: number;
+      taskIndex?: number;
+      checked?: boolean;
+      refreshRuns?: boolean;
       promote?: PromoteRecord & { projectPath?: string };
       project?: { projectId?: string } | null;
     } | null) => {
@@ -352,14 +368,43 @@ export default function WorkerPane({
       ) {
         void refreshRuns();
       }
-      if (event?.kind === 'chain_progress' && event.chain) {
+      if (event?.kind === 'chain_updated' && event.chain) {
         const chain = event.chain;
         setChains((previous) =>
           previous[chain.slug] || chain.projectPath === projectPath
             ? { ...previous, [chain.slug]: chain }
             : previous,
         );
-        void refreshRuns();
+        if (event.refreshRuns) {
+          void refreshRuns();
+        }
+      }
+      if (
+        event?.kind === 'chain_progress'
+        && typeof event.chainSlug === 'string'
+        && Number.isInteger(event.unit)
+        && Number.isInteger(event.taskIndex)
+        && typeof event.checked === 'boolean'
+      ) {
+        const unit = event.unit as number;
+        const taskIndex = event.taskIndex as number;
+        setChains((previous) => {
+          const chain = previous[event.chainSlug as string];
+          const entry = chain?.manifest?.[unit - 1];
+          if (!chain || !entry || taskIndex < 0) {
+            return previous;
+          }
+          const currentDone = entry.done ?? 0;
+          const done = event.checked
+            ? Math.max(currentDone, taskIndex + 1)
+            : Math.min(currentDone, taskIndex);
+          if (done === entry.done) {
+            return previous;
+          }
+          const manifest = [...(chain.manifest ?? [])];
+          manifest[unit - 1] = { ...entry, done };
+          return { ...previous, [chain.slug]: { ...chain, manifest } };
+        });
       }
       // A promote landing while the column is open inserts its boundary row
       // straight away; only this project's promotes reach this pane.
@@ -371,12 +416,8 @@ export default function WorkerPane({
         });
       }
     });
-    const interval = setInterval(() => {
-      void refreshRuns();
-    }, 20_000);
     return () => {
       unsubscribe?.();
-      clearInterval(interval);
     };
   }, [subscribe, refreshRuns, projectPath, selectedProject.projectId]);
 
@@ -704,6 +745,9 @@ export default function WorkerPane({
           <div
             data-slot="jobs-view"
             data-layout={jobsFullPane ? 'pane' : 'column'}
+            data-runs-loaded={runs.length}
+            data-runs-total={runsTotal}
+            data-next-cursor={runsNextCursor ?? ''}
             className={cn(
               'min-h-0 min-w-0 overflow-hidden',
               jobsFullPane ? 'flex-1' : 'flex-shrink-0 border-l border-border/60',

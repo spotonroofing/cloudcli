@@ -222,8 +222,13 @@ test('an anchor-less planner manifest streams prompt-derived punch-list check-of
       try {
         await writeFile(punchlistPath, '## Job 23 — Live jobs\n\n- [x] First task\n- [ ] Second task\n- [ ] Design note\n');
         await waitFor(() => messages.some((message) => {
-          const event = JSON.parse(message) as { kind?: string; chain?: { manifest?: Array<{ done?: number }> } };
-          return event.kind === 'chain_progress' && event.chain?.manifest?.[0]?.done === 1;
+          const event = JSON.parse(message) as Record<string, unknown>;
+          return event.kind === 'chain_progress'
+            && event.chainSlug === slug
+            && event.unit === 1
+            && event.taskIndex === 0
+            && event.checked === true
+            && event.chain === undefined;
         }));
         let snapshot = watchdogService.listWorkerRuns(projectPath).chains[slug];
         assert.equal(snapshot.manifest?.[0]?.done, 1);
@@ -233,8 +238,13 @@ test('an anchor-less planner manifest streams prompt-derived punch-list check-of
         messages.length = 0;
         await writeFile(punchlistPath, '## Job 23 — Live jobs\n\n- [x] First task\n- [x] Second task\n- [x] Design note\n');
         await waitFor(() => messages.some((message) => {
-          const event = JSON.parse(message) as { kind?: string; chain?: { manifest?: Array<{ done?: number }> } };
-          return event.kind === 'chain_progress' && event.chain?.manifest?.[0]?.done === 2;
+          const event = JSON.parse(message) as Record<string, unknown>;
+          return event.kind === 'chain_progress'
+            && event.chainSlug === slug
+            && event.unit === 1
+            && event.taskIndex === 1
+            && event.checked === true
+            && event.chain === undefined;
         }));
         snapshot = watchdogService.listWorkerRuns(projectPath).chains[slug];
         assert.equal(snapshot.manifest?.[0]?.done, 2);

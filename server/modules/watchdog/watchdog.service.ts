@@ -86,6 +86,8 @@ export type ChainJobMeta = {
   suite?: 'green' | 'red';
   /** Failing test names extracted from the runner's durable suite log. */
   suiteFailures?: string[];
+  /** True when the runner's terminal reason records a per-unit budget stop. */
+  budgetStop?: boolean;
 };
 
 /**
@@ -192,6 +194,13 @@ type WorkerRun = {
   cacheReadCount: number | null;
 };
 
+type WorkerRunsPage = {
+  runs: WorkerRun[];
+  chains: Record<string, ChainSnapshot>;
+  total: number;
+  nextCursor: string | null;
+};
+
 type ChainEventName =
   | 'phase-start'
   | 'phase-end'
@@ -243,7 +252,17 @@ type ChainSnapshot = {
   /** Manifest entries with the punch-list `done` count and the unit's commit
    *  and timing metadata (ui13 job 14) folded in per unit; a twin superseded
    *  by another chain's unit (codex job 5) is marked hidden with its winner. */
-  manifest: (ChainManifestEntry & { done: number | null; hidden?: true; supersededBy?: string } & ChainJobMeta)[] | null;
+  manifest: (ChainManifestEntry & {
+    done: number | null;
+    hidden?: true;
+    supersededBy?: string;
+    verdict: 'passed' | 'failed' | 'inconclusive' | 'skipped';
+    verifyFailureReason: string | null;
+    suiteResult: 'green' | 'red' | null;
+    holdRequested: boolean;
+    budgetStop: boolean;
+    workerCommit: { hash: string; subject: string } | null;
+  } & ChainJobMeta)[] | null;
   /** Prompt files still queued after a terminal runner event. */
   orphanedAppends: number;
   startedAt: number;
@@ -321,6 +340,8 @@ export class WatchdogService {
     timer: ReturnType<typeof setTimeout> | null;
     mtimeMs: number;
     file: string;
+    unit: number;
+    done: number | null;
   }>();
   /** Twin grouping (codex job 5): prompt-file identities and the last result per project. */
   private twinIdentities = new UnitIdentityCache();
@@ -557,7 +578,7 @@ export class WatchdogService {
       sessionsDb.setWatchdogWakeTarget(dispatchingSessionId);
     }
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain, true);
     this.syncPunchlistWatcher(chain);
     log(`chain registered: ${input.slug}`, {
       projectPath: input.projectPath,
@@ -599,7 +620,7 @@ export class WatchdogService {
       meta.model = model;
     }
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain, true);
     return true;
   }
 
@@ -610,7 +631,7 @@ export class WatchdogService {
     }
     chain.manifest = manifest;
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain);
     log(`chain ${slug}: manifest updated in place (${manifest.length} entries)`);
     return true;
   }
@@ -685,7 +706,7 @@ export class WatchdogService {
       : null;
     chain.lastEventAt = Date.now();
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain);
     this.syncPunchlistWatcher(chain);
     log(`chain ${slug}: manifest rebuilt from phase files (${rebuilt.entries.length} entries)`);
     return { status: 'ok', entries: rebuilt.entries.length };
@@ -705,7 +726,7 @@ export class WatchdogService {
       chain.jobs[Number(index)] = { ...chain.jobs[Number(index)], ...meta };
     }
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain);
     log(`chain ${slug}: job metadata updated for ${Object.keys(jobs).length} job(s)`);
     return true;
   }
@@ -728,7 +749,7 @@ export class WatchdogService {
     chain.fastMode = enabled;
     chain.lastEventAt = Date.now();
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain);
     log(`chain ${slug}: fast mode ${enabled ? 'on' : 'off'}`);
     return chain.fastMode;
   }
@@ -752,7 +773,7 @@ export class WatchdogService {
     }
     chain.lastEventAt = Date.now();
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain);
     log(`chain ${slug}: ${entries.length} unit(s) appended`, { manifestLength: chain.manifest.length });
     return true;
   }
@@ -802,7 +823,7 @@ export class WatchdogService {
     }
     chain.lastEventAt = Date.now();
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain);
     log(`chain ${slug}: unit ${phaseIndex} amended`, { tasks: entry.tasks.length });
     return 'ok';
   }
@@ -846,6 +867,41 @@ export class WatchdogService {
   }
 
   /**
+   * Stops a chain through the watchdog route. A running chain first uses the
+   * runner's pause signal so child shutdown, verifier settlement, and WIP
+   * parking remain owned by the runner; an already-paused chain is already
+   * parked and can move directly to the durable stopped state.
+   */
+  async requestChainStop(
+    slug: string,
+    projectPath: string,
+  ): Promise<'stopped' | 'not-running' | 'no-runner' | 'timeout'> {
+    const chain = this.chains.get(slug);
+    if (!chain || normalizeProjectPath(chain.projectPath) !== normalizeProjectPath(projectPath)
+      || (chain.status !== 'running' && chain.status !== 'paused')) {
+      return 'not-running';
+    }
+    if (chain.status === 'running') {
+      const paused = await this.requestChainPause(slug, projectPath);
+      if (paused !== 'paused') {
+        return paused;
+      }
+    }
+    const parked = this.chains.get(slug);
+    if (!parked || parked.status !== 'paused') {
+      return 'not-running';
+    }
+    parked.holdRequested = false;
+    parked.holdReason = null;
+    const phase = parked.currentPhase ?? undefined;
+    this.chainEvent(slug, 'stopped', {
+      phase,
+      summaryTail: 'Stopped by the user after the active work was parked.',
+    });
+    return 'stopped';
+  }
+
+  /**
    * Used by the watchdog hold route for `dispatch hold`: records a promote
    * request without signaling or interrupting the runner. The runner alone
    * consumes it after a committed unit and its verifier have settled.
@@ -863,7 +919,7 @@ export class WatchdogService {
     chain.holdReason = reason;
     chain.lastEventAt = Date.now();
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain);
     log(`chain ${slug}: hold requested`, { reason });
     return 'holding';
   }
@@ -903,7 +959,7 @@ export class WatchdogService {
     chain.holdReason = null;
     chain.lastEventAt = Date.now();
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain);
     log(`chain ${slug}: hold released before boundary`);
     return 'cleared';
   }
@@ -932,7 +988,7 @@ export class WatchdogService {
     chain.holdReason = null;
     chain.lastEventAt = Date.now();
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain, true);
     this.syncPunchlistWatcher(chain);
     log(`chain ${slug}: resumed`, { phase, phases });
     return { phase, phases };
@@ -947,10 +1003,11 @@ export class WatchdogService {
    */
   private syncPunchlistWatcher(chain: ChainRecord): void {
     const active = this.punchlistWatchers.get(chain.slug);
-    const file = chain.currentPhase == null
+    const unit = chain.currentPhase;
+    const file = unit == null
       ? null
-      : this.punchlistSections(chain)[chain.currentPhase - 1]?.file ?? null;
-    if (chain.status !== 'running' || !file
+      : this.punchlistSections(chain)[unit - 1]?.file ?? null;
+    if (chain.status !== 'running' || !file || unit == null
       || !this.policy('punchlistWatching', `punch list watch for chain ${chain.slug}`)) {
       if (active) {
         active.watcher.close();
@@ -961,7 +1018,10 @@ export class WatchdogService {
       }
       return;
     }
+    const done = this.chainUnitDone(chain, unit);
     if (active?.file === file) {
+      active.unit = unit;
+      active.done = done;
       return;
     }
     if (active) {
@@ -999,14 +1059,26 @@ export class WatchdogService {
           state.mtimeMs = mtimeMs;
           const current = this.chains.get(chain.slug);
           if (current) {
-            this.broadcastChainProgress(current);
+            const currentDone = this.chainUnitDone(current, state.unit);
+            const previousDone = state.done;
+            state.done = currentDone;
+            if (previousDone != null && currentDone != null && previousDone !== currentDone) {
+              this.broadcastTaskProgress(current, state.unit, previousDone, currentDone);
+            }
           }
         }, PUNCHLIST_DEBOUNCE_MS);
       });
       watcher.on('error', (error) => {
         log(`chain ${chain.slug}: punch list watch error: ${error.message}`);
       });
-      this.punchlistWatchers.set(chain.slug, { watcher, timer: null, mtimeMs: mtimeOf(), file });
+      this.punchlistWatchers.set(chain.slug, {
+        watcher,
+        timer: null,
+        mtimeMs: mtimeOf(),
+        file,
+        unit,
+        done,
+      });
     } catch (error) {
       log(`chain ${chain.slug}: cannot watch punch list ${file}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -1070,6 +1142,17 @@ export class WatchdogService {
     if (changed) {
       this.persistChain(chain);
     }
+  }
+
+  /** Current normalized checkbox count for one unit; used only by the watcher delta path. */
+  private chainUnitDone(chain: ChainRecord, unit: number): number | null {
+    const counts = punchlistDoneCounts(chain.manifest, this.punchlistSections(chain));
+    this.observeTaskCheckoffs(chain, counts);
+    const raw = counts?.[unit - 1];
+    if (raw == null) {
+      return null;
+    }
+    return Math.max(0, raw - (chain.jobs[unit]?.taskDoneBaseline ?? 0));
   }
 
   /**
@@ -1144,10 +1227,23 @@ export class WatchdogService {
       manifest: chain.manifest
         ? chain.manifest.map((entry, i) => {
             const { taskDoneBaseline: _taskDoneBaseline, ...publicJobMeta } = chain.jobs[i + 1] ?? {};
+            const verdict = publicJobMeta.verify === 'passed'
+              || publicJobMeta.verify === 'failed'
+              || publicJobMeta.verify === 'inconclusive'
+              ? publicJobMeta.verify
+              : 'skipped';
             return {
               ...entry,
               done: doneCounts?.[i] ?? null,
               ...publicJobMeta,
+              verdict,
+              verifyFailureReason: publicJobMeta.verifyReason ?? null,
+              suiteResult: publicJobMeta.suite ?? null,
+              holdRequested: chain.holdRequested && chain.currentPhase === i + 1,
+              budgetStop: Boolean(publicJobMeta.budgetStop),
+              workerCommit: publicJobMeta.commitHash
+                ? { hash: publicJobMeta.commitHash, subject: publicJobMeta.commitSubject ?? '' }
+                : null,
               ...(hidden?.has(i + 1) ? { hidden: true as const, supersededBy: hidden.get(i + 1) } : {}),
             };
           })
@@ -1158,14 +1254,43 @@ export class WatchdogService {
     };
   }
 
-  /** Streams per-phase progress to every open client (the navigator's feed). */
-  private broadcastChainProgress(chain: ChainRecord): void {
-    const event = JSON.stringify({ kind: 'chain_progress', chain: this.chainSnapshot(chain) });
+  /** Streams a chain snapshot; consumers refetch runs only at lifecycle boundaries. */
+  private broadcastChainUpdate(chain: ChainRecord, refreshRuns = false): void {
+    const event = JSON.stringify({
+      kind: 'chain_updated',
+      chain: this.chainSnapshot(chain),
+      refreshRuns,
+    });
     connectedClients.forEach((client) => {
       if (client.readyState === WS_OPEN_STATE) {
         client.send(event);
       }
     });
+  }
+
+  /** Streams only checkbox changes so a task tick never carries a full chain snapshot. */
+  private broadcastTaskProgress(
+    chain: ChainRecord,
+    unit: number,
+    previousDone: number,
+    currentDone: number,
+  ): void {
+    const first = Math.min(previousDone, currentDone);
+    const last = Math.max(previousDone, currentDone);
+    for (let taskIndex = first; taskIndex < last; taskIndex += 1) {
+      const event = JSON.stringify({
+        kind: 'chain_progress',
+        chainSlug: chain.slug,
+        unit,
+        taskIndex,
+        checked: currentDone > previousDone,
+      });
+      connectedClients.forEach((client) => {
+        if (client.readyState === WS_OPEN_STATE) {
+          client.send(event);
+        }
+      });
+    }
   }
 
   chainEvent(
@@ -1201,7 +1326,7 @@ export class WatchdogService {
         chain.lastSummaryTail = detail.summaryTail.slice(-2000);
       }
       this.persistChain(chain);
-      this.broadcastChainProgress(chain);
+      this.broadcastChainUpdate(chain, true);
       this.syncPunchlistWatcher(chain);
       log(`chain ${slug}: ${event}`, { phase: chain.currentPhase });
       return true;
@@ -1215,7 +1340,7 @@ export class WatchdogService {
         meta.suiteFailures = detail.suiteStatus === 'red' ? (detail.suiteFailures ?? []).slice(0, 20) : [];
       }
       this.persistChain(chain);
-      this.broadcastChainProgress(chain);
+      this.broadcastChainUpdate(chain);
       log(`chain ${slug}: suite-end`, {
         phase: detail?.phase ?? null,
         suite: detail?.suiteStatus ?? null,
@@ -1255,7 +1380,7 @@ export class WatchdogService {
       const failedVerdict = event === 'verify-failed' || (event === 'verify-end' && detail?.verdict === 'FAIL');
       if (failedVerdict) {
         this.persistChain(chain);
-        this.broadcastChainProgress(chain);
+        this.broadcastChainUpdate(chain, true);
         const phase = detail?.phase;
         const meta = typeof phase === 'number' ? chain.jobs[phase] : undefined;
         const unitName = typeof phase === 'number' ? chain.manifest?.[phase - 1]?.name : undefined;
@@ -1268,7 +1393,7 @@ export class WatchdogService {
         );
       } else {
         this.persistChain(chain);
-        this.broadcastChainProgress(chain);
+        this.broadcastChainUpdate(chain, true);
       }
       return true;
     }
@@ -1298,6 +1423,9 @@ export class WatchdogService {
       if ((event === 'failed' || event === 'stopped') && chain.currentPhase != null) {
         const meta = chain.jobs[chain.currentPhase] ?? (chain.jobs[chain.currentPhase] = {});
         meta.failureReason = chain.lastSummaryTail;
+        if (event === 'stopped') {
+          meta.budgetStop = /(?:unit|turn|token|session) budget|retry cap|weekly usage cap/i.test(chain.lastSummaryTail);
+        }
       }
     }
     // Honest run state: a phase session is live only between phase-start and
@@ -1313,7 +1441,7 @@ export class WatchdogService {
         log(`account usage refresh after chain limit failed: ${error instanceof Error ? error.message : String(error)}`);
       });
       this.persistChain(chain);
-      this.broadcastChainProgress(chain);
+      this.broadcastChainUpdate(chain);
       // A Codex usage-limit wait (codex job 2) is announced through a
       // recovery notification instead; the event only records the wait.
       if (detail?.quiet || !this.policy('recoveryNotices', `limit recovery notice for chain ${slug}`)) {
@@ -1334,12 +1462,12 @@ export class WatchdogService {
       chain.status = event === 'completed' ? 'completed' : event === 'stopped' ? 'stopped' : 'failed';
       settleRunningVerifies(chain);
       this.persistChain(chain);
-      this.broadcastChainProgress(chain);
+      this.broadcastChainUpdate(chain, true);
       this.syncPunchlistWatcher(chain);
       this.handleTerminalChain(chain);
     } else {
       this.persistChain(chain);
-      this.broadcastChainProgress(chain);
+      this.broadcastChainUpdate(chain, true);
       // A newly started unit may be the first moment an appended prompt is
       // available to derive its punch-list path. Re-anchor the directory
       // watcher on every live boundary so that unit's check-offs stream.
@@ -1415,25 +1543,21 @@ export class WatchdogService {
     return this.chains.get(chainSlug)?.manifest?.[chainPhase - 1]?.name ?? null;
   }
 
-  listWorkerRuns(projectPath: string): { runs: WorkerRun[]; chains: Record<string, ChainSnapshot> } {
+  listWorkerRuns(projectPath: string, pageSize?: number, cursor: string | null = null): WorkerRunsPage {
     const normalizedPath = normalizeProjectPath(projectPath);
-    // Jobs is a history surface, not a recent-run switcher. Keep enough rows
-    // to cover completed chains and both provider types; file totals are
-    // metadata-cached by size/mtime in the token service.
-    const rows = sessionsDb.listWorkerSessions(normalizedPath, 100);
-
-    const knownIds = new Set<string>();
-    for (const row of rows) {
-      knownIds.add(row.session_id);
-      if (row.provider_session_id) {
-        knownIds.add(row.provider_session_id);
-      }
-    }
+    const firstPage = sessionsDb.listWorkerSessionsPage(normalizedPath, pageSize ?? 1, cursor);
+    const page = pageSize === undefined && firstPage.total > firstPage.sessions.length
+      ? sessionsDb.listWorkerSessionsPage(normalizedPath, Math.max(firstPage.total, 1), cursor)
+      : firstPage;
+    const rows = page.sessions;
 
     // A live dispatched run whose session row is not indexed yet still shows
     // up — this is the "concurrent dispatched runs are invisible" fix.
-    const liveOnly: WorkerRun[] = [...this.dispatchRuns.values()]
-      .filter((run) => !run.ended && run.projectPath === normalizedPath && !knownIds.has(run.sessionId))
+    const unindexedLive = [...this.dispatchRuns.values()]
+      .filter((run) => !run.ended
+        && run.projectPath === normalizedPath
+        && !sessionsDb.getSessionById(run.sessionId));
+    const liveOnly: WorkerRun[] = (cursor ? [] : unindexedLive)
       .sort((a, b) => b.startedAt - a.startedAt)
       .map((run) => ({
         sessionId: run.sessionId,
@@ -1511,13 +1635,17 @@ export class WatchdogService {
       };
     });
 
-    // Snapshots for every chain this project's runs reference, plus chains
-    // registered for the project whose first phase session has not landed yet
-    // — the navigator shows the manifest the moment a dispatch registers.
+    // Chain manifests follow only the runs in this page. The first page also
+    // includes active chains whose first session has not landed yet, keeping
+    // history pagination from re-sending every stored manifest on each page.
     const chains: Record<string, ChainSnapshot> = {};
-    for (const chain of this.chains.values()) {
-      if (chain.projectPath === normalizedPath) {
-        chains[chain.slug] = this.chainSnapshot(chain);
+    if (pageSize === undefined || !cursor) {
+      for (const chain of this.chains.values()) {
+        if (chain.projectPath === normalizedPath && (
+          pageSize === undefined || chain.status === 'running' || chain.status === 'paused'
+        )) {
+          chains[chain.slug] = this.chainSnapshot(chain);
+        }
       }
     }
     for (const run of [...liveOnly, ...fromRows]) {
@@ -1527,7 +1655,12 @@ export class WatchdogService {
       }
     }
 
-    return { runs: [...liveOnly, ...fromRows], chains };
+    return {
+      runs: [...liveOnly, ...fromRows],
+      chains,
+      total: page.total + unindexedLive.length,
+      nextCursor: page.nextCursor,
+    };
   }
 
   /**
@@ -1537,8 +1670,10 @@ export class WatchdogService {
    */
   async listWorkerRunsWithTokens(
     projectPath: string,
-  ): Promise<{ runs: WorkerRun[]; chains: Record<string, ChainSnapshot> }> {
-    const snapshot = this.listWorkerRuns(projectPath);
+    pageSize = 50,
+    cursor: string | null = null,
+  ): Promise<WorkerRunsPage> {
+    const snapshot = this.listWorkerRuns(projectPath, pageSize, cursor);
     const runs = await Promise.all(snapshot.runs.map(async (run) => {
       try {
         const usage = await providerTokenUsageService.getJobTokenUsage(run.sessionId);
@@ -2352,7 +2487,7 @@ export class WatchdogService {
     chain.lastEventAt = Date.now();
     chain.lastSummaryTail = reason;
     this.persistChain(chain);
-    this.broadcastChainProgress(chain);
+    this.broadcastChainUpdate(chain, true);
     this.syncPunchlistWatcher(chain);
     log(`chain ${chain.slug}: stopped by the liveness sweep`, { reason });
     this.handleTerminalChain(chain);

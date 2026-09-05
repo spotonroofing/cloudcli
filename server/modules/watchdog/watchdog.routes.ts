@@ -460,6 +460,36 @@ export function createWatchdogRouter(): express.Router {
   );
 
   router.post(
+    '/chains/:slug/stop',
+    requireApiKeyOrToken,
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const projectPath = typeof body.projectPath === 'string' ? body.projectPath.trim() : '';
+      if (!projectPath) {
+        throw new AppError('projectPath is required.', {
+          code: 'WATCHDOG_CHAIN_PROJECT_REQUIRED',
+          statusCode: 400,
+        });
+      }
+      const slug = String(req.params.slug);
+      const result = await watchdogService.requestChainStop(slug, projectPath);
+      if (result === 'not-running' || result === 'no-runner') {
+        throw new AppError(`Chain "${slug}" is not running or paused.`, {
+          code: 'WATCHDOG_CHAIN_NOT_STOPPABLE',
+          statusCode: 409,
+        });
+      }
+      if (result === 'timeout') {
+        throw new AppError(`Chain "${slug}" did not finish parking before stop.`, {
+          code: 'WATCHDOG_CHAIN_STOP_TIMEOUT',
+          statusCode: 504,
+        });
+      }
+      res.json(createApiSuccessResponse({ slug, status: 'stopped' }));
+    }),
+  );
+
+  router.post(
     '/chains/:slug/resume',
     requireApiKey,
     asyncHandler(async (req: Request, res: Response) => {
