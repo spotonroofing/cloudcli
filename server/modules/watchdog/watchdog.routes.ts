@@ -66,12 +66,19 @@ export function createWatchdogRouter(): express.Router {
         }
         manifestValue = wrapped.entries;
       }
+      const manifest = manifestValue === undefined ? null : parseManifest(manifestValue, true);
+      if (manifestValue !== undefined && !manifest) {
+        throw new AppError('manifest entries require name and tasks; names are capped at 120 characters, tasks at 160, and anchors at 120.', {
+          code: 'WATCHDOG_MANIFEST_INVALID',
+          statusCode: 400,
+        });
+      }
       watchdogService.registerChain({
         slug,
         projectPath,
         dispatchingSessionId,
         phases,
-        manifest: parseManifest(manifestValue),
+        manifest,
         punchlist,
       });
       res.status(201).json(createApiSuccessResponse({ slug }));
@@ -339,7 +346,7 @@ export function createWatchdogRouter(): express.Router {
     requireApiKey,
     asyncHandler(async (req: Request, res: Response) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      const entries = parseManifest(body.entries);
+      const entries = parseManifest(body.entries, true);
       if (!entries) {
         throw new AppError('entries must be a non-empty array of {name, tasks?, kind?, anchor?}.', {
           code: 'WATCHDOG_MANIFEST_ENTRIES_REQUIRED',
@@ -390,7 +397,7 @@ export function createWatchdogRouter(): express.Router {
     requireApiKey,
     asyncHandler(async (req: Request, res: Response) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      const entries = parseManifest(body.entries);
+      const entries = parseManifest(body.entries, true);
       if (!entries) {
         throw new AppError('entries must be a non-empty array of {name, tasks?, kind?}.', {
           code: 'WATCHDOG_APPEND_ENTRIES_REQUIRED',
@@ -506,6 +513,12 @@ export function createWatchdogRouter(): express.Router {
         throw new AppError(`Unit ${phase} of chain "${slug}" has started, so its punch-list anchor cannot change.`, {
           code: 'WATCHDOG_AMEND_ANCHOR_STARTED',
           statusCode: 409,
+        });
+      }
+      if (result === 'invalid') {
+        throw new AppError('The amended unit must keep a name and tasks; names are capped at 120 characters, tasks at 160, and anchors at 120.', {
+          code: 'WATCHDOG_AMEND_INVALID',
+          statusCode: 400,
         });
       }
       res.json(createApiSuccessResponse({ slug, phase, tasks: tasks?.length ?? undefined }));

@@ -119,9 +119,11 @@ test('manifest-less dispatch compiles phase headers, refuses blank tasks, and re
     const punchlist = path.join(repo, 'PUNCHLIST_stub.md');
     const phaseOne = path.join(repo, '01-one.md');
     const phaseTwo = path.join(repo, '02-two.md');
+    const phaseThree = path.join(repo, '03-explicit.md');
     await writeFile(punchlist, '## Job 1: First real job\n\n- [ ] First task\n- [ ] Second task\n\n## Job 2: Second real job\n\n- [ ] Third task\n\n## Job 3: Explicit manifest\n\n- [ ] Stored task\n');
     await writeFile(phaseOne, '<!-- engine: codex -->\n<!-- verify: no -->\n<!-- name: First real job -->\n<!-- tasks: First task | Second task -->\nExecute Job 1 of PUNCHLIST_stub.md in this repo.\n');
     await writeFile(phaseTwo, '<!-- engine: codex -->\n<!-- verify: no -->\n<!-- name: Second real job -->\n<!-- tasks: Third task -->\nExecute Job 2 of PUNCHLIST_stub.md in this repo.\n');
+    await writeFile(phaseThree, '<!-- engine: codex -->\n<!-- verify: no -->\n<!-- name: Explicit prompt -->\n<!-- tasks: Stored task -->\nExecute Job 3 of PUNCHLIST_stub.md in this repo.\n');
     await git('add', '.');
     await git('commit', '-q', '-m', 'stub base');
 
@@ -186,7 +188,7 @@ print -r -- "done" > "$output"
     await git('add', missingTasks);
     await git('commit', '-q', '-m', 'add explicit-manifest prompt');
     const explicitSlug = `${slug}-explicit`;
-    const explicit = await runDispatch([repo, explicitSlug, missingTasks], {
+    const explicit = await runDispatch([repo, explicitSlug, phaseThree], {
       cwd: repo,
       env: { ...environment, DISPATCH_MANIFEST: explicitManifest },
     });

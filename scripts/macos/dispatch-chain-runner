@@ -15,8 +15,14 @@
 # claude|codex -->`, `<!-- model: <id> -->` and `<!-- effort: <level> -->`
 # in its header; each overrides the chain's DISPATCH_ENGINE / DISPATCH_MODEL
 # / DISPATCH_EFFORT for that unit only, and a missing header falls back to
-# the env, then the engine default (Claude: claude-fable-5 at high with the
+# the env, then the engine default (Claude: claude-opus-5 at high with the
 # claude-opus-4-8 capacity fallback; Codex: gpt-5.6-sol at high).
+# DISPATCH_RUN_DATE is resolved by this runner at the chain's first start as
+# YYYYMMDD. DISPATCH_RUN_SUMMARY_PATH is the fully resolved memory-repo path.
+# Both are persisted across pause/reload and exported to every unit so its
+# phase tail references the chain's real start date rather than compile time.
+# Worker journal clause: one line per entry, YYYY-MM-DD HH:MM | phase or task
+# | event | detail.
 #
 # Pipelined verification (ui14 job 10): every unit is two stages. The build
 # stage is the phase prompt itself, ending at the commit gate. The verify
@@ -48,12 +54,25 @@ eval "$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --shell)"
 SERVER_URL="${DISPATCH_SERVER_URL:-http://127.0.0.1:4747}"
 DB_PATH="${DISPATCH_DB_PATH:-$COMMAND_CENTER_RUNTIME_DATA_DIR/auth.db}"
 
+# Hard per-unit ceilings. Tests may lower either value through the matching
+# DISPATCH_ override; production defaults remain named and visible here.
+UNIT_MODEL_TURN_BUDGET="${DISPATCH_UNIT_MODEL_TURN_BUDGET:-160}"
+UNIT_WALL_TIME_BUDGET_SECS="${DISPATCH_UNIT_WALL_TIME_BUDGET_SECS:-10800}"
+LIMIT_RETRY_CAP="${DISPATCH_LIMIT_RETRY_CAP:-4}"
+[[ "$UNIT_MODEL_TURN_BUDGET" == <1-> && "$UNIT_WALL_TIME_BUDGET_SECS" == <1-> \
+  && "$LIMIT_RETRY_CAP" == <1-> ]] \
+  || { print -u2 "dispatch-chain-runner: unit budgets and retry cap must be positive integers"; exit 64; }
+DISPATCH_RUN_DATE="${DISPATCH_RUN_DATE:-$(date +%Y%m%d)}"
+export DISPATCH_RUN_DATE
+
 [[ $# -ge 3 ]] || { print -u2 "usage: dispatch-chain-runner <repo> <slug> <phase-file ...>"; exit 64; }
 REPO="$1"; SLUG="$2"; shift 2
 typeset -a PHASE_FILES
 PHASE_FILES=("$@")
 
 cd "$REPO" || { print -u2 "dispatch-chain-runner: cannot cd to $REPO"; exit 66; }
+DISPATCH_RUN_SUMMARY_PATH="${DISPATCH_RUN_SUMMARY_PATH:-$HOME/Projects/spoton-worker/planner/${REPO:t}/sessions/${DISPATCH_RUN_DATE}-${SLUG}-summary.md}"
+export DISPATCH_RUN_SUMMARY_PATH
 
 # Chain-level engine/model/effort from the env: the fallback for units whose
 # header names none. DISPATCH_MODEL applies only to units on the chain's
@@ -64,7 +83,7 @@ CHAIN_ENGINE="${DISPATCH_ENGINE:-claude}"
 CHAIN_MODEL="${DISPATCH_MODEL:-}"
 CHAIN_EFFORT="${DISPATCH_EFFORT:-high}"
 FALLBACK_MODEL="claude-opus-4-8"
-CLAUDE_DEFAULT_MODEL="claude-fable-5"
+CLAUDE_DEFAULT_MODEL="claude-opus-5"
 CODEX_DEFAULT_MODEL="gpt-5.6-sol"
 # Headless Claude units are unattended, so every normal work tool is explicit.
 # acceptEdits keeps Claude on its native file tools while the PreToolUse hook
@@ -72,7 +91,7 @@ CODEX_DEFAULT_MODEL="gpt-5.6-sol"
 CLAUDE_PERMISSION_MODE="acceptEdits"
 CLAUDE_ALLOWED_TOOLS="Bash,WebFetch,WebSearch,Agent,Skill,ToolSearch,Monitor,TaskOutput,Read,Edit,Write,Glob,Grep,NotebookEdit,TaskCreate,TaskUpdate,TaskList,TaskGet"
 
-# The verify stage runs on Luna regardless of the build's engine; the two
+# The verify stage runs on Terra regardless of the build's engine; the two
 # overrides exist only for stub chains and tests.
 VERIFY_ENGINE="${DISPATCH_VERIFY_ENGINE:-codex}"
 [[ "$VERIFY_ENGINE" == "claude" || "$VERIFY_ENGINE" == "codex" ]] \
@@ -215,7 +234,8 @@ trap 'rm -f "$HEADER_FILE"' EXIT
 JOURNAL_DIR="$HOME/forge-logs/$SLUG"
 mkdir -p "$JOURNAL_DIR"
 JOURNAL="$JOURNAL_DIR/JOURNAL.md"
-journal() { print -r -- "$(date +%H:%M) | $1 | $2 | $3" >> "$JOURNAL"; }
+APPEND_DIR="$JOURNAL_DIR/append"
+journal() { print -r -- "$(date '+%Y-%m-%d %H:%M') | $1 | $2 | $3" >> "$JOURNAL"; }
 
 # Build sessions get a private PATH prefix that gates only commands capable of
 # rebuilding or restarting dev. Verifiers keep the ordinary PATH, so their own
@@ -230,7 +250,7 @@ prepare_dev_guard() {
 #!/bin/zsh
 [[ -f "$DISPATCH_VERIFY_HOLD_FILE" ]] || exit 0
 if mkdir "$DISPATCH_VERIFY_HOLD_REPORTED" 2>/dev/null; then
-  print -r -- "$(date +%H:%M) | $DISPATCH_VERIFY_HOLD_LABEL | hold | next unit dev rebuild/restart waits for the verifier or its cap" >> "$DISPATCH_VERIFY_HOLD_JOURNAL"
+  print -r -- "$(date '+%Y-%m-%d %H:%M') | $DISPATCH_VERIFY_HOLD_LABEL | hold | next unit dev rebuild/restart waits for the verifier or its cap" >> "$DISPATCH_VERIFY_HOLD_JOURNAL"
 fi
 while [[ -f "$DISPATCH_VERIFY_HOLD_FILE" ]]; do /bin/sleep 0.1; done
 GUARD_EOF
@@ -275,11 +295,11 @@ RESUME_STATE="$JOURNAL_DIR/resume.json"
 # Appended prompts extend this file when the runner consumes them.
 save_resume_state() {
   local next_phase="${1:-$RESUME_FROM}" phase_count=${#PHASE_FILES[@]}
-  python3 - "$RESUME_STATE.tmp" "$REPO" "$SLUG" "$CHAIN_ENGINE" "$CHAIN_MODEL" "$CHAIN_EFFORT" \
+  python3 - "$RESUME_STATE.tmp" "$REPO" "$SLUG" "$DISPATCH_RUN_DATE" "$DISPATCH_RUN_SUMMARY_PATH" "$CHAIN_ENGINE" "$CHAIN_MODEL" "$CHAIN_EFFORT" \
       "$VERIFY_ENGINE" "$VERIFY_MODEL" "${DISPATCHING_SESSION_ID:-}" "$next_phase" "${CHAIN_BASE:-}" \
       "$VERIFY_INCONCLUSIVE_COUNT" "$phase_count" "${PHASE_FILES[@]}" "${VERIFY_FAILURES[@]}" <<'PYEOF'
 import json, os, sys
-out, repo, slug, engine, model, effort, verify_engine, verify_model, dispatching_session_id, next_phase, chain_base, verify_inconclusive_count, phase_count, *rest = sys.argv[1:]
+out, repo, slug, run_date, summary_path, engine, model, effort, verify_engine, verify_model, dispatching_session_id, next_phase, chain_base, verify_inconclusive_count, phase_count, *rest = sys.argv[1:]
 phase_count = int(phase_count)
 files = rest[:phase_count]
 verify_failures = rest[phase_count:]
@@ -287,6 +307,8 @@ with open(out, 'w', encoding='utf-8') as handle:
     json.dump({
         'repo': repo,
         'slug': slug,
+        'runDate': run_date,
+        'summaryPath': summary_path,
         'engine': engine,
         'model': model,
         'effort': effort,
@@ -356,22 +378,51 @@ read_chain_hold_reason() {
   print -r -- "${reason:-}"
 }
 
+# Names queued append files that a terminal chain can no longer consume.
+# Prints a tab-separated count and terminal-notice sentence.
+orphaned_append_report() {
+  local -a files
+  local count names
+  files=("$APPEND_DIR"/*.md(N))
+  count=${#files[@]}
+  if [[ $count -eq 0 ]]; then
+    print -r -- $'0\t'
+    return 0
+  fi
+  names=$(print -rl -- "${files[@]:t}" | paste -sd ', ' -)
+  print -r -- "$count"$'\t'"$count queued append file$([[ $count -eq 1 ]] || print s) remain under $APPEND_DIR: $names"
+}
+
 # Every event carries projectPath and phases so a restarted server can
-# re-register the chain it lost with the event itself.
+# re-register the chain it lost with the event itself. Terminal events also
+# report queued appends in both the journal and the notice summary tail.
 event_body() {
   # $1 event, $2 phase (or empty), $3 summaryTail json string (or empty),
   # $4 commit short hash (or empty), $5 commit subject (or empty),
   # $6 exact verifier verdict (PASS|FAIL|INCONCLUSIVE, or empty)
-  python3 - "$1" "$2" "$3" "$REPO" "$TOTAL" "${4:-}" "${5:-}" "${DISPATCHING_SESSION_ID:-}" "${UNIT_FAST_MODE:-0}" "${6:-}" <<'PYEOF'
+  local event="$1" phase="$2" tail="$3" orphan_count=0 orphan_detail="" orphan_report
+  if [[ "$event" == completed || "$event" == stopped || "$event" == failed ]]; then
+    orphan_report=$(orphaned_append_report)
+    IFS=$'\t' read -r orphan_count orphan_detail <<< "$orphan_report"
+    if [[ $orphan_count -gt 0 ]]; then
+      journal run "orphaned-appends" "$orphan_detail"
+    fi
+  fi
+  python3 - "$event" "$phase" "$tail" "$REPO" "$TOTAL" "${4:-}" "${5:-}" "${DISPATCHING_SESSION_ID:-}" "${UNIT_FAST_MODE:-0}" "${6:-}" "$orphan_count" "$orphan_detail" <<'PYEOF'
 import json, sys
-event, phase, tail, repo, total, commit_hash, commit_subject, dispatching_session_id, fast_mode, verdict = sys.argv[1:11]
+event, phase, tail, repo, total, commit_hash, commit_subject, dispatching_session_id, fast_mode, verdict, orphan_count, orphan_detail = sys.argv[1:13]
 body = {'event': event, 'projectPath': repo, 'phases': int(total)}
 if dispatching_session_id:
     body['dispatchingSessionId'] = dispatching_session_id
 if phase:
     body['phase'] = int(phase)
-if tail:
-    body['summaryTail'] = json.loads(tail)
+summary = json.loads(tail) if tail else ''
+if orphan_detail:
+    summary = f'{summary}\n\n{orphan_detail}'.strip()
+if summary:
+    body['summaryTail'] = summary
+if int(orphan_count):
+    body['orphanedAppends'] = int(orphan_count)
 if commit_hash:
     body['commit'] = {'hash': commit_hash, 'subject': commit_subject}
 if event == 'phase-start':
@@ -517,6 +568,7 @@ unpark_stale() {
 }
 
 LIMIT_STREAK=0
+LIMIT_STREAK_KEY=""
 WAIT_CYCLES=0
 WAIT_TOTAL=0
 PARK_ESCALATED=0
@@ -536,9 +588,34 @@ recover_from_limit() {
     event_phase=""
     what="The verify of job $unit ($name)"
   fi
+  if [[ "$LIMIT_STREAK_KEY" != "$stage:$unit" ]]; then
+    LIMIT_STREAK_KEY="$stage:$unit"
+    LIMIT_STREAK=0
+    WAIT_CYCLES=0
+    WAIT_TOTAL=0
+    PARK_ESCALATED=0
+  fi
   LIMIT_STREAK=$((LIMIT_STREAK + 1))
   journal "$label" "limit" "claude exited on the session limit (attempt $LIMIT_STREAK); auto-recovering"
+  if [[ $LIMIT_STREAK -ge $LIMIT_RETRY_CAP ]]; then
+    report_claude_read_usage
+    journal "$label" "STOPPED" "session limit retry cap reached after $LIMIT_STREAK limit waits; decision-needed sent"
+    api_post "/api/watchdog/notify" "$(python3 - "$SLUG" "$unit" "$TOTAL" "$name" "$LIMIT_STREAK" <<'PYEOF'
+import json, sys
+slug, phase, total, name, count = sys.argv[1:6]
+print(json.dumps({
+    'kind': 'decision-needed',
+    'title': f'Chain {slug} stopped after repeated limit waits',
+    'body': f'Job {phase} of {total} ({name}) reached the per-unit retry cap after {count} limit waits. The chain stopped with its work left in place for a decision.',
+}))
+PYEOF
+)" 3
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body stopped "$unit" "$(print -rn -- "Job $unit ($name) reached the per-unit retry cap after $LIMIT_STREAK limit waits." | json_string)")" 80
+    exit 2
+  fi
   if [[ ! -x "$CSWAP_BIN" ]]; then
+    report_claude_read_usage
     journal "$label" "FAILED" "limit hit but cswap missing at $CSWAP_BIN; cannot auto-recover"
     api_post "/api/watchdog/chains/$SLUG/events" \
       "$(event_body failed $unit "$(print -rn -- "Phase $unit ($name) hit the session limit and auto-recovery is unavailable (cswap missing at $CSWAP_BIN)." | json_string)")" 80
@@ -593,8 +670,94 @@ PYEOF
     "$(event_body limit "$event_phase" "$(print -rn -- "$what hit the session limit; recovery: $RECOVERY." | json_string)")" 3
   if [[ "${RECOVERY%% *}" == "wait" ]]; then
     sleep "$WAIT_SECS"
-    LIMIT_STREAK=0
   fi
+}
+
+# Counts completed model calls from the provider's durable session record.
+# Claude assistant records are one model turn; Codex token_count records are
+# one inference in the rollout. Missing/incomplete records safely count zero.
+model_turn_count() {
+  local engine="$1" session="$2" thread="${3:-}"
+  ENGINE="$engine" SESSION_ID="$session" THREAD_ID="$thread" REPO_PATH="$REPO" \
+    TURN_SOURCE_CACHE="$JOURNAL_DIR/model-turn-source-${session:-$thread}" python3 - <<'PYEOF'
+import glob, json, os, pathlib
+
+engine = os.environ['ENGINE']
+identifier = os.environ['SESSION_ID'] if engine == 'claude' else os.environ.get('THREAD_ID', '')
+if not identifier:
+    print(0)
+    raise SystemExit(0)
+cache = pathlib.Path(os.environ['TURN_SOURCE_CACHE'])
+paths = []
+try:
+    cached = cache.read_text().strip()
+    if cached and os.path.isfile(cached):
+        paths = [cached]
+except OSError:
+    pass
+if not paths:
+    root = os.path.expanduser('~/.claude/projects' if engine == 'claude' else '~/.codex/sessions')
+    if engine == 'claude':
+        project = os.environ['REPO_PATH'].replace('/', '-')
+        candidate = os.path.join(root, project, f'{identifier}.jsonl')
+        paths = [candidate] if os.path.isfile(candidate) else glob.glob(os.path.join(root, '**', f'{identifier}.jsonl'), recursive=True)
+    else:
+        paths = glob.glob(os.path.join(root, '**', f'rollout-*{identifier}.jsonl'), recursive=True)
+    if paths:
+        try:
+            cache.write_text(paths[0])
+        except OSError:
+            pass
+count = 0
+for filename in paths:
+    try:
+        with open(filename, encoding='utf-8', errors='replace') as handle:
+            for line in handle:
+                try:
+                    item = json.loads(line)
+                except ValueError:
+                    continue
+                if engine == 'claude':
+                    count += item.get('type') == 'assistant'
+                elif item.get('type') == 'event_msg' and (item.get('payload') or {}).get('type') == 'token_count':
+                    count += 1
+    except OSError:
+        pass
+print(count)
+PYEOF
+}
+
+# Counts Read tool calls for the one Claude session so a zero-Read unit leaves
+# the audit signal requested by runner doctrine without changing behavior.
+claude_read_tool_count() {
+  SESSION_ID="$1" python3 - <<'PYEOF'
+import glob, json, os
+
+count = 0
+pattern = os.path.expanduser(f'~/.claude/projects/**/{os.environ["SESSION_ID"]}.jsonl')
+for filename in glob.glob(pattern, recursive=True):
+    try:
+        with open(filename, encoding='utf-8', errors='replace') as handle:
+            for line in handle:
+                try:
+                    item = json.loads(line)
+                except ValueError:
+                    continue
+                message = item.get('message') or {}
+                for block in message.get('content') or []:
+                    if isinstance(block, dict) and block.get('type') == 'tool_use' and block.get('name') == 'Read':
+                        count += 1
+    except OSError:
+        pass
+print(count)
+PYEOF
+}
+
+report_claude_read_usage() {
+  [[ "$UNIT_ENGINE" == claude ]] || return 0
+  local reads
+  reads=$(claude_read_tool_count "$SESSION_ID")
+  [[ $reads -gt 0 ]] || journal "phase $PHASE_NUM/$TOTAL" "read-check" "Claude unit ended with zero Read tool calls"
 }
 
 # One headless claude session: $1 prompt file, $2 log, $3 session id, $4
@@ -1244,8 +1407,22 @@ honor_promote_hold() {
 # Waits for the build in flight, settling the verify the moment it exits so
 # a FAIL kills the build within seconds instead of after it finishes.
 watch_build() {
+  local elapsed turns
   while kill -0 $BUILD_PID 2>/dev/null; do
     [[ -f "$PAUSE_REQUEST" ]] && return 0
+    elapsed=$(($(date +%s) - UNIT_STARTED_AT))
+    turns=$(model_turn_count "$UNIT_ENGINE" "$SESSION_ID" "${BUILD_THREAD:-}")
+    UNIT_MODEL_TURNS="$turns"
+    if [[ $turns -gt $UNIT_MODEL_TURN_BUDGET ]]; then
+      UNIT_BUDGET_REASON="passed the $UNIT_MODEL_TURN_BUDGET model-turn budget (observed $turns turns)"
+      stop_stage_for_pause "$BUILD_PID"
+      return 124
+    fi
+    if [[ $elapsed -ge $UNIT_WALL_TIME_BUDGET_SECS ]]; then
+      UNIT_BUDGET_REASON="reached the ${UNIT_WALL_TIME_BUDGET_SECS}s wall-time budget (observed ${elapsed}s)"
+      stop_stage_for_pause "$BUILD_PID"
+      return 124
+    fi
     if [[ -n "$VERIFY_PID" ]]; then
       if ! kill -0 $VERIFY_PID 2>/dev/null; then
         settle_verify
@@ -1285,7 +1462,6 @@ fi
 
 # Append queue (ui9 B4): `dispatch append` drops prompt files here; they are
 # picked up after each phase's commit gate and run as additional units.
-APPEND_DIR="$JOURNAL_DIR/append"
 CONSUMED_DIR="$APPEND_DIR/consumed"
 pickup_appends() {
   local f
@@ -1371,6 +1547,9 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   # The build stage: a fresh headless session in the repo, run in the
   # background so the previous unit's verify can be settled while it works.
   : > "$JOURNAL_DIR/phase$PHASE_NUM.log"
+  UNIT_STARTED_AT=$(date +%s)
+  UNIT_BUDGET_REASON=""
+  UNIT_MODEL_TURNS=0
   run_engine "$UNIT_ENGINE" "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" "$UNIT_MODEL" "$UNIT_EFFORT" "$UNIT_FAST_MODE" build &
   BUILD_PID=$!
   BUILD_THREAD=""
@@ -1386,6 +1565,25 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   RC=$?
   honor_pause_request
   BUILD_PID=""
+
+  if [[ -n "$UNIT_BUDGET_REASON" ]]; then
+    reconcile_verify
+    report_claude_read_usage
+    journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "$PHASE_NAME $UNIT_BUDGET_REASON; decision-needed sent"
+    api_post "/api/watchdog/notify" "$(python3 - "$SLUG" "$PHASE_NUM" "$TOTAL" "$PHASE_NAME" "$UNIT_BUDGET_REASON" <<'PYEOF'
+import json, sys
+slug, phase, total, name, reason = sys.argv[1:6]
+print(json.dumps({
+    'kind': 'decision-needed',
+    'title': f'Chain {slug} stopped on a unit budget',
+    'body': f'Job {phase} of {total} ({name}) {reason}. The chain stopped like a commit-gate miss, with work left in place for a decision.',
+}))
+PYEOF
+)" 3
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body stopped "$PHASE_NUM" "$(print -rn -- "Job $PHASE_NUM ($PHASE_NAME) $UNIT_BUDGET_REASON." | json_string)")" 80
+    exit 2
+  fi
 
   if [[ "$UNIT_ENGINE" == "codex" && "$UNIT_FAST_MODE" == "1" && $RC -eq 0 ]]; then
     if confirm_fast_rollout "$JOURNAL_DIR/phase$PHASE_NUM.log" "$BUILD_THREAD"; then
@@ -1414,7 +1612,9 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
     PHASE_NUM=$((PHASE_NUM - 1))
     continue
   fi
+  report_claude_read_usage
   LIMIT_STREAK=0
+  LIMIT_STREAK_KEY=""
   WAIT_CYCLES=0
   WAIT_TOTAL=0
   PARK_ESCALATED=0

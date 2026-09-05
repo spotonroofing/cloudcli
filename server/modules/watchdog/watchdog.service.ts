@@ -26,6 +26,10 @@ import { UnitIdentityCache, hiddenTwinUnits, summarizeHidden, type TwinChain } f
 
 type ChainStatus = 'running' | 'paused' | 'completed' | 'stopped' | 'failed';
 
+const MANIFEST_NAME_MAX = 120;
+const MANIFEST_TASK_MAX = 160;
+const MANIFEST_ANCHOR_MAX = 120;
+
 /**
  * One unit of a dispatch manifest (ui9 B4), in run order. `kind` 'phase' is a
  * full compiled unit; 'task' is a small appended iteration and renders as a
@@ -231,6 +235,8 @@ type ChainSnapshot = {
    *  and timing metadata (ui13 job 14) folded in per unit; a twin superseded
    *  by another chain's unit (codex job 5) is marked hidden with its winner. */
   manifest: (ChainManifestEntry & { done: number | null; hidden?: true; supersededBy?: string } & ChainJobMeta)[] | null;
+  /** Prompt files still queued after a terminal runner event. */
+  orphanedAppends: number;
   startedAt: number;
   lastEventAt: number;
 };
@@ -726,7 +732,7 @@ class WatchdogService {
     slug: string,
     phaseIndex: number,
     patch: { tasks?: string[]; name?: string; anchor?: string },
-  ): 'ok' | 'unknown' | 'not-queued' | 'anchor-started' {
+  ): 'ok' | 'unknown' | 'not-queued' | 'anchor-started' | 'invalid' {
     const chain = this.chains.get(slug);
     if (!chain || !chain.manifest) {
       return 'unknown';
@@ -741,6 +747,14 @@ class WatchdogService {
     }
     if (executing && patch.anchor) {
       return 'anchor-started';
+    }
+    const nextName = patch.name ?? entry.name;
+    const nextTasks = patch.tasks ?? entry.tasks;
+    const nextAnchor = patch.anchor ?? entry.anchor;
+    if (!nextName.trim() || !nextTasks.length || nextName.length > MANIFEST_NAME_MAX
+      || nextTasks.some((task) => task.length > MANIFEST_TASK_MAX)
+      || (nextAnchor?.length ?? 0) > MANIFEST_ANCHOR_MAX) {
+      return 'invalid';
     }
     if (patch.tasks) {
       entry.tasks = patch.tasks;
@@ -1103,6 +1117,7 @@ class WatchdogService {
             };
           })
         : null,
+      orphanedAppends: countQueuedAppends(chain.slug),
       startedAt: chain.startedAt,
       lastEventAt: chain.lastEventAt,
     };
@@ -2477,6 +2492,15 @@ function manifestFromPhaseFiles(
     if (missing.length) {
       return { error: `Phase file ${phaseFile} has no ${missing.join(' or ')}.` };
     }
+    if (name.length > MANIFEST_NAME_MAX) {
+      return { error: `Phase file ${phaseFile} has a name longer than ${MANIFEST_NAME_MAX} characters.` };
+    }
+    if (tasks.some((task) => task.length > MANIFEST_TASK_MAX)) {
+      return { error: `Phase file ${phaseFile} has a task longer than ${MANIFEST_TASK_MAX} characters.` };
+    }
+    if ((metadata.get('anchor')?.length ?? 0) > MANIFEST_ANCHOR_MAX) {
+      return { error: `Phase file ${phaseFile} has an anchor longer than ${MANIFEST_ANCHOR_MAX} characters.` };
+    }
 
     const identity = /Execute\s+Job\s+(\d+)\s+of\s+([^\s`]+?\.md)\b/i.exec(text);
     const explicitAnchor = metadata.get('anchor');
@@ -2495,9 +2519,10 @@ function manifestFromPhaseFiles(
 
 /**
  * Normalizes an untrusted manifest value (DB JSON or request body) into clean
- * entries, dropping anything malformed. Returns null when nothing survives.
+ * entries. Watchdog routes use strict mode to reject missing tasks or
+ * overlong labels; service hydration uses tolerant mode for legacy rows.
  */
-export function parseManifest(value: unknown): ChainManifestEntry[] | null {
+export function parseManifest(value: unknown, strict = false): ChainManifestEntry[] | null {
   let raw = value;
   if (typeof raw === 'string') {
     try {
@@ -2513,13 +2538,18 @@ export function parseManifest(value: unknown): ChainManifestEntry[] | null {
   for (const item of raw) {
     const entry = item as { name?: unknown; tasks?: unknown; kind?: unknown; anchor?: unknown } | null;
     const name = typeof entry?.name === 'string' ? entry.name.trim() : '';
-    if (!name) {
+    if (!name || (strict && name.length > MANIFEST_NAME_MAX)) {
+      if (strict) return null;
       continue;
     }
     const tasks = Array.isArray(entry?.tasks)
-      ? entry.tasks.filter((task): task is string => typeof task === 'string' && task.trim() !== '')
+      ? entry.tasks.filter((task): task is string => typeof task === 'string' && task.trim() !== '').map((task) => task.trim())
       : [];
     const anchor = typeof entry?.anchor === 'string' && entry.anchor.trim() ? entry.anchor.trim() : undefined;
+    if (strict && (!tasks.length || tasks.some((task) => task.length > MANIFEST_TASK_MAX)
+      || (anchor?.length ?? 0) > MANIFEST_ANCHOR_MAX)) {
+      return null;
+    }
     entries.push({ name, tasks, kind: entry?.kind === 'task' ? 'task' : 'phase', ...(anchor ? { anchor } : {}) });
   }
   return entries.length ? entries : null;
@@ -2720,8 +2750,8 @@ function terminalWakePrompt(chain: ChainRecord): string {
     const outcome = inconclusiveVerifies.length === 0
       ? `completed with ${failedVerifies.length} verify ${failedVerifies.length === 1 ? 'failure' : 'failures'}`
       : `completed with ${failedVerifies.length} failed and ${inconclusiveVerifies.length} inconclusive verifies`;
-    return `Watchdog: dispatched chain "${chain.slug}" ${outcome}. ${totals} Every build commit stayed on main and all queued units ran.`
-      + failureBlock + inconclusiveBlock;
+    return `Watchdog: dispatched chain "${chain.slug}" ${outcome}. ${totals} Every build commit stayed on main.`
+      + failureBlock + inconclusiveBlock + tail;
   }
   const flag = chain.status === 'completed'
     ? 'ended'
@@ -2767,15 +2797,22 @@ function chainJournalDir(slug: string): string {
   return path.join(os.homedir(), 'forge-logs', slug);
 }
 
+function countQueuedAppends(slug: string): number {
+  try {
+    return fs.readdirSync(path.join(chainJournalDir(slug), 'append'), { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.md')).length;
+  } catch {
+    return 0;
+  }
+}
+
 function appendChainJournalLine(slug: string, phase: string, event: string, detail: string): void {
   try {
     const directory = chainJournalDir(slug);
     fs.mkdirSync(directory, { recursive: true });
-    const timestamp = new Date().toLocaleTimeString('en-GB', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} `
+      + `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     fs.appendFileSync(path.join(directory, 'JOURNAL.md'), `${timestamp} | ${phase} | ${event} | ${detail}\n`);
   } catch (error) {
     log(`chain ${slug}: could not journal wake reroute: ${error instanceof Error ? error.message : String(error)}`);

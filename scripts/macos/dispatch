@@ -60,6 +60,9 @@ eval "$("$NODE" "$SCRIPT_DIR/../../shared/runtime-anchors.js" --shell)"
 PROJECTS_ROOT="$HOME/Projects"
 SERVER_URL="${DISPATCH_SERVER_URL:-http://127.0.0.1:4747}"
 DB_PATH="${DISPATCH_DB_PATH:-$COMMAND_CENTER_RUNTIME_DATA_DIR/auth.db}"
+MANIFEST_NAME_MAX=120
+MANIFEST_TASK_MAX=160
+MANIFEST_ANCHOR_MAX=120
 
 # Refuses a prompt file whose engine header names an engine the runner lacks.
 check_engine_header() {
@@ -73,6 +76,38 @@ PYEOF
 )
   [[ -z "$engine" || "$engine" == "claude" || "$engine" == "codex" ]] \
     || { print -u2 "dispatch: $1 names engine '$engine'; must be claude or codex"; exit 65; }
+}
+
+# Applies the same required header and label-length contract anywhere a phase
+# file enters or re-enters a chain. Error wording is intentionally shared by
+# initial dispatch and append.
+check_phase_headers() {
+  python3 - "$MANIFEST_NAME_MAX" "$MANIFEST_TASK_MAX" "$MANIFEST_ANCHOR_MAX" "$@" <<'PYEOF'
+import re, sys
+
+name_max, task_max, anchor_max = map(int, sys.argv[1:4])
+for phase_file in sys.argv[4:]:
+    text = open(phase_file, encoding='utf-8', errors='replace').read(4096)
+    meta = {
+        key.lower(): value.strip()
+        for key, value in re.findall(r'<!--\s*(name|tasks|anchor):\s*(.*?)\s*-->', text, re.I)
+    }
+    name = meta.get('name', '')
+    tasks = [task.strip() for task in meta.get('tasks', '').split('|') if task.strip()]
+    missing = [*(['name'] if not name else []), *(['tasks'] if not tasks else [])]
+    if missing:
+        print(f"dispatch: phase file {phase_file} has no {' or '.join(missing)}", file=sys.stderr)
+        raise SystemExit(65)
+    if len(name) > name_max:
+        print(f"dispatch: phase file {phase_file} has a name longer than {name_max} characters", file=sys.stderr)
+        raise SystemExit(65)
+    if any(len(task) > task_max for task in tasks):
+        print(f"dispatch: phase file {phase_file} has a task longer than {task_max} characters", file=sys.stderr)
+        raise SystemExit(65)
+    if len(meta.get('anchor', '')) > anchor_max:
+        print(f"dispatch: phase file {phase_file} has an anchor longer than {anchor_max} characters", file=sys.stderr)
+        raise SystemExit(65)
+PYEOF
 }
 
 usage() {
@@ -117,10 +152,11 @@ if [[ "$1" == "remanifest" ]]; then
   # Compile the same durable file list client-side and use the existing
   # in-place manifest patch; once promoted, the route above is always used.
   if [[ "$STATUS" == "404" ]]; then
-    BODY=$(python3 - "$HOME/forge-logs/$SLUG" <<'PYEOF'
+    BODY=$(python3 - "$HOME/forge-logs/$SLUG" "$MANIFEST_NAME_MAX" "$MANIFEST_TASK_MAX" "$MANIFEST_ANCHOR_MAX" <<'PYEOF'
 import glob, json, os, re, sys
 
 runtime = sys.argv[1]
+name_max, task_max, anchor_max = map(int, sys.argv[2:5])
 resume_path = os.path.join(runtime, 'resume.json')
 try:
     resume = json.load(open(resume_path, encoding='utf-8'))
@@ -154,6 +190,15 @@ for phase_file in phase_files:
         missing.append('tasks')
     if missing:
         print(f"dispatch: phase file {phase_file} has no {' or '.join(missing)}", file=sys.stderr)
+        raise SystemExit(65)
+    if len(name) > name_max:
+        print(f"dispatch: phase file {phase_file} has a name longer than {name_max} characters", file=sys.stderr)
+        raise SystemExit(65)
+    if any(len(task) > task_max for task in tasks):
+        print(f"dispatch: phase file {phase_file} has a task longer than {task_max} characters", file=sys.stderr)
+        raise SystemExit(65)
+    if len(meta.get('anchor', '')) > anchor_max:
+        print(f"dispatch: phase file {phase_file} has an anchor longer than {anchor_max} characters", file=sys.stderr)
         raise SystemExit(65)
     identity = re.search(r'Execute\s+Job\s+(\d+)\s+of\s+([^\s`]+?\.md)\b', text, re.I)
     entry = {'name': name, 'tasks': tasks, 'kind': 'phase'}
@@ -341,6 +386,8 @@ runner, state_path, phase, log = sys.argv[1:5]
 state = json.load(open(state_path, encoding='utf-8'))
 env = os.environ.copy()
 env.update({
+    'DISPATCH_RUN_DATE': state.get('runDate', ''),
+    'DISPATCH_RUN_SUMMARY_PATH': state.get('summaryPath', ''),
     'DISPATCH_ENGINE': state['engine'],
     'DISPATCH_MODEL': state['model'],
     'DISPATCH_EFFORT': state['effort'],
@@ -388,10 +435,20 @@ if [[ "$1" == "amend" ]]; then
   print -r -- "header = \"x-api-key: $API_KEY\"" > "$HEADER_FILE"
   trap 'rm -f "$HEADER_FILE"' EXIT
 
-  BODY=$(AMEND_TASKS="$AMEND_TASKS" AMEND_NAME="$AMEND_NAME" AMEND_ANCHOR="$AMEND_ANCHOR" python3 - <<'PYEOF'
+  BODY=$(AMEND_TASKS="$AMEND_TASKS" AMEND_NAME="$AMEND_NAME" AMEND_ANCHOR="$AMEND_ANCHOR" \
+    MANIFEST_NAME_MAX="$MANIFEST_NAME_MAX" MANIFEST_TASK_MAX="$MANIFEST_TASK_MAX" \
+    MANIFEST_ANCHOR_MAX="$MANIFEST_ANCHOR_MAX" python3 - <<'PYEOF'
 import json, os
 body = {}
 tasks = [t.strip() for t in os.environ['AMEND_TASKS'].split('|') if t.strip()]
+if os.environ['AMEND_TASKS'] and not tasks:
+    raise SystemExit('dispatch: amend has no tasks')
+if len(os.environ['AMEND_NAME']) > int(os.environ['MANIFEST_NAME_MAX']):
+    raise SystemExit(f"dispatch: amend name is longer than {os.environ['MANIFEST_NAME_MAX']} characters")
+if any(len(task) > int(os.environ['MANIFEST_TASK_MAX']) for task in tasks):
+    raise SystemExit(f"dispatch: amend task is longer than {os.environ['MANIFEST_TASK_MAX']} characters")
+if len(os.environ['AMEND_ANCHOR']) > int(os.environ['MANIFEST_ANCHOR_MAX']):
+    raise SystemExit(f"dispatch: amend anchor is longer than {os.environ['MANIFEST_ANCHOR_MAX']} characters")
 if tasks:
     body['tasks'] = tasks
 if os.environ['AMEND_NAME']:
@@ -400,7 +457,7 @@ if os.environ['AMEND_ANCHOR']:
     body['anchor'] = os.environ['AMEND_ANCHOR']
 print(json.dumps(body))
 PYEOF
-)
+) || exit 65
   RESPONSE=$(curl -s -K "$HEADER_FILE" -m 30 -X POST "$SERVER_URL/api/watchdog/chains/$SLUG/phases/$UNIT/tasks" \
       -H 'Content-Type: application/json' -d "$BODY" -w '\n%{http_code}' 2>/dev/null)
   STATUS="${RESPONSE##*$'\n'}"
@@ -435,6 +492,7 @@ if [[ "$1" == "append" ]]; then
   for f in "${APPEND_FILES[@]}"; do
     [[ -r "$f" ]] || { print -u2 "dispatch: cannot read append file $f"; exit 66; }
     check_engine_header "$f"
+    check_phase_headers "$f" || exit $?
   done
 
   API_KEY=$(/usr/bin/sqlite3 "$DB_PATH" "SELECT api_key FROM api_keys WHERE is_active=1 ORDER BY id LIMIT 1" 2>/dev/null)
@@ -451,15 +509,17 @@ if [[ "$1" == "append" ]]; then
   #   <!-- tasks: task one | task two | task three -->
   #   <!-- anchor: Phase 10 -->
   # so the navigator announces real task rows and punch-list counters for
-  # appended units; the filename is the fallback when headers are absent.
+  # appended units. Missing or overlong labels were refused above.
   ENTRIES=$(python3 - "$KIND" "${APPEND_FILES[@]}" <<'PYEOF'
 import json, os, re, sys
 kind = sys.argv[1]
 entries = []
 for path in sys.argv[2:]:
     head = open(path, encoding='utf-8', errors='replace').read(4096)
-    meta = dict(re.findall(r'<!--\s*(name|tasks|anchor):\s*(.*?)\s*-->', head))
-    entry = {'name': meta.get('name') or os.path.splitext(os.path.basename(path))[0], 'kind': kind}
+    meta = {key.lower(): value.strip() for key, value in re.findall(
+        r'<!--\s*(name|tasks|anchor):\s*(.*?)\s*-->', head, re.I
+    )}
+    entry = {'name': meta['name'], 'kind': kind}
     entry['tasks'] = [t.strip() for t in meta.get('tasks', '').split('|') if t.strip()]
     if meta.get('anchor'):
         entry['anchor'] = meta['anchor']
@@ -579,6 +639,7 @@ ABS_PHASE_FILES=()
 for f in "${PHASE_FILES[@]}"; do
   [[ -r "$f" ]] || { print -u2 "dispatch: cannot read phase file $f"; exit 66; }
   check_engine_header "$f"
+  check_phase_headers "$f" || exit $?
   ABS_PHASE_FILES+=("${f:A}")
 done
 
