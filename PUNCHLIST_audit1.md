@@ -190,3 +190,12 @@ Goal: long runs render as readable transcripts on the phone, and the context rin
 - [ ] The context ring shows the percentage as a number beside it, turns amber past 120k tokens and red past 200k, and past amber carries a short "rotate soon" hint in the ring's hover and the phone's tap sheet; nothing acts automatically.
 
 Done check: on dev, a fixture transcript with 200 mixed tool rows renders under 30 rows collapsed while streaming; the phone DOM holds one pane's transcript at a time; a stub session with 130k context shows the amber ring with the number. Commit.
+
+## Job 15 — Runner reset tolerates a no-op, stopped stays stopped. Verify: yes
+
+Goal: two runner defects seen on 2026-09-05 while resuming this chain. First, the runner's punch-list reset step (reset_superseded_job in scripts/macos/dispatch-chain-runner) unchecks the job's boxes and then commits the file; when the uncommitted tree already held those checks, the reset landed the file back at HEAD, the commit had nothing to commit, and the runner stopped the chain before the unit started. Second, the chain row audit1, set to stopped in the database, flipped back to paused on its own within the hour. Files: scripts/macos/dispatch-chain-runner (reset step near line 130 to 180), the watchdog service's liveness sweep and resume-state handling, runner tests. Dependencies: none.
+
+- [ ] The reset step commits the punch list only when the file differs from HEAD after the reset; a reset that lands the file back at HEAD journals one line ("reset left the file at HEAD") and the unit starts normally.
+- [ ] A chain row in a terminal state (stopped, failed, completed) is never moved back to paused or running by the liveness sweep, a stale resume file, or a late runner event; find what flipped audit1 (journals and the watchdog log for 2026-09-05 between 1:30 am and 1:50 am) and close that path with a test.
+
+Done check: a runner test or stub exercises the no-op reset and sees the unit start; a watchdog test posts a late paused event against a stopped chain and the row stays stopped; the audit1 row reads stopped afterwards. Commit.
