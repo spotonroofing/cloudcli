@@ -1,19 +1,20 @@
 <!-- browser -->
-<!-- engine: codex -->
-<!-- model: gpt-5.6-sol -->
-<!-- effort: xhigh -->
-<!-- name: Notification truth -->
-<!-- tasks: Clean end is verified-done | Taps open the session | Server-acked push state | Channel policy everywhere | Wakes survive restart -->
+<!-- verify: no -->
+<!-- engine: claude -->
+<!-- model: claude-opus-5 -->
+<!-- effort: high -->
+<!-- name: Chain controls, errors -->
+<!-- tasks: Pause, resume, stop in header | App-level error strip | Partial vs empty states -->
 <!-- tail: inline -->
-Execute Job 4 of PUNCHLIST_audit1.md in this repo (notifications mean what they say). The goal and items are that job's section and checkboxes in PUNCHLIST_audit1.md; read only that job's section plus the whole-file rules block at the top, the recent git log, and the files the job names; the two audit reports the section cites may be grepped for the finding's evidence; trust repo state over this prompt when they disagree, and check each item off in the file the moment it is verified. Done when the job's done check passes against the dev instance.
+Execute Job 8 of PUNCHLIST_audit1.md in this repo (chain controls and an error surface). The goal and items are that job's section and checkboxes in PUNCHLIST_audit1.md; read only that job's section plus the whole-file rules block at the top, the recent git log, and the files the job names; the two audit reports the section cites may be grepped for the finding's evidence; trust repo state over this prompt when they disagree, and check each item off in the file the moment it is verified. Done when the job's done check passes against the dev instance.
 
-Do not spawn subagents; the runner's verify stage is the fresh-context check. Browser and UI checks use agent-browser against dev; the computer-use tool is not installed on this machine, never attempt it. Group related shell work into one call rather than many small ones.
+Group related shell work into one call rather than many small ones, and read files with the Read tool in the ranges you need; do not narrate between tool calls. Delegate to a subagent only for large tracks of work that are genuinely independent and parallelizable. Do not delegate work you can finish yourself in a handful of tool calls. If one subagent can do it, use one rather than several, and keep spawn counts low. Deliver what was asked, at the scope intended. Make routine judgment calls yourself, and check in only when different readings of the request would lead to materially different work. If the request seems mistaken or a better approach exists, say so in a sentence and continue with the task as asked rather than quietly narrowing, widening, or transforming it. Match the length of what you write to what the task needs; keep the final message brief.
 
 Before running a command that changes state (restarts, deletes, config edits), check that the evidence supports that specific action; a signal that matches a known failure can have a different cause. Rebuild and restart dev only when the done check needs the running instance to show the change, and never twice when once serves.
 
 Run every check, build and command to completion in the foreground before ending your turn; never end your turn while anything you started is still running, and never end it with a message saying you are waiting on something.
 
-Keep an append-only run journal at /Users/spoton-worker/forge-logs/audit1/JOURNAL.md; create the folder if missing. One line per entry, YYYY-MM-DD HH:MM | phase or task | event | detail. Write an entry only at these moments: run start (the goal in a few words), each major step start, the job end (include the commit hash), any item that fails, blocks, or gets skipped (the error in one line and what you did about it), any external-service error or unexpected state, and run end. Log boundaries and exceptions, never narration. Append each entry with a single shell command; never rewrite or reformat the file.
+Keep an append-only run journal at /Users/spoton-worker/forge-logs/audit1r/JOURNAL.md; create the folder if missing. One line per entry, YYYY-MM-DD HH:MM | phase or task | event | detail. Write an entry only at these moments: run start (the goal in a few words), each major step start, the job end (include the commit hash), any item that fails, blocks, or gets skipped (the error in one line and what you did about it), any external-service error or unexpected state, and run end. Log boundaries and exceptions, never narration. Append each entry with a single shell command; never rewrite or reformat the file.
 
 You are operating unattended; no one is watching and no one can answer a question mid-run. For reversible actions that follow from this request, proceed without asking. Pause only for a destructive or irreversible action outside this request's scope, or input only Willem can provide. Before ending your turn, check your last paragraph: if it is a plan, a question, a list of next steps, or a promise about work not yet done, do that work now with tool calls. End only when the task is complete, or you are truly blocked. Before reporting progress or completion, check each claim against an actual tool result from this session; report only what you can point to evidence for, and if something is unverified, say so plainly. If tests fail, say so and include the output. When you hit an obstacle, never take a destructive shortcut around it: do not bypass safety checks, do not delete unfamiliar files that may be in-progress work, do not force-push.
 
