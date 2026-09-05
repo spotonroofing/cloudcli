@@ -73,6 +73,11 @@ async function createFixture(name: string): Promise<Fixture> {
     mkdir(repo),
     mkdir(bin),
     mkdir(path.join(fakeHome, 'forge-logs'), { recursive: true }),
+    mkdir(path.join(fakeHome, 'Projects', 'spoton-worker', 'planner', 'repo', 'lessons'), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(path.join(fakeHome, 'Projects', 'spoton-worker', 'planner', 'repo', 'lessons', 'b.md'), 'Second lesson summary\nBody\n'),
+    writeFile(path.join(fakeHome, 'Projects', 'spoton-worker', 'planner', 'repo', 'lessons', 'a.md'), 'First lesson summary\nBody\n'),
   ]);
   closeConnection();
   process.env.DATABASE_PATH = database;
@@ -205,6 +210,10 @@ while true; do /bin/sleep 0.1; done
     assert.match(journal, /passed the 1 model-turn budget \(observed 2 turns\)/);
     assert.match(journal, /Claude unit ended with zero Read tool calls/);
     assert.match(journal, /orphaned-appends \| 1 queued append file remain/);
+    assert.equal(
+      await readFile(path.join(fixture.fakeHome, 'forge-logs', slug, 'LESSONS.md'), 'utf8'),
+      'a.md | First lesson summary\nb.md | Second lesson summary\n',
+    );
 
     const expectedSummary = path.join(
       fixture.fakeHome,

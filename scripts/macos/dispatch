@@ -47,6 +47,9 @@
 # `<!-- effort: <level> -->` in its header; the runner applies them to that
 # unit only, over the chain's DISPATCH_ENGINE / DISPATCH_MODEL /
 # DISPATCH_EFFORT. An engine header naming anything else is refused here.
+# Unless a phase carries `<!-- tail: inline -->`, the runner asks this script
+# to append phase-tail/v1.md's shared and engine blocks when that unit fires.
+# Stored phase files remain the planner's headers and job paragraph only.
 #
 # `dispatch amend` rewrites a queued unit's stored display metadata (ui14 job
 # 8). The executing unit also accepts name/task repairs, but its punch-list
@@ -63,6 +66,79 @@ DB_PATH="${DISPATCH_DB_PATH:-$COMMAND_CENTER_RUNTIME_DATA_DIR/auth.db}"
 MANIFEST_NAME_MAX=120
 MANIFEST_TASK_MAX=160
 MANIFEST_ANCHOR_MAX=120
+
+# Internal runner/test command: render one phase at fire time. Inline-tail
+# files are byte-for-byte passthrough for already compiled chains.
+if [[ "${1:-}" == "assemble-phase" ]]; then
+  shift
+  [[ $# -eq 6 ]] || { print -u2 "usage: dispatch assemble-phase <phase-file> <engine> <journal> <lessons-index> <lessons-dir> <summary>"; exit 64; }
+  python3 - "$SCRIPT_DIR/phase-tail/v1.md" "$@" <<'PYEOF'
+import pathlib, re, sys
+
+template_path, phase_path, engine, journal, lessons_index, lessons_dir, summary = sys.argv[1:]
+if engine not in {'codex', 'claude'}:
+    raise SystemExit(f'dispatch: cannot assemble phase for engine {engine!r}')
+phase = pathlib.Path(phase_path).read_text(encoding='utf-8', errors='replace')
+if re.search(r'<!--\s*tail:\s*inline\s*-->', phase, re.I):
+    sys.stdout.write(phase)
+    raise SystemExit(0)
+template = pathlib.Path(template_path).read_text(encoding='utf-8')
+
+def block(name):
+    match = re.search(
+        rf'<!-- phase-tail-{re.escape(name)}:start -->\n(.*?)\n<!-- phase-tail-{re.escape(name)}:end -->',
+        template,
+        re.S,
+    )
+    if not match:
+        raise SystemExit(f'dispatch: phase tail template has no {name} block')
+    return match.group(1)
+
+tail = '\n\n'.join((block('shared'), block(engine)))
+replacements = {
+    '{{JOURNAL_PATH}}': journal,
+    '{{LESSONS_INDEX_PATH}}': lessons_index,
+    '{{LESSONS_DIR}}': lessons_dir,
+    '{{SUMMARY_PATH}}': summary,
+}
+for token, value in replacements.items():
+    tail = tail.replace(token, value)
+unresolved = re.findall(r'{{[A-Z_]+}}', tail)
+if unresolved:
+    raise SystemExit(f"dispatch: unresolved phase tail tokens: {', '.join(sorted(set(unresolved)))}")
+sys.stdout.write(phase.rstrip() + '\n\n' + tail.rstrip() + '\n')
+PYEOF
+  exit $?
+fi
+
+# Internal runner/test command: snapshot lesson first lines once at chain
+# start so workers never need to walk the memory repository's lesson tree.
+if [[ "${1:-}" == "index-lessons" ]]; then
+  shift
+  [[ $# -eq 2 ]] || { print -u2 "usage: dispatch index-lessons <lessons-dir> <output>"; exit 64; }
+  python3 - "$1" "$2" <<'PYEOF'
+import os, pathlib, sys, tempfile
+
+lesson_dir = pathlib.Path(sys.argv[1])
+output = pathlib.Path(sys.argv[2])
+lines = []
+if lesson_dir.is_dir():
+    for lesson in sorted((item for item in lesson_dir.iterdir() if item.is_file()), key=lambda item: item.name):
+        try:
+            first = lesson.open(encoding='utf-8', errors='replace').readline().rstrip('\r\n')
+        except OSError as error:
+            raise SystemExit(f'dispatch: cannot read lesson {lesson}: {error}')
+        lines.append(f'{lesson.name} | {first}')
+output.parent.mkdir(parents=True, exist_ok=True)
+with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=output.parent, delete=False) as handle:
+    handle.write('\n'.join(lines))
+    if lines:
+        handle.write('\n')
+    temporary = handle.name
+os.replace(temporary, output)
+PYEOF
+  exit $?
+fi
 
 # Refuses a prompt file whose engine header names an engine the runner lacks.
 check_engine_header() {

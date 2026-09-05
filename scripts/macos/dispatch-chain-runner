@@ -20,7 +20,8 @@
 # DISPATCH_RUN_DATE is resolved by this runner at the chain's first start as
 # YYYYMMDD. DISPATCH_RUN_SUMMARY_PATH is the fully resolved memory-repo path.
 # Both are persisted across pause/reload and exported to every unit so its
-# phase tail references the chain's real start date rather than compile time.
+# generated phase tail references the chain's real start date rather than
+# compile time. The original stored phase files are never rewritten.
 # Worker journal clause: one line per entry, YYYY-MM-DD HH:MM | phase or task
 # | event | detail.
 #
@@ -235,6 +236,8 @@ JOURNAL_DIR="$HOME/forge-logs/$SLUG"
 mkdir -p "$JOURNAL_DIR"
 JOURNAL="$JOURNAL_DIR/JOURNAL.md"
 APPEND_DIR="$JOURNAL_DIR/append"
+LESSONS_DIR="$HOME/Projects/spoton-worker/planner/${REPO:t}/lessons"
+LESSONS_INDEX="$JOURNAL_DIR/LESSONS.md"
 journal() { print -r -- "$(date '+%Y-%m-%d %H:%M') | $1 | $2 | $3" >> "$JOURNAL"; }
 
 # Build sessions get a private PATH prefix that gates only commands capable of
@@ -1477,6 +1480,10 @@ MANIFEST_PATH="${DISPATCH_MANIFEST:-}"
 journal run "$([[ $RESUME_FROM -gt 1 ]] && print resume || print start)" "chain $SLUG in $REPO from job $RESUME_FROM ($TOTAL phases; default engine $CHAIN_ENGINE, verify on $VERIFY_ENGINE $VERIFY_MODEL)"
 [[ -x "$CSWAP_BIN" ]] && unpark_stale
 if [[ $RESUME_FROM -eq 1 && -z "${DISPATCH_RESUMING:-}" ]]; then
+  if ! "$SCRIPT_DIR/dispatch" index-lessons "$LESSONS_DIR" "$LESSONS_INDEX"; then
+    journal run FAILED "could not write lesson index $LESSONS_INDEX"
+    exit 74
+  fi
   api_post "/api/watchdog/chains" "$(python3 - "$SLUG" "$REPO" "$TOTAL" "$MANIFEST_PATH" "${DISPATCHING_SESSION_ID:-}" <<'PYEOF'
 import json, sys
 slug, repo, total, manifest_path, dispatching_session_id = sys.argv[1:6]
@@ -1570,6 +1577,15 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
       "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) needs the $UNIT_ENGINE CLI, which is not on PATH." | json_string)")" 80
     exit 1
   fi
+  ASSEMBLED_PHASE_FILE="$JOURNAL_DIR/phase$PHASE_NUM.prompt.md"
+  if ! "$SCRIPT_DIR/dispatch" assemble-phase "$PHASE_FILE" "$UNIT_ENGINE" "$JOURNAL" "$LESSONS_INDEX" "$LESSONS_DIR" "$DISPATCH_RUN_SUMMARY_PATH" > "$ASSEMBLED_PHASE_FILE"; then
+    reconcile_verify
+    journal "phase $PHASE_NUM/$TOTAL" FAILED "could not assemble $PHASE_NAME with the versioned phase tail"
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body failed $PHASE_NUM "$(print -rn -- "Phase $PHASE_NUM ($PHASE_NAME) could not be assembled with the versioned phase tail." | json_string)")" 80
+    exit 74
+  fi
+  chmod 600 "$ASSEMBLED_PHASE_FILE"
   UNIT_FAST_MODE=0
   if [[ "$UNIT_ENGINE" == "codex" ]]; then
     UNIT_FAST_MODE=$(read_chain_fast_mode)
@@ -1592,7 +1608,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   UNIT_STARTED_AT=$(date +%s)
   UNIT_BUDGET_REASON=""
   UNIT_MODEL_TURNS=0
-  run_engine "$UNIT_ENGINE" "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" "$UNIT_MODEL" "$UNIT_EFFORT" "$UNIT_FAST_MODE" build &
+  run_engine "$UNIT_ENGINE" "$ASSEMBLED_PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" "$UNIT_MODEL" "$UNIT_EFFORT" "$UNIT_FAST_MODE" build &
   BUILD_PID=$!
   BUILD_THREAD=""
   if [[ "$UNIT_ENGINE" == "codex" ]]; then

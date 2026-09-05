@@ -7,8 +7,8 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>__NODE__</string>
-        <string>dist-server/server/index.js</string>
+        <string>/bin/zsh</string>
+        <string>__REPO__/scripts/macos/__LEGACY_STEM__-dev-start.sh</string>
     </array>
 
     <key>WorkingDirectory</key>

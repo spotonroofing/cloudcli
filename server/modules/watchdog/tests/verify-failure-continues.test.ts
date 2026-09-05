@@ -24,6 +24,8 @@ import type { RealtimeClientConnection } from '@/shared/types.js';
 import { createWatchdogRouter, watchdogService } from '../index.js';
 
 const sourceRunnerPath = path.resolve('scripts/macos/dispatch-chain-runner');
+const sourceDispatchPath = path.resolve('scripts/macos/dispatch');
+const sourcePhaseTailPath = path.resolve('scripts/macos/phase-tail/v1.md');
 const sourceRuntimeAnchorsPath = path.resolve('shared/runtime-anchors.js');
 
 async function executable(filePath: string, content: string): Promise<void> {
@@ -77,13 +79,19 @@ test('a boundary reload runs new code and a later failed verify still notifies w
       mkdir(bin),
       mkdir(path.join(fakeHome, 'forge-logs'), { recursive: true }),
       mkdir(path.dirname(runnerPath), { recursive: true }),
+      mkdir(path.join(runnerRoot, 'scripts', 'macos', 'phase-tail'), { recursive: true }),
       mkdir(path.join(runnerRoot, 'shared'), { recursive: true }),
     ]);
     await Promise.all([
       copyFile(sourceRunnerPath, runnerPath),
+      copyFile(sourceDispatchPath, path.join(runnerRoot, 'scripts', 'macos', 'dispatch')),
+      copyFile(sourcePhaseTailPath, path.join(runnerRoot, 'scripts', 'macos', 'phase-tail', 'v1.md')),
       copyFile(sourceRuntimeAnchorsPath, path.join(runnerRoot, 'shared', 'runtime-anchors.js')),
     ]);
-    await chmod(runnerPath, 0o755);
+    await Promise.all([
+      chmod(runnerPath, 0o755),
+      chmod(path.join(runnerRoot, 'scripts', 'macos', 'dispatch'), 0o755),
+    ]);
     await initializeDatabase();
     const user = userDb.createUser('verify-failure-test', 'unused');
     notificationPreferencesDb.updatePreferences(Number(user.id), {
