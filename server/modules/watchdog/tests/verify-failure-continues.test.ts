@@ -119,9 +119,15 @@ prompt=$(</dev/stdin)
 stage=build
 [[ "$prompt" == *"fresh-context verifier"* ]] && stage=verify
 unit=unknown
-[[ "$prompt" == *"FIRST_BUILD_STUB"* ]] && unit=one
-[[ "$prompt" == *"SECOND_BUILD_STUB"* ]] && unit=two
-[[ "$prompt" == *"THIRD_BUILD_STUB"* ]] && unit=three
+if [[ "$stage" == verify ]]; then
+  [[ "$prompt" == *"job 1 of 3 (One)"* ]] && unit=one
+  [[ "$prompt" == *"job 2 of 3 (Two)"* ]] && unit=two
+  [[ "$prompt" == *"job 3 of 3 (Three)"* ]] && unit=three
+else
+  [[ "$prompt" == *"FIRST_BUILD_STUB"* ]] && unit=one
+  [[ "$prompt" == *"SECOND_BUILD_STUB"* ]] && unit=two
+  [[ "$prompt" == *"THIRD_BUILD_STUB"* ]] && unit=three
+fi
 output=""
 model=""
 while [[ $# -gt 0 ]]; do

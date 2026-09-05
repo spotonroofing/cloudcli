@@ -64,7 +64,9 @@ export type ChainJobMeta = {
    * against the job's commit while the next job builds. Absent on units the
    * runner never verified (older chains, `verify: no` prompts).
    */
-  verify?: 'running' | 'passed' | 'failed' | 'stopped';
+  verify?: 'running' | 'passed' | 'failed' | 'inconclusive' | 'stopped';
+  /** Exact runner-supplied reason for a failed or inconclusive verdict. */
+  verifyReason?: string;
   verifyStartedAt?: number;
   verifyEndedAt?: number;
   /** The verifier's session id, pre-announced by the runner. */
@@ -123,9 +125,21 @@ type ChainRecord = {
   holdReason: string | null;
 };
 
-/** Number of committed units whose verifier rejected the result. */
-function countVerifyFailures(chain: ChainRecord): number {
-  return Object.values(chain.jobs).filter((meta) => meta.verify === 'failed').length;
+type VerifySummary = {
+  passed: number;
+  failed: number;
+  inconclusive: number;
+};
+
+/** First-class verifier totals for the jobs payload and terminal summary. */
+function countVerifyVerdicts(chain: ChainRecord): VerifySummary {
+  const summary: VerifySummary = { passed: 0, failed: 0, inconclusive: 0 };
+  for (const meta of Object.values(chain.jobs)) {
+    if (meta.verify === 'passed' || meta.verify === 'failed' || meta.verify === 'inconclusive') {
+      summary[meta.verify] += 1;
+    }
+  }
+  return summary;
 }
 
 type DispatchRunRecord = {
@@ -211,6 +225,8 @@ type ChainSnapshot = {
   holdReason: string | null;
   /** Failed verifier verdicts recorded so far; they never change chain status. */
   verifyFailures: number;
+  /** Terminal-safe totals keep inconclusive distinct from both pass and fail. */
+  verifySummary: VerifySummary;
   /** Manifest entries with the punch-list `done` count and the unit's commit
    *  and timing metadata (ui13 job 14) folded in per unit; a twin superseded
    *  by another chain's unit (codex job 5) is marked hidden with its winner. */
@@ -315,10 +331,14 @@ class WatchdogService {
 
   /** Posts the terminal notice, then queues the separately gated planner wake. */
   private handleTerminalChain(chain: ChainRecord): void {
-    const verifyFailures = countVerifyFailures(chain);
-    const terminalLabel = chain.status === 'completed' && verifyFailures > 0
-      ? `completed with ${verifyFailures} verify ${verifyFailures === 1 ? 'failure' : 'failures'}`
-      : chain.status;
+    const verifySummary = countVerifyVerdicts(chain);
+    const unsettled = verifySummary.failed + verifySummary.inconclusive;
+    let terminalLabel: string = chain.status;
+    if (chain.status === 'completed' && unsettled > 0) {
+      terminalLabel = verifySummary.inconclusive === 0
+        ? `completed with ${verifySummary.failed} verify ${verifySummary.failed === 1 ? 'failure' : 'failures'}`
+        : `completed with ${verifySummary.failed} failed and ${verifySummary.inconclusive} inconclusive verifies`;
+    }
     this.notify(
       'decision-needed',
       `Chain ${chain.slug} ${terminalLabel}`,
@@ -1070,7 +1090,8 @@ class WatchdogService {
       fastMode: chain.fastMode,
       holdRequested: chain.holdRequested,
       holdReason: chain.holdReason,
-      verifyFailures: countVerifyFailures(chain),
+      verifyFailures: countVerifyVerdicts(chain).failed,
+      verifySummary: countVerifyVerdicts(chain),
       manifest: chain.manifest
         ? chain.manifest.map((entry, i) => {
             const { taskDoneBaseline: _taskDoneBaseline, ...publicJobMeta } = chain.jobs[i + 1] ?? {};
@@ -1106,6 +1127,7 @@ class WatchdogService {
       commit?: { hash: string; subject: string };
       quiet?: boolean;
       fastMode?: boolean;
+      verdict?: 'PASS' | 'FAIL' | 'INCONCLUSIVE';
     },
   ): boolean {
     const chain = this.chains.get(slug);
@@ -1134,8 +1156,9 @@ class WatchdogService {
     }
     // Verify-stage events belong to a unit whose build already ended. They
     // never move currentPhase or phaseActive, which track the build in flight.
-    // A failed verdict is recorded and announced immediately, but the runner
-    // and every queued unit continue; the terminal wake aggregates failures.
+    // Every settled verdict travels on verify-end. The legacy verify-failed
+    // event remains readable for old runners, but no settled state is inferred
+    // from a bare event except the old verify-end=PASS compatibility path.
     if (event === 'verify-start' || event === 'verify-end' || event === 'verify-failed') {
       if (typeof detail?.phase === 'number') {
         const meta = chain.jobs[detail.phase] ?? (chain.jobs[detail.phase] = {});
@@ -1143,10 +1166,15 @@ class WatchdogService {
           meta.verify = 'running';
           meta.verifyStartedAt = Date.now();
           delete meta.verifyEndedAt;
+          delete meta.verifyReason;
         } else {
-          meta.verify = event === 'verify-end' ? 'passed' : 'failed';
+          const verdict = event === 'verify-failed' ? 'FAIL' : (detail?.verdict ?? 'PASS');
+          meta.verify = verdict === 'PASS' ? 'passed' : verdict === 'FAIL' ? 'failed' : 'inconclusive';
           meta.verifyEndedAt = Date.now();
-          if (event === 'verify-failed' && detail.summaryTail) {
+          if (verdict !== 'PASS' && detail?.summaryTail) {
+            meta.verifyReason = detail.summaryTail.slice(-2000);
+          }
+          if (verdict === 'FAIL' && detail?.summaryTail) {
             meta.failureReason = detail.summaryTail.slice(-2000);
           }
         }
@@ -1155,7 +1183,8 @@ class WatchdogService {
         chain.lastSummaryTail = detail.summaryTail.slice(-2000);
       }
       log(`chain ${slug}: ${event}`, { phase: detail?.phase ?? null, status: chain.status });
-      if (event === 'verify-failed') {
+      const failedVerdict = event === 'verify-failed' || (event === 'verify-end' && detail?.verdict === 'FAIL');
+      if (failedVerdict) {
         this.persistChain(chain);
         this.broadcastChainProgress(chain);
         const phase = detail?.phase;
@@ -2541,8 +2570,12 @@ export function parseJobMeta(value: unknown): Record<number, ChainJobMeta> {
     if (typeof entry.failureReason === 'string' && entry.failureReason.trim()) {
       meta.failureReason = entry.failureReason.trim().slice(-2000);
     }
-    if (entry.verify === 'running' || entry.verify === 'passed' || entry.verify === 'failed' || entry.verify === 'stopped') {
+    if (entry.verify === 'running' || entry.verify === 'passed' || entry.verify === 'failed'
+      || entry.verify === 'inconclusive' || entry.verify === 'stopped') {
       meta.verify = entry.verify;
+    }
+    if (typeof entry.verifyReason === 'string' && entry.verifyReason.trim()) {
+      meta.verifyReason = entry.verifyReason.trim().slice(-2000);
     }
     if (Number.isFinite(Number(entry.verifyStartedAt))) {
       meta.verifyStartedAt = Number(entry.verifyStartedAt);
@@ -2662,17 +2695,33 @@ function punchlistDoneCounts(
  */
 function terminalWakePrompt(chain: ChainRecord): string {
   const tail = chain.lastSummaryTail ? `\n\nFinal summary tail:\n${chain.lastSummaryTail}` : '';
+  const verifySummary = countVerifyVerdicts(chain);
+  const totals = `Verify totals: ${verifySummary.passed} passed, ${verifySummary.failed} failed, `
+    + `${verifySummary.inconclusive} inconclusive.`;
   const failedVerifies = Object.entries(chain.jobs).filter(([, meta]) => meta.verify === 'failed');
-  if (chain.status === 'completed' && failedVerifies.length > 0) {
+  const inconclusiveVerifies = Object.entries(chain.jobs).filter(([, meta]) => meta.verify === 'inconclusive');
+  if (chain.status === 'completed' && (failedVerifies.length > 0 || inconclusiveVerifies.length > 0)) {
     const failures = failedVerifies.map(([unit, meta]) => {
       const name = chain.manifest?.[Number(unit) - 1]?.name;
       const reason = meta.failureReason ?? 'The verifier reported a failure without a reason or resume point.';
       return `- Job ${unit}${name ? ` (${name})` : ''}${meta.commitHash ? ` at ${meta.commitHash}` : ''}: ${reason}`;
     }).join('\n');
-    return `Watchdog: dispatched chain "${chain.slug}" completed with ${failedVerifies.length} verify `
-      + `${failedVerifies.length === 1 ? 'failure' : 'failures'}. Every build commit stayed on main and all queued units ran. `
-      + 'Append fix units for these recorded failures and start from each listed resume point:\n'
-      + failures;
+    const inconclusives = inconclusiveVerifies.map(([unit, meta]) => {
+      const name = chain.manifest?.[Number(unit) - 1]?.name;
+      const reason = meta.verifyReason ?? 'The verifier supplied no reason.';
+      return `- Job ${unit}${name ? ` (${name})` : ''}${meta.commitHash ? ` at ${meta.commitHash}` : ''}: ${reason}`;
+    }).join('\n');
+    const failureBlock = failures
+      ? `\n\nFailed verifies need fix units from their recorded resume points:\n${failures}`
+      : '';
+    const inconclusiveBlock = inconclusives
+      ? `\n\nInconclusive verifies were not passes and still need a conclusive check:\n${inconclusives}`
+      : '';
+    const outcome = inconclusiveVerifies.length === 0
+      ? `completed with ${failedVerifies.length} verify ${failedVerifies.length === 1 ? 'failure' : 'failures'}`
+      : `completed with ${failedVerifies.length} failed and ${inconclusiveVerifies.length} inconclusive verifies`;
+    return `Watchdog: dispatched chain "${chain.slug}" ${outcome}. ${totals} Every build commit stayed on main and all queued units ran.`
+      + failureBlock + inconclusiveBlock;
   }
   const flag = chain.status === 'completed'
     ? 'ended'
@@ -2680,7 +2729,7 @@ function terminalWakePrompt(chain: ChainRecord): string {
       ? 'STOPPED'
       : 'FAILED';
   return `Watchdog: dispatched chain "${chain.slug}" ${flag}${chain.phases ? ` (job ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''}. `
-    + `Verify the result against git log and the punch list before declaring anything done.${tail}`;
+    + `${totals} Verify the result against git log and the punch list before declaring anything done.${tail}`;
 }
 
 /**

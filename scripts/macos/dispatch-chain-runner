@@ -25,9 +25,9 @@
 # DISPATCH_VERIFY_MODEL exist only so stub chains and tests can pin it) —
 # that checks the committed job against its done check and answers
 # `VERIFY: PASS`, `VERIFY: INCONCLUSIVE: <reason>`, or
-# `VERIFY: FAIL: <reason>` on its last line; it runs in
-# the background while the next unit's build starts, so the verify tail
-# leaves the critical path.
+# `VERIFY: FAIL: <reason>` on its last line. The next unit may start while it
+# runs, but runner-owned command wrappers hold that unit's dev build/restart
+# until the verifier settles or reaches its 20-minute cap.
 # A phase file that carries `<!-- verify: no -->` in its header skips its
 # verify stage. A failing verify is recorded on that unit without touching
 # the build already in flight; the chain continues and its terminal wake
@@ -83,11 +83,16 @@ else
   VERIFY_MODEL="${DISPATCH_VERIFY_MODEL:-$CLAUDE_DEFAULT_MODEL}"
 fi
 VERIFY_EFFORT=high
+VERIFY_CAP_SECS="${DISPATCH_VERIFY_CAP_SECS:-1200}"
+[[ "$VERIFY_CAP_SECS" == <1-> ]] \
+  || { print -u2 "dispatch-chain-runner: DISPATCH_VERIFY_CAP_SECS must be a positive integer"; exit 64; }
 
 # Both CLIs resolve up front; a unit whose engine is missing stops the chain
 # at that unit with a journal line instead of at launch.
 CLAUDE_BIN=$(command -v claude)
 CODEX_BIN=$(command -v codex)
+REAL_NPM=$(command -v npm)
+REAL_LAUNCHCTL=$(command -v launchctl)
 
 # Header value `<!-- key: value -->` from a prompt file's first 4 KB, or empty.
 header_value() {
@@ -212,6 +217,55 @@ mkdir -p "$JOURNAL_DIR"
 JOURNAL="$JOURNAL_DIR/JOURNAL.md"
 journal() { print -r -- "$(date +%H:%M) | $1 | $2 | $3" >> "$JOURNAL"; }
 
+# Build sessions get a private PATH prefix that gates only commands capable of
+# rebuilding or restarting dev. Verifiers keep the ordinary PATH, so their own
+# done checks can run while the next unit reads and edits. The atomic report
+# directory makes one hold journal line even when npm and launchctl overlap.
+DEV_GUARD_DIR="$JOURNAL_DIR/dev-guard"
+VERIFY_HOLD_FILE="$JOURNAL_DIR/verify.hold"
+VERIFY_HOLD_REPORTED="$JOURNAL_DIR/verify-hold-reported"
+prepare_dev_guard() {
+  mkdir -p "$DEV_GUARD_DIR"
+  cat > "$DEV_GUARD_DIR/dispatch-dev-hold" <<'GUARD_EOF'
+#!/bin/zsh
+[[ -f "$DISPATCH_VERIFY_HOLD_FILE" ]] || exit 0
+if mkdir "$DISPATCH_VERIFY_HOLD_REPORTED" 2>/dev/null; then
+  print -r -- "$(date +%H:%M) | $DISPATCH_VERIFY_HOLD_LABEL | hold | next unit dev rebuild/restart waits for the verifier or its cap" >> "$DISPATCH_VERIFY_HOLD_JOURNAL"
+fi
+while [[ -f "$DISPATCH_VERIFY_HOLD_FILE" ]]; do /bin/sleep 0.1; done
+GUARD_EOF
+  cat > "$DEV_GUARD_DIR/npm" <<'GUARD_EOF'
+#!/bin/zsh
+if [[ "${1:-}" == run && ( "${2:-}" == build* || "${2:-}" == dev || "${2:-}" == server:dev || "${2:-}" == client ) ]]; then
+  "$DISPATCH_DEV_GUARD_DIR/dispatch-dev-hold"
+fi
+[[ -n "$DISPATCH_REAL_NPM" ]] || { print -u2 "dispatch: npm is not on PATH"; exit 127; }
+exec "$DISPATCH_REAL_NPM" "$@"
+GUARD_EOF
+  cat > "$DEV_GUARD_DIR/launchctl" <<'GUARD_EOF'
+#!/bin/zsh
+"$DISPATCH_DEV_GUARD_DIR/dispatch-dev-hold"
+[[ -n "$DISPATCH_REAL_LAUNCHCTL" ]] || { print -u2 "dispatch: launchctl is not on PATH"; exit 127; }
+exec "$DISPATCH_REAL_LAUNCHCTL" "$@"
+GUARD_EOF
+  chmod 700 "$DEV_GUARD_DIR/dispatch-dev-hold" "$DEV_GUARD_DIR/npm" "$DEV_GUARD_DIR/launchctl"
+}
+prepare_dev_guard
+
+# Applied inside a background build subshell immediately before exec. The
+# parent runner and verifier environments remain untouched.
+apply_build_guard() {
+  [[ "${1:-}" == build ]] || return 0
+  export PATH="$DEV_GUARD_DIR:$PATH"
+  export DISPATCH_DEV_GUARD_DIR="$DEV_GUARD_DIR"
+  export DISPATCH_REAL_NPM="$REAL_NPM"
+  export DISPATCH_REAL_LAUNCHCTL="$REAL_LAUNCHCTL"
+  export DISPATCH_VERIFY_HOLD_FILE="$VERIFY_HOLD_FILE"
+  export DISPATCH_VERIFY_HOLD_REPORTED="$VERIFY_HOLD_REPORTED"
+  export DISPATCH_VERIFY_HOLD_JOURNAL="$JOURNAL"
+  export DISPATCH_VERIFY_HOLD_LABEL="verify $VERIFY_NUM/$TOTAL"
+}
+
 TOTAL=${#PHASE_FILES[@]}
 RESUME_FROM="${DISPATCH_RESUME_FROM:-1}"
 [[ "$RESUME_FROM" == <1-> ]] || { print -u2 "dispatch-chain-runner: DISPATCH_RESUME_FROM must be a 1-based index"; exit 64; }
@@ -223,9 +277,9 @@ save_resume_state() {
   local next_phase="${1:-$RESUME_FROM}" phase_count=${#PHASE_FILES[@]}
   python3 - "$RESUME_STATE.tmp" "$REPO" "$SLUG" "$CHAIN_ENGINE" "$CHAIN_MODEL" "$CHAIN_EFFORT" \
       "$VERIFY_ENGINE" "$VERIFY_MODEL" "${DISPATCHING_SESSION_ID:-}" "$next_phase" "${CHAIN_BASE:-}" \
-      "$phase_count" "${PHASE_FILES[@]}" "${VERIFY_FAILURES[@]}" <<'PYEOF'
+      "$VERIFY_INCONCLUSIVE_COUNT" "$phase_count" "${PHASE_FILES[@]}" "${VERIFY_FAILURES[@]}" <<'PYEOF'
 import json, os, sys
-out, repo, slug, engine, model, effort, verify_engine, verify_model, dispatching_session_id, next_phase, chain_base, phase_count, *rest = sys.argv[1:]
+out, repo, slug, engine, model, effort, verify_engine, verify_model, dispatching_session_id, next_phase, chain_base, verify_inconclusive_count, phase_count, *rest = sys.argv[1:]
 phase_count = int(phase_count)
 files = rest[:phase_count]
 verify_failures = rest[phase_count:]
@@ -242,6 +296,7 @@ with open(out, 'w', encoding='utf-8') as handle:
         'phaseFiles': files,
         'resumeFrom': int(next_phase),
         'chainBase': chain_base,
+        'verifyInconclusiveCount': int(verify_inconclusive_count),
         'verifyFailures': verify_failures,
     }, handle)
     handle.write('\n')
@@ -305,10 +360,11 @@ read_chain_hold_reason() {
 # re-register the chain it lost with the event itself.
 event_body() {
   # $1 event, $2 phase (or empty), $3 summaryTail json string (or empty),
-  # $4 commit short hash (or empty), $5 commit subject (or empty)
-  python3 - "$1" "$2" "$3" "$REPO" "$TOTAL" "${4:-}" "${5:-}" "${DISPATCHING_SESSION_ID:-}" "${UNIT_FAST_MODE:-0}" <<'PYEOF'
+  # $4 commit short hash (or empty), $5 commit subject (or empty),
+  # $6 exact verifier verdict (PASS|FAIL|INCONCLUSIVE, or empty)
+  python3 - "$1" "$2" "$3" "$REPO" "$TOTAL" "${4:-}" "${5:-}" "${DISPATCHING_SESSION_ID:-}" "${UNIT_FAST_MODE:-0}" "${6:-}" <<'PYEOF'
 import json, sys
-event, phase, tail, repo, total, commit_hash, commit_subject, dispatching_session_id, fast_mode = sys.argv[1:10]
+event, phase, tail, repo, total, commit_hash, commit_subject, dispatching_session_id, fast_mode, verdict = sys.argv[1:11]
 body = {'event': event, 'projectPath': repo, 'phases': int(total)}
 if dispatching_session_id:
     body['dispatchingSessionId'] = dispatching_session_id
@@ -320,6 +376,8 @@ if commit_hash:
     body['commit'] = {'hash': commit_hash, 'subject': commit_subject}
 if event == 'phase-start':
     body['fastMode'] = fast_mode == '1'
+if verdict:
+    body['verdict'] = verdict
 print(json.dumps(body))
 PYEOF
 }
@@ -551,6 +609,7 @@ run_claude() {
   typeset -a fallback_args
   fallback_args=()
   [[ "$4" != "$FALLBACK_MODEL" ]] && fallback_args=(--fallback-model "$FALLBACK_MODEL")
+  apply_build_guard "${7:-build}"
   # setsid puts the session in its own process group (pid == pgid, since the
   # exec keeps the pid) so a rewind can kill claude and everything it spawned.
   ANTHROPIC_API_KEY="" \
@@ -576,6 +635,7 @@ run_claude() {
 run_codex() {
   local service_tier=default
   [[ "${6:-0}" == "1" ]] && service_tier=fast
+  apply_build_guard "${7:-build}"
   exec python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' \
     "$CODEX_BIN" exec \
     --strict-config \
@@ -772,6 +832,8 @@ VERIFY_COMMIT=""
 VERIFY_SUBJECT=""
 VERIFY_RETRY=0
 VERIFY_THREAD=""
+VERIFY_DEADLINE=0
+VERIFY_INCONCLUSIVE_COUNT=0
 typeset -a VERIFY_FAILURES
 VERIFY_FAILURES=()
 PAUSING=0
@@ -794,6 +856,11 @@ PYEOF
 import json, sys
 for failure in json.load(open(sys.argv[1], encoding='utf-8')).get('verifyFailures', []):
     print(failure)
+PYEOF
+)
+  VERIFY_INCONCLUSIVE_COUNT=$(python3 - "$RESUME_STATE" <<'PYEOF'
+import json, sys
+print(int(json.load(open(sys.argv[1], encoding='utf-8')).get('verifyInconclusiveCount') or 0))
 PYEOF
 )
 else
@@ -883,35 +950,123 @@ restore_paused_work() {
 
 verify_wanted() { ! grep -qiE '<!--[[:space:]]*verify:[[:space:]]*no' "$1" 2>/dev/null; }
 
-# The verify prompt wraps the builder's brief: the verifier reads the job's
-# items and done check from it but builds nothing, and answers on its last
-# line so the runner can read the verdict off the log.
+# Newest implementation commit in a unit range. Planner-owned docs commits
+# may move shared HEAD but never satisfy the build gate or become attribution.
+newest_non_docs_commit() {
+  git -C "$REPO" log --format=$'%H\t%s' "$1..$2" 2>/dev/null \
+    | while IFS=$'\t' read -r hash subject; do
+        [[ "$subject" == docs\(* ]] || { print -r -- "$hash"; break; }
+      done
+}
+
+# Mechanical verifier pre-check. Git already omits ignored files. The chain's
+# prompt files and referenced punch list are its own mutable coordination
+# files; any untracked .dispatch artifact is harmless runner scaffolding.
+verify_precheck_reason() {
+  python3 - "$REPO" "$VERIFY_BASE_COMMIT" "$VERIFY_COMMIT" "$SLUG" "${PHASE_FILES[@]}" <<'PYEOF'
+import os, pathlib, re, subprocess, sys
+
+repo, base, head, slug, *phase_files = sys.argv[1:]
+allowed = set()
+for filename in phase_files:
+    candidate = pathlib.Path(filename)
+    try:
+        relative = candidate.resolve().relative_to(pathlib.Path(repo).resolve()).as_posix()
+    except (OSError, ValueError):
+        continue
+    allowed.add(relative)
+    try:
+        prompt = candidate.read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        continue
+    for punchlist in re.findall(r'\b(PUNCHLIST_[\w.-]+\.md)\b', prompt):
+        allowed.add(punchlist)
+
+status = subprocess.run(
+    ['git', '-C', repo, 'status', '--porcelain=v1', '-z', '--untracked-files=all'],
+    check=False, capture_output=True,
+).stdout.decode('utf-8', errors='replace').split('\0')
+dirty = []
+index = 0
+while index < len(status):
+    record = status[index]
+    index += 1
+    if not record:
+        continue
+    code, filename = record[:2], record[3:]
+    if 'R' in code or 'C' in code:
+        index += 1
+    if filename in allowed:
+        continue
+    if code == '??' and filename.startswith('.dispatch/'):
+        continue
+    dirty.append(f'{code} {filename}')
+if dirty:
+    print('working tree has paths outside this chain: ' + ', '.join(dirty[:4]))
+    raise SystemExit(0)
+
+subjects = subprocess.run(
+    ['git', '-C', repo, 'log', '--format=%s', f'{base}..{head}'],
+    check=False, capture_output=True, text=True,
+).stdout.splitlines()
+if not any(not subject.startswith('docs(') for subject in subjects):
+    print(f'commit range {base}..{head} contains no non-docs commit')
+PYEOF
+}
+
+# Extracts only the named job section from the committed punch list. The
+# builder's operational prompt never enters verifier context.
+write_verify_section() {
+  python3 - "$VERIFY_FILE" "$REPO" "$VERIFY_COMMIT" <<'PYEOF'
+import pathlib, re, subprocess, sys
+
+prompt_file, repo, commit = sys.argv[1:]
+prompt = pathlib.Path(prompt_file).read_text(encoding='utf-8', errors='replace')
+reference = re.search(r'\b(?:Job|Phase)\s+(\d+)\s+of\s+(PUNCHLIST_[\w.-]+\.md)\b', prompt, re.I)
+if not reference:
+    print('(No named punch-list section was present in the unit prompt.)')
+    raise SystemExit(0)
+unit, filename = int(reference.group(1)), reference.group(2)
+content = subprocess.run(
+    ['git', '-C', repo, 'show', f'{commit}:{filename}'],
+    check=False, capture_output=True, text=True,
+)
+if content.returncode:
+    print(f'(The committed {filename} section for job {unit} could not be read.)')
+    raise SystemExit(0)
+lines = content.stdout.splitlines()
+heading = re.compile(rf'^(#{{1,6}})\s+(?:Job|Phase)\s+{unit}(?:\D|$)', re.I)
+start = next((i for i, line in enumerate(lines) if heading.match(line)), None)
+if start is None:
+    print(f'(Job {unit} was not found in committed {filename}.)')
+    raise SystemExit(0)
+level = len(heading.match(lines[start]).group(1))
+end = len(lines)
+for index in range(start + 1, len(lines)):
+    next_heading = re.match(r'^(#{1,6})\s+', lines[index])
+    if next_heading and len(next_heading.group(1)) <= level:
+        end = index
+        break
+print('\n'.join(lines[start:end]).rstrip())
+PYEOF
+}
+
+# The verifier sees identity, the exact done-check section, the immutable
+# commit range and stat, and environment constraints. It never receives the
+# builder's whole phase prompt.
 write_verify_prompt() {
   local out="$JOURNAL_DIR/verify$VERIFY_NUM.prompt.md"
   {
     print -r -- "<!-- name: Verify: $VERIFY_NAME -->"
-    print -r -- "You are the fresh-context verifier for job $VERIFY_NUM of $TOTAL in this repo ($REPO). A builder session already did the work and committed it as $VERIFY_COMMIT ($VERIFY_SUBJECT). The chain has moved on: the next job's build may be editing the working tree and rebuilding the dev instance while you check. You build nothing. Do not edit, commit, stash, reset, or push anything; do not check boxes in the punch list; do not write journal lines."
+    print -r -- "You are the fresh-context verifier for job $VERIFY_NUM of $TOTAL ($VERIFY_NAME) in $REPO. The builder's attributed commit is $VERIFY_COMMIT ($VERIFY_SUBJECT)."
     print -r -- ""
-    print -r -- "The builder's brief follows between the markers. Its instructions were for the builder, not for you; read it only for the job's items, the punch list section it names, and that section's done check."
-    print -r -- "----- builder brief -----"
-    cat "$VERIFY_FILE"
-    print -r -- "----- end builder brief -----"
+    print -r -- "Punch-list section and done check:"
+    write_verify_section
     print -r -- ""
-    print -r -- "Verify the job's behavior in the tree at the phase-end commit $VERIFY_COMMIT. The phase's base commit is $VERIFY_BASE_COMMIT; the job's own commits are the commits landed by the builder between that base commit and the phase-end commit ($VERIFY_BASE_COMMIT..$VERIFY_COMMIT). Commits in that range whose subject starts with docs( are planner commits and are never a reason to fail. Read the exact tree and change through git show $VERIFY_COMMIT, git diff $VERIFY_BASE_COMMIT..$VERIFY_COMMIT, and git show $VERIFY_COMMIT:<path> for any file the working tree may have moved past."
+    print -r -- "Commit range: $VERIFY_BASE_COMMIT..$VERIFY_COMMIT"
+    git -C "$REPO" diff --stat "$VERIFY_BASE_COMMIT..$VERIFY_COMMIT"
     print -r -- ""
-    cat <<'VERIFY_AUTH_EOF'
-For authenticated checks against dev, mint a short-lived JWT from the dev database and send it as a Bearer token (the API-testing recipe from CLAUDE.md):
-
-  DEV_DB="$COMMAND_CENTER_RUNTIME_DEV_DATA_DIR/auth.db"
-  DEV_JWT_SECRET=$(/usr/bin/sqlite3 "$DEV_DB" "SELECT value FROM app_config WHERE key='jwt_secret';")
-  DEV_USER_ID=$(/usr/bin/sqlite3 "$DEV_DB" "SELECT id FROM users WHERE is_active=1 ORDER BY id LIMIT 1;")
-  DEV_USERNAME=$(/usr/bin/sqlite3 "$DEV_DB" "SELECT username FROM users WHERE id=$DEV_USER_ID;")
-  DEV_JWT=$(JWT_SECRET="$DEV_JWT_SECRET" JWT_USER_ID="$DEV_USER_ID" JWT_USERNAME="$DEV_USERNAME" node -e 'const jwt=require("jsonwebtoken"); process.stdout.write(jwt.sign({userId:Number(process.env.JWT_USER_ID),username:process.env.JWT_USERNAME},process.env.JWT_SECRET,{expiresIn:"5m"}))')
-  curl -H "Authorization: Bearer $DEV_JWT" http://127.0.0.1:4748/api/...
-  unset DEV_JWT DEV_JWT_SECRET DEV_USER_ID DEV_USERNAME
-
-Never print the secret or token. Verify the job against its done check and every item it names, with concrete evidence. Run the checks the done check calls for against dev and report what passed and what failed with the evidence you saw.
-VERIFY_AUTH_EOF
+    print -r -- "Constraints: inspect only the committed tree with git show/diff; do not edit, commit, stash, reset, push, or change punch-list checks. Run the section's done check and report concrete evidence. Dev is port 4748 with config ~/.claude-dev, DB ~/.cloudcli-dev/auth.db, and public URL https://spoton-worker.tail6e1056.ts.net:8443. Treat ignored files, this chain's punch list and .dispatch files, and untracked .dispatch files as allowed tree state."
     print -r -- ""
     print -r -- "Use FAIL only for an observed defect. If login, tooling, or the environment prevented a check, do not call that a defect: list what you could not exercise and use INCONCLUSIVE. Your last line must be exactly one of: VERIFY: PASS, VERIFY: INCONCLUSIVE: <one-line list of what could not be exercised>, or VERIFY: FAIL: <one-line observed defect>."
   } > "$out"
@@ -932,10 +1087,13 @@ start_verify() {
   [[ "$VERIFY_ENGINE" == "claude" ]] && permission_detail=", permission $CLAUDE_PERMISSION_MODE"
   journal "verify $VERIFY_NUM/$TOTAL" "start" "$VERIFY_NAME against $VERIFY_COMMIT ($VERIFY_ENGINE $VERIFY_MODEL$permission_detail)"
   api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-start $VERIFY_NUM '')" 3
+  VERIFY_DEADLINE=$(($(date +%s) + VERIFY_CAP_SECS))
+  rmdir "$VERIFY_HOLD_REPORTED" 2>/dev/null || true
+  print -r -- "$VERIFY_DEADLINE" > "$VERIFY_HOLD_FILE"
   : > "$log"
   # Verify is a billing and correctness boundary: it is always standard tier,
   # regardless of the chain preference read by the next build.
-  run_engine "$VERIFY_ENGINE" "$prompt" "$log" "$session" "$VERIFY_MODEL" "$VERIFY_EFFORT" 0 &
+  run_engine "$VERIFY_ENGINE" "$prompt" "$log" "$session" "$VERIFY_MODEL" "$VERIFY_EFFORT" 0 verify &
   VERIFY_PID=$!
   if [[ "$VERIFY_ENGINE" == "codex" ]]; then
     VERIFY_THREAD=$(wait_thread_id "$log" "$VERIFY_PID")
@@ -953,21 +1111,46 @@ start_verify() {
 # in flight (reconcile_verify); an explicit FAIL is recorded and clears the
 # stage without disturbing the build already in flight.
 settle_verify() {
-  local rc log="$JOURNAL_DIR/verify$VERIFY_NUM.log" verdict verdict_source
-  # A pause signal can interrupt zsh's wait without ending the verifier. Keep
-  # waiting while that exact child is alive, then interpret only its real exit.
-  while true; do
-    wait $VERIFY_PID
-    rc=$?
-    kill -0 "$VERIFY_PID" 2>/dev/null || break
-  done
+  local forced_reason="${1:-}" rc=0 log="$JOURNAL_DIR/verify$VERIFY_NUM.log" verdict verdict_source
+  # Every wait path owns the same 20-minute ceiling. A pause or terminal
+  # reconcile therefore cannot wait forever, and the dev-command hold always
+  # releases from this one settlement point.
+  if [[ -n "$forced_reason" ]]; then
+    journal "verify $VERIFY_NUM/$TOTAL" "cap" "verify cap reached after ${VERIFY_CAP_SECS}s; recording INCONCLUSIVE"
+    stop_stage_for_pause "$VERIFY_PID"
+    rc=124
+  else
+    while kill -0 "$VERIFY_PID" 2>/dev/null; do
+      if [[ $(date +%s) -ge $VERIFY_DEADLINE ]]; then
+        forced_reason="verify cap"
+        journal "verify $VERIFY_NUM/$TOTAL" "cap" "verify cap reached after ${VERIFY_CAP_SECS}s; recording INCONCLUSIVE"
+        stop_stage_for_pause "$VERIFY_PID"
+        rc=124
+        break
+      fi
+      sleep 1
+    done
+  fi
+  if [[ -z "$forced_reason" ]]; then
+    # A pause signal can interrupt zsh's wait. Retry until this exact child is
+    # reaped rather than interpreting the interrupted wait as its real exit.
+    while true; do
+      wait $VERIFY_PID
+      rc=$?
+      kill -0 "$VERIFY_PID" 2>/dev/null || break
+    done
+  fi
   VERIFY_PID=""
+  rm -f "$VERIFY_HOLD_FILE"
+  rmdir "$VERIFY_HOLD_REPORTED" 2>/dev/null || true
+  VERIFY_DEADLINE=0
   # Codex writes its final assistant message to .last; Claude's verdict stays
   # in the session log. The verdict is the last VERIFY: line, wherever markdown wrapped it
   # (`**VERIFY: PASS**`, a backticked or indented line all count).
   verdict_source="$log"
   [[ "$VERIFY_ENGINE" == "codex" ]] && verdict_source="$log.last"
   verdict=$(grep -oE 'VERIFY: (PASS|INCONCLUSIVE[^`*]*|FAIL[^`*]*)' "$verdict_source" 2>/dev/null | tail -1 | sed 's/[[:space:]]*$//')
+  [[ -z "$forced_reason" ]] || verdict="VERIFY: INCONCLUSIVE: $forced_reason"
   if [[ "$VERIFY_ENGINE" == "claude" && $rc -ne 0 && -z "$verdict" ]] && grep -qiE "$LIMIT_PATTERN" "$log"; then
     journal "verify $VERIFY_NUM/$TOTAL" "limit" "verifier exited $rc on the session limit; re-running once the build in flight has recovered"
     VERIFY_RETRY=1
@@ -980,7 +1163,7 @@ settle_verify() {
   fi
   if [[ "$verdict" == "VERIFY: PASS"* ]]; then
     journal "verify $VERIFY_NUM/$TOTAL" "end" "PASS for $VERIFY_COMMIT"
-    api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-end $VERIFY_NUM '')" 3
+    api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-end $VERIFY_NUM '' '' '' PASS)" 3
     VERIFY_NUM=0
     return 0
   fi
@@ -988,6 +1171,7 @@ settle_verify() {
     [[ -n "$verdict" ]] || verdict="VERIFY: INCONCLUSIVE: verifier exited $rc without a verdict (verify$VERIFY_NUM.log)"
     local note="${verdict#VERIFY: INCONCLUSIVE: }"
     journal "verify $VERIFY_NUM/$TOTAL" "end" "INCONCLUSIVE for $VERIFY_COMMIT: $note; continuing chain"
+    VERIFY_INCONCLUSIVE_COUNT=$((VERIFY_INCONCLUSIVE_COUNT + 1))
     api_post "/api/watchdog/notify" "$(python3 - "$SLUG" "$VERIFY_NUM" "$TOTAL" "$VERIFY_NAME" "$VERIFY_COMMIT" "$note" <<'PYEOF'
 import json, sys
 slug, phase, total, name, commit_hash, note = sys.argv[1:7]
@@ -998,7 +1182,8 @@ print(json.dumps({
 }))
 PYEOF
 )" 3
-    api_post "/api/watchdog/chains/$SLUG/events" "$(event_body verify-end $VERIFY_NUM '')" 3
+    api_post "/api/watchdog/chains/$SLUG/events" \
+      "$(event_body verify-end $VERIFY_NUM "$(print -rn -- "$note" | json_string)" '' '' INCONCLUSIVE)" 3
     VERIFY_NUM=0
     return 0
   fi
@@ -1015,7 +1200,7 @@ record_verify_failure() {
   VERIFY_FAILURES+=("$resume")
   save_resume_state "$((PHASE_NUM + 1))"
   api_post "/api/watchdog/chains/$SLUG/events" \
-    "$(event_body verify-failed $VERIFY_NUM "$(print -rn -- "$resume" | json_string)")" 80
+    "$(event_body verify-end $VERIFY_NUM "$(print -rn -- "$resume" | json_string)" '' '' FAIL)" 80
   VERIFY_NUM=0
 }
 
@@ -1061,8 +1246,12 @@ honor_promote_hold() {
 watch_build() {
   while kill -0 $BUILD_PID 2>/dev/null; do
     [[ -f "$PAUSE_REQUEST" ]] && return 0
-    if [[ -n "$VERIFY_PID" ]] && ! kill -0 $VERIFY_PID 2>/dev/null; then
-      settle_verify
+    if [[ -n "$VERIFY_PID" ]]; then
+      if ! kill -0 $VERIFY_PID 2>/dev/null; then
+        settle_verify
+      elif [[ $(date +%s) -ge $VERIFY_DEADLINE ]]; then
+        settle_verify "verify cap"
+      fi
     fi
     sleep 1
   done
@@ -1182,7 +1371,7 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   # The build stage: a fresh headless session in the repo, run in the
   # background so the previous unit's verify can be settled while it works.
   : > "$JOURNAL_DIR/phase$PHASE_NUM.log"
-  run_engine "$UNIT_ENGINE" "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" "$UNIT_MODEL" "$UNIT_EFFORT" "$UNIT_FAST_MODE" &
+  run_engine "$UNIT_ENGINE" "$PHASE_FILE" "$JOURNAL_DIR/phase$PHASE_NUM.log" "$SESSION_ID" "$UNIT_MODEL" "$UNIT_EFFORT" "$UNIT_FAST_MODE" build &
   BUILD_PID=$!
   BUILD_THREAD=""
   if [[ "$UNIT_ENGINE" == "codex" ]]; then
@@ -1230,28 +1419,38 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
   WAIT_TOTAL=0
   PARK_ESCALATED=0
 
-  # The commit is the build boundary. A non-zero CLI exit after landing one
-  # does not erase shipped work or kill queued units; without a commit, the
-  # ordinary commit gate remains terminal.
+  # The commit is the build boundary. Shared HEAD movement counts only when
+  # BASE..HEAD contains implementation work; planner docs commits cannot pass
+  # the gate or become this unit's recorded commit.
   [[ $RC -eq 0 ]] || journal "phase $PHASE_NUM/$TOTAL" "build-exit" "$UNIT_ENGINE exited $RC; checking the commit gate"
-  if [[ "$NEW_COMMIT" == "$BASE_COMMIT" ]]; then
+  UNIT_COMMIT=$(newest_non_docs_commit "$BASE_COMMIT" "$NEW_COMMIT")
+  if [[ -z "$UNIT_COMMIT" ]]; then
     reconcile_verify
+    if verify_wanted "$PHASE_FILE"; then
+      PRECHECK_REASON="commit range $BASE_COMMIT..$NEW_COMMIT contains no non-docs commit"
+      journal "verify $PHASE_NUM/$TOTAL" "pre-check" "INCONCLUSIVE: $PRECHECK_REASON; model verify skipped"
+      VERIFY_INCONCLUSIVE_COUNT=$((VERIFY_INCONCLUSIVE_COUNT + 1))
+      api_post "/api/watchdog/chains/$SLUG/events" \
+        "$(event_body verify-end $PHASE_NUM "$(print -rn -- "$PRECHECK_REASON" | json_string)" '' '' INCONCLUSIVE)" 3
+    fi
     if [[ "$UNIT_ENGINE" == "codex" ]]; then
       LOG_TAIL=$(head -c 300 "$JOURNAL_DIR/phase$PHASE_NUM.log.last" 2>/dev/null | tr '\n' ' ')
-      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME (exit $RC); last message: ${LOG_TAIL:-none}"
+      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: BASE..HEAD has no non-docs commit after $PHASE_NAME (exit $RC); last message: ${LOG_TAIL:-none}"
     else
-      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: no new commit after $PHASE_NAME (exit $RC)"
+      journal "phase $PHASE_NUM/$TOTAL" "STOPPED" "commit gate: BASE..HEAD has no non-docs commit after $PHASE_NAME (exit $RC)"
     fi
     api_post "/api/watchdog/chains/$SLUG/events" \
-      "$(event_body stopped $PHASE_NUM "$(print -rn -- "Commit gate stopped the chain: phase $PHASE_NUM ($PHASE_NAME) produced no commit." | json_string)")" 80
+      "$(event_body stopped $PHASE_NUM "$(print -rn -- "Commit gate stopped the chain: phase $PHASE_NUM ($PHASE_NAME) produced no non-docs commit." | json_string)")" 80
     exit 2
   fi
 
-  journal "phase $PHASE_NUM/$TOTAL" "end" "$(git -C "$REPO" log -1 --format=%h\ %s)"
+  UNIT_COMMIT_SHORT=$(git -C "$REPO" show -s --format=%h "$UNIT_COMMIT")
+  UNIT_SUBJECT=$(git -C "$REPO" show -s --format=%s "$UNIT_COMMIT")
+  journal "phase $PHASE_NUM/$TOTAL" "end" "$UNIT_COMMIT_SHORT $UNIT_SUBJECT"
   # The phase-end event carries the job's commit (ui13 job 14) so the jobs
   # view can show what each job shipped.
   api_post "/api/watchdog/chains/$SLUG/events" \
-    "$(event_body phase-end $PHASE_NUM '' "$(git -C "$REPO" log -1 --format=%h)" "$(git -C "$REPO" log -1 --format=%s)")" 3
+    "$(event_body phase-end $PHASE_NUM '' "$UNIT_COMMIT_SHORT" "$UNIT_SUBJECT")" 3
 
   # The previous unit's verify must have passed before this unit's starts:
   # at most one verify is in flight, one build behind it.
@@ -1262,9 +1461,18 @@ while [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]]; do
     VERIFY_NAME="$UNIT_NAME"
     VERIFY_FILE="$PHASE_FILE"
     VERIFY_BASE_COMMIT="$BASE_COMMIT"
-    VERIFY_COMMIT=$(git -C "$REPO" log -1 --format=%h)
-    VERIFY_SUBJECT=$(git -C "$REPO" log -1 --format=%s)
-    start_verify
+    VERIFY_COMMIT="$UNIT_COMMIT_SHORT"
+    VERIFY_SUBJECT="$UNIT_SUBJECT"
+    PRECHECK_REASON=$(verify_precheck_reason)
+    if [[ -n "$PRECHECK_REASON" ]]; then
+      journal "verify $VERIFY_NUM/$TOTAL" "pre-check" "INCONCLUSIVE: $PRECHECK_REASON; model verify skipped"
+      VERIFY_INCONCLUSIVE_COUNT=$((VERIFY_INCONCLUSIVE_COUNT + 1))
+      api_post "/api/watchdog/chains/$SLUG/events" \
+        "$(event_body verify-end $VERIFY_NUM "$(print -rn -- "$PRECHECK_REASON" | json_string)" '' '' INCONCLUSIVE)" 3
+      VERIFY_NUM=0
+    else
+      start_verify
+    fi
   fi
   pickup_appends
   honor_promote_hold
@@ -1276,15 +1484,19 @@ honor_pause_request
 honor_promote_hold
 VERIFY_FAILURE_COUNT=${#VERIFY_FAILURES[@]}
 TAIL=$(git -C "$REPO" log --oneline "$CHAIN_BASE"..HEAD 2>/dev/null | head -20 | json_string)
-if [[ $VERIFY_FAILURE_COUNT -gt 0 ]]; then
+if [[ $VERIFY_FAILURE_COUNT -gt 0 && $VERIFY_INCONCLUSIVE_COUNT -eq 0 ]]; then
   VERIFY_FAILURE_NOUN="$([[ $VERIFY_FAILURE_COUNT -eq 1 ]] && print failure || print failures)"
   journal run "end" "all $TOTAL phases committed; completed with $VERIFY_FAILURE_COUNT verify $VERIFY_FAILURE_NOUN"
+elif [[ $VERIFY_FAILURE_COUNT -gt 0 || $VERIFY_INCONCLUSIVE_COUNT -gt 0 ]]; then
+  journal run "end" "all $TOTAL phases committed; verify totals include $VERIFY_FAILURE_COUNT failed and $VERIFY_INCONCLUSIVE_COUNT inconclusive"
 else
   journal run "end" "all $TOTAL phases committed and verified"
 fi
 api_post "/api/watchdog/chains/$SLUG/events" "$(event_body completed $TOTAL "$TAIL")" 80
-if [[ $VERIFY_FAILURE_COUNT -gt 0 ]]; then
+if [[ $VERIFY_FAILURE_COUNT -gt 0 && $VERIFY_INCONCLUSIVE_COUNT -eq 0 ]]; then
   print -r -- "dispatch: chain $SLUG completed with $VERIFY_FAILURE_COUNT verify $VERIFY_FAILURE_NOUN ($TOTAL phases)"
+elif [[ $VERIFY_FAILURE_COUNT -gt 0 || $VERIFY_INCONCLUSIVE_COUNT -gt 0 ]]; then
+  print -r -- "dispatch: chain $SLUG completed with $VERIFY_FAILURE_COUNT failed and $VERIFY_INCONCLUSIVE_COUNT inconclusive verifies ($TOTAL phases)"
 else
   print -r -- "dispatch: chain $SLUG completed ($TOTAL phases)"
 fi

@@ -39,11 +39,80 @@ async function waitFor(assertion: () => boolean, timeoutMs = 4_000): Promise<voi
   assert.fail(`condition did not become true within ${timeoutMs}ms`);
 }
 
-test('persisted job metadata hydrates its build engine and model', () => {
+test('persisted job metadata round-trips every settled verify verdict', () => {
   assert.deepEqual(parseJobMeta(JSON.stringify({
-    11: { engine: 'codex', model: 'gpt-5.6-sol' },
+    11: { engine: 'codex', model: 'gpt-5.6-sol', verify: 'passed' },
+    12: { verify: 'failed', verifyReason: 'observed defect' },
+    13: { verify: 'inconclusive', verifyReason: 'verify cap' },
   })), {
-    11: { engine: 'codex', model: 'gpt-5.6-sol' },
+    11: { engine: 'codex', model: 'gpt-5.6-sol', verify: 'passed' },
+    12: { verify: 'failed', verifyReason: 'observed defect' },
+    13: { verify: 'inconclusive', verifyReason: 'verify cap' },
+  });
+});
+
+test('PASS, FAIL, and INCONCLUSIVE remain distinct in job_meta, jobs payload, and terminal totals', async () => {
+  await withIsolatedDatabase(() => {
+    const projectPath = '/workspace/verdict-truth-project';
+    const slug = `verdict-truth-${Date.now()}`;
+    const messages: string[] = [];
+    const notificationClient = {
+      readyState: WS_OPEN_STATE,
+      send: (message: string) => { messages.push(message); },
+    } as unknown as RealtimeClientConnection;
+    connectedClients.add(notificationClient);
+    try {
+      appConfigDb.set('watchdog_terminal_wakes', '0');
+      projectsDb.createProjectPath(projectPath);
+      watchdogService.registerChain({
+        slug,
+        projectPath,
+        phases: 3,
+        manifest: [
+          { name: 'Pass', tasks: [], kind: 'phase' },
+          { name: 'Fail', tasks: [], kind: 'phase' },
+          { name: 'Inconclusive', tasks: [], kind: 'phase' },
+        ],
+      });
+      for (const phase of [1, 2, 3]) {
+        watchdogService.chainEvent(slug, 'phase-start', { phase });
+        watchdogService.chainEvent(slug, 'phase-end', {
+          phase,
+          commit: { hash: `commit-${phase}`, subject: `job ${phase}` },
+        });
+        watchdogService.chainEvent(slug, 'verify-start', { phase });
+      }
+      watchdogService.chainEvent(slug, 'verify-end', { phase: 1, verdict: 'PASS' });
+      watchdogService.chainEvent(slug, 'verify-end', { phase: 2, verdict: 'FAIL', summaryTail: 'observed defect' });
+      watchdogService.chainEvent(slug, 'verify-end', {
+        phase: 3,
+        verdict: 'INCONCLUSIVE',
+        summaryTail: 'verify cap',
+      });
+      watchdogService.chainEvent(slug, 'completed', { phase: 3 });
+
+      const snapshot = watchdogService.listWorkerRuns(projectPath).chains[slug];
+      assert.deepEqual(snapshot.verifySummary, { passed: 1, failed: 1, inconclusive: 1 });
+      assert.deepEqual(snapshot.manifest?.map((job) => job.verify), ['passed', 'failed', 'inconclusive']);
+      assert.equal(snapshot.manifest?.[2]?.verifyReason, 'verify cap');
+
+      const persisted = watchdogDb.listChains().find((chain) => chain.slug === slug);
+      assert.ok(persisted?.job_meta);
+      assert.deepEqual(Object.values(parseJobMeta(persisted.job_meta)).map((meta) => meta.verify), [
+        'passed',
+        'failed',
+        'inconclusive',
+      ]);
+
+      const terminal = messages
+        .map((message) => JSON.parse(message) as { kind?: string; title?: string; body?: string })
+        .find((message) => message.kind === 'fleet_notification' && message.title?.includes('completed with'));
+      assert.match(terminal?.title ?? '', /1 failed and 1 inconclusive/);
+      assert.match(terminal?.body ?? '', /Verify totals: 1 passed, 1 failed, 1 inconclusive/);
+      assert.match(terminal?.body ?? '', /verify cap/);
+    } finally {
+      connectedClients.delete(notificationClient);
+    }
   });
 });
 

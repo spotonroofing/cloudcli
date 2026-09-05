@@ -96,6 +96,16 @@ export function createWatchdogRouter(): express.Router {
       const commit = commitBody && typeof commitBody.hash === 'string' && commitBody.hash.trim()
         ? { hash: commitBody.hash.trim(), subject: typeof commitBody.subject === 'string' ? commitBody.subject.trim() : '' }
         : undefined;
+      const verdict: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | undefined = body.verdict === 'PASS'
+        || body.verdict === 'FAIL' || body.verdict === 'INCONCLUSIVE'
+        ? body.verdict
+        : undefined;
+      if (event === 'verify-end' && verdict === undefined) {
+        throw new AppError('verify-end requires verdict PASS|FAIL|INCONCLUSIVE.', {
+          code: 'WATCHDOG_VERIFY_VERDICT_REQUIRED',
+          statusCode: 400,
+        });
+      }
       const detail = {
         phase: Number.isFinite(Number(body.phase)) ? Number(body.phase) : undefined,
         summaryTail: typeof body.summaryTail === 'string' ? body.summaryTail : undefined,
@@ -105,6 +115,7 @@ export function createWatchdogRouter(): express.Router {
         // The runner supplies this only on build phase-start. Verify events
         // never carry it and therefore can never mark a unit fast.
         fastMode: body.fastMode === true,
+        verdict,
       };
       const eventName = event as (typeof CHAIN_EVENT_NAMES)[number];
       let known = watchdogService.chainEvent(slug, eventName, detail);

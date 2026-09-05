@@ -122,7 +122,7 @@ stage=build
 [[ "$prompt" == *"fresh-context verifier"* ]] && stage=verify
 print -r -- "{\\"type\\":\\"thread.started\\",\\"thread_id\\":\\"pause-$stage-$$\\"}"
 if [[ "$stage" == verify ]]; then
-  if [[ "$prompt" == *"FIRST_BUILD_STUB"* ]]; then
+  if [[ "$prompt" == *"job 1 of 2 (One)"* ]]; then
     : > "$STUB_VERIFY_STARTED"
     tries=0
     while [[ ! -f "$STUB_RELEASE_VERIFY" && $tries -lt 200 ]]; do
