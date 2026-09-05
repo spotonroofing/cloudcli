@@ -64,6 +64,8 @@ export type StoredQueuedMessage = {
    * File objects, they can follow a queued message across session switches.
    */
   attachments?: unknown[];
+  /** True until this device receives a successful server response for the row. */
+  pendingReceipt?: boolean;
 };
 
 /**
@@ -89,15 +91,21 @@ export const createQueuedMessageId = (): string =>
 const cache = new Map<string, StoredQueuedMessage[]>();
 const listeners = new Set<(sessionId: string) => void>();
 const tails = new Map<string, Promise<unknown>>();
+
+const CHAT_SEND_OUTBOX_KEY = 'chat_send_outbox_v1';
+
+type OutboxEntry = {
+  sessionId: string;
+  message: StoredQueuedMessage;
+};
+
 /**
  * Message ids whose latest local write has not been acknowledged by the
- * server (the PUT failed, e.g. across a dev-server restart). Hydration
- * preserves and re-pushes these instead of wiping them to server state —
- * they are a live tab's own in-flight write, not a stale remnant, and
- * dropping them would lose the message. The set is in-memory only, so
- * nothing here survives a shutdown to ghost-send later.
+ * server. The matching payloads live in the device-local outbox below, so a
+ * reload can restore and re-push them with the same idempotency key.
  */
 const pendingWrites = new Map<string, Set<string>>();
+let outbox: OutboxEntry[] = [];
 
 const notify = (sessionId: string) => {
   listeners.forEach((listener) => listener(sessionId));
@@ -119,6 +127,72 @@ const normalize = (message: StoredQueuedMessage): StoredQueuedMessage => ({
 const hasSubstance = (message: StoredQueuedMessage): boolean =>
   Boolean(message.content.trim()) || (message.attachments?.length ?? 0) > 0;
 
+const persistOutbox = (): void => {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+  if (outbox.length === 0) {
+    safeLocalStorage.removeItem(CHAT_SEND_OUTBOX_KEY);
+    return;
+  }
+  safeLocalStorage.setItem(CHAT_SEND_OUTBOX_KEY, JSON.stringify(outbox));
+};
+
+const loadOutbox = (): void => {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+  const raw = safeLocalStorage.getItem(CHAT_SEND_OUTBOX_KEY);
+  if (!raw) {
+    return;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return;
+    }
+    outbox = parsed.flatMap((candidate): OutboxEntry[] => {
+      if (!candidate || typeof candidate !== 'object') {
+        return [];
+      }
+      const entry = candidate as Partial<OutboxEntry>;
+      if (typeof entry.sessionId !== 'string' || !entry.message || typeof entry.message.content !== 'string') {
+        return [];
+      }
+      const message = normalize(entry.message);
+      return hasSubstance(message) ? [{ sessionId: entry.sessionId, message }] : [];
+    });
+  } catch {
+    outbox = [];
+    safeLocalStorage.removeItem(CHAT_SEND_OUTBOX_KEY);
+  }
+
+  for (const { sessionId, message } of outbox) {
+    (pendingWrites.get(sessionId) ?? pendingWrites.set(sessionId, new Set()).get(sessionId)!).add(message.id);
+    const list = cache.get(sessionId) ?? [];
+    const index = list.findIndex((candidate) => candidate.id === message.id);
+    cache.set(
+      sessionId,
+      index >= 0
+        ? list.map((candidate, currentIndex) => (currentIndex === index ? message : candidate))
+        : [...list, message],
+    );
+  }
+};
+
+const rememberPendingWrite = (sessionId: string, message: StoredQueuedMessage): void => {
+  (pendingWrites.get(sessionId) ?? pendingWrites.set(sessionId, new Set()).get(sessionId)!).add(message.id);
+  const index = outbox.findIndex((entry) => entry.sessionId === sessionId && entry.message.id === message.id);
+  if (index >= 0) {
+    outbox[index] = { sessionId, message };
+  } else {
+    outbox.push({ sessionId, message });
+  }
+  persistOutbox();
+};
+
+loadOutbox();
+
 const endpoint = (sessionId: string, id?: string) =>
   `/api/queued-messages/${encodeURIComponent(sessionId)}${id ? `/${encodeURIComponent(id)}` : ''}`;
 
@@ -129,6 +203,11 @@ const clearPendingWrite = (sessionId: string, id: string) => {
     if (ids.size === 0) {
       pendingWrites.delete(sessionId);
     }
+  }
+  const nextOutbox = outbox.filter((entry) => entry.sessionId !== sessionId || entry.message.id !== id);
+  if (nextOutbox.length !== outbox.length) {
+    outbox = nextOutbox;
+    persistOutbox();
   }
 };
 
@@ -142,7 +221,10 @@ export function subscribeQueuedMessages(listener: (sessionId: string) => void): 
 
 /** The session's queued messages in delivery order. */
 export function readQueuedMessages(sessionId: string): StoredQueuedMessage[] {
-  return (cache.get(sessionId) ?? []).filter(hasSubstance);
+  const pendingIds = pendingWrites.get(sessionId);
+  return (cache.get(sessionId) ?? [])
+    .filter(hasSubstance)
+    .map((message) => ({ ...message, pendingReceipt: pendingIds?.has(message.id) ?? false }));
 }
 
 const pushQueuedMessage = (sessionId: string, message: StoredQueuedMessage): Promise<unknown> =>
@@ -153,6 +235,7 @@ const pushQueuedMessage = (sessionId: string, message: StoredQueuedMessage): Pro
     }).then((response) => {
       if (response.ok) {
         clearPendingWrite(sessionId, message.id);
+        notify(sessionId);
       }
     }).catch(() => {
       // Stays in pendingWrites; the next hydrate re-pushes it.
@@ -168,16 +251,16 @@ export function writeQueuedMessage(sessionId: string, message: StoredQueuedMessa
     ? list.map((candidate, currentIndex) => (currentIndex === index ? normalized : candidate))
     : [...list, normalized];
   cache.set(sessionId, next);
-  (pendingWrites.get(sessionId) ?? pendingWrites.set(sessionId, new Set()).get(sessionId)!).add(normalized.id);
+  rememberPendingWrite(sessionId, normalized);
+  notify(sessionId);
   void pushQueuedMessage(sessionId, normalized);
 }
 
 /**
- * A chat.send frame that found the socket dead lands back in the server queue
- * instead of a client-memory buffer (ui12 phase 1): the composer flush and
- * app-level auto-send deliver it exactly once after reconnect, and nothing
- * client-side ever replays a send on its own. Notifies subscribers so the
- * viewing composer shows the message as queued.
+ * A chat.send frame that found the socket dead lands in the device-local
+ * outbox first. Its server-queue PUT keeps retrying with the same idempotency
+ * key until acknowledged, after which the composer flush and app-level
+ * auto-send deliver the server row exactly once.
  */
 export function stashUndeliverableChatSend(frame: Record<string, unknown>): void {
   const sessionId = typeof frame.sessionId === 'string' ? frame.sessionId : null;
@@ -191,7 +274,6 @@ export function stashUndeliverableChatSend(frame: Record<string, unknown>): void
     return;
   }
   writeQueuedMessage(sessionId, { id: createQueuedMessageId(), content, options, attachments });
-  notify(sessionId);
 }
 
 /** Deletes one queued message everywhere (card delete); no send follows. */
@@ -268,6 +350,14 @@ export function applyRemoteQueuedMessages(sessionId: string, messages: StoredQue
   const normalized = messages
     .filter((message) => message && typeof message.content === 'string')
     .map(normalize);
+  const localPending = outbox
+    .filter((entry) => entry.sessionId === sessionId)
+    .map((entry) => entry.message);
+  for (const message of localPending) {
+    if (!normalized.some((candidate) => candidate.id === message.id)) {
+      normalized.push(message);
+    }
+  }
   if (normalized.length > 0) {
     cache.set(sessionId, normalized);
   } else {
@@ -279,10 +369,9 @@ export function applyRemoteQueuedMessages(sessionId: string, messages: StoredQue
 const LEGACY_KEY_PREFIX = 'queued_message_';
 
 /**
- * Messages queued by the pre-sync build sit in localStorage. They are stale by
- * definition — the server queue has been the sole truth since ui11 phase 1 —
- * so they purge without ever reaching the server or a send path: a machine
- * powered back on must never fire an old local message (ui12 phase 1).
+ * Messages queued by the pre-sync build use a different key shape and lack an
+ * idempotency key, so they remain unsafe to replay and are purged. The current
+ * CHAT_SEND_OUTBOX_KEY is retained until the server acknowledges each row.
  */
 const purgeLegacyQueuedMessages = (): void => {
   for (const key of Object.keys(localStorage)) {
@@ -306,16 +395,9 @@ export async function hydrateQueuedMessages(): Promise<void> {
     return;
   }
   const touched = new Set([...cache.keys(), ...Object.keys(messages)]);
-  // A local write the server never acknowledged is this tab's own in-flight
-  // message, not a stale remnant: keep it and re-push instead of adopting the
-  // server's (missing) copy, or the message would silently evaporate.
-  const unacknowledged = new Map<string, StoredQueuedMessage[]>();
-  for (const [sessionId, ids] of pendingWrites) {
-    const local = (cache.get(sessionId) ?? []).filter((message) => ids.has(message.id));
-    if (local.length > 0) {
-      unacknowledged.set(sessionId, local);
-    }
-  }
+  // Reconcile server truth first, then replay the durable outbox in its saved
+  // order. Per-session request tails preserve that order through the PUTs.
+  const unacknowledged = [...outbox];
   cache.clear();
   for (const [sessionId, sessionMessages] of Object.entries(messages)) {
     if (Array.isArray(sessionMessages)) {
@@ -327,15 +409,13 @@ export async function hydrateQueuedMessages(): Promise<void> {
       }
     }
   }
-  for (const [sessionId, localMessages] of unacknowledged) {
+  for (const { sessionId, message } of unacknowledged) {
     const list = cache.get(sessionId) ?? [];
-    for (const message of localMessages) {
-      if (!list.some((candidate) => candidate.id === message.id)) {
-        list.push(message);
-      }
-      void pushQueuedMessage(sessionId, message);
+    if (!list.some((candidate) => candidate.id === message.id)) {
+      list.push(message);
     }
     cache.set(sessionId, list);
+    void pushQueuedMessage(sessionId, message);
   }
   touched.forEach(notify);
 }

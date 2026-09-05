@@ -359,6 +359,20 @@ CREATE INDEX IF NOT EXISTS idx_queued_messages_session ON queued_messages(sessio
 `;
 
 /**
+ * Durable idempotency receipts for the queued-messages repository. The
+ * repository keeps these after a queue row is claimed so a client retry whose
+ * acknowledgement was lost cannot recreate an already delivered message.
+ * Database initialization and migrations install the table.
+ */
+export const QUEUED_MESSAGE_RECEIPTS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS queued_message_receipts (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    received_at TEXT NOT NULL
+);
+`;
+
+/**
  * Edit-and-resend response versioning (ui9 B3). A resend is a fresh provider
  * turn appended to the Claude transcript — the JSONL is never touched. These
  * rows only record which turns are alternative versions of the same exchange

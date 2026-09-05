@@ -258,6 +258,8 @@ export type QueuedDraft = {
    * survives the submission.
    */
   preserveComposer?: boolean;
+  /** The device-local outbox is still waiting for the server to receive this row. */
+  pendingReceipt?: boolean;
 };
 
 type ComposerSubmit = (
@@ -288,6 +290,7 @@ const restoreQueuedDrafts = (sessionKey: string): QueuedDraft[] =>
     attachments: [],
     uploadedAttachments: saved.attachments ?? saved.images,
     options: saved.options,
+    pendingReceipt: saved.pendingReceipt,
   }));
 
 const getNotificationSessionSummary = (
@@ -1078,7 +1081,7 @@ export function useChatComposerState({
           // The server re-append lands it at the stack's tail; mirror that.
           setQueuedDrafts((previous) => [
             ...previous.filter((draft) => draft.id !== queuedSubmission.id),
-            queuedSubmission,
+            { ...queuedSubmission, pendingReceipt: Boolean(sessionKey) },
           ]);
           return;
         }
@@ -1114,6 +1117,7 @@ export function useChatComposerState({
           attachments: currentAttachments,
           uploadedAttachments,
           options: queuedOptions,
+          pendingReceipt: Boolean(queuedSessionKey),
         };
         if (queuedSessionKey) {
           // Append to the server stack synchronously after upload, so the
@@ -1157,7 +1161,10 @@ export function useChatComposerState({
           return;
         }
 
-        setQueuedDrafts((previous) => [...previous, durableDraft]);
+        setQueuedDrafts((previous) => [
+          ...previous.filter((draft) => draft.id !== durableDraft.id),
+          durableDraft,
+        ]);
         setInput('');
         inputValueRef.current = '';
         setAttachedFilesSync([]);

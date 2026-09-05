@@ -47,10 +47,10 @@ export const useWebSocket = () => {
 };
 
 // Control frames survive a dead socket by queueing for the next open.
-// chat.send is deliberately excluded (ui12 phase 1): a stale tab replaying a
-// message send on reconnect is a ghost send — an undeliverable send is
-// stashed in the server-side queued-message store instead (see sendMessage),
-// never in client memory. Subscription frames are excluded too: the
+// chat.send is deliberately excluded: an undeliverable send is persisted in
+// the device-local outbox and PUT to the server queue with an idempotency key
+// (see sendMessage), rather than replayed directly through this socket.
+// Subscription frames are excluded too: the
 // reconnect flow re-sends them with a fresh lastSeq, and replaying a stale
 // one would duplicate rows.
 const QUEUEABLE_TYPES = ['chat.abort', 'chat.permission-response'];
@@ -195,10 +195,10 @@ const useWebSocketProviderState = (): WebSocketContextType => {
 
     const record = message as Record<string, unknown> | null;
     if (record && record.type === 'chat.send') {
-      // Never buffer a send client-side: it lands in the server queue, where
-      // the flush/auto-send machinery delivers it exactly once on reconnect.
+      // Persist before attempting the server queue, retaining the generated
+      // id until the server acknowledges receipt.
       stashUndeliverableChatSend(record);
-      console.warn('WebSocket not connected; stashed chat.send in the server queue');
+      console.warn('WebSocket not connected; saved chat.send on this device, sending when connected');
     } else if (record && typeof record.type === 'string' && QUEUEABLE_TYPES.includes(record.type)) {
       pendingOutboundRef.current.push(record);
       console.warn(`WebSocket not connected; queued ${record.type} for reconnect`);

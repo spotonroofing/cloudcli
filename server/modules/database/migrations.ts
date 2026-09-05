@@ -9,6 +9,7 @@ import {
   PROJECTS_TABLE_SCHEMA_SQL,
   PROVIDER_MODELS_TABLE_SCHEMA_SQL,
   PUSH_SUBSCRIPTIONS_TABLE_SCHEMA_SQL,
+  QUEUED_MESSAGE_RECEIPTS_TABLE_SCHEMA_SQL,
   QUEUED_MESSAGES_TABLE_SCHEMA_SQL,
   SESSIONS_TABLE_SCHEMA_SQL,
   USER_NOTIFICATION_PREFERENCES_TABLE_SCHEMA_SQL,
@@ -732,6 +733,11 @@ export const runMigrations = (db: Database) => {
     db.exec(USER_SETTINGS_TABLE_SCHEMA_SQL);
     rebuildQueuedMessagesTableWithStackSchema(db);
     db.exec(QUEUED_MESSAGES_TABLE_SCHEMA_SQL);
+    db.exec(QUEUED_MESSAGE_RECEIPTS_TABLE_SCHEMA_SQL);
+    db.exec(`
+      INSERT OR IGNORE INTO queued_message_receipts (id, session_id, received_at)
+      SELECT id, session_id, updated_at FROM queued_messages
+    `);
     db.exec(WATCHDOG_CHAINS_TABLE_SCHEMA_SQL);
     addWatchdogChainManifestColumns(db);
     db.exec(WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL);

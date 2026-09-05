@@ -100,8 +100,8 @@ Done check: server tests cover pagination (a fixture with 130 sessions pages ful
 
 Goal: a message sent while the socket is down is never lost and its state is honest. Evidence: audit-codex-sol.md UX finding 1 (chat.send stashed in an in-memory cache; the warning claims the server queue). Files: src/contexts/WebSocketContext.tsx (near 189), src/components/chat/utils/chatStorage.ts (near 89, 148, 295), the server's queued-messages module for the acknowledgement and idempotency, the composer's pending state. Dependencies: none.
 
-- [ ] Outbound messages persist locally (IndexedDB or localStorage, per device) with an idempotency key until the server acknowledges receipt; reloading or reopening the tab re-sends unacknowledged ones in order; the server dedupes by key.
-- [ ] The composer shows a pending, not-yet-received state for an unacknowledged message (a queued card variant per DESIGN.md) and clears it on acknowledgement; the warning copy says what is true ("saved on this device, sending when connected").
+- [x] Outbound messages persist locally (IndexedDB or localStorage, per device) with an idempotency key until the server acknowledges receipt; reloading or reopening the tab re-sends unacknowledged ones in order; the server dedupes by key.
+- [x] The composer shows a pending, not-yet-received state for an unacknowledged message (a queued card variant per DESIGN.md) and clears it on acknowledgement; the warning copy says what is true ("saved on this device, sending when connected").
 
 Done check: on dev, kill the socket (server restart) after sending, reload the page, and the message arrives exactly once when the socket returns; a duplicate re-send is dropped by the server; a test covers the dedupe. Commit.
 

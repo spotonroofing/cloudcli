@@ -346,6 +346,7 @@ export default function ChatComposer({
               <div className="min-h-0 overflow-hidden pb-2">
                 <QueuedMessageCard
                   content={draft.content}
+                  pendingReceipt={draft.pendingReceipt}
                   attachmentCount={
                     draft.uploadedAttachments?.length ?? draft.attachments.length
                   }

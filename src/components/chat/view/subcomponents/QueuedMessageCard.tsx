@@ -4,6 +4,7 @@ import { PencilIcon, XIcon } from 'lucide-react';
 interface QueuedMessageCardProps {
   content: string;
   attachmentCount?: number;
+  pendingReceipt?: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -11,21 +12,31 @@ interface QueuedMessageCardProps {
 export default function QueuedMessageCard({
   content,
   attachmentCount = 0,
+  pendingReceipt = false,
   onEdit,
   onDelete,
 }: QueuedMessageCardProps) {
   const { t } = useTranslation('chat');
 
   return (
-    <div className="settings-content-enter mx-auto max-w-[54.25rem] rounded-lg border border-dashed border-primary/25 bg-primary/[0.04] px-3 py-2">
+    <div
+      data-delivery-state={pendingReceipt ? 'pending-receipt' : 'queued'}
+      className="settings-content-enter mx-auto max-w-[54.25rem] rounded-lg border border-dashed border-primary/25 bg-primary/[0.04] px-3 py-2"
+    >
       <div className="flex items-start gap-2.5">
         <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/60" aria-hidden />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-primary/70">
-            <span>{t('input.queue.label', { defaultValue: 'Queued' })}</span>
+            <span>
+              {pendingReceipt
+                ? t('input.queue.savedOnDevice', { defaultValue: 'Saved on this device' })
+                : t('input.queue.label', { defaultValue: 'Queued' })}
+            </span>
             <span className="normal-case text-muted-foreground/60">
-              · {t('input.queue.willSend', { defaultValue: 'Sends at the next break' })}
+              · {pendingReceipt
+                ? t('input.queue.sendingWhenConnected', { defaultValue: 'Sending when connected' })
+                : t('input.queue.willSend', { defaultValue: 'Sends at the next break' })}
             </span>
           </div>
           <p className="mt-0.5 line-clamp-2 break-words text-sm text-foreground/90">{content}</p>

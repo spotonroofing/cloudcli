@@ -50,7 +50,13 @@ export const queuedMessagesDb = {
     return (row as QueuedMessageRow | undefined) ?? null;
   },
 
-  /** Updates an existing row in place, or appends it after the session's tail. */
+  /**
+   * Updates an existing row in place, or appends it after the session's tail.
+   * The client-generated id is also the retry idempotency key. A durable
+   * receipt survives row removal, so an acknowledgement-lost retry cannot
+   * append a second delivery after the first one was claimed. Returns false
+   * only when the key was already received and its queue row is gone.
+   */
   upsert(
     sessionId: string,
     id: string,
@@ -58,19 +64,37 @@ export const queuedMessagesDb = {
     optionsJson: string | null,
     attachmentsJson: string | null,
     updatedAt: string,
-  ): void {
+  ): boolean {
     const db = getConnection();
-    db.prepare(`
-      INSERT INTO queued_messages (id, session_id, content, options_json, attachments_json, position, updated_at)
-      VALUES (?, ?, ?, ?, ?, (
-        SELECT COALESCE(MAX(position), 0) + 1 FROM queued_messages WHERE session_id = ?
-      ), ?)
-      ON CONFLICT(id) DO UPDATE SET
-        content = excluded.content,
-        options_json = excluded.options_json,
-        attachments_json = excluded.attachments_json,
-        updated_at = excluded.updated_at
-    `).run(id, sessionId, content, optionsJson, attachmentsJson, sessionId, updatedAt);
+    return db.transaction(() => {
+      const existing = db
+        .prepare('SELECT 1 FROM queued_messages WHERE session_id = ? AND id = ?')
+        .get(sessionId, id);
+      if (existing) {
+        db.prepare(`
+          UPDATE queued_messages
+          SET content = ?, options_json = ?, attachments_json = ?, updated_at = ?
+          WHERE session_id = ? AND id = ?
+        `).run(content, optionsJson, attachmentsJson, updatedAt, sessionId, id);
+        return true;
+      }
+
+      const receipt = db.prepare(`
+        INSERT OR IGNORE INTO queued_message_receipts (id, session_id, received_at)
+        VALUES (?, ?, ?)
+      `).run(id, sessionId, updatedAt);
+      if (receipt.changes === 0) {
+        return false;
+      }
+
+      db.prepare(`
+        INSERT INTO queued_messages (id, session_id, content, options_json, attachments_json, position, updated_at)
+        VALUES (?, ?, ?, ?, ?, (
+          SELECT COALESCE(MAX(position), 0) + 1 FROM queued_messages WHERE session_id = ?
+        ), ?)
+      `).run(id, sessionId, content, optionsJson, attachmentsJson, sessionId, updatedAt);
+      return true;
+    })();
   },
 
   /**

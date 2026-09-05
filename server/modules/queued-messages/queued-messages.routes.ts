@@ -62,7 +62,7 @@ export function createQueuedMessagesRouter(): express.Router {
       const clientId = typeof body.clientId === 'string' ? body.clientId : null;
       const updatedAt = new Date().toISOString();
 
-      queuedMessagesDb.upsert(
+      const accepted = queuedMessagesDb.upsert(
         sessionId,
         id,
         body.content,
@@ -71,9 +71,11 @@ export function createQueuedMessagesRouter(): express.Router {
         updatedAt,
       );
 
-      broadcastQueuedMessagesUpdated(sessionId, listQueuedMessagePayloads(sessionId), clientId);
-      emitQueuedMessageChanged(sessionId);
-      res.json(createApiSuccessResponse({ sessionId, id, updatedAt }));
+      if (accepted) {
+        broadcastQueuedMessagesUpdated(sessionId, listQueuedMessagePayloads(sessionId), clientId);
+        emitQueuedMessageChanged(sessionId);
+      }
+      res.json(createApiSuccessResponse({ sessionId, id, updatedAt, deduplicated: !accepted }));
     }),
   );
 
