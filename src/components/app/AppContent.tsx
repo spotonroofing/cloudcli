@@ -43,6 +43,7 @@ type RunningSessionApiItem = {
 
 const RUN_ORIGINS = ['planner', 'direct', 'dispatch', 'external', 'maintenance'] as const;
 type RunOrigin = (typeof RUN_ORIGINS)[number];
+const WORKER_NOTIFICATION_ORIGINS = new Set<RunOrigin>(['direct', 'dispatch', 'external', 'maintenance']);
 
 type RunningSessionsApiPayload = {
   data?: {
@@ -148,6 +149,39 @@ function AppContentInner() {
     },
     [projects, selectedProject?.projectId, handleProjectSelect, setActiveTab, setSidebarOpen],
   );
+
+  // A service-worker-opened window has no existing client to receive the
+  // postMessage. Its URL carries the same origin/provider routing data so a
+  // dispatch or direct notice still opens in Worker after a cold launch.
+  useEffect(() => {
+    if (!sessionId) return;
+    const params = new URLSearchParams(location.search);
+    const notificationOrigin = params.get('notificationOrigin') as RunOrigin | null;
+    if (!notificationOrigin || !RUN_ORIGINS.includes(notificationOrigin)) return;
+    const provider = params.get('provider');
+    if (provider) writeSetting('selected-provider', provider);
+    if (WORKER_NOTIFICATION_ORIGINS.has(notificationOrigin)) {
+      // MainContent rejects Worker until the deep-linked session has resolved
+      // its project. Apply the route intent after that guard can accept it.
+      if (isLoadingProjects || !selectedProject?.projectId) return;
+      setActiveTab('worker');
+      setWorkerSessionRequest({
+        sessionId,
+        provider: (provider || 'claude') as LLMProvider,
+        token: Date.now(),
+      });
+    } else {
+      setActiveTab('chat');
+    }
+    setSidebarOpen(false);
+  }, [
+    isLoadingProjects,
+    location.search,
+    selectedProject?.projectId,
+    sessionId,
+    setActiveTab,
+    setSidebarOpen,
+  ]);
 
   // Multi-project workspace (phase 7): which projects are open as stacked
   // rows. With a single open project the surface renders exactly as before.
@@ -339,12 +373,27 @@ function AppContentInner() {
         writeSetting('selected-provider', message.provider);
       }
 
-      setActiveTab('chat');
+      const origin = typeof message.origin === 'string' && RUN_ORIGINS.includes(message.origin as RunOrigin)
+        ? message.origin as RunOrigin
+        : null;
+      const workerOrigin = origin != null && WORKER_NOTIFICATION_ORIGINS.has(origin);
+      setActiveTab(workerOrigin ? 'worker' : 'chat');
       setSidebarOpen(false);
       void refreshProjectsSilently();
 
       if (typeof message.sessionId === 'string' && message.sessionId) {
-        navigate(`/session/${message.sessionId}`);
+        if (workerOrigin) {
+          setWorkerSessionRequest({
+            sessionId: message.sessionId,
+            provider: (typeof message.provider === 'string' && message.provider
+              ? message.provider
+              : 'claude') as LLMProvider,
+            token: Date.now(),
+          });
+        }
+        navigate(typeof message.urlPath === 'string' && message.urlPath
+          ? message.urlPath
+          : `/session/${message.sessionId}`);
         return;
       }
 

@@ -14,6 +14,7 @@ import {
   appConfigDb,
   closeConnection,
   initializeDatabase,
+  notificationPreferencesDb,
   projectsDb,
   userDb,
 } from '@/modules/database/index.js';
@@ -85,6 +86,10 @@ test('a boundary reload runs new code and a later failed verify still notifies w
     await chmod(runnerPath, 0o755);
     await initializeDatabase();
     const user = userDb.createUser('verify-failure-test', 'unused');
+    notificationPreferencesDb.updatePreferences(Number(user.id), {
+      channels: { inApp: true, webPush: false, desktop: false, sound: false },
+      events: { actionRequired: true, stop: true, error: true },
+    });
     apiKeysDb.createApiKey(Number(user.id), 'verify-failure-test');
     projectsDb.createProjectPath(repo);
     // The terminal fleet notification carries the same payload queued for a
@@ -258,9 +263,9 @@ print -r -- "done" > "$output"
 
     const terminalNotification = fleetNotifications.find((message) => message.title?.includes('completed with 1 verify failure'));
     assert.equal(terminalNotification?.notificationKind, 'decision-needed');
-    assert.match(terminalNotification?.body ?? '', /completed with 1 verify failure/);
-    assert.match(terminalNotification?.body ?? '', /Job 2 \(Two\).*second unit missed its budget/);
-    assert.match(terminalNotification?.body ?? '', /Resume point: append a fix unit for job 2/);
+    assert.match(terminalNotification?.body ?? '', /verification is not clean/);
+    assert.match(terminalNotification?.body ?? '', /Job 2 \(Two\) failed.*second unit missed its budget/);
+    assert.doesNotMatch(terminalNotification?.body ?? '', /append a fix unit|Resume point/);
 
     const journal = await readFile(path.join(fakeHome, 'forge-logs', slug, 'JOURNAL.md'), 'utf8');
     assert.match(journal, /run \| reload \| runner reloaded at [a-f0-9]{64}/);

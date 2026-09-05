@@ -11,7 +11,7 @@ export {
   notifyRunStopped,
   // Used by provider runtimes to report background work that finished after its turn ended.
   notifyBackgroundWorkCompleted,
-  // Used by the watchdog: broadcast to every subscribed endpoint (spec B8).
+  // Used by Accounts and Watchdog: fleet delivery through stored channel policy.
   sendFleetNotification,
 } from '@/modules/notifications/services/notification-orchestrator.service.js';
 export {

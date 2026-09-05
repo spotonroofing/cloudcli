@@ -401,16 +401,24 @@ export function createSettingsService(dependencies: SettingsDependencies) {
       const auth = requiredString(keys.auth, 'auth', 'PUSH_SUBSCRIPTION_REQUIRED');
       dependencies.pushSubscriptions.save(userId, endpoint, p256dh, auth);
 
+      if (!dependencies.pushSubscriptions.has(userId, endpoint)) {
+        throw new AppError('The push subscription was not stored', {
+          code: 'PUSH_SUBSCRIPTION_NOT_STORED',
+          statusCode: 500,
+        });
+      }
+
       const currentPreferences = dependencies.notifications.getPreferences(userId);
+      let storedPreferences = currentPreferences;
       if (!currentPreferences?.channels?.webPush) {
-        dependencies.notifications.updatePreferences(userId, {
+        storedPreferences = dependencies.notifications.updatePreferences(userId, {
           ...currentPreferences,
           channels: { ...currentPreferences?.channels, webPush: true },
-        });
+        }) as NotificationPreferences;
       }
       const event = dependencies.notifications.createEnabledEvent();
       void dependencies.notifications.notifyUser(userId, event);
-      return { success: true };
+      return { success: true, subscribed: true, preferences: storedPreferences };
     },
     getPushSubscriptionStatus(userId: number, endpointInput: unknown) {
       const endpoint = requiredString(endpointInput, 'Endpoint', 'PUSH_ENDPOINT_REQUIRED');
@@ -420,13 +428,14 @@ export function createSettingsService(dependencies: SettingsDependencies) {
       const endpoint = requiredString(endpointInput, 'Endpoint', 'PUSH_ENDPOINT_REQUIRED');
       dependencies.pushSubscriptions.remove(endpoint);
       const currentPreferences = dependencies.notifications.getPreferences(userId);
+      let storedPreferences = currentPreferences;
       if (currentPreferences?.channels?.webPush) {
-        dependencies.notifications.updatePreferences(userId, {
+        storedPreferences = dependencies.notifications.updatePreferences(userId, {
           ...currentPreferences,
           channels: { ...currentPreferences.channels, webPush: false },
-        });
+        }) as NotificationPreferences;
       }
-      return { success: true };
+      return { success: true, subscribed: false, preferences: storedPreferences };
     },
   };
 }

@@ -234,7 +234,7 @@ test('subscribeToPush persists the subscription and enables Web Push', () => {
     pushSubscriptions: {
       save: (_id, endpoint) => operations.push(`save:${endpoint}`),
       remove: () => undefined,
-      has: () => false,
+      has: () => true,
     },
     notifications: {
       getPreferences: () => ({ channels: { webPush: false } }),
@@ -244,9 +244,28 @@ test('subscribeToPush persists the subscription and enables Web Push', () => {
     },
   }));
 
-  service.subscribeToPush(1, {
+  const result = service.subscribeToPush(1, {
     endpoint: 'https://push.example.test',
     keys: { p256dh: 'key', auth: 'auth' },
   });
   assert.deepEqual(operations, ['save:https://push.example.test', 'preferences', 'notify']);
+  assert.equal(result.subscribed, true);
+});
+
+test('subscribeToPush refuses to acknowledge a row the repository did not store', () => {
+  const service = createSettingsService(dependencies({
+    pushSubscriptions: {
+      save: () => undefined,
+      remove: () => undefined,
+      has: () => false,
+    },
+  }));
+
+  assert.throws(
+    () => service.subscribeToPush(1, {
+      endpoint: 'https://push.example.test/missing',
+      keys: { p256dh: 'key', auth: 'auth' },
+    }),
+    /push subscription was not stored/i,
+  );
 });

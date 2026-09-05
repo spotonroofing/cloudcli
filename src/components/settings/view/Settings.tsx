@@ -43,27 +43,42 @@ function Settings({ isOpen, initialTab = 'system', projects = [] }: SettingsProp
     permission: pushPermission,
     isSubscribed: isPushSubscribed,
     isLoading: isPushLoading,
+    isReady: isPushReady,
+    error: pushError,
+    requiresHomeScreen: pushRequiresHomeScreen,
     subscribe: pushSubscribe,
     unsubscribe: pushUnsubscribe,
   } = useWebPush();
 
   const handleEnablePush = async () => {
-    await pushSubscribe();
-    // Server sets webPush: true in preferences on subscribe; sync local state
-    setNotificationPreferences({
-      ...notificationPreferences,
-      channels: { ...notificationPreferences.channels, webPush: true },
-    });
+    if (await pushSubscribe()) {
+      setNotificationPreferences((previous) => ({
+        ...previous,
+        channels: { ...previous.channels, webPush: true },
+      }));
+    }
   };
 
   const handleDisablePush = async () => {
-    await pushUnsubscribe();
-    // Server sets webPush: false in preferences on unsubscribe; sync local state
-    setNotificationPreferences({
-      ...notificationPreferences,
-      channels: { ...notificationPreferences.channels, webPush: false },
-    });
+    if (await pushUnsubscribe()) {
+      setNotificationPreferences((previous) => ({
+        ...previous,
+        channels: { ...previous.channels, webPush: false },
+      }));
+    }
   };
+
+  useEffect(() => {
+    if (!isPushReady) return;
+    setNotificationPreferences((previous) => previous.channels.webPush === isPushSubscribed
+      ? previous
+      : { ...previous, channels: { ...previous.channels, webPush: isPushSubscribed } });
+  }, [
+    isPushReady,
+    isPushSubscribed,
+    notificationPreferences.channels.webPush,
+    setNotificationPreferences,
+  ]);
 
   useEffect(() => {
     if (!desktopNotificationsBridge) return undefined;
@@ -141,6 +156,8 @@ function Settings({ isOpen, initialTab = 'system', projects = [] }: SettingsProp
               pushPermission={pushPermission}
               isPushSubscribed={isPushSubscribed}
               isPushLoading={isPushLoading}
+              pushError={pushError}
+              pushRequiresHomeScreen={pushRequiresHomeScreen}
               onEnablePush={handleEnablePush}
               onDisablePush={handleDisablePush}
               isDesktop={Boolean(desktopNotificationsBridge)}

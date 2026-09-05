@@ -260,6 +260,8 @@ type PunchlistSection = {
 };
 
 type WakeItem = {
+  /** Durable outbox identity; null only when persistence itself was unavailable. */
+  id: number | null;
   prompt: string;
   /** Always boots a brand-new planner session instead of resuming. */
   freshBoot?: boolean;
@@ -301,7 +303,11 @@ const log = (message: string, meta?: Record<string, unknown>) => {
  * escalates decision-needed events, and self-tests the push pipeline weekly.
  * Direct (origin=direct) sessions are Willem's own and are never touched.
  */
-class WatchdogService {
+/**
+ * Runtime watchdog used by the server singleton and integration tests that
+ * recreate the service to prove restart recovery.
+ */
+export class WatchdogService {
   private chains = new Map<string, ChainRecord>();
   private rotatedSessions = new Set<string>();
   private dispatchRuns = new Map<string, DispatchRunRecord>();
@@ -354,11 +360,12 @@ class WatchdogService {
         ? `completed with ${verifySummary.failed} verify ${verifySummary.failed === 1 ? 'failure' : 'failures'}`
         : `completed with ${verifySummary.failed} failed and ${verifySummary.inconclusive} inconclusive verifies`;
     }
+    const cleanCompletion = chain.status === 'completed' && unsettled === 0;
     this.notify(
-      'decision-needed',
+      cleanCompletion ? 'verified-done' : 'decision-needed',
       `Chain ${chain.slug} ${terminalLabel}`,
-      terminalWakePrompt(chain),
-      { chainSlug: chain.slug, projectPath: chain.projectPath, status: chain.status },
+      terminalNotificationBody(chain),
+      this.chainNoticeData(chain, { projectPath: chain.projectPath, status: chain.status }),
     );
     this.queueTerminalWake(chain);
   }
@@ -420,20 +427,39 @@ class WatchdogService {
           ended: Boolean(row.ended),
         });
       }
+      for (const row of watchdogDb.listOutstandingWakes()) {
+        const queue = this.wakeQueues.get(row.project_path) ?? { prompts: [], draining: false };
+        queue.prompts.push({
+          id: row.id,
+          prompt: row.prompt,
+          freshBoot: Boolean(row.fresh_boot),
+          chainSlug: row.chain_slug ?? undefined,
+          targetSessionId: row.target_session_id ?? undefined,
+          failures: row.failures,
+        });
+        this.wakeQueues.set(row.project_path, queue);
+        // A crash can leave a row marked delivering. Its payload is still
+        // owed, so restart returns it to the head of the same ordered queue.
+        watchdogDb.markWakeQueued(row.id, row.failures);
+      }
       if (this.chains.size || this.dispatchRuns.size) {
         log(`hydrated from DB: ${this.chains.size} chain(s), ${this.dispatchRuns.size} dispatched run(s)`);
       }
       for (const chain of this.chains.values()) {
         this.syncPunchlistWatcher(chain);
       }
-      // A terminal wake that was queued but never delivered before the last
-      // restart (the queue is in-memory) is re-derived from the chain record.
+      // Legacy databases can have wakePending without an outbox row. Rebuild
+      // that one payload, but never duplicate a durable wake already loaded.
       for (const chain of this.chains.values()) {
         if (chain.status !== 'running' && chain.wakePending
+          && !this.wakeQueues.get(chain.projectPath)?.prompts.some((item) => item.chainSlug === chain.slug)
           && this.policy('terminalWakes', `re-derived terminal wake for chain ${chain.slug}`)) {
           log(`chain ${chain.slug}: re-deriving its undelivered ${chain.status} wake after restart`);
           this.queueWake(chain.projectPath, terminalWakePrompt(chain), { chainSlug: chain.slug });
         }
+      }
+      for (const projectPath of this.wakeQueues.keys()) {
+        void this.drainWakes(projectPath);
       }
     } catch (error) {
       log(`hydration failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -1237,8 +1263,8 @@ class WatchdogService {
         this.notify(
           'decision-needed',
           `Chain ${slug} job ${phase ?? '?'} verify failed`,
-          `Job ${phase ?? '?'}${chain.phases ? ` of ${chain.phases}` : ''}${unitName ? ` (${unitName})` : ''} failed verification: ${reason}\n\nThe chain is continuing. Append a fix unit at the terminal wake's resume point.`,
-          { chainSlug: slug, projectPath: chain.projectPath, status: 'verify-failed', phase },
+          `Job ${phase ?? '?'}${chain.phases ? ` of ${chain.phases}` : ''}${unitName ? ` (${unitName})` : ''} failed verification: ${humanVerifyReason(reason) ?? reason}\n\nThe chain is continuing. Review this failed check when the chain ends.`,
+          this.chainNoticeData(chain, { projectPath: chain.projectPath, status: 'verify-failed', phase }),
         );
       } else {
         this.persistChain(chain);
@@ -1299,7 +1325,7 @@ class WatchdogService {
         `Chain ${slug} is auto-recovering`,
         `The dispatched chain hit the session limit${chain.phases ? ` at job ${chain.currentPhase ?? '?'} of ${chain.phases}` : ''} `
         + `and is switching accounts or waiting for a reset before retrying. No action is needed.${tail}`,
-        { chainSlug: slug, projectPath: chain.projectPath, status: 'recovering' },
+        this.chainNoticeData(chain, { projectPath: chain.projectPath, status: 'recovering' }),
       );
       return true;
     }
@@ -1592,7 +1618,7 @@ class WatchdogService {
       'Dispatched run needs a decision',
       `${kind === 'permission_request' ? 'A tool needs approval' : 'An interactive prompt is waiting'}`
       + `${detail ? `: ${detail}` : ''} (session ${sessionId}${run ? `, ${run.projectPath}` : ''}).`,
-      { sessionId },
+      { sessionId, chainSlug: run?.chainSlug ?? null, origin: 'dispatch', provider: run?.provider ?? null },
     );
   }
 
@@ -1709,20 +1735,18 @@ class WatchdogService {
     data: Record<string, unknown> = {},
   ): void {
     log(`notify ${kind}: ${title}`);
-    void sendFleetNotification({ kind, title, body, data });
-
-    // Foreground enhancement: visible tabs play the Orca notification sound.
-    const event = JSON.stringify({
-      kind: 'fleet_notification',
-      notificationKind: kind,
-      title,
-      body,
-      timestamp: new Date().toISOString(),
-    });
-    connectedClients.forEach((client) => {
-      if (client.readyState === WS_OPEN_STATE) {
-        client.send(event);
-      }
+    const titleChainSlug = /^Chain\s+(\S+)/.exec(title)?.[1] ?? null;
+    const chainSlug = typeof data.chainSlug === 'string' ? data.chainSlug : titleChainSlug;
+    const chain = chainSlug ? this.chains.get(chainSlug) : undefined;
+    const titlePhase = /\bjob\s+(\d+)\b/i.exec(title)?.[1];
+    const routedData = chain && typeof data.sessionId !== 'string'
+      ? this.chainNoticeData(chain, {
+        ...data,
+        ...(titlePhase ? { phase: Number(titlePhase) } : {}),
+      })
+      : { ...data, ...(chainSlug ? { chainSlug } : {}) };
+    void sendFleetNotification({ kind, title, body, data: routedData }).catch((error) => {
+      log(`notify ${kind} failed: ${error instanceof Error ? error.message : String(error)}`);
     });
   }
 
@@ -1734,20 +1758,37 @@ class WatchdogService {
     options: { freshBoot?: boolean; chainSlug?: string; targetSessionId?: string } = {},
   ): void {
     const queue = this.wakeQueues.get(projectPath) ?? { prompts: [], draining: false };
-    queue.prompts.push({
+    const wake: WakeItem = {
+      id: null,
       prompt,
       freshBoot: options.freshBoot,
       chainSlug: options.chainSlug,
       targetSessionId: options.targetSessionId,
       failures: 0,
-    });
+    };
+    try {
+      wake.id = watchdogDb.createWake({
+        project_path: projectPath,
+        prompt,
+        fresh_boot: options.freshBoot ? 1 : 0,
+        chain_slug: options.chainSlug ?? null,
+        target_session_id: options.targetSessionId ?? null,
+        failures: 0,
+      });
+    } catch (error) {
+      log(`wake persist failed for ${projectPath}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    queue.prompts.push(wake);
     this.wakeQueues.set(projectPath, queue);
     log(`wake queued for ${projectPath} (${queue.prompts.length} pending)`);
     void this.drainWakes(projectPath);
   }
 
   /** The wake reached the planner (or its fallback); the chain no longer owes one. */
-  private wakeSettled(item: WakeItem): void {
+  private wakeSettled(item: WakeItem, state: 'delivered' | 'failed' = 'delivered'): void {
+    if (item.id != null) {
+      watchdogDb.settleWake(item.id, state, item.failures);
+    }
     const chain = item.chainSlug ? this.chains.get(item.chainSlug) : undefined;
     if (chain?.wakePending) {
       chain.wakePending = false;
@@ -1769,7 +1810,7 @@ class WatchdogService {
       { projectPath },
     );
     for (const item of items) {
-      this.wakeSettled(item);
+      this.wakeSettled(item, 'failed');
     }
   }
 
@@ -1834,6 +1875,9 @@ class WatchdogService {
         // retries from the UI) instead of retrying into more session rows.
         if (item.freshBoot) {
           try {
+            if (item.id != null) {
+              watchdogDb.markWakeDelivering(item.id);
+            }
             if (!await this.bootFreshPlanner(projectPath, planner.session_id, item.prompt)) {
               throw new Error('fresh planner boot failed');
             }
@@ -1848,6 +1892,9 @@ class WatchdogService {
               this.wakeUndeliverable(projectPath, [item], `Delivery failed ${item.failures} times (last error: ${message})`);
               continue;
             }
+            if (item.id != null) {
+              watchdogDb.markWakeQueued(item.id, item.failures);
+            }
             log(`wake failed for ${projectPath}: ${message}; retrying in ${WAKE_RETRY_MS / 1000}s`);
             setTimeout(() => {
               queue.draining = false;
@@ -1859,6 +1906,9 @@ class WatchdogService {
         }
 
         try {
+          if (item.id != null) {
+            watchdogDb.markWakeDelivering(item.id);
+          }
           // Resume by provider-native id, but only when a transcript actually
           // exists on disk; otherwise boot a fresh planner session — the
           // planner is stateless by design and re-grounds from STATE.md.
@@ -1890,6 +1940,9 @@ class WatchdogService {
             queue.prompts.shift();
             this.wakeUndeliverable(projectPath, [item], `Delivery failed ${item.failures} times (last error: ${message})`);
             continue;
+          }
+          if (item.id != null) {
+            watchdogDb.markWakeQueued(item.id, item.failures);
           }
           log(`wake failed for ${projectPath}: ${message}; retrying in ${WAKE_RETRY_MS / 1000}s`);
           setTimeout(() => {
@@ -2494,6 +2547,22 @@ class WatchdogService {
       ),
     };
   }
+
+  /** Resolves the build session that owns a chain notice, never its verifier. */
+  private chainNoticeData(chain: ChainRecord, data: Record<string, unknown>): Record<string, unknown> {
+    const phase = typeof data.phase === 'number' ? data.phase : chain.currentPhase;
+    const verifySessionId = phase == null ? null : chain.jobs[phase]?.verifySessionId ?? null;
+    const session = sessionsDb.listChainSessions(chain.slug)
+      .filter((row) => row.chain_phase === phase && row.session_id !== verifySessionId)
+      .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at))[0];
+    return {
+      ...data,
+      sessionId: session?.session_id ?? null,
+      provider: session?.provider ?? null,
+      origin: 'dispatch',
+      chainSlug: chain.slug,
+    };
+  }
 }
 
 /**
@@ -2843,6 +2912,39 @@ function terminalWakePrompt(chain: ChainRecord): string {
       : 'FAILED';
   return `Watchdog: dispatched chain "${chain.slug}" ${flag}${chain.phases ? ` (job ${chain.currentPhase ?? '?'} of ${chain.phases})` : ''}. `
     + `${totals} Verify the result against git log and the punch list before declaring anything done.${tail}`;
+}
+
+/** Human-facing terminal notice; planner instructions stay in the wake only. */
+function terminalNotificationBody(chain: ChainRecord): string {
+  const verifySummary = countVerifyVerdicts(chain);
+  const totals = `${verifySummary.passed} passed, ${verifySummary.failed} failed, `
+    + `${verifySummary.inconclusive} inconclusive`;
+  const detail = chain.lastSummaryTail ? ` Last report: ${chain.lastSummaryTail.replace(/\s+/g, ' ').slice(-500)}` : '';
+  if (chain.status === 'completed' && verifySummary.failed === 0 && verifySummary.inconclusive === 0) {
+    return `The chain completed cleanly. Verification totals: ${totals}.${detail}`;
+  }
+  if (chain.status === 'completed') {
+    const issues = Object.entries(chain.jobs)
+      .filter(([, meta]) => meta.verify === 'failed' || meta.verify === 'inconclusive')
+      .map(([unit, meta]) => {
+        const name = chain.manifest?.[Number(unit) - 1]?.name;
+        const verdict = meta.verify === 'failed' ? 'failed' : 'was inconclusive';
+        const reason = humanVerifyReason(meta.verifyReason ?? meta.failureReason);
+        return `Job ${unit}${name ? ` (${name})` : ''} ${verdict}${reason ? `: ${reason.replace(/\s+/g, ' ').slice(-400)}` : ''}.`;
+      })
+      .join(' ');
+    return `The chain completed, but its verification is not clean. Verification totals: ${totals}. ${issues}${detail}`;
+  }
+  return `The chain ${chain.status}. Verification totals: ${totals}.${detail}`;
+}
+
+/** Removes runner-to-planner repair instructions from the human push body. */
+function humanVerifyReason(reason: string | undefined): string | null {
+  if (!reason) return null;
+  return reason
+    .replace(/^Job \d+(?: \([^)]*\))? failed verify at commit [^:]+:\s*/i, '')
+    .split(/\s+Resume point:/i)[0]
+    .trim() || null;
 }
 
 /**

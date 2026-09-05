@@ -102,7 +102,15 @@ self.addEventListener('notificationclick', event => {
 
   const sessionId = event.notification.data?.sessionId;
   const provider = event.notification.data?.provider || null;
-  const urlPath = sessionId ? `/session/${sessionId}` : '/';
+  const origin = event.notification.data?.origin || null;
+  const chainSlug = event.notification.data?.chainSlug || null;
+  const query = new URLSearchParams();
+  if (origin) query.set('notificationOrigin', origin);
+  if (provider) query.set('provider', provider);
+  if (chainSlug) query.set('chain', chainSlug);
+  const urlPath = sessionId
+    ? `/session/${encodeURIComponent(sessionId)}${query.size ? `?${query.toString()}` : ''}`
+    : '/';
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async clientList => {
@@ -113,6 +121,8 @@ self.addEventListener('notificationclick', event => {
             type: 'notification:navigate',
             sessionId: sessionId || null,
             provider,
+            origin,
+            chainSlug,
             urlPath
           });
           return;

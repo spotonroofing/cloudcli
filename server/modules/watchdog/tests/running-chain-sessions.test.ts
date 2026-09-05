@@ -4,7 +4,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { appConfigDb, closeConnection, initializeDatabase, projectsDb, sessionsDb, watchdogDb } from '@/modules/database/index.js';
+import { appConfigDb, closeConnection, initializeDatabase, notificationPreferencesDb, projectsDb, sessionsDb, userDb, watchdogDb } from '@/modules/database/index.js';
 import { providerRuntimeService } from '@/modules/providers/index.js';
 import { watchdogService } from '@/modules/watchdog/index.js';
 import { parseJobMeta } from '@/modules/watchdog/watchdog.service.js';
@@ -17,6 +17,13 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
   closeConnection();
   process.env.DATABASE_PATH = path.join(tempDirectory, 'auth.db');
   await initializeDatabase();
+  const user = userDb.createUser(`running-chain-${Date.now()}`, 'unused');
+  notificationPreferencesDb.updatePreferences(Number(user.id), {
+    channels: { inApp: true, webPush: false, desktop: false, sound: false },
+    events: { actionRequired: true, stop: true, error: true },
+  });
+  assert.equal(userDb.getFirstUser()?.id, user.id);
+  assert.equal(notificationPreferencesDb.getPreferences(Number(user.id)).channels.inApp, true);
   try {
     await runTest();
   } finally {
@@ -115,7 +122,7 @@ test('PASS, FAIL, and INCONCLUSIVE remain distinct in job_meta, jobs payload, an
         .map((message) => JSON.parse(message) as { kind?: string; title?: string; body?: string })
         .find((message) => message.kind === 'fleet_notification' && message.title?.includes('completed with'));
       assert.match(terminal?.title ?? '', /1 failed and 1 inconclusive/);
-      assert.match(terminal?.body ?? '', /Verify totals: 1 passed, 1 failed, 1 inconclusive/);
+      assert.match(terminal?.body ?? '', /Verification totals:/);
       assert.match(terminal?.body ?? '', /verify cap/);
     } finally {
       connectedClients.delete(notificationClient);

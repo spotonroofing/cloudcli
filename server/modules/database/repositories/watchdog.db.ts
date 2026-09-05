@@ -41,6 +41,19 @@ export type WatchdogDispatchRunRow = {
   ended: number;
 };
 
+type WatchdogWakeRow = {
+  id: number;
+  project_path: string;
+  prompt: string;
+  fresh_boot: number;
+  chain_slug: string | null;
+  target_session_id: string | null;
+  failures: number;
+  state: 'queued' | 'delivering' | 'delivered' | 'failed';
+  created_at: number;
+  updated_at: number;
+};
+
 /** One durable promote attempt, consumed by the watchdog routes and jobs history. */
 type WatchdogPromoteRow = {
   id: number;
@@ -154,6 +167,79 @@ export const watchdogDb = {
   listDispatchRuns(): WatchdogDispatchRunRow[] {
     const db = getConnection();
     return db.prepare('SELECT * FROM watchdog_dispatch_runs').all() as WatchdogDispatchRunRow[];
+  },
+
+  /** Persists one wake before the watchdog begins delivery. */
+  createWake(row: Omit<WatchdogWakeRow, 'id' | 'state' | 'created_at' | 'updated_at'>): number {
+    const db = getConnection();
+    const now = Date.now();
+    const result = db.prepare(`
+      INSERT INTO watchdog_wakes (
+        project_path, prompt, fresh_boot, chain_slug, target_session_id,
+        failures, state, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)
+    `).run(
+      row.project_path,
+      row.prompt,
+      row.fresh_boot,
+      row.chain_slug,
+      row.target_session_id,
+      row.failures,
+      now,
+      now,
+    );
+    return Number(result.lastInsertRowid);
+  },
+
+  /** Restores unfinished wakes in insertion order after a server restart. */
+  listOutstandingWakes(): WatchdogWakeRow[] {
+    const db = getConnection();
+    return db.prepare(`
+      SELECT * FROM watchdog_wakes
+      WHERE state IN ('queued', 'delivering')
+      ORDER BY id ASC
+    `).all() as WatchdogWakeRow[];
+  },
+
+  /** Lists one project's durable outbox for status checks and integration tests. */
+  listWakes(projectPath: string): WatchdogWakeRow[] {
+    const db = getConnection();
+    return db.prepare(`
+      SELECT * FROM watchdog_wakes
+      WHERE project_path = ?
+      ORDER BY id ASC
+    `).all(projectPath) as WatchdogWakeRow[];
+  },
+
+  /** Records an in-flight delivery before invoking a provider runtime. */
+  markWakeDelivering(id: number): void {
+    const db = getConnection();
+    db.prepare(`
+      UPDATE watchdog_wakes
+      SET state = 'delivering', updated_at = ?
+      WHERE id = ? AND state IN ('queued', 'delivering')
+    `).run(Date.now(), id);
+  },
+
+  /** Returns a retryable or restart-interrupted wake to the ordered queue. */
+  markWakeQueued(id: number, failures: number): void {
+    const db = getConnection();
+    db.prepare(`
+      UPDATE watchdog_wakes
+      SET state = 'queued', failures = ?, updated_at = ?
+      WHERE id = ? AND state IN ('queued', 'delivering')
+    `).run(failures, Date.now(), id);
+  },
+
+  /** Settles a wake after planner delivery or its user-visible fallback. */
+  settleWake(id: number, state: 'delivered' | 'failed', failures: number): void {
+    const db = getConnection();
+    db.prepare(`
+      UPDATE watchdog_wakes
+      SET state = ?, failures = ?, updated_at = ?
+      WHERE id = ? AND state IN ('queued', 'delivering')
+    `).run(state, failures, Date.now(), id);
   },
 
   /** Inserts an attempt before promote.sh runs its first gate. */

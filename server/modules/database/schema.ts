@@ -290,6 +290,28 @@ CREATE TABLE IF NOT EXISTS watchdog_dispatch_runs (
 );
 `;
 
+/**
+ * Durable, ordered planner-wake outbox. A row is inserted before delivery is
+ * attempted; queued and delivering rows are replayed after restart, while
+ * terminal states remain as an audit trail. Timestamps are epoch milliseconds.
+ */
+export const WATCHDOG_WAKES_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS watchdog_wakes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_path TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    fresh_boot INTEGER NOT NULL DEFAULT 0,
+    chain_slug TEXT,
+    target_session_id TEXT,
+    failures INTEGER NOT NULL DEFAULT 0,
+    state TEXT NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'delivering', 'delivered', 'failed')),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_watchdog_wakes_project_state_id
+ON watchdog_wakes(project_path, state, id);
+`;
+
 export const COMPOSER_DRAFTS_TABLE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS composer_drafts (
     draft_key TEXT PRIMARY KEY,
@@ -429,6 +451,8 @@ ${COMPOSER_DRAFTS_TABLE_SCHEMA_SQL}
 ${WATCHDOG_CHAINS_TABLE_SCHEMA_SQL}
 
 ${WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL}
+
+${WATCHDOG_WAKES_TABLE_SCHEMA_SQL}
 
 ${WATCHDOG_PROMOTES_TABLE_SCHEMA_SQL}
 

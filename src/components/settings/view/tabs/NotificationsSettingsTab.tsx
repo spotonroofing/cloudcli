@@ -31,6 +31,8 @@ type NotificationsSettingsTabProps = {
   pushPermission: NotificationPermission | 'unsupported';
   isPushSubscribed: boolean;
   isPushLoading: boolean;
+  pushError: string | null;
+  pushRequiresHomeScreen: boolean;
   onEnablePush: () => void;
   onDisablePush: () => void;
   isDesktop?: boolean;
@@ -56,6 +58,8 @@ export default function NotificationsSettingsTab({
   pushPermission,
   isPushSubscribed,
   isPushLoading,
+  pushError,
+  pushRequiresHomeScreen,
   onEnablePush,
   onDisablePush,
   isDesktop = false,
@@ -121,9 +125,11 @@ export default function NotificationsSettingsTab({
               description={
                 !pushSupported
                   ? t('notifications.webPush.unsupported')
+                  : pushRequiresHomeScreen
+                    ? pushError ?? 'Install Command Center to your Home Screen before enabling notifications.'
                   : pushDenied
                     ? t('notifications.webPush.denied')
-                    : undefined
+                    : pushError ?? undefined
               }
             >
               <div className="flex items-center gap-2">
@@ -132,7 +138,7 @@ export default function NotificationsSettingsTab({
                   checked={isPushSubscribed}
                   onChange={(value) => (value ? onEnablePush() : onDisablePush())}
                   ariaLabel={t('notifications.webPush.title')}
-                  disabled={isPushLoading || !pushSupported || pushDenied}
+                  disabled={isPushLoading || !pushSupported || pushDenied || pushRequiresHomeScreen}
                 />
               </div>
             </SettingsRow>

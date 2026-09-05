@@ -1,7 +1,7 @@
 import { appConfigDb } from '@/modules/database/index.js';
 import { sendFleetNotification } from '@/modules/notifications/index.js';
 import { settingsService } from '@/modules/settings/index.js';
-import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/index.js';
+import { WS_OPEN_STATE } from '@/modules/websocket/index.js';
 import type { RealtimeClientConnection } from '@/shared/types.js';
 
 import { createAccountUsageMonitor } from './account-usage.service.js';
@@ -18,18 +18,6 @@ export const accountUsageMonitor = createAccountUsageMonitor({
   writeState: (value) => appConfigDb.set(ALERT_STATE_KEY, value),
   notify: ({ key, title, body, data }) => {
     void sendFleetNotification({ kind: 'usage-alert', title, body, data: { ...data, alertKey: key } });
-    const frame = JSON.stringify({
-      kind: 'fleet_notification',
-      notificationKind: 'usage-alert',
-      title,
-      body,
-      alertKey: key,
-      data,
-      timestamp: new Date().toISOString(),
-    });
-    connectedClients.forEach((client) => {
-      if (client.readyState === WS_OPEN_STATE) client.send(frame);
-    });
   },
   broadcastAccounts: (payload, reason) => {
     const frame = JSON.stringify({

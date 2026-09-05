@@ -17,6 +17,7 @@ import {
   WATCHDOG_CHAINS_TABLE_SCHEMA_SQL,
   WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL,
   WATCHDOG_PROMOTES_TABLE_SCHEMA_SQL,
+  WATCHDOG_WAKES_TABLE_SCHEMA_SQL,
 } from '@/modules/database/schema.js';
 
 import { isCommentShapedTitle, titleFromPrompt } from '../../../shared/sessionTitle.js';
@@ -734,6 +735,7 @@ export const runMigrations = (db: Database) => {
     db.exec(WATCHDOG_CHAINS_TABLE_SCHEMA_SQL);
     addWatchdogChainManifestColumns(db);
     db.exec(WATCHDOG_DISPATCH_RUNS_TABLE_SCHEMA_SQL);
+    db.exec(WATCHDOG_WAKES_TABLE_SCHEMA_SQL);
     db.exec(WATCHDOG_PROMOTES_TABLE_SCHEMA_SQL);
     addWatchdogPromoteAttemptColumns(db);
     db.exec(MESSAGE_VERSIONS_TABLE_SCHEMA_SQL);
