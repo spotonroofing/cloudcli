@@ -199,3 +199,12 @@ Goal: two runner defects seen on 2026-09-05 while resuming this chain. First, th
 - [ ] A chain row in a terminal state (stopped, failed, completed) is never moved back to paused or running by the liveness sweep, a stale resume file, or a late runner event; find what flipped audit1 (journals and the watchdog log for 2026-09-05 between 1:30 am and 1:50 am) and close that path with a test.
 
 Done check: a runner test or stub exercises the no-op reset and sees the unit start; a watchdog test posts a late paused event against a stopped chain and the row stays stopped; the audit1 row reads stopped afterwards. Commit.
+
+## Job 16 — Verifier and builder browser checks can log in; the red suite. Verify: yes
+
+Goal: three verify stages in this round came back INCONCLUSIVE for one reason, "authenticated browser check could not be exercised" (no logged-in agent-browser profile on dev), and two units recorded a red server suite from the same provider tests. Files: scripts/macos/dispatch-chain-runner (verify stage and unit environment), the phase tail template from Job 7, scripts/macos/populate-agent-auth.sh, the dev instance's auth (JWT minted from app_config jwt_secret in ~/.cloudcli-dev/auth.db, see the API testing note), the failing tests the suite check named on units 3 and 4 of audit1r2 (opencode-runtime.provider.test.js, claude-runtime-stream.test.ts and the provider registry tests). Dependencies: none.
+
+- [ ] Every unit and every verify stage gets a dev login it can use: the runner mints a dev JWT at unit start (from the dev database's jwt_secret, never printed) and exports it as DEV_AUTH_TOKEN plus a one-line recipe in the phase and verify tails for applying it in agent-browser (the storage key or cookie the app reads); a verify stage that needs the browser uses it instead of returning INCONCLUSIVE for lack of login.
+- [ ] The red suite: run the full server suite the way the runner does; if the three provider tests fail only under the full parallel run (circular initialization under concurrency), fix the initialization order or isolate those tests so the full run is green; if they fail alone, fix the tests. The suite check on the unit reads green afterwards.
+
+Done check: a stub verify stage on dev opens the app with the minted token and reads an authenticated page (the projects list) without INCONCLUSIVE; `npm test` from a clean tree passes twice in a row the way the runner invokes it. Commit.
