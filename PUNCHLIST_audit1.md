@@ -55,10 +55,10 @@ Done check: runner tests or a stub chain on dev exercise the turn budget (set th
 
 Goal: the guard stops blocking legitimate commands and the two copies cannot drift. Evidence: audit-opus-5.md "The tool guard denies 2>/dev/null inside command substitution" (shellWords never strips the closing paren or backtick from a redirect target) and "recursive force delete is banned everywhere" (isRecursiveForceRm never consults allowedRoots), plus the two byte-identical copies at ~/.claude/hooks/git-guard.js and scripts/macos/tool-guard.cjs. Files: scripts/macos/tool-guard.cjs, scripts/macos/install.sh, the runner's boundary reload, guard tests. Dependencies: none.
 
-- [ ] resolveTarget strips a trailing `)` or backtick from a redirect target so `$(grep x y 2>/dev/null)`, `echo $(ls 2>/dev/null)` and the backtick form resolve to /dev/null and are allowed; a redirect to a path outside the allowed roots is still denied.
-- [ ] The recursive force delete rule consults allowedRoots like every other destructive verb: inside the project tree and /tmp it is allowed, outside it stays denied; a target of `/`, `~`, `$HOME`, or a bare `*` stays denied regardless.
-- [ ] One source: scripts/macos/tool-guard.cjs is canonical; install.sh copies it to ~/.claude/hooks/git-guard.js, and the runner's boundary reload does the same copy when the hashes differ, journaling one line when it does.
-- [ ] Tests cover the three previously denied substitution forms (now allowed), the scoped delete cases (allowed inside, denied outside, denied for the dangerous targets), and that the destructive git patterns the guard exists for still deny.
+- [x] resolveTarget strips a trailing `)` or backtick from a redirect target so `$(grep x y 2>/dev/null)`, `echo $(ls 2>/dev/null)` and the backtick form resolve to /dev/null and are allowed; a redirect to a path outside the allowed roots is still denied.
+- [x] The recursive force delete rule consults allowedRoots like every other destructive verb: inside the project tree and /tmp it is allowed, outside it stays denied; a target of `/`, `~`, `$HOME`, or a bare `*` stays denied regardless.
+- [x] One source: scripts/macos/tool-guard.cjs is canonical; install.sh copies it to ~/.claude/hooks/git-guard.js, and the runner's boundary reload does the same copy when the hashes differ, journaling one line when it does.
+- [x] Tests cover the three previously denied substitution forms (now allowed), the scoped delete cases (allowed inside, denied outside, denied for the dangerous targets), and that the destructive git patterns the guard exists for still deny.
 
 Done check: the guard test file passes; running the guard binary by hand against the audit's four reproductions returns allow for the substitutions and the in-project delete and deny for the out-of-tree delete; ~/.claude/hooks/git-guard.js matches the repo copy byte for byte after install.sh. Commit.
 

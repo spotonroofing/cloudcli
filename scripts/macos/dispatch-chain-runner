@@ -1481,7 +1481,14 @@ pickup_appends() {
 # state through resume.json, then replaces this process before the next unit.
 reload_runner_if_changed() {
   [[ $PHASE_NUM -lt ${#PHASE_FILES[@]} ]] || return 0
-  local disk_hash next_phase
+  local disk_hash next_phase canonical_guard installed_guard
+  canonical_guard="$SCRIPT_DIR/tool-guard.cjs"
+  installed_guard="$HOME/.claude/hooks/git-guard.js"
+  if [[ ! -f "$installed_guard" ]] || ! cmp -s "$canonical_guard" "$installed_guard"; then
+    mkdir -p "${installed_guard:h}"
+    cp "$canonical_guard" "$installed_guard"
+    journal run guard-sync "tool guard refreshed from canonical source"
+  fi
   disk_hash=$(/usr/bin/shasum -a 256 "$RUNNER_PATH" | awk '{print $1}')
   [[ "$disk_hash" == "$RUNNER_START_HASH" ]] && return 0
   reconcile_verify

@@ -4,6 +4,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
 const os = require('os');
 const path = require('path');
 
@@ -28,24 +30,13 @@ const MUST_BLOCK = [
   'git checkout .',
   'git restore .',
   'npm test && git push --force',
-  // recursive force delete in any flag order or form, with or without sudo
-  'rm -rf build',
-  'rm -fr build',
-  'rm -Rf build',
-  'rm -r -f build',
-  'rm -f -r build',
-  'rm --recursive --force build',
-  'rm --force --recursive build',
-  'rm -rfv build',
-  'sudo rm -rf build',
-  'sudo -E rm -r -f build',
-  'ls; rm -rf build',
-  'bash -c "rm -rf build"',
-  'zsh -lc \'rm -rf build\'',
-  // recursive force deletes block everywhere, allowed roots included
-  'rm -rf /tmp/scratch',
-  'rm -rf /private/tmp/scratch',
-  `rm -rf ${HOME}/forge-logs/stub`,
+  // recursive force deletes outside allowed roots and dangerous broad targets
+  `rm -rf ${HOME}/Documents/archive`,
+  'rm -rf /var/tmp/guard-outside',
+  'rm -rf /',
+  'rm -rf ~',
+  'rm -rf $HOME',
+  'rm -rf *',
   // find with -delete or an exec of remove
   'find . -name "*.log" -delete',
   'find /tmp/x -type f -exec rm {} \\;',
@@ -74,6 +65,7 @@ const MUST_BLOCK = [
   'rm ../outside.txt',
   `rm /Users/other/Projects/repo/file.txt`,
   `ls && echo x > ${HOME}/Downloads/x.txt`,
+  `echo $(ls 2>${HOME}/err.log)`,
 ];
 
 const MUST_PASS = [
@@ -91,11 +83,28 @@ const MUST_PASS = [
   'git status && git diff',
   'git commit -m "clean up the force of habit"',
   'echo "git push --force" > NOTES.md',
-  // rm without both flags, or inside allowed roots
+  // rm without both flags, or recursive force inside allowed roots
   'rm build/out.js',
   'rm -f build/out.js',
   'rm -r build',
   'rm -rf-ish',
+  'rm -rf build',
+  'rm -fr build',
+  'rm -Rf build',
+  'rm -r -f build',
+  'rm -f -r build',
+  'rm --recursive --force build',
+  'rm --force --recursive build',
+  'rm -rfv build',
+  'sudo rm -rf build',
+  'sudo -E rm -r -f build',
+  'ls; rm -rf build',
+  'bash -c "rm -rf build"',
+  'zsh -lc \'rm -rf build\'',
+  'rm -rf /tmp/scratch',
+  'rm -rf /private/tmp/scratch',
+  `rm -rf ${PROJECT}/scratch`,
+  `rm -rf ${HOME}/forge-logs/stub`,
   'rm -r /tmp/scratch',
   `rm -f ${HOME}/forge-logs/stub/JOURNAL.md`,
   // find without a delete
@@ -113,6 +122,9 @@ const MUST_PASS = [
   `cat x > ${HOME}/Projects/spoton-worker/planner/command-center/lessons/a.md`,
   'ls > /dev/null 2>&1',
   'npm run build 2>&1 | tail -5',
+  '$(grep x y 2>/dev/null)',
+  'echo $(ls 2>/dev/null)',
+  'V=`grep x y 2>/dev/null`',
   'mv src/a.ts src/b.ts',
   `cp ${HOME}/Desktop/a.txt ./a.txt`,
   'cp -r src /tmp/src-copy',
@@ -152,7 +164,34 @@ test('command is read from either engine input shape', () => {
   assert.equal(commandFrom({ tool_name: 'Bash', tool_input: { command: 'ls' } }), 'ls');
   assert.equal(commandFrom({ tool_name: 'Bash', tool_input: { cmd: 'ls' } }), 'ls');
   assert.equal(commandFrom({ tool_input: { command: ['bash', '-lc', 'rm -rf build'] } }), 'bash -lc \'rm -rf build\'');
-  assert.ok(findViolation(commandFrom({ tool_input: { command: ['bash', '-lc', 'rm -rf build'] } }), PROJECT));
+  assert.equal(findViolation(commandFrom({ tool_input: { command: ['bash', '-lc', 'rm -rf build'] } }), PROJECT), null);
+  assert.ok(findViolation(commandFrom({ tool_input: { command: ['bash', '-lc', 'rm -rf /var/tmp/guard-outside'] } }), PROJECT));
   assert.equal(commandFrom({ tool_input: {} }), null);
   assert.equal(commandFrom(null), null);
+});
+
+test('installer copies the canonical guard byte for byte without touching services', () => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-guard-install-'));
+  try {
+    const install = path.join(__dirname, 'install.sh');
+    const run = spawnSync('zsh', [install, '--guard-only'], {
+      encoding: 'utf8',
+      env: { ...process.env, HOME: tempHome },
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(
+      fs.readFileSync(path.join(tempHome, '.claude', 'hooks', 'git-guard.js')),
+      fs.readFileSync(path.join(__dirname, 'tool-guard.cjs')),
+    );
+  } finally {
+    fs.rmSync(tempHome, { recursive: true, force: true });
+  }
+});
+
+test('runner boundary refreshes a drifted Claude guard from the canonical source', () => {
+  const runner = fs.readFileSync(path.join(__dirname, 'dispatch-chain-runner'), 'utf8');
+  assert.match(runner, /canonical_guard="\$SCRIPT_DIR\/tool-guard\.cjs"/);
+  assert.match(runner, /cmp -s "\$canonical_guard" "\$installed_guard"/);
+  assert.match(runner, /cp "\$canonical_guard" "\$installed_guard"/);
+  assert.match(runner, /journal run guard-sync "tool guard refreshed from canonical source"/);
 });

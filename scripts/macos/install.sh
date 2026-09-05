@@ -6,6 +6,17 @@
 set -eu
 
 SCRIPT_DIR="${0:A:h}"
+
+sync_tool_guard() {
+    mkdir -p "$HOME/.claude/hooks"
+    cp "$SCRIPT_DIR/tool-guard.cjs" "$HOME/.claude/hooks/git-guard.js"
+}
+
+# Keep a safe, service-free path for refreshing only the shared guard. The
+# regular installer performs the same copy before touching launch agents.
+sync_tool_guard
+[[ "${1:-}" == "--guard-only" ]] && exit 0
+
 REPO="${SCRIPT_DIR:h:h}"
 NODE=$(command -v node || echo /usr/local/bin/node)
 eval "$("$NODE" "$REPO/shared/runtime-anchors.js" --shell)"
@@ -38,11 +49,7 @@ install_agent() {
 chmod +x "$SCRIPT_DIR/$COMMAND_CENTER_RUNTIME_LEGACY_STEM-backup.sh" "$SCRIPT_DIR/transcript-scrub.mjs" "$SCRIPT_DIR/dispatch" "$SCRIPT_DIR/dispatch-chain-runner" "$SCRIPT_DIR/$COMMAND_CENTER_RUNTIME_LEGACY_STEM-dev-start.sh"
 mkdir -p "$HOME/.local/bin"
 ln -sf "$SCRIPT_DIR/dispatch" "$HOME/.local/bin/dispatch"
-# The tool guard (codex job 2) is one script for both engines: Codex's hook
-# calls it in place; Claude's PreToolUse hook reads the synced copy under
-# ~/.claude/hooks (the user settings.json must keep a ~/.claude path so the
-# hook survives ccsync's canonicalization on every machine).
-cp "$SCRIPT_DIR/tool-guard.cjs" "$HOME/.claude/hooks/git-guard.js"
+# The tool guard (codex job 2) was synced above before service installation.
 chmod +x "$SCRIPT_DIR/promote.sh"
 ln -sf "$SCRIPT_DIR/promote.sh" "$HOME/.local/bin/promote"
 mkdir -p "$COMMAND_CENTER_RUNTIME_DEV_DATA_DIR" "$HOME/.claude-dev/projects"

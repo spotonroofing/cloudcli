@@ -163,7 +163,7 @@ function stripWrappers(words) {
   return words.slice(i);
 }
 
-function isRecursiveForceRm(words) {
+function isRecursiveForceRm(words, cwd, roots) {
   if (words[0] !== 'rm') return false;
   let recursive = false;
   let force = false;
@@ -176,7 +176,16 @@ function isRecursiveForceRm(words) {
       if (/f/.test(w)) force = true;
     }
   }
-  return recursive && force;
+  if (!recursive || !force) return false;
+
+  // Recursive force deletes follow the same root policy as other writes. An
+  // unresolved target is denied because its eventual expansion cannot be
+  // proven safe; a bare glob is denied even though the current cwd is allowed.
+  return writeTargets(words).some((word) => {
+    if (word === '*') return true;
+    const target = resolveTarget(word, cwd);
+    return !target || !isUnderAny(target, roots);
+  });
 }
 
 function isFindDelete(words) {
@@ -192,7 +201,9 @@ function isFindDelete(words) {
 // Absolute path for a target word, or null when it cannot be known (an
 // unexpanded variable or a bare option).
 function resolveTarget(word, cwd) {
-  let w = word;
+  // shellWords deliberately does not parse command substitutions. Their
+  // closing delimiter can therefore remain attached to a redirect target.
+  let w = word.replace(/[)`]+$/g, '');
   if (w.startsWith('~/') || w === '~') w = path.join(HOME, w.slice(1));
   w = w.replace(/^\$\{?HOME\}?(?=\/|$)/, HOME);
   if (w.includes('$')) return null;
@@ -272,7 +283,7 @@ function findViolation(command, cwd) {
       const hit = findViolation(inner, cwd);
       if (hit) return hit;
     }
-    if (isRecursiveForceRm(words)) return { name: 'rm with recursive and force flags' };
+    if (isRecursiveForceRm(words, cwd, roots)) return { name: 'rm with recursive and force flags outside allowed roots' };
     if (isFindDelete(words)) return { name: 'find -delete / find -exec rm' };
     const outside = outsideProjectTarget(words, cwd, roots);
     if (outside) {
